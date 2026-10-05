@@ -6,7 +6,15 @@ import { FARMHANDS, type FarmhandRole } from '@/game/data';
 const ROLE_LIST: FarmhandRole[] = ['lumberjack', 'fisherman', 'farmer', 'artisan'];
 
 export function FarmhandPanel() {
-  const { farmhands, coins, buyFarmhand } = useGameStore();
+  const { farmhands, coins, barn, lastFishTime, buyFarmhand } = useGameStore();
+
+  const fishermanCount = farmhands.filter(f => f.role === 'fisherman').length;
+  const fishCount = barn.fish || 0;
+  const now = Date.now();
+  const fishInterval = 30000;
+  const nextFishIn = fishermanCount > 0
+    ? Math.max(0, fishInterval - (now - lastFishTime))
+    : 0;
 
   return (
     <div className="space-y-3">
@@ -16,6 +24,40 @@ export function FarmhandPanel() {
         </h3>
         <span className="text-xs text-stone-500 dark:text-gray-400">{farmhands.length} hired</span>
       </div>
+
+      {/* Fisherman Status Bar (only when fishermen are hired) */}
+      {fishermanCount > 0 && (
+        <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-xl p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🎣</span>
+              <div>
+                <div className="text-sm font-semibold text-sky-800 dark:text-sky-300">
+                  {fishermanCount} Fisherman{fishermanCount > 1 ? 's' : ''} active
+                </div>
+                <div className="text-xs text-sky-600 dark:text-sky-400">
+                  Catching {fishermanCount} 🐟 every 30s
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-bold text-sky-700 dark:text-sky-300">
+                🐟 {fishCount}
+              </div>
+              <div className="text-[10px] text-sky-500 dark:text-sky-400">
+                Next in {Math.ceil(nextFishIn / 1000)}s
+              </div>
+            </div>
+          </div>
+          {/* Countdown bar */}
+          <div className="mt-2 h-1.5 bg-sky-100 dark:bg-sky-900 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-sky-400 dark:bg-sky-500 rounded-full transition-all"
+              style={{ width: `${((fishInterval - nextFishIn) / fishInterval) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Recruitable */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">

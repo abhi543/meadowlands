@@ -65,7 +65,7 @@ export const ANIMALS: Record<AnimalSpecies, AnimalDef> = {
 };
 
 // --- Products ---
-export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil';
+export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil';
 
 export interface ProductDef {
   id: ProductId;
@@ -85,6 +85,7 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   cheese:      { id: 'cheese',      name: 'Cheese',       emoji: '🧀', category: 'manufactured', sellPrice: 25 },
   pie:         { id: 'pie',         name: 'Pie',          emoji: '🥧', category: 'manufactured', sellPrice: 35 },
   sweater:     { id: 'sweater',     name: 'Sweater',      emoji: '🧥', category: 'manufactured', sellPrice: 40 },
+  fish:        { id: 'fish',        name: 'Fish',         emoji: '🐟', category: 'animal',       sellPrice: 12 },
   truffle_oil: { id: 'truffle_oil', name: 'Truffle Oil',  emoji: '🫒', category: 'manufactured', sellPrice: 50 },
 };
 
@@ -187,4 +188,8 @@ export const ORDER_TEMPLATES: OrderTemplate[] = [
   { requested: [{ itemId: 'strawberry', qty: 3, emoji: '🍓', name: 'Strawberry' }], coinReward: 35, xpReward: 20 },
   { requested: [{ itemId: 'pie', qty: 1, emoji: '🥧', name: 'Pie' }], coinReward: 60, xpReward: 35 },
   { requested: [{ itemId: 'sweater', qty: 1, emoji: '🧥', name: 'Sweater' }], coinReward: 70, xpReward: 40 },
+  // Fish-related orders
+  { requested: [{ itemId: 'fish', qty: 2, emoji: '🐟', name: 'Fish' }], coinReward: 30, xpReward: 18 },
+  { requested: [{ itemId: 'fish', qty: 5, emoji: '🐟', name: 'Fish' }], coinReward: 75, xpReward: 40 },
+  { requested: [{ itemId: 'fish', qty: 3, emoji: '🐟', name: 'Fish' }, { itemId: 'wheat', qty: 3, emoji: '🌾', name: 'Wheat' }], coinReward: 55, xpReward: 30 },
 ];

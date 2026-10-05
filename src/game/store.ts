@@ -80,6 +80,7 @@ export interface GameState {
 
   // Time
   lastTick: number;
+  lastFishTime: number;  // epoch ms — last time fisherman caught fish
 
   // --- Actions ---
   plantCrop: (plotId: number, cropId: CropId) => void;
@@ -143,7 +144,7 @@ export const useGameStore = create<GameState>()(
       level: 1,
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, feed: 3 },
-      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0 },
+      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0 },
 
       plots: initialPlots,
       unlockedPlots: GRID_SIZE,
@@ -164,6 +165,7 @@ export const useGameStore = create<GameState>()(
       codex: { 'chicken_common': true, 'cow_common': true },
 
       lastTick: Date.now(),
+      lastFishTime: Date.now(),
 
       // ---- Actions ----
 
@@ -441,10 +443,24 @@ export const useGameStore = create<GameState>()(
           });
         }
 
+        // Fisherman passive fish: every 30s per fisherman
+        const fishermanCount = state.farmhands.filter(f => f.role === 'fisherman').length;
+        let newBarn = state.barn;
+        let newLastFishTime = state.lastFishTime;
+        if (fishermanCount > 0) {
+          const fishInterval = 30000; // 30 seconds per catch
+          if (now - state.lastFishTime >= fishInterval) {
+            newBarn = { ...state.barn, fish: (state.barn.fish || 0) + fishermanCount };
+            newLastFishTime = now;
+          }
+        }
+
         set({
           plots: newPlots,
           animals: newAnimals,
           productionQueues: newQueues,
+          barn: newBarn,
+          lastFishTime: newLastFishTime,
           lastTick: now,
         });
       },
@@ -453,7 +469,7 @@ export const useGameStore = create<GameState>()(
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
           silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, feed: 3 },
-          barn: { egg: 2, milk: 1, wool: 0, truffle: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0 },
+          barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0 },
           plots: initialPlots, unlockedPlots: GRID_SIZE,
           animals: initialAnimals,
           animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
@@ -461,6 +477,7 @@ export const useGameStore = create<GameState>()(
           orders: generateOrders(6),
           farmhands: [], codex: { 'chicken_common': true, 'cow_common': true },
           lastTick: Date.now(),
+          lastFishTime: Date.now(),
         });
       },
     }),
@@ -473,6 +490,7 @@ export const useGameStore = create<GameState>()(
         animals: state.animals, animalCapacity: state.animalCapacity,
         productionQueues: state.productionQueues,
         orders: state.orders, farmhands: state.farmhands, codex: state.codex,
+        lastFishTime: state.lastFishTime,
       }),
     }
   )
