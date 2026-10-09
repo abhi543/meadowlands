@@ -1,0 +1,706 @@
+     1→// ============================================================
+     2→// Project Meadowlands — Static Game Data & Type Definitions
+     3→// ============================================================
+     4→
+     5→// --- Tier ---
+     6→export type Tier = 'common' | 'uncommon' | 'rare' | 'legendary';
+     7→
+     8→export const TIER_COLORS: Record<Tier, string> = {
+     9→  common: '#9ca3af',
+    10→  uncommon: '#22c55e',
+    11→  rare: '#3b82f6',
+    12→  legendary: '#f59e0b',
+    13→};
+    14→
+    15→export const TIER_LABELS: Record<Tier, string> = {
+    16→  common: 'Common',
+    17→  uncommon: 'Uncommon',
+    18→  rare: 'Rare',
+    19→  legendary: 'Legendary',
+    20→};
+    21→
+    22→export const TIER_MAX_CYCLES: Record<Tier, number> = {
+    23→  common: 8,
+    24→  uncommon: 12,
+    25→  rare: 16,
+    26→  legendary: 20,
+    27→};
+    28→
+    29→// Randomize max cycles for a new animal: ±30% around the tier base, clamped to [4, 30]
+    30→export function randomMaxCycles(tier: Tier): number {
+    31→  const base = TIER_MAX_CYCLES[tier];
+    32→  const min = Math.max(4, Math.floor(base * 0.7));
+    33→  const max = Math.min(30, Math.ceil(base * 1.3));
+    34→  return min + Math.floor(Math.random() * (max - min + 1));
+    35→}
+    36→
+    37→// --- Crops ---
+    38→export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton';
+    39→
+    40→export interface CropDef {
+    41→  id: CropId;
+    42→  name: string;
+    43→  emoji: string;
+    44→  growTimeSec: number;
+    45→  yieldCount: number;
+    46→  seedCost: number;
+    47→}
+    48→
+    49→export const CROPS: Record<CropId, CropDef> = {
+    50→  wheat:       { id: 'wheat',       name: 'Wheat',       emoji: '\u{1F33E}', growTimeSec: 60,  yieldCount: 2, seedCost: 0 },
+    51→  corn:        { id: 'corn',        name: 'Corn',        emoji: '\u{1F33D}', growTimeSec: 60,  yieldCount: 2, seedCost: 0 },
+    52→  carrot:      { id: 'carrot',      name: 'Carrot',      emoji: '\u{1F955}', growTimeSec: 90,  yieldCount: 3, seedCost: 5 },
+    53→  strawberry:  { id: 'strawberry',  name: 'Strawberry',  emoji: '\u{1F353}', growTimeSec: 120, yieldCount: 3, seedCost: 10 },
+    54→  soybean:     { id: 'soybean',     name: 'Soybean',     emoji: '\u{1FADB}', growTimeSec: 180, yieldCount: 4, seedCost: 15 },
+    55→  pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 600, yieldCount: 5, seedCost: 25 },
+    56→  cotton:      { id: 'cotton',      name: 'Cotton',      emoji: '\u{1F33F}', growTimeSec: 150, yieldCount: 8, seedCost: 12 },
+    57→};
+    58→
+    59→// --- Animals ---
+    60→export type AnimalSpecies = 'chicken' | 'cow' | 'sheep' | 'pig';
+    61→
+    62→export interface AnimalDef {
+    63→  species: AnimalSpecies;
+    64→  name: string;
+    65→  emoji: string;
+    66→  habitat: string;
+    67→  habitatEmoji: string;
+    68→  capacity: number;
+    69→  feedPerCycle: number;
+    70→  product: string;
+    71→  productEmoji: string;
+    72→  productYield: number;
+    73→  productionTimeSec: number;
+    74→}
+    75→
+    76→export const ANIMALS: Record<AnimalSpecies, AnimalDef> = {
+    77→  chicken: { species: 'chicken', name: 'Chicken', emoji: '\u{1F414}', habitat: 'Chicken Coop', habitatEmoji: '\u{1F3E0}', capacity: 6, feedPerCycle: 1, product: 'egg', productEmoji: '\u{1F95A}', productYield: 1, productionTimeSec: 60 },
+    78→  cow:     { species: 'cow',     name: 'Cow',     emoji: '\u{1F404}', habitat: 'Cow Barn',     habitatEmoji: '\u{1F316}', capacity: 4, feedPerCycle: 2, product: 'milk', productEmoji: '\u{1F95B}', productYield: 1, productionTimeSec: 90 },
+    79→  sheep:   { species: 'sheep',   name: 'Sheep',   emoji: '\u{1F411}', habitat: 'Sheep Pasture', habitatEmoji: '\u{1F7E9}', capacity: 4, feedPerCycle: 2, product: 'wool', productEmoji: '\u{1F9F6}', productYield: 1, productionTimeSec: 120 },
+    80→  pig:     { species: 'pig',     name: 'Pig',     emoji: '\u{1F437}', habitat: 'Pig Pen',     habitatEmoji: '\u{1F3E0}', capacity: 4, feedPerCycle: 3, product: 'truffle', productEmoji: '\u{1F344}', productYield: 1, productionTimeSec: 180 },
+    81→};
+    82→
+    83→// --- Habitat Upgrades ---
+    84→export interface HabitatUpgradeStep {
+    85→  species: AnimalSpecies;
+    86→  step: number;
+    87→  additionalCapacity: number;
+    88→  costCoins: number;
+    89→}
+    90→
+    91→export const HABITAT_UPGRADES: HabitatUpgradeStep[] = [
+    92→  { species: 'chicken', step: 1, additionalCapacity: 2, costCoins: 200 },
+    93→  { species: 'chicken', step: 2, additionalCapacity: 2, costCoins: 500 },
+    94→  { species: 'chicken', step: 3, additionalCapacity: 2, costCoins: 1200 },
+    95→  { species: 'cow',     step: 1, additionalCapacity: 2, costCoins: 300 },
+    96→  { species: 'cow',     step: 2, additionalCapacity: 2, costCoins: 800 },
+    97→  { species: 'cow',     step: 3, additionalCapacity: 2, costCoins: 2000 },
+    98→  { species: 'sheep',   step: 1, additionalCapacity: 2, costCoins: 300 },
+    99→  { species: 'sheep',   step: 2, additionalCapacity: 2, costCoins: 800 },
+   100→  { species: 'sheep',   step: 3, additionalCapacity: 2, costCoins: 2000 },
+   101→  { species: 'pig',     step: 1, additionalCapacity: 2, costCoins: 400 },
+   102→  { species: 'pig',     step: 2, additionalCapacity: 2, costCoins: 1000 },
+   103→  { species: 'pig',     step: 3, additionalCapacity: 2, costCoins: 2500 },
+   104→];
+   105→
+   106→// --- Products ---
+   107→export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar';
+   108→
+   109→export interface ProductDef {
+   110→  id: ProductId;
+   111→  name: string;
+   112→  emoji: string;
+   113→  category: 'raw' | 'animal' | 'manufactured';
+   114→  sellPrice: number;
+   115→}
+   116→
+   117→export const PRODUCTS: Record<ProductId, ProductDef> = {
+   118→  feed:             { id: 'feed',             name: 'Animal Feed',      emoji: '\u{1FAD9}', category: 'raw',          sellPrice: 2 },
+   119→  egg:              { id: 'egg',              name: 'Egg',              emoji: '\u{1F95A}', category: 'animal',       sellPrice: 5 },
+   120→  milk:             { id: 'milk',             name: 'Milk',             emoji: '\u{1F95B}', category: 'animal',       sellPrice: 8 },
+   121→  wool:             { id: 'wool',             name: 'Wool',             emoji: '\u{1F9F6}', category: 'animal',       sellPrice: 10 },
+   122→  truffle:          { id: 'truffle',          name: 'Truffle',          emoji: '\u{1F344}', category: 'animal',       sellPrice: 15 },
+   123→  bread:            { id: 'bread',            name: 'Bread',            emoji: '\u{1F35E}', category: 'manufactured', sellPrice: 20 },
+   124→  cheese:           { id: 'cheese',           name: 'Cheese',           emoji: '\u{1F9C0}', category: 'manufactured', sellPrice: 25 },
+   125→  pie:              { id: 'pie',              name: 'Pie',              emoji: '\u{1F967}', category: 'manufactured', sellPrice: 35 },
+   126→  sweater:          { id: 'sweater',          name: 'Sweater',          emoji: '\u{1F9E5}', category: 'manufactured', sellPrice: 40 },
+   127→  fish:             { id: 'fish',             name: 'Fish',             emoji: '\u{1F41F}', category: 'animal',       sellPrice: 12 },
+   128→  truffle_oil:      { id: 'truffle_oil',      name: 'Truffle Oil',      emoji: '\u{1FAD2}', category: 'manufactured', sellPrice: 50 },
+   129→  yarn:             { id: 'yarn',             name: 'Yarn',             emoji: '\u{1F9F5}', category: 'manufactured', sellPrice: 18 },
+   130→  quilted_blanket:  { id: 'quilted_blanket',  name: 'Quilted Blanket',  emoji: '\u{1F9F4}', category: 'manufactured', sellPrice: 65 },
+   131→  savory_fish_pie:  { id: 'savory_fish_pie',  name: 'Savory Fish Pie',  emoji: '\u{1F967}', category: 'manufactured', sellPrice: 55 },
+   132→  crab_bisque:      { id: 'crab_bisque',      name: 'Crab Bisque',      emoji: '\u{1F352}', category: 'manufactured', sellPrice: 70 },
+   133→  honey_comb:       { id: 'honey_comb',       name: 'Honey Comb',       emoji: '\u{1F36F}', category: 'raw',          sellPrice: 12 },
+   134→  honey:            { id: 'honey',            name: 'Honey',            emoji: '\u{1F36F}', category: 'manufactured', sellPrice: 22 },
+   135→  wild_berries:     { id: 'wild_berries',     name: 'Wild Berries',     emoji: '\u{1F347}', category: 'raw',          sellPrice: 8 },
+   136→  gold_nugget:      { id: 'gold_nugget',      name: 'Gold Nugget',      emoji: '\u{2B50}',  category: 'raw',          sellPrice: 50 },
+   137→  cotton:           { id: 'cotton',           name: 'Cotton',           emoji: '\u{1F33F}', category: 'raw',          sellPrice: 6 },
+   138→  silk:             { id: 'silk',             name: 'Silk',             emoji: '\u{1F9F5}', category: 'manufactured', sellPrice: 30 },
+   139→  // Lure items (crafted for wilderness expeditions)
+   140→  lure_basic:       { id: 'lure_basic',       name: 'Sweet Seed Cluster',  emoji: '\u{1F33E}', category: 'manufactured', sellPrice: 15 },
+   141→  lure_berry:       { id: 'lure_berry',       name: 'Glazed Berry Pastry', emoji: '\u{1F353}', category: 'manufactured', sellPrice: 45 },
+   142→  lure_truffle:     { id: 'lure_truffle',     name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', category: 'manufactured', sellPrice: 80 },
+   143→  lure_nectar:      { id: 'lure_nectar',      name: 'Celestial Ambrosia',  emoji: '\u{2728}',  category: 'manufactured', sellPrice: 200 },
+   144→};
+   145→
+   146→// --- Production Buildings ---
+   147→export type BuildingId = 'feed_mill' | 'bakery' | 'dairy' | 'loom' | 'press' | 'tailor_shop' | 'textiles';
+   148→
+   149→export interface BuildingDef {
+   150→  id: BuildingId;
+   151→  name: string;
+   152→  emoji: string;
+   153→  recipes: RecipeDef[];
+   154→  queueSlots: number;
+   155→  unlockLevel?: number;
+   156→}
+   157→
+   158→export interface RecipeDef {
+   159→  id: string;
+   160→  name: string;
+   161→  emoji: string;
+   162→  inputs: { productId: string; qty: number }[];
+   163→  output: { productId: string; qty: number };
+   164→  timeSec: number;
+   165→}
+   166→
+   167→export const BUILDINGS: Record<BuildingId, BuildingDef> = {
+   168→  feed_mill: {
+   169→    id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 20,
+   170→    recipes: [
+   171→      { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
+   172→      { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
+   173→    ],
+   174→  },
+   175→  bakery: {
+   176→    id: 'bakery', name: 'Bakery', emoji: '\u{1F3ED}', queueSlots: 20,
+   177→    recipes: [
+   178→      { id: 'make_bread', name: 'Bake Bread', emoji: '\u{1F35E}', inputs: [{ productId: 'wheat', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 1 }, timeSec: 60 },
+   179→      { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
+   180→      { id: 'make_savory_fish_pie', name: 'Savory Fish Pie', emoji: '\u{1F967}', inputs: [{ productId: 'fish', qty: 2 }, { productId: 'wheat', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'savory_fish_pie', qty: 1 }, timeSec: 75 },
+   181→      { id: 'make_crab_bisque', name: 'Crab Bisque', emoji: '\u{1F352}', inputs: [{ productId: 'fish', qty: 3 }, { productId: 'milk', qty: 1 }], output: { productId: 'crab_bisque', qty: 1 }, timeSec: 90 },
+   182→      { id: 'make_lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', inputs: [{ productId: 'pie', qty: 1 }, { productId: 'strawberry', qty: 4 }], output: { productId: 'lure_berry', qty: 1 }, timeSec: 150 },
+   183→    ],
+   184→  },
+   185→  dairy: {
+   186→    id: 'dairy', name: 'Dairy', emoji: '\u{1F9C0}', queueSlots: 20,
+   187→    recipes: [
+   188→      { id: 'make_cheese', name: 'Make Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk', qty: 2 }], output: { productId: 'cheese', qty: 1 }, timeSec: 60 },
+   189→    ],
+   190→  },
+   191→  loom: {
+   192→    id: 'loom', name: 'Loom', emoji: '\u{1F9F5}', queueSlots: 20,
+   193→    recipes: [
+   194→      { id: 'make_sweater', name: 'Weave Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
+   195→      { id: 'make_yarn', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool', qty: 1 }], output: { productId: 'yarn', qty: 2 }, timeSec: 60 },
+   196→    ],
+   197→  },
+   198→  press: {
+   199→    id: 'press', name: 'Press', emoji: '\u{1FAD2}', queueSlots: 20,
+   200→    recipes: [
+   201→      { id: 'make_truffle_oil', name: 'Press Truffle Oil', emoji: '\u{1FAD2}', inputs: [{ productId: 'truffle', qty: 2 }], output: { productId: 'truffle_oil', qty: 1 }, timeSec: 90 },
+   202→      { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 60 },
+   203→      { id: 'make_lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', inputs: [{ productId: 'truffle_oil', qty: 1 }, { productId: 'cheese', qty: 2 }], output: { productId: 'lure_truffle', qty: 1 }, timeSec: 180 },
+   204→      { id: 'make_lure_nectar', name: 'Celestial Ambrosia', emoji: '\u{2728}', inputs: [{ productId: 'truffle_oil', qty: 2 }, { productId: 'sweater', qty: 2 }, { productId: 'fish', qty: 6 }], output: { productId: 'lure_nectar', qty: 1 }, timeSec: 300 },
+   205→    ],
+   206→  },
+   207→  tailor_shop: {
+   208→    id: 'tailor_shop', name: 'Tailor Shop', emoji: '\u{1F9E5}', queueSlots: 20, unlockLevel: 18,
+   209→    recipes: [
+   210→      { id: 'make_sweater_ts', name: 'Knit Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'yarn', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
+   211→      { id: 'make_yarn_ts', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 3 }], output: { productId: 'yarn', qty: 2 }, timeSec: 60 },
+   212→      { id: 'make_quilted_blanket', name: 'Quilt Blanket', emoji: '\u{1F9F4}', inputs: [{ productId: 'yarn', qty: 4 }, { productId: 'wool', qty: 2 }], output: { productId: 'quilted_blanket', qty: 1 }, timeSec: 120 },
+   213→    ],
+   214→  },
+   215→  textiles: {
+   216→    id: 'textiles', name: 'Textiles', emoji: '\u{1F33F}', queueSlots: 20, unlockLevel: 12,
+   217→    recipes: [
+   218→      { id: 'make_silk', name: 'Weave Silk', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 4 }], output: { productId: 'silk', qty: 1 }, timeSec: 60 },
+   219→    ],
+   220→  },
+   221→};
+   222→
+   223→// --- Farmhands ---
+   224→export type FarmhandRole = 'lumberjack' | 'fisherman' | 'farmer' | 'artisan';
+   225→
+   226→export interface FarmhandDef {
+   227→  role: FarmhandRole;
+   228→  name: string;
+   229→  emoji: string;
+   230→  description: string;
+   231→  perk: string;
+   232→}
+   233→
+   234→export const FARMHANDS: Record<FarmhandRole, FarmhandDef> = {
+   235→  lumberjack: { role: 'lumberjack', name: 'Lumberjack', emoji: '\u{1FA93}', description: 'Clears wood hazards; boosts lumber mill yield.', perk: '+15% production speed' },
+   236→  fisherman:  { role: 'fisherman',  name: 'Fisherman',  emoji: '\u{1F3A3}', description: 'Passive fish gathering at riverside docks.', perk: 'Free fish every 5 min' },
+   237→  farmer:     { role: 'farmer',     name: 'Farmer',     emoji: '\u{1F468}\u200D\u{1F33E}', description: 'Decreases field growth timers on adjacent plots.', perk: '-20% crop grow time' },
+   238→  artisan:    { role: 'artisan',    name: 'Artisan',    emoji: '\u{1F9D1}\u200D\u{1F3A8}', description: 'Speeds up production processing inside factories.', perk: '-25% production time' },
+   239→};
+   240→
+   241→// --- Water Zones ---
+   242→export type WaterZoneId = 'zone_pond' | 'zone_river' | 'zone_estuary' | 'zone_lake' | 'zone_ocean';
+   243→
+   244→export interface WaterZoneDef {
+   245→  id: WaterZoneId;
+   246→  name: string;
+   247→  emoji: string;
+   248→  waterType: 'freshwater' | 'brackish' | 'saltwater';
+   249→  unlockLevel: number;
+   250→  baseIntervalMs: number;
+   251→  unlockCostCoins?: number;
+   252→  unlockCostGems?: number;
+   253→  species: FishSpeciesId[];
+   254→}
+   255→
+   256→export const WATER_ZONES: Record<WaterZoneId, WaterZoneDef> = {
+   257→  zone_pond: {
+   258→    id: 'zone_pond', name: 'Farmstead Pond', emoji: '\u{1F327}\uFE0F', waterType: 'freshwater',
+   259→    unlockLevel: 1, baseIntervalMs: 60000,
+   260→    species: ['carp', 'catfish', 'perch'],
+   261→  },
+   262→  zone_river: {
+   263→    id: 'zone_river', name: 'Forest River Stream', emoji: '\u{1F4A7}', waterType: 'freshwater',
+   264→    unlockLevel: 5, baseIntervalMs: 60000, unlockCostCoins: 500,
+   265→    species: ['trout', 'salmon', 'bass'],
+   266→  },
+   267→  zone_estuary: {
+   268→    id: 'zone_estuary', name: 'Coastal Estuary', emoji: '\u{1F3DD}\uFE0F', waterType: 'brackish',
+   269→    unlockLevel: 10, baseIntervalMs: 60000, unlockCostCoins: 2000,
+   270→    species: ['mud_crab', 'snapper', 'barramundi'],
+   271→  },
+   272→  zone_lake: {
+   273→    id: 'zone_lake', name: 'Alpine Mountain Lake', emoji: '\u{1F3D4}\uFE0F', waterType: 'freshwater',
+   274→    unlockLevel: 16, baseIntervalMs: 80000, unlockCostCoins: 5000,
+   275→    species: ['arctic_char', 'golden_trout', 'sturgeon'],
+   276→  },
+   277→  zone_ocean: {
+   278→    id: 'zone_ocean', name: 'Deep Ocean Pier', emoji: '\u{1F30A}', waterType: 'saltwater',
+   279→    unlockLevel: 22, baseIntervalMs: 120000, unlockCostCoins: 15000, unlockCostGems: 10,
+   280→    species: ['tuna', 'marlin', 'lanternfish'],
+   281→  },
+   282→};
+   283→
+   284→// --- Fish Species ---
+   285→export type FishSpeciesId = 'carp' | 'catfish' | 'perch' | 'trout' | 'salmon' | 'bass' | 'mud_crab' | 'snapper' | 'barramundi' | 'arctic_char' | 'golden_trout' | 'sturgeon' | 'tuna' | 'marlin' | 'lanternfish';
+   286→
+   287→export interface FishSpeciesDef {
+   288→  id: FishSpeciesId;
+   289→  name: string;
+   290→  emoji: string;
+   291→  tier: Tier;
+   292→  sellPrice: number;
+   293→  codexGems: number;
+   294→  dropWeight: number;
+   295→  hint: string;
+   296→}
+   297→
+   298→export const FISH_SPECIES: Record<FishSpeciesId, FishSpeciesDef> = {
+   299→  carp:          { id: 'carp',          name: 'Carp',          emoji: '\u{1F41F}', tier: 'common',    sellPrice: 5,  codexGems: 1, dropWeight: 60, hint: 'Common in still waters' },
+   300→  catfish:       { id: 'catfish',       name: 'Catfish',       emoji: '\u{1F41F}', tier: 'uncommon',  sellPrice: 10, codexGems: 2, dropWeight: 30, hint: 'Bottom-dwelling whiskered fish' },
+   301→  perch:         { id: 'perch',         name: 'Perch',         emoji: '\u{1F41F}', tier: 'rare',      sellPrice: 20, codexGems: 3, dropWeight: 10, hint: 'Striped and elusive' },
+   302→  trout:         { id: 'trout',         name: 'Trout',         emoji: '\u{1F41F}', tier: 'common',    sellPrice: 8,  codexGems: 1, dropWeight: 55, hint: 'Swift river swimmer' },
+   303→  salmon:        { id: 'salmon',        name: 'Salmon',        emoji: '\u{1F41F}', tier: 'uncommon',  sellPrice: 15, codexGems: 2, dropWeight: 30, hint: 'Migratory upstream' },
+   304→  bass:          { id: 'bass',          name: 'Bass',          emoji: '\u{1F41F}', tier: 'rare',      sellPrice: 25, codexGems: 3, dropWeight: 15, hint: 'A prized catch' },
+   305→  mud_crab:      { id: 'mud_crab',      name: 'Mud Crab',      emoji: '\u{1F980}', tier: 'common',    sellPrice: 10, codexGems: 1, dropWeight: 50, hint: 'Scuttles in the muck' },
+   306→  snapper:       { id: 'snapper',       name: 'Snapper',       emoji: '\u{1F41F}', tier: 'uncommon',  sellPrice: 18, codexGems: 2, dropWeight: 30, hint: 'Bright red scales' },
+   307→  barramundi:    { id: 'barramundi',    name: 'Barramundi',    emoji: '\u{1F41F}', tier: 'rare',      sellPrice: 30, codexGems: 3, dropWeight: 20, hint: 'Tropical predator' },
+   308→  arctic_char:   { id: 'arctic_char',   name: 'Arctic Char',   emoji: '\u{1F41F}', tier: 'common',    sellPrice: 15, codexGems: 1, dropWeight: 45, hint: 'Cold-water survivor' },
+   309→  golden_trout:  { id: 'golden_trout',  name: 'Golden Trout',  emoji: '\u{1F41F}', tier: 'uncommon',  sellPrice: 25, codexGems: 2, dropWeight: 35, hint: 'Shimmers like gold' },
+   310→  sturgeon:      { id: 'sturgeon',      name: 'Sturgeon',      emoji: '\u{1F41F}', tier: 'rare',      sellPrice: 40, codexGems: 3, dropWeight: 20, hint: 'Ancient river giant' },
+   311→  tuna:          { id: 'tuna',          name: 'Tuna',          emoji: '\u{1F41F}', tier: 'common',    sellPrice: 20, codexGems: 1, dropWeight: 45, hint: 'Open ocean speedster' },
+   312→  marlin:        { id: 'marlin',        name: 'Marlin',        emoji: '\u{1F41F}', tier: 'rare',      sellPrice: 50, codexGems: 3, dropWeight: 15, hint: 'The king of game fish' },
+   313→  lanternfish:   { id: 'lanternfish',   name: 'Lanternfish',   emoji: '\u{1F41F}', tier: 'legendary', sellPrice: 100, codexGems: 5, dropWeight: 5,  hint: 'Bioluminescent deep-sea wonder' },
+   314→};
+   315→
+   316→// --- Fishing Rod Tiers ---
+   317→export type RodTier = 'bamboo' | 'fiberglass' | 'carbon' | 'titanium';
+   318→
+   319→export interface RodTierDef {
+   320→  id: RodTier;
+   321→  name: string;
+   322→  emoji: string;
+   323→  speedMultiplier: number;
+   324→  rareBoost: number;
+   325→  legendaryBoost: number;
+   326→  unlockLevel: number;
+   327→  costCoins: number;
+   328→}
+   329→
+   330→export const ROD_TIERS: Record<RodTier, RodTierDef> = {
+   331→  bamboo:     { id: 'bamboo',     name: 'Bamboo Rod',     emoji: '\u{1F3A3}', speedMultiplier: 1.0, rareBoost: 0,    legendaryBoost: 0,    unlockLevel: 1,  costCoins: 0 },
+   332→  fiberglass: { id: 'fiberglass', name: 'Fiberglass Rod', emoji: '\u{1F3A3}', speedMultiplier: 0.75, rareBoost: 0, legendaryBoost: 0, unlockLevel: 8,  costCoins: 1000 },
+   333→  carbon:     { id: 'carbon',     name: 'Carbon Rod',     emoji: '\u{1F3A3}', speedMultiplier: 0.50, rareBoost: 0.10, legendaryBoost: 0,    unlockLevel: 14, costCoins: 5000 },
+   334→  titanium:   { id: 'titanium',   name: 'Titanium Rod',   emoji: '\u{1F3A3}', speedMultiplier: 0.30, rareBoost: 0.15, legendaryBoost: 0.10, unlockLevel: 22, costCoins: 20000 },
+   335→};
+   336→
+   337→export const ROD_TIER_ORDER: RodTier[] = ['bamboo', 'fiberglass', 'carbon', 'titanium'];
+   338→
+   339→// --- Outfits ---
+   340→export type OutfitId = 'fisherman_slicker' | 'farmers_hat' | 'artisan_apron' | 'lumberjack_vest';
+   341→
+   342→export interface OutfitDef {
+   343→  id: OutfitId;
+   344→  name: string;
+   345→  emoji: string;
+   346→  compatibleRole: FarmhandRole;
+   347→  buff: string;
+   348→}
+   349→
+   350→export const OUTFITS: Record<OutfitId, OutfitDef> = {
+   351→  fisherman_slicker: { id: 'fisherman_slicker', name: 'Fisherman Slicker', emoji: '\u{1F9E5}', compatibleRole: 'fisherman', buff: '-33% catch time' },
+   352→  farmers_hat:       { id: 'farmers_hat',       name: "Farmer's Hat",      emoji: '\u{1F9E5}', compatibleRole: 'farmer',     buff: '-20% crop grow time' },
+   353→  artisan_apron:     { id: 'artisan_apron',     name: 'Artisan Apron',     emoji: '\u{1F9E5}', compatibleRole: 'artisan',    buff: '-25% production time' },
+   354→  lumberjack_vest:   { id: 'lumberjack_vest',   name: 'Lumberjack Vest',   emoji: '\u{1F9E5}', compatibleRole: 'lumberjack', buff: '+15% lumber yield' },
+   355→};
+   356→
+   357→// --- Autonomous Workers ---
+   358→export type WorkerType = 'fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector';
+   359→
+   360→export interface WorkerDef {
+   361→  type: WorkerType;
+   362→  name: string;
+   363→  emoji: string;
+   364→  description: string;
+   365→  baseIntervalMs: number;
+   366→  produces?: string;
+   367→  producesEmoji?: string;
+   368→  producesQty?: number;
+   369→  gearTiers: GearTierDef[];
+   370→}
+   371→
+   372→export interface GearTierDef {
+   373→  tier: number;
+   374→  name: string;
+   375→  speedMultiplier: number;
+   376→  costCoins: number;
+   377→  costGems: number;
+   378→}
+   379→
+   380→export const WORKERS: Record<WorkerType, WorkerDef> = {
+   381→  fisherman: {
+   382→    type: 'fisherman', name: 'Auto Fisherman', emoji: '\u{1F3A3}',
+   383→    description: 'Catches fish autonomously', baseIntervalMs: 60000,
+   384→    produces: 'fish', producesEmoji: '\u{1F41F}', producesQty: 1,
+   385→    gearTiers: [
+   386→      { tier: 1, name: 'Basic Net', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
+   387→      { tier: 2, name: 'Copper Net', speedMultiplier: 0.8, costCoins: 500, costGems: 0 },
+   388→      { tier: 3, name: 'Steel Net', speedMultiplier: 0.6, costCoins: 2000, costGems: 2 },
+   389→    ],
+   390→  },
+   391→  beekeeper: {
+   392→    type: 'beekeeper', name: 'Beekeeper', emoji: '\u{1F36F}',
+   393→    description: 'Tends hives for honey comb', baseIntervalMs: 120000,
+   394→    produces: 'honey_comb', producesEmoji: '\u{1F36F}', producesQty: 1,
+   395→    gearTiers: [
+   396→      { tier: 1, name: 'Basic Smoker', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
+   397→      { tier: 2, name: 'Pro Smoker', speedMultiplier: 0.75, costCoins: 800, costGems: 0 },
+   398→      { tier: 3, name: 'Elite Smoker', speedMultiplier: 0.5, costCoins: 3000, costGems: 3 },
+   399→    ],
+   400→  },
+   401→  forager: {
+   402→    type: 'forager', name: 'Forager', emoji: '\u{1F347}',
+   403→    description: 'Gathers wild berries', baseIntervalMs: 90000,
+   404→    produces: 'wild_berries', producesEmoji: '\u{1F347}', producesQty: 1,
+   405→    gearTiers: [
+   406→      { tier: 1, name: 'Basic Basket', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
+   407→      { tier: 2, name: 'Woven Basket', speedMultiplier: 0.8, costCoins: 600, costGems: 0 },
+   408→      { tier: 3, name: 'Enchanted Basket', speedMultiplier: 0.5, costCoins: 2500, costGems: 2 },
+   409→    ],
+   410→  },
+   411→  merchant: {
+   412→    type: 'merchant', name: 'Merchant', emoji: '\u{1F4B0}',
+   413→    description: 'Auto-sells excess items for coins', baseIntervalMs: 60000,
+   414→    gearTiers: [
+   415→      { tier: 1, name: 'Basic Cart', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
+   416→      { tier: 2, name: 'Sturdy Cart', speedMultiplier: 0.8, costCoins: 1000, costGems: 0 },
+   417→      { tier: 3, name: 'Golden Cart', speedMultiplier: 0.5, costCoins: 5000, costGems: 5 },
+   418→    ],
+   419→  },
+   420→  prospector: {
+   421→    type: 'prospector', name: 'Prospector', emoji: '\u{26CF}',
+   422→    description: 'Digs for gold nuggets', baseIntervalMs: 180000,
+   423→    produces: 'gold_nugget', producesEmoji: '\u2B50', producesQty: 1,
+   424→    gearTiers: [
+   425→      { tier: 1, name: 'Basic Pick', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
+   426→      { tier: 2, name: 'Iron Pick', speedMultiplier: 0.75, costCoins: 1500, costGems: 0 },
+   427→      { tier: 3, name: 'Diamond Pick', speedMultiplier: 0.5, costCoins: 8000, costGems: 5 },
+   428→    ],
+   429→  },
+   430→};
+   431→
+   432→// --- Hourly Events ---
+   433→export type HourlyEventType = 'vip_chef' | 'crow_attack' | 'rainstorm' | 'smuggler';
+   434→
+   435→export interface HourlyEventDef {
+   436→  type: HourlyEventType;
+   437→  name: string;
+   438→  emoji: string;
+   439→  description: string;
+   440→  durationMs: number;
+   441→}
+   442→
+   443→export const HOURLY_EVENTS: Record<HourlyEventType, HourlyEventDef> = {
+   444→  vip_chef: {
+   445→    type: 'vip_chef', name: 'VIP Chef Visit', emoji: '\u{1F468}\u200D\u{1F373}',
+   446→    description: 'A VIP chef is visiting! Fulfill their order for bonus rewards.',
+   447→    durationMs: 600000, // 10 min
+   448→  },
+   449→  crow_attack: {
+   450→    type: 'crow_attack', name: 'Crow Attack!', emoji: '\u{1F426}',
+   451→    description: 'Crows are attacking your crops! Shoo them away!',
+   452→    durationMs: 180000, // 3 min
+   453→  },
+   454→  rainstorm: {
+   455→    type: 'rainstorm', name: 'Rainstorm', emoji: '\u{26C8}\uFE0F',
+   456→    description: 'Rain speeds up all crop growth by 50%!',
+   457→    durationMs: 900000, // 15 min
+   458→  },
+   459→  smuggler: {
+   460→    type: 'smuggler', name: 'Smuggler Crate', emoji: '\u{1F4E6}',
+   461→    description: 'A mysterious smuggler left a crate! Open it for loot.',
+   462→    durationMs: 900000, // 15 min
+   463→  },
+   464→};
+   465→
+   466→// Smuggler crate loot table
+   467→export interface SmugglerLootEntry {
+   468→  itemId: string;
+   469→  qty: number;
+   470→  weight: number;
+   471→}
+   472→
+   473→export const SMUGGLER_LOOT: SmugglerLootEntry[] = [
+   474→  { itemId: 'gems', qty: 2, weight: 10 },
+   475→  { itemId: 'fish', qty: 5, weight: 15 },
+   476→  { itemId: 'honey_comb', qty: 3, weight: 15 },
+   477→  { itemId: 'gold_nugget', qty: 1, weight: 10 },
+   478→  { itemId: 'cheese', qty: 2, weight: 15 },
+   479→  { itemId: 'sweater', qty: 1, weight: 10 },
+   480→  { itemId: 'truffle_oil', qty: 1, weight: 5 },
+   481→  { itemId: 'quilted_blanket', qty: 1, weight: 5 },
+   482→  { itemId: 'silk', qty: 2, weight: 10 },
+   483→  { itemId: 'savory_fish_pie', qty: 1, weight: 5 },
+   484→];
+   485→
+   486→// VIP Chef order templates
+   487→export const CHEF_ORDER_TEMPLATES: { requested: { itemId: string; qty: number; emoji: string; name: string }[]; coinReward: number; xpReward: number; gemReward: number }[] = [
+   488→  { requested: [{ itemId: 'bread', qty: 3, emoji: '\u{1F35E}', name: 'Bread' }], coinReward: 80, xpReward: 50, gemReward: 1 },
+   489→  { requested: [{ itemId: 'cheese', qty: 2, emoji: '\u{1F9C0}', name: 'Cheese' }], coinReward: 100, xpReward: 60, gemReward: 1 },
+   490→  { requested: [{ itemId: 'pie', qty: 2, emoji: '\u{1F967}', name: 'Pie' }], coinReward: 120, xpReward: 70, gemReward: 2 },
+   491→  { requested: [{ itemId: 'sweater', qty: 1, emoji: '\u{1F9E5}', name: 'Sweater' }, { itemId: 'yarn', qty: 2, emoji: '\u{1F9F5}', name: 'Yarn' }], coinReward: 150, xpReward: 80, gemReward: 2 },
+   492→  { requested: [{ itemId: 'savory_fish_pie', qty: 1, emoji: '\u{1F967}', name: 'Savory Fish Pie' }], coinReward: 200, xpReward: 100, gemReward: 3 },
+   493→];
+   494→
+   495→// --- Breeding Slot Upgrades ---
+   496→export interface BreedingSlotUpgrade {
+   497→  slotIndex: number;
+   498→  unlockLevel: number;
+   499→  costGems: number;
+   500→}
+   501→
+   502→export const BREEDING_SLOT_UPGRADES: BreedingSlotUpgrade[] = [
+   503→  { slotIndex: 2, unlockLevel: 6,  costGems: 10 },
+   504→  { slotIndex: 3, unlockLevel: 14, costGems: 25 },
+   505→  { slotIndex: 4, unlockLevel: 22, costGems: 50 },
+   506→];
+   507→
+   508→// --- XP Level Curve ---
+   509→export function xpForLevel(level: number): number {
+   510→  return Math.floor(50 * level * level + 100 * level);
+   511→}
+   512→
+   513→export const MAX_LEVEL = 50;
+   514→
+   515→// --- Order templates ---
+   516→export interface OrderTemplate {
+   517→  requested: { itemId: string; qty: number; emoji: string; name: string }[];
+   518→  coinReward: number;
+   519→  xpReward: number;
+   520→}
+   521→
+   522→export const ORDER_TEMPLATES: OrderTemplate[] = [
+   523→  { requested: [{ itemId: 'wheat', qty: 5, emoji: '\u{1F33E}', name: 'Wheat' }], coinReward: 15, xpReward: 10 },
+   524→  { requested: [{ itemId: 'corn', qty: 4, emoji: '\u{1F33D}', name: 'Corn' }], coinReward: 18, xpReward: 12 },
+   525→  { requested: [{ itemId: 'egg', qty: 3, emoji: '\u{1F95A}', name: 'Egg' }], coinReward: 25, xpReward: 15 },
+   526→  { requested: [{ itemId: 'milk', qty: 2, emoji: '\u{1F95B}', name: 'Milk' }], coinReward: 30, xpReward: 18 },
+   527→  { requested: [{ itemId: 'bread', qty: 2, emoji: '\u{1F35E}', name: 'Bread' }], coinReward: 55, xpReward: 30 },
+   528→  { requested: [{ itemId: 'cheese', qty: 1, emoji: '\u{1F9C0}', name: 'Cheese' }], coinReward: 40, xpReward: 25 },
+   529→  { requested: [{ itemId: 'wool', qty: 3, emoji: '\u{1F9F6}', name: 'Wool' }], coinReward: 45, xpReward: 22 },
+   530→  { requested: [{ itemId: 'feed', qty: 5, emoji: '\u{1FAD9}', name: 'Animal Feed' }], coinReward: 20, xpReward: 12 },
+   531→  { requested: [{ itemId: 'carrot', qty: 4, emoji: '\u{1F955}', name: 'Carrot' }], coinReward: 28, xpReward: 16 },
+   532→  { requested: [{ itemId: 'strawberry', qty: 3, emoji: '\u{1F353}', name: 'Strawberry' }], coinReward: 35, xpReward: 20 },
+   533→  { requested: [{ itemId: 'pie', qty: 1, emoji: '\u{1F967}', name: 'Pie' }], coinReward: 60, xpReward: 35 },
+   534→  { requested: [{ itemId: 'sweater', qty: 1, emoji: '\u{1F9E5}', name: 'Sweater' }], coinReward: 70, xpReward: 40 },
+   535→  { requested: [{ itemId: 'fish', qty: 2, emoji: '\u{1F41F}', name: 'Fish' }], coinReward: 30, xpReward: 18 },
+   536→  { requested: [{ itemId: 'fish', qty: 5, emoji: '\u{1F41F}', name: 'Fish' }], coinReward: 75, xpReward: 40 },
+   537→  { requested: [{ itemId: 'fish', qty: 3, emoji: '\u{1F41F}', name: 'Fish' }, { itemId: 'wheat', qty: 3, emoji: '\u{1F33E}', name: 'Wheat' }], coinReward: 55, xpReward: 30 },
+   538→  { requested: [{ itemId: 'cotton', qty: 5, emoji: '\u{1F33F}', name: 'Cotton' }], coinReward: 35, xpReward: 20 },
+   539→  { requested: [{ itemId: 'honey_comb', qty: 2, emoji: '\u{1F36F}', name: 'Honey Comb' }], coinReward: 30, xpReward: 18 },
+   540→  { requested: [{ itemId: 'yarn', qty: 2, emoji: '\u{1F9F5}', name: 'Yarn' }], coinReward: 45, xpReward: 25 },
+   541→  { requested: [{ itemId: 'savory_fish_pie', qty: 1, emoji: '\u{1F967}', name: 'Savory Fish Pie' }], coinReward: 100, xpReward: 55 },
+   542→];
+   543→
+   544→// --- Wilderness Expeditions ---
+   545→export type BiomeId = 'biome_woods' | 'biome_ridge' | 'biome_caves' | 'biome_peaks';
+   546→export type LureTypeId = 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar';
+   547→
+   548→export interface BiomeDef {
+   549→  id: BiomeId;
+   550→  name: string;
+   551→  emoji: string;
+   552→  description: string;
+   553→  unlockLevel: number;
+   554→  baseDurationMs: number;
+   555→  dispatchFee: number;
+   556→  // Species + tier combinations available in this biome
+   557→  speciesPool: { species: AnimalSpecies; tier: Tier; name: string; weight: number }[];
+   558→}
+   559→
+   560→export const BIOMES: Record<BiomeId, BiomeDef> = {
+   561→  biome_woods: {
+   562→    id: 'biome_woods', name: 'Whispering Woods', emoji: '\u{1F332}',
+   563→    description: 'Dense forest teeming with common and uncommon breeds.',
+   564→    unlockLevel: 14, baseDurationMs: 180_000, dispatchFee: 2500,
+   565→    speciesPool: [
+   566→      { species: 'chicken', tier: 'common', name: 'Rhode Island Red', weight: 50 },
+   567→      { species: 'cow', tier: 'common', name: 'Jersey Cow', weight: 30 },
+   568→      { species: 'pig', tier: 'common', name: 'Berkshire Pig', weight: 20 },
+   569→      { species: 'chicken', tier: 'uncommon', name: 'Ameraucana Hen', weight: 15 },
+   570→      { species: 'cow', tier: 'uncommon', name: 'Holstein Calf', weight: 10 },
+   571→    ],
+   572→  },
+   573→  biome_ridge: {
+   574→    id: 'biome_ridge', name: 'Alpine Ridge', emoji: '\u{26F0}\uFE0F',
+   575→    description: 'Windswept highland pastures hide uncommon and rare breeds.',
+   576→    unlockLevel: 22, baseDurationMs: 360_000, dispatchFee: 8000,
+   577→    speciesPool: [
+   578→      { species: 'cow', tier: 'uncommon', name: 'Highland Shaggy Cow', weight: 40 },
+   579→      { species: 'sheep', tier: 'uncommon', name: 'Jacob Multi-Horn', weight: 30 },
+   580→      { species: 'pig', tier: 'uncommon', name: 'Wild Boar', weight: 20 },
+   581→      { species: 'cow', tier: 'rare', name: 'Aurochs Bull', weight: 10 },
+   582→      { species: 'sheep', tier: 'rare', name: 'Blue Faced Leicester', weight: 8 },
+   583→    ],
+   584→  },
+   585→  biome_caves: {
+   586→    id: 'biome_caves', name: 'Luminescent Caverns', emoji: '\u{1F48A}',
+   587→    description: 'Glowing grottos shelter rare and legendary creatures.',
+   588→    unlockLevel: 32, baseDurationMs: 600_000, dispatchFee: 22000,
+   589→    speciesPool: [
+   590→      { species: 'chicken', tier: 'rare', name: 'Silkie Chicken', weight: 35 },
+   591→      { species: 'cow', tier: 'rare', name: 'Aurora Bovine', weight: 25 },
+   592→      { species: 'sheep', tier: 'rare', name: 'Golden Fleece Sheep', weight: 20 },
+   593→      { species: 'chicken', tier: 'legendary', name: 'Phoenix Rooster', weight: 5 },
+   594→      { species: 'pig', tier: 'legendary', name: 'Truffle Sovereign', weight: 3 },
+   595→    ],
+   596→  },
+   597→  biome_peaks: {
+   598→    id: 'biome_peaks', name: 'Sunken Volcano Peaks', emoji: '\u{1F30B}',
+   599→    description: 'Molten cradle of mythic legends. Only the finest lures prevail.',
+   600→    unlockLevel: 42, baseDurationMs: 900_000, dispatchFee: 60000,
+   601→    speciesPool: [
+   602→      { species: 'chicken', tier: 'legendary', name: 'Phoenix Rooster', weight: 30 },
+   603→      { species: 'cow', tier: 'legendary', name: 'Celestial Ox', weight: 20 },
+   604→      { species: 'sheep', tier: 'legendary', name: 'Cloudwalker Ewe', weight: 15 },
+   605→      { species: 'pig', tier: 'legendary', name: 'Infernal Boar', weight: 10 },
+   606→    ],
+   607→  },
+   608→};
+   609→
+   610→export interface LureDef {
+   611→  id: LureTypeId;
+   612→  name: string;
+   613→  emoji: string;
+   614→  productId: string; // the PRODUCT id this lure maps to
+   615→  targetTier: Tier; // primary tier this lure attracts
+   616→  // Modifiers applied when this lure is used
+   617→  timeMultiplier: number;  // e.g. 0.8 = 20% faster
+   618→  rareBoost: number;       // +chance to trigger rare encounter
+   619→  legendaryBoost: number;  // +chance to trigger legendary encounter
+   620→}
+   621→
+   622→export const LURES: Record<LureTypeId, LureDef> = {
+   623→  lure_basic: {
+   624→    id: 'lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', productId: 'lure_basic',
+   625→    targetTier: 'common', timeMultiplier: 1.0, rareBoost: 0, legendaryBoost: 0,
+   626→  },
+   627→  lure_berry: {
+   628→    id: 'lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', productId: 'lure_berry',
+   629→    targetTier: 'uncommon', timeMultiplier: 0.8, rareBoost: 0.10, legendaryBoost: 0,
+   630→  },
+   631→  lure_truffle: {
+   632→    id: 'lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', productId: 'lure_truffle',
+   633→    targetTier: 'rare', timeMultiplier: 1.0, rareBoost: 0.35, legendaryBoost: 0.05,
+   634→  },
+   635→  lure_nectar: {
+   636→    id: 'lure_nectar', name: 'Celestial Ambrosia', emoji: '\u{2728}', productId: 'lure_nectar',
+   637→    targetTier: 'legendary', timeMultiplier: 1.0, rareBoost: 0.5, legendaryBoost: 0.25,
+   638→  },
+   639→};
+   640→
+   641→// Trail encounter prompts used at the midpoint of expeditions
+   642→export const TRAIL_ENCOUNTERS = [
+   643→  {
+   644→    prompt: 'Your Farmhand spots fresh tracks leading toward a steep bramble ridge, while a gentle path follows the riverbank.',
+   645→    safeLabel: 'Follow the Riverbank',
+   646→    riskyLabel: 'Scale the Ridge',
+   647→  },
+   648→  {
+   649→    prompt: 'A faint glow emanates from a cave entrance ahead. The main trail continues through open meadow.',
+   650→    safeLabel: 'Stay on the Meadow Trail',
+   651→    riskyLabel: 'Enter the Glowing Cave',
+   652→  },
+   653→  {
+   654→    prompt: 'Fog rolls in. A well-worn path leads through the clearing, but a shadow darts between the ancient trees.',
+   655→    safeLabel: 'Take the Cleared Path',
+   656→    riskyLabel: 'Chase the Shadow',
+   657→  },
+   658→  {
+   659→    prompt: 'You hear distant howling. A sheltered den offers safety, while a narrow ridge leads toward the sound.',
+   660→    safeLabel: 'Take Shelter in the Den',
+   661→    riskyLabel: 'Follow the Howling',
+   662→  },
+   663→] as const;
+   664→
+   665→// --- Livestock Market ---
+   666→export const ANIMAL_BUY_PRICES: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
+   667→
+   668→// Market sale prices (common tier base) — derived from the economic formula:
+   669→//   Market Sale Payout = Purchase Cost + (Σ Commodity Value Generated × 1.25)
+   670→// Chicken: 50 + (150 × 1.25) = 237.5 → 250
+   671→// Cow:    150 + (192 × 1.25) = 390   → 750  (higher tier investment reward)
+   672→// Sheep:  200 + (200 × 1.25) = 450   → 1200 (premium for patience)
+   673→// Pig:    300 + (240 × 1.25) = 600   → 2200 (jackpot payday animal)
+   674→export const ANIMAL_MARKET_PRICES: Record<AnimalSpecies, number> = {
+   675→  chicken: 250,
+   676→  cow: 750,
+   677→  sheep: 1200,
+   678→  pig: 2200,
+   679→};
+   680→
+   681→export const TIER_MULTIPLIER: Record<Tier, number> = {
+   682→  common: 1.0,
+   683→  uncommon: 1.5,
+   684→  rare: 2.5,
+   685→  legendary: 5.0,
+   686→};
+   687→
+   688→// Full market price for an elder animal (completed all productive cycles)
+   689→export function livestockSellPrice(species: AnimalSpecies, tier: Tier): number {
+   690→  return Math.floor(ANIMAL_MARKET_PRICES[species] * TIER_MULTIPLIER[tier]);
+   691→}
+   692→
+   693→// Proportional market price based on cycles already completed
+   694→// Elder animals (cyclesRemaining=0) get full price; younger animals get a fraction
+   695→export function livestockSellPriceForAnimal(species: AnimalSpecies, tier: Tier, cyclesRemaining: number, maxCycles: number): number {
+   696→  const fullPrice = livestockSellPrice(species, tier);
+   697→  const cyclesCompleted = maxCycles - cyclesRemaining;
+   698→  if (cyclesCompleted <= 0) return 0; // haven't produced anything yet
+   699→  if (cyclesRemaining <= 0) return fullPrice; // elder — full payout
+   700→  return Math.floor(fullPrice * (cyclesCompleted / maxCycles));
+   701→}
+   702→
+   703→export function livestockBuyPrice(species: AnimalSpecies, tier: Tier): number {
+   704→  return Math.floor(ANIMAL_BUY_PRICES[species] * TIER_MULTIPLIER[tier]);
+   705→}
+   706→
