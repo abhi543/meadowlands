@@ -24,30 +24,32 @@ interface TabDef {
   id: TabId;
   label: string;
   emoji: string;
+  color: string;        // Active text/icon color
+  bgActive: string;     // Active background color
+  bgInactive: string;   // Inactive hover background
 }
 
 const TABS: TabDef[] = [
-  { id: 'farm',       label: 'Farm',       emoji: '\u{1F33E}' },
-  { id: 'animals',    label: 'Animals',    emoji: '\u{1F414}' },
-  { id: 'production', label: 'Produce',    emoji: '\u2699\uFE0F' },
-  { id: 'orders',     label: 'Orders',     emoji: '\u{1F69A}' },
-  { id: 'shop',       label: 'Shop',       emoji: '\u{1F3EA}' },
-  { id: 'farmhands',  label: 'Workers',    emoji: '\u{1F477}' },
-  { id: 'fishery',    label: 'Fishery',    emoji: '\u{1F3A3}' },
-  { id: 'breeding',   label: 'Breed',      emoji: '\u{1F43E}' },
-  { id: 'market',     label: 'Market',     emoji: '\u{1F4B0}' },
-  { id: 'guide',      label: 'Guide',      emoji: '\u{1F4D6}' },
+  { id: 'farm',       label: 'Farm',     emoji: '🌾', color: 'text-green-600 dark:text-green-400',       bgActive: 'bg-green-100 dark:bg-green-900/40',     bgInactive: 'hover:bg-green-50 dark:hover:bg-green-900/20' },
+  { id: 'animals',    label: 'Animals',  emoji: '🐔', color: 'text-amber-600 dark:text-amber-400',       bgActive: 'bg-amber-100 dark:bg-amber-900/40',     bgInactive: 'hover:bg-amber-50 dark:hover:bg-amber-900/20' },
+  { id: 'production', label: 'Produce',  emoji: '⚙️', color: 'text-orange-600 dark:text-orange-400',     bgActive: 'bg-orange-100 dark:bg-orange-900/40',   bgInactive: 'hover:bg-orange-50 dark:hover:bg-orange-900/20' },
+  { id: 'orders',     label: 'Orders',   emoji: '🚚', color: 'text-blue-600 dark:text-blue-400',         bgActive: 'bg-blue-100 dark:bg-blue-900/40',       bgInactive: 'hover:bg-blue-50 dark:hover:bg-blue-900/20' },
+  { id: 'shop',       label: 'Shop',     emoji: '🏪', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
+  { id: 'farmhands',  label: 'Workers',  emoji: '👷', color: 'text-violet-600 dark:text-violet-400',     bgActive: 'bg-violet-100 dark:bg-violet-900/40',   bgInactive: 'hover:bg-violet-50 dark:hover:bg-violet-900/20' },
+  { id: 'fishery',    label: 'Fishery',  emoji: '🎣', color: 'text-cyan-600 dark:text-cyan-400',         bgActive: 'bg-cyan-100 dark:bg-cyan-900/40',       bgInactive: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/20' },
+  { id: 'breeding',   label: 'Breed',    emoji: '🐾', color: 'text-pink-600 dark:text-pink-400',         bgActive: 'bg-pink-100 dark:bg-pink-900/40',       bgInactive: 'hover:bg-pink-50 dark:hover:bg-pink-900/20' },
+  { id: 'market',     label: 'Market',   emoji: '💰', color: 'text-yellow-600 dark:text-yellow-400',     bgActive: 'bg-yellow-100 dark:bg-yellow-900/40',   bgInactive: 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20' },
+  { id: 'guide',      label: 'Guide',    emoji: '📖', color: 'text-indigo-600 dark:text-indigo-400',     bgActive: 'bg-indigo-100 dark:bg-indigo-900/40',   bgInactive: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20' },
 ];
 
 // Hydration-safe hook for zustand persist
 function useHydrated() {
   return useSyncExternalStore(
     (onStoreChange) => {
-      // Subscribe to no-op — we just need to know if we're on the client
       return () => {};
     },
-    () => true,  // client: always hydrated
-    () => false,  // server: not hydrated
+    () => true,
+    () => false,
   );
 }
 
@@ -77,7 +79,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-sky-200 via-green-100 to-amber-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-bounce">{'\u{1F33E}'}</div>
+          <div className="text-5xl mb-4 animate-bounce">🌾</div>
           <p className="text-lg font-semibold text-green-800 dark:text-green-300">Loading Meadowlands...</p>
         </div>
       </div>
@@ -91,7 +93,7 @@ export default function Home() {
         <HUD />
       </header>
 
-      <main className="max-w-2xl mx-auto p-3 pt-2 pb-24">
+      <main className="max-w-2xl mx-auto p-3 pt-2 pb-36">
         {/* Event Banner */}
         <EventBanner />
 
@@ -120,27 +122,30 @@ export default function Home() {
       {/** Floating Notifications */}
       <FloatingNumbers />
 
-      {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-gray-900/90 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
-        <div className="max-w-2xl mx-auto flex overflow-x-auto">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-2.5 flex flex-col items-center gap-0.5 transition-all min-w-[56px] ${
-                activeTab === tab.id
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-stone-400 dark:text-gray-500 hover:text-stone-600 dark:hover:text-gray-300'
-              }`}
-            >
-              <span className={`text-lg transition-transform ${activeTab === tab.id ? 'scale-110' : ''}`}>
-                {tab.emoji}
-              </span>
-              <span className={`text-[9px] font-medium ${activeTab === tab.id ? 'font-bold' : ''}`}>
-                {tab.label}
-              </span>
-            </button>
-          ))}
+      {/* Bottom Tab Bar - 2-row grid for all tabs visible */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
+        <div className="max-w-2xl mx-auto grid grid-cols-5 gap-1 p-1.5">
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all duration-200 ${
+                  isActive
+                    ? `${tab.bgActive} ${tab.color} shadow-sm scale-105`
+                    : `text-stone-400 dark:text-gray-500 ${tab.bgInactive}`
+                }`}
+              >
+                <span className={`transition-transform duration-200 ${isActive ? 'text-2xl' : 'text-xl'}`}>
+                  {tab.emoji}
+                </span>
+                <span className={`text-[10px] leading-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </nav>
     </div>
