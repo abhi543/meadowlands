@@ -1,7 +1,43 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { CROPS, PRODUCTS } from '@/game/data';
+import { CROPS, PRODUCTS, BUILDINGS } from '@/game/data';
+
+/** Get source hint for where to obtain a missing item */
+function getItemSourceHint(itemId: string): string {
+  if (itemId in CROPS) return `Grow ${CROPS[itemId as keyof typeof CROPS].name} on Farm`;
+  if (itemId === 'egg') return 'Feed Chickens, then collect';
+  if (itemId === 'milk') return 'Feed Cows, then collect';
+  if (itemId === 'wool') return 'Feed Sheep, then collect';
+  if (itemId === 'truffle') return 'Feed Pigs, then collect';
+  if (itemId === 'fish') return 'Catch at Fishery';
+  if (itemId === 'feed') return 'Craft at Feed Mill (wheat/corn)';
+  if (itemId === 'bread') return 'Bake at Bakery (wheat + egg)';
+  if (itemId === 'cheese') return 'Craft at Dairy (milk)';
+  if (itemId === 'fabric') return 'Weave at Loom (wool)';
+  if (itemId === 'yarn') return 'Spin at Loom (wool)';
+  if (itemId === 'truffle_oil') return 'Press at Press (truffle)';
+  if (itemId === 'honey') return 'Beekeeper or Bakery';
+  if (itemId === 'honey_comb') return 'Beekeeper worker';
+  if (itemId === 'wild_berries') return 'Forager worker or Farm';
+  if (itemId === 'gold_nugget') return 'Prospector worker';
+  if (itemId === 'cotton') return 'Grow Cotton on Farm';
+  if (itemId === 'silk') return 'Weave at Textiles';
+  if (itemId === 'sweater') return 'Craft at Tailor Shop (yarn)';
+  if (itemId === 'pie') return 'Bake at Bakery';
+  if (itemId === 'quilted_blanket') return 'Craft at Tailor Shop';
+  if (itemId === 'savory_fish_pie') return 'Bake at Bakery (fish)';
+  if (itemId === 'crab_bisque') return 'Craft at Dairy (fish)';
+  // Check if it's a product made in a building
+  for (const [bId, bDef] of Object.entries(BUILDINGS)) {
+    for (const recipe of bDef.recipes) {
+      if (recipe.output.productId === itemId) {
+        return `Craft at ${bDef.name}`;
+      }
+    }
+  }
+  return 'Produce or gather';
+}
 
 export function OrderBoard() {
   const { orders, silo, barn, fulfillOrder, trashOrder } = useGameStore();
@@ -18,18 +54,50 @@ export function OrderBoard() {
     return true;
   };
 
+  // Count how many orders are fulfillable
+  const fulfillableCount = orders.filter(o => canFulfill(o)).length;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
           {'\u{1F69A}'} Delivery Board
         </h3>
-        <span className="text-xs text-stone-500 dark:text-gray-400">{orders.length} orders available</span>
+        <span className="text-xs text-stone-500 dark:text-gray-400">
+          {fulfillableCount > 0 && <span className="text-green-600 dark:text-green-400 font-medium">{fulfillableCount} ready</span>}
+          {fulfillableCount > 0 && ' / '}
+          {orders.length} orders
+        </span>
       </div>
+
+      {/* Quick hint when no orders can be fulfilled */}
+      {orders.length > 0 && fulfillableCount === 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded px-2 py-1.5">
+          <span>{'\u{1F4E6}'}</span>
+          <span>No orders ready to deliver. Produce items to match order requirements below.</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {orders.map(order => {
           const fulfilled = canFulfill(order);
+
+          // Find missing items for hint
+          const missingItems: { name: string; emoji: string; have: number; need: number; source: string }[] = [];
+          for (const item of order.requested) {
+            const storage = isCropItem(item.itemId) ? silo : barn;
+            const have = storage[item.itemId] || 0;
+            if (have < item.qty) {
+              missingItems.push({
+                name: item.name,
+                emoji: item.emoji,
+                have,
+                need: item.qty,
+                source: getItemSourceHint(item.itemId),
+              });
+            }
+          }
+
           return (
             <div
               key={order.id}
@@ -58,6 +126,27 @@ export function OrderBoard() {
                   );
                 })}
               </div>
+
+              {/* Missing items hints */}
+              {missingItems.length > 0 && (
+                <div className="mb-3 space-y-1">
+                  {missingItems.map((m, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-[10px] text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
+                      <span>{m.emoji}</span>
+                      <span>Need {m.need - m.have} more {m.name}</span>
+                      <span className="text-red-400 dark:text-red-500">{'\u2192'} {m.source}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ready to deliver hint */}
+              {fulfilled && (
+                <div className="mb-3 flex items-center gap-1.5 text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 rounded px-2 py-1">
+                  <span>{'\u2705'}</span>
+                  <span className="font-medium">All items ready! Deliver now for rewards.</span>
+                </div>
+              )}
 
               {/* Rewards */}
               <div className="flex items-center gap-3 mb-3 text-xs">
