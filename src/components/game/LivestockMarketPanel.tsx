@@ -4,7 +4,7 @@ import { useGameStore } from '@/game/store';
 import {
   ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES,
   HABITAT_UPGRADES,
-  livestockBuyPrice, livestockSellPrice,
+  livestockBuyPrice, livestockSellPriceForAnimal,
   type AnimalSpecies, type Tier,
 } from '@/game/data';
 
@@ -12,7 +12,7 @@ const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
 
 export function LivestockMarketPanel() {
-  const { animals, coins, animalCapacity, buyAnimal } = useGameStore();
+  const { animals, coins, animalCapacity, buyAnimal, sellAnimal } = useGameStore();
 
   return (
     <div className="space-y-3">
@@ -89,7 +89,8 @@ export function LivestockMarketPanel() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {animals.map(animal => {
               const def = ANIMALS[animal.species];
-              const sellPrice = livestockSellPrice(animal.species, animal.tier);
+              const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+              const canSell = sellPrice > 0;
 
               return (
                 <div
@@ -111,6 +112,18 @@ export function LivestockMarketPanel() {
                   <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">
                     {'\u{1F4B0}'}{sellPrice}
                   </div>
+                  {canSell && (
+                    <button
+                      onClick={() => sellAnimal(animal.id)}
+                      className={`w-full mt-1 py-1 text-[10px] font-bold rounded-md text-white transition-colors ${
+                        animal.age === 'elder'
+                          ? 'bg-red-500 hover:bg-red-600'
+                          : 'bg-orange-500 hover:bg-orange-600'
+                      }`}
+                    >
+                      {animal.age === 'elder' ? 'Sell' : 'Market Sell'}
+                    </button>
+                  )}
                 </div>
               );
             })}

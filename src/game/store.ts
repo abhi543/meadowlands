@@ -6,7 +6,8 @@ import {
   HOURLY_EVENTS, SMUGGLER_LOOT, CHEF_ORDER_TEMPLATES,
   HABITAT_UPGRADES, BREEDING_SLOT_UPGRADES,
   ORDER_TEMPLATES, xpForLevel, MAX_LEVEL,
-  TIER_MAX_CYCLES, ANIMAL_BUY_PRICES,
+  TIER_MAX_CYCLES, ANIMAL_BUY_PRICES, ANIMAL_MARKET_PRICES,
+  livestockSellPriceForAnimal,
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
   type WorkerType, type HourlyEventType,
@@ -538,11 +539,10 @@ export const useGameStore = create<GameState>()(
       sellAnimal: (animalId) => {
         const state = get();
         const animal = state.animals.find(a => a.id === animalId);
-        if (!animal || animal.age !== 'elder') return;
-        // Sell price: 25% of buy cost based on tier
-        const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
-        const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
-        const sellPrice = Math.max(5, Math.floor(costs[animal.species] * tierMult[animal.tier] * 0.25));
+        if (!animal) return;
+        // Proportional market price based on cycles completed
+        const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+        if (sellPrice <= 0) return; // can't sell an animal that hasn't produced anything
         const newAnimals = state.animals.filter(a => a.id !== animalId);
         set({
           animals: newAnimals,
@@ -552,13 +552,11 @@ export const useGameStore = create<GameState>()(
 
       sellAllElderAnimals: () => {
         const state = get();
-        const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
-        const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
-        let totalCoins = 0;
         const elders = state.animals.filter(a => a.age === 'elder');
         if (elders.length === 0) return;
+        let totalCoins = 0;
         for (const animal of elders) {
-          totalCoins += Math.max(5, Math.floor(costs[animal.species] * tierMult[animal.tier] * 0.25));
+          totalCoins += livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
         }
         const newAnimals = state.animals.filter(a => a.age !== 'elder');
         set({

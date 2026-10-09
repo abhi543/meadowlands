@@ -527,6 +527,19 @@ export const ORDER_TEMPLATES: OrderTemplate[] = [
 // --- Livestock Market ---
 export const ANIMAL_BUY_PRICES: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
 
+// Market sale prices (common tier base) — derived from the economic formula:
+//   Market Sale Payout = Purchase Cost + (Σ Commodity Value Generated × 1.25)
+// Chicken: 50 + (150 × 1.25) = 237.5 → 250
+// Cow:    150 + (192 × 1.25) = 390   → 750  (higher tier investment reward)
+// Sheep:  200 + (200 × 1.25) = 450   → 1200 (premium for patience)
+// Pig:    300 + (240 × 1.25) = 600   → 2200 (jackpot payday animal)
+export const ANIMAL_MARKET_PRICES: Record<AnimalSpecies, number> = {
+  chicken: 250,
+  cow: 750,
+  sheep: 1200,
+  pig: 2200,
+};
+
 export const TIER_MULTIPLIER: Record<Tier, number> = {
   common: 1.0,
   uncommon: 1.5,
@@ -534,8 +547,19 @@ export const TIER_MULTIPLIER: Record<Tier, number> = {
   legendary: 5.0,
 };
 
+// Full market price for an elder animal (completed all productive cycles)
 export function livestockSellPrice(species: AnimalSpecies, tier: Tier): number {
-  return Math.floor(ANIMAL_BUY_PRICES[species] * TIER_MULTIPLIER[tier] * 0.7);
+  return Math.floor(ANIMAL_MARKET_PRICES[species] * TIER_MULTIPLIER[tier]);
+}
+
+// Proportional market price based on cycles already completed
+// Elder animals (cyclesRemaining=0) get full price; younger animals get a fraction
+export function livestockSellPriceForAnimal(species: AnimalSpecies, tier: Tier, cyclesRemaining: number, maxCycles: number): number {
+  const fullPrice = livestockSellPrice(species, tier);
+  const cyclesCompleted = maxCycles - cyclesRemaining;
+  if (cyclesCompleted <= 0) return 0; // haven't produced anything yet
+  if (cyclesRemaining <= 0) return fullPrice; // elder — full payout
+  return Math.floor(fullPrice * (cyclesCompleted / maxCycles));
 }
 
 export function livestockBuyPrice(species: AnimalSpecies, tier: Tier): number {

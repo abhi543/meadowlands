@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, HABITAT_UPGRADES, type AnimalSpecies, type Tier } from '@/game/data';
+import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, HABITAT_UPGRADES, livestockSellPriceForAnimal, type AnimalSpecies, type Tier } from '@/game/data';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -25,6 +25,9 @@ export function AnimalPanel() {
   }
   const totalFeedNeeded = feedableAnimals.reduce((sum, a) => sum + ANIMALS[a.species].feedPerCycle, 0);
   const elderCount = animals.filter(a => a.age === 'elder').length;
+  const elderTotalValue = animals
+    .filter(a => a.age === 'elder')
+    .reduce((sum, a) => sum + livestockSellPriceForAnimal(a.species, a.tier, a.cyclesRemaining, a.maxCycles), 0);
 
   return (
     <div className="space-y-4">
@@ -76,10 +79,10 @@ export function AnimalPanel() {
               onClick={() => sellAllElderAnimals()}
               className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white border-red-600 shadow-lg shadow-red-200/50 active:scale-95"
             >
-              <span className="text-lg">{'🗑️'}</span>
+              <span className="text-lg">{'🏪'}</span>
               Sell Elders
               <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
-                {elderCount}
+                {elderCount} {'💰'}{elderTotalValue}
               </span>
             </button>
           )}
@@ -202,14 +205,23 @@ export function AnimalPanel() {
                         {animal.fed && !animal.productReady && (
                           <div className="text-[10px] text-blue-500 dark:text-blue-400">Producing...</div>
                         )}
-                        {animal.age === 'elder' && (
-                          <button
-                            onClick={() => sellAnimal(animal.id)}
-                            className="w-full py-1 text-xs font-bold rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors"
-                          >
-                            {'🗑️'} Sell {'💰'}{Math.max(5, Math.floor(COSTS[animal.species] * ({ common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 }[animal.tier]) * 0.25))}
-                          </button>
-                        )}
+                        {/* Sell button — available for any animal that has completed at least 1 cycle */}
+                        {(() => {
+                          const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+                          const canSell = sellPrice > 0;
+                          return canSell ? (
+                            <button
+                              onClick={() => sellAnimal(animal.id)}
+                              className={`w-full py-1 text-xs font-bold rounded-md text-white transition-colors ${
+                                animal.age === 'elder'
+                                  ? 'bg-red-500 hover:bg-red-600'
+                                  : 'bg-orange-500 hover:bg-orange-600'
+                              }`}
+                            >
+                              {'💰'}{sellPrice} {animal.age === 'elder' ? 'Sell' : 'Market'}
+                            </button>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                   );
