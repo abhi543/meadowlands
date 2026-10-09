@@ -179,6 +179,8 @@ export interface GameState {
   fulfillOrder: (orderId: string) => void;
   trashOrder: (orderId: string) => void;
   sellItem: (itemId: string, qty: number) => void;
+  sellAllOfItem: (itemId: string) => void;
+  sellAllItems: () => void;
   buyFarmhand: (role: FarmhandRole) => void;
   addSilo: (itemId: string, qty: number) => void;
   addBarn: (itemId: string, qty: number) => void;
@@ -762,17 +764,82 @@ export const useGameStore = create<GameState>()(
 
       sellItem: (itemId, qty) => {
         const state = get();
-        const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
-        if (!product) return;
         const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
         const storage = isCrop ? state.silo : state.barn;
-        if ((storage[itemId] || 0) < qty) return;
-
-        if (isCrop) {
-          set({ silo: { ...state.silo, [itemId]: state.silo[itemId] - qty }, coins: state.coins + product.sellPrice * qty });
+        const available = storage[itemId] || 0;
+        if (available < qty) return;
+        // Determine sell price
+        let sellPrice = 1;
+        if (itemId in CROPS) {
+          const cropDef = CROPS[itemId as CropId];
+          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
         } else {
-          set({ barn: { ...state.barn, [itemId]: state.barn[itemId] - qty }, coins: state.coins + product.sellPrice * qty });
+          const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
+          if (product) sellPrice = product.sellPrice;
         }
+        if (isCrop) {
+          set({ silo: { ...state.silo, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+        } else {
+          set({ barn: { ...state.barn, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+        }
+      },
+
+      sellAllOfItem: (itemId) => {
+        const state = get();
+        const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+        const storage = isCrop ? state.silo : state.barn;
+        const qty = storage[itemId] || 0;
+        if (qty <= 0) return;
+        let sellPrice = 1;
+        if (itemId in CROPS) {
+          const cropDef = CROPS[itemId as CropId];
+          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+        } else {
+          const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
+          if (product) sellPrice = product.sellPrice;
+        }
+        if (isCrop) {
+          set({ silo: { ...state.silo, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+        } else {
+          set({ barn: { ...state.barn, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+        }
+      },
+
+      sellAllItems: () => {
+        const state = get();
+        let totalCoins = 0;
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        // Sell all silo items (crops + extras)
+        for (const [id, def] of Object.entries(CROPS)) {
+          const qty = newSilo[id] || 0;
+          if (qty > 0) {
+            const sellPrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+            totalCoins += sellPrice * qty;
+            newSilo[id] = 0;
+          }
+        }
+        const siloExtras = ['feed', 'cotton', 'honey_comb', 'wild_berries', 'gold_nugget'];
+        for (const id of siloExtras) {
+          const qty = newSilo[id] || 0;
+          if (qty > 0) {
+            const product = PRODUCTS[id as keyof typeof PRODUCTS];
+            if (product) {
+              totalCoins += product.sellPrice * qty;
+              newSilo[id] = 0;
+            }
+          }
+        }
+        // Sell all barn items
+        for (const [id, def] of Object.entries(PRODUCTS)) {
+          const qty = newBarn[id] || 0;
+          if (qty > 0) {
+            totalCoins += def.sellPrice * qty;
+            newBarn[id] = 0;
+          }
+        }
+        if (totalCoins === 0) return;
+        set({ silo: newSilo, barn: newBarn, coins: state.coins + totalCoins });
       },
 
       buyFarmhand: (role) => {
