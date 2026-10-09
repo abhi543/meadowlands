@@ -6,10 +6,13 @@ import { CROPS, PRODUCTS } from '@/game/data';
 export function OrderBoard() {
   const { orders, silo, barn, fulfillOrder, trashOrder } = useGameStore();
 
+  const isCropItem = (itemId: string): boolean => {
+    return itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+  };
+
   const canFulfill = (order: typeof orders[0]) => {
     for (const item of order.requested) {
-      const isCrop = item.itemId in CROPS || item.itemId === 'feed';
-      const storage = isCrop ? silo : barn;
+      const storage = isCropItem(item.itemId) ? silo : barn;
       if ((storage[item.itemId] || 0) < item.qty) return false;
     }
     return true;
@@ -19,7 +22,7 @@ export function OrderBoard() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          🚚 Delivery Board
+          {'\u{1F69A}'} Delivery Board
         </h3>
         <span className="text-xs text-stone-500 dark:text-gray-400">{orders.length} orders available</span>
       </div>
@@ -39,8 +42,7 @@ export function OrderBoard() {
               {/* Items Requested */}
               <div className="space-y-1.5 mb-3">
                 {order.requested.map((item, i) => {
-                  const isCrop = item.itemId in CROPS || item.itemId === 'feed';
-                  const storage = isCrop ? silo : barn;
+                  const storage = isCropItem(item.itemId) ? silo : barn;
                   const have = storage[item.itemId] || 0;
                   const enough = have >= item.qty;
                   return (
@@ -60,10 +62,10 @@ export function OrderBoard() {
               {/* Rewards */}
               <div className="flex items-center gap-3 mb-3 text-xs">
                 <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
-                  💰 {order.coinReward}
+                  {'\u{1F4B0}'} {order.coinReward}
                 </span>
                 <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold">
-                  ⭐ {order.xpReward} XP
+                  {'\u2B50'} {order.xpReward} XP
                 </span>
               </div>
 
@@ -74,13 +76,13 @@ export function OrderBoard() {
                   disabled={!fulfilled}
                   className="flex-1 py-1.5 text-xs font-bold rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
                 >
-                  ✅ Deliver
+                  {'\u2705'} Deliver
                 </button>
                 <button
                   onClick={() => trashOrder(order.id)}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg bg-stone-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-stone-600 dark:text-gray-400 transition-colors"
                 >
-                  🗑️
+                  {'\u{1F5D1}\uFE0F'}
                 </button>
               </div>
             </div>

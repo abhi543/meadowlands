@@ -14,9 +14,17 @@ export function ShopPanel() {
     if (qty > 0) allItems.push({ id, name: def.name, emoji: def.emoji, qty, sellPrice: Math.max(1, Math.floor(def.seedCost / 2) + 1), isCrop: true });
   }
 
-  // Feed from silo
-  if ((silo.feed || 0) > 0) {
-    allItems.push({ id: 'feed', name: 'Animal Feed', emoji: '🫙', qty: silo.feed, sellPrice: 2, isCrop: true });
+  // Other silo items
+  const siloExtras: { id: string; name: string; emoji: string; sellPrice: number }[] = [
+    { id: 'feed', name: 'Animal Feed', emoji: '\u{1FAD9}', sellPrice: 2 },
+    { id: 'cotton', name: 'Cotton', emoji: '\u{1F33F}', sellPrice: 6 },
+    { id: 'honey_comb', name: 'Honey Comb', emoji: '\u{1F36F}', sellPrice: 12 },
+    { id: 'wild_berries', name: 'Wild Berries', emoji: '\u{1F347}', sellPrice: 8 },
+    { id: 'gold_nugget', name: 'Gold Nugget', emoji: '\u2B50', sellPrice: 50 },
+  ];
+  for (const extra of siloExtras) {
+    const qty = silo[extra.id] || 0;
+    if (qty > 0) allItems.push({ id: extra.id, name: extra.name, emoji: extra.emoji, qty, sellPrice: extra.sellPrice, isCrop: true });
   }
 
   // Products from barn
@@ -28,7 +36,7 @@ export function ShopPanel() {
   return (
     <div className="space-y-3">
       <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-        🏪 Sell Items
+        {'\u{1F3EA}'} Sell Items
       </h3>
 
       {allItems.length === 0 ? (
@@ -43,7 +51,7 @@ export function ShopPanel() {
                 <span className="text-xl">{item.emoji}</span>
                 <div>
                   <div className="text-sm font-medium text-stone-800 dark:text-gray-200">{item.name}</div>
-                  <div className="text-xs text-stone-500 dark:text-gray-400">Have: {item.qty} · 💰{item.sellPrice}/ea</div>
+                  <div className="text-xs text-stone-500 dark:text-gray-400">Have: {item.qty} {'\u2022'} {'\u{1F4B0}'}{item.sellPrice}/ea</div>
                 </div>
               </div>
               <div className="flex gap-1">
