@@ -7,17 +7,24 @@ import { useState } from 'react';
 const CROP_LIST = Object.values(CROPS);
 
 export function FarmGrid() {
-  const { plots, unlockedPlots, plantCrop, harvestPlot, silo } = useGameStore();
+  const { plots, unlockedPlots, plantCrop, harvestPlot, plantAllCrops, harvestAllPlots, silo, coins } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
 
   const visiblePlots = plots.slice(0, unlockedPlots);
+
+  // Count ready and empty plots for batch actions
+  const readyCount = visiblePlots.filter(p => p.crop && p.ready).length;
+  const emptyCount = visiblePlots.filter(p => !p.crop).length;
+  const selectedCropDef = CROPS[selectedCrop];
+  const totalPlantCost = emptyCount * selectedCropDef.seedCost;
+  const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
 
   return (
     <div className="space-y-3">
       {/* Crop Selector Toolbar */}
       <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2 border border-amber-200 dark:border-amber-800">
         <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1.5 flex items-center gap-1">
-          {'\u{1F331}'} Select Crop & Tap Plot to Plant
+          {'🌱'} Select Crop & Tap Plot to Plant
         </div>
         <div className="flex gap-1.5 flex-wrap">
           {CROP_LIST.map(crop => (
@@ -31,10 +38,54 @@ export function FarmGrid() {
               }`}
             >
               {crop.emoji} {crop.name}
-              {crop.seedCost > 0 && <span className="text-xs opacity-70 ml-1">{'\u{1F4B0}'}{crop.seedCost}</span>}
+              {crop.seedCost > 0 && <span className="text-xs opacity-70 ml-1">{'💰'}{crop.seedCost}</span>}
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Batch Action Buttons */}
+      <div className="flex gap-2 flex-wrap">
+        {/* Harvest All */}
+        <button
+          onClick={() => harvestAllPlots()}
+          disabled={readyCount === 0}
+          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+            readyCount > 0
+              ? 'bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-lg shadow-green-200/50 active:scale-95'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+          }`}
+        >
+          <span className="text-lg">{'🌾'}</span>
+          Harvest All
+          {readyCount > 0 && (
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+              {readyCount}
+            </span>
+          )}
+        </button>
+
+        {/* Plant All */}
+        <button
+          onClick={() => plantAllCrops(selectedCrop)}
+          disabled={emptyCount === 0 || !canAffordPlantAll}
+          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+            emptyCount > 0 && canAffordPlantAll
+              ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-200/50 active:scale-95'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+          }`}
+        >
+          <span className="text-lg">{'🌱'}</span>
+          Plant All {selectedCropDef.emoji}
+          {emptyCount > 0 && (
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+              {emptyCount}
+            </span>
+          )}
+          {totalPlantCost > 0 && (
+            <span className="text-xs opacity-80">{'💰'}{totalPlantCost}</span>
+          )}
+        </button>
       </div>
 
       {/* Farm Grid */}
@@ -74,7 +125,7 @@ export function FarmGrid() {
               )}
 
               {isEmpty && (
-                <span className="text-2xl opacity-30">{'\u{1F7EB}'}</span>
+                <span className="text-2xl opacity-30">{'🟫'}</span>
               )}
 
               {isGrowing && plot.crop && (
@@ -89,7 +140,7 @@ export function FarmGrid() {
               {isReady && plot.crop && (
                 <div className="flex flex-col items-center animate-bounce">
                   <span className="text-2xl">{CROPS[plot.crop].emoji}</span>
-                  <span className="text-[10px] font-bold text-green-600 dark:text-green-400">{'\u2702\uFE0F'} Harvest</span>
+                  <span className="text-[10px] font-bold text-green-600 dark:text-green-400">{'✂️'} Harvest</span>
                 </div>
               )}
             </button>
@@ -102,7 +153,7 @@ export function FarmGrid() {
         <span className="font-semibold text-stone-600 dark:text-stone-400">Silo:</span>
         {Object.entries(silo).filter(([, v]) => v > 0).map(([k, v]) => (
           <span key={k} className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full text-stone-700 dark:text-stone-300">
-            {k in CROPS ? CROPS[k as CropId].emoji : '\u{1FAD9}'} {v}
+            {k in CROPS ? CROPS[k as CropId].emoji : '🪹'} {v}
           </span>
         ))}
       </div>

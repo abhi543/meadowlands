@@ -165,6 +165,8 @@ export interface GameState {
   // --- Actions ---
   plantCrop: (plotId: number, cropId: CropId) => void;
   harvestPlot: (plotId: number) => void;
+  plantAllCrops: (cropId: CropId) => void;
+  harvestAllPlots: () => void;
   feedAnimal: (animalId: string) => void;
   collectProduct: (animalId: string) => void;
   buyAnimal: (species: AnimalSpecies, tier?: Tier) => void;
@@ -382,6 +384,52 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         newPlots[plotId] = { id: plotId, crop: null, plantedAt: null, ready: false };
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3, state.level);
+        set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
+      },
+
+      plantAllCrops: (cropId) => {
+        const state = get();
+        const cropDef = CROPS[cropId];
+        const now = Date.now();
+        // Find all empty unlocked plots
+        const emptyPlotIds: number[] = [];
+        for (let i = 0; i < state.unlockedPlots; i++) {
+          if (state.plots[i] && state.plots[i].crop === null) {
+            emptyPlotIds.push(i);
+          }
+        }
+        if (emptyPlotIds.length === 0) return;
+        // Check if we can afford to plant all (each plot costs seedCost)
+        const totalCost = emptyPlotIds.length * cropDef.seedCost;
+        if (cropDef.seedCost > 0 && state.coins < totalCost) return;
+        // Deduct cost and plant all
+        const newPlots = [...state.plots];
+        for (const pid of emptyPlotIds) {
+          newPlots[pid] = { id: pid, crop: cropId, plantedAt: now, ready: false };
+        }
+        set({
+          coins: state.coins - totalCost,
+          plots: newPlots,
+        });
+      },
+
+      harvestAllPlots: () => {
+        const state = get();
+        const now = Date.now();
+        const newSilo = { ...state.silo };
+        const newPlots = [...state.plots];
+        let harvestedCount = 0;
+        for (let i = 0; i < state.unlockedPlots; i++) {
+          const plot = state.plots[i];
+          if (plot && plot.crop && plot.ready) {
+            const cropDef = CROPS[plot.crop];
+            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount;
+            newPlots[i] = { id: i, crop: null, plantedAt: null, ready: false };
+            harvestedCount++;
+          }
+        }
+        if (harvestedCount === 0) return;
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3 * harvestedCount, state.level);
         set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
       },
 
