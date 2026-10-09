@@ -153,13 +153,13 @@ export interface RecipeDef {
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   feed_mill: {
-    id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 2,
+    id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 20,
     recipes: [
       { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 15 },
     ],
   },
   bakery: {
-    id: 'bakery', name: 'Bakery', emoji: '\u{1F3ED}', queueSlots: 2,
+    id: 'bakery', name: 'Bakery', emoji: '\u{1F3ED}', queueSlots: 20,
     recipes: [
       { id: 'make_bread', name: 'Bake Bread', emoji: '\u{1F35E}', inputs: [{ productId: 'wheat', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 1 }, timeSec: 30 },
       { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
@@ -168,27 +168,27 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     ],
   },
   dairy: {
-    id: 'dairy', name: 'Dairy', emoji: '\u{1F9C0}', queueSlots: 2,
+    id: 'dairy', name: 'Dairy', emoji: '\u{1F9C0}', queueSlots: 20,
     recipes: [
       { id: 'make_cheese', name: 'Make Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk', qty: 2 }], output: { productId: 'cheese', qty: 1 }, timeSec: 45 },
     ],
   },
   loom: {
-    id: 'loom', name: 'Loom', emoji: '\u{1F9F5}', queueSlots: 2,
+    id: 'loom', name: 'Loom', emoji: '\u{1F9F5}', queueSlots: 20,
     recipes: [
       { id: 'make_sweater', name: 'Weave Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
       { id: 'make_yarn', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool', qty: 1 }], output: { productId: 'yarn', qty: 2 }, timeSec: 20 },
     ],
   },
   press: {
-    id: 'press', name: 'Press', emoji: '\u{1FAD2}', queueSlots: 2,
+    id: 'press', name: 'Press', emoji: '\u{1FAD2}', queueSlots: 20,
     recipes: [
       { id: 'make_truffle_oil', name: 'Press Truffle Oil', emoji: '\u{1FAD2}', inputs: [{ productId: 'truffle', qty: 2 }], output: { productId: 'truffle_oil', qty: 1 }, timeSec: 90 },
       { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 30 },
     ],
   },
   tailor_shop: {
-    id: 'tailor_shop', name: 'Tailor Shop', emoji: '\u{1F9E5}', queueSlots: 2, unlockLevel: 18,
+    id: 'tailor_shop', name: 'Tailor Shop', emoji: '\u{1F9E5}', queueSlots: 20, unlockLevel: 18,
     recipes: [
       { id: 'make_sweater_ts', name: 'Knit Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'yarn', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 50 },
       { id: 'make_yarn_ts', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 3 }], output: { productId: 'yarn', qty: 2 }, timeSec: 25 },
@@ -196,7 +196,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     ],
   },
   textiles: {
-    id: 'textiles', name: 'Textiles', emoji: '\u{1F33F}', queueSlots: 2, unlockLevel: 12,
+    id: 'textiles', name: 'Textiles', emoji: '\u{1F33F}', queueSlots: 20, unlockLevel: 12,
     recipes: [
       { id: 'make_silk', name: 'Weave Silk', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 4 }], output: { productId: 'silk', qty: 1 }, timeSec: 60 },
     ],

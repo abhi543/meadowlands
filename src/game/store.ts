@@ -174,6 +174,8 @@ export interface GameState {
   buyAnimal: (species: AnimalSpecies, tier?: Tier) => void;
   startProduction: (buildingId: BuildingId, recipe: RecipeDef) => void;
   collectProduction: (buildingId: BuildingId, slotIndex: number) => void;
+  startProductionAll: (buildingId: BuildingId, recipe: RecipeDef) => void;
+  collectProductionAll: (buildingId: BuildingId) => void;
   fulfillOrder: (orderId: string) => void;
   trashOrder: (orderId: string) => void;
   sellItem: (itemId: string, qty: number) => void;
@@ -594,6 +596,114 @@ export const useGameStore = create<GameState>()(
 
         const newQueue = queue.filter((_, i) => i !== slotIndex);
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 8, state.level);
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          productionQueues: {
+            ...state.productionQueues,
+            [buildingId]: newQueue,
+          },
+          xp: newXp,
+          level: newLevel,
+        });
+      },
+
+      startProductionAll: (buildingId, recipe) => {
+        const state = get();
+        const building = BUILDINGS[buildingId];
+        if (!building) return;
+        if (building.unlockLevel && state.level < building.unlockLevel) return;
+        const queue = state.productionQueues[buildingId] || [];
+        const freeSlots = building.queueSlots - queue.filter(s => !s.done).length;
+        if (freeSlots <= 0) return;
+
+        // Figure out how many times we can afford to craft this recipe
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let craftCount = 0;
+        for (let i = 0; i < freeSlots; i++) {
+          let canAfford = true;
+          for (const input of recipe.inputs) {
+            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+            const storage = isCrop ? newSilo : newBarn;
+            if ((storage[input.productId] || 0) < input.qty) {
+              canAfford = false;
+              break;
+            }
+          }
+          if (!canAfford) break;
+          // Deduct inputs
+          for (const input of recipe.inputs) {
+            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+            const storage = isCrop ? newSilo : newBarn;
+            storage[input.productId] = (storage[input.productId] || 0) - input.qty;
+          }
+          craftCount++;
+        }
+        if (craftCount === 0) return;
+
+        // Queue all slots (stagger start times slightly so they don't all finish at once)
+        const now = Date.now();
+        const newSlots: ProductionSlot[] = [];
+        for (let i = 0; i < craftCount; i++) {
+          newSlots.push({
+            recipeId: recipe.id,
+            recipeName: recipe.name,
+            recipeEmoji: recipe.emoji,
+            startedAt: now + i * 100, // stagger by 100ms
+            durationSec: recipe.timeSec,
+            done: false,
+          });
+        }
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          productionQueues: {
+            ...state.productionQueues,
+            [buildingId]: [...queue, ...newSlots],
+          },
+        });
+      },
+
+      collectProductionAll: (buildingId) => {
+        const state = get();
+        const building = BUILDINGS[buildingId];
+        if (!building) return;
+        const queue = state.productionQueues[buildingId] || [];
+
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let collectedCount = 0;
+        const newQueue: ProductionSlot[] = [];
+
+        for (const slot of queue) {
+          if (slot.done) {
+            let outputItem = '';
+            let outputQty = 0;
+            for (const recipe of building.recipes) {
+              if (recipe.id === slot.recipeId) {
+                outputItem = recipe.output.productId;
+                outputQty = recipe.output.qty;
+                break;
+              }
+            }
+            if (outputItem) {
+              const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
+              if (isCropOutput) {
+                newSilo[outputItem] = (newSilo[outputItem] || 0) + outputQty;
+              } else {
+                newBarn[outputItem] = (newBarn[outputItem] || 0) + outputQty;
+              }
+              collectedCount++;
+            }
+          } else {
+            newQueue.push(slot);
+          }
+        }
+
+        if (collectedCount === 0) return;
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 8 * collectedCount, state.level);
         set({
           silo: newSilo,
           barn: newBarn,
