@@ -7,10 +7,70 @@ const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
 
 export function AnimalPanel() {
-  const { animals, silo, barn, coins, level, feedAnimal, collectProduct, buyAnimal, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
+  const { animals, silo, barn, coins, level, feedAnimal, collectProduct, feedAllAnimals, collectAllProducts, buyAnimal, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
+
+  // Compute batch action counts
+  const feedableAnimals = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder');
+  const collectibleAnimals = animals.filter(a => a.productReady && a.cyclesRemaining > 0);
+
+  // Count how many can actually be fed with available feed
+  let feedSim = silo.feed || 0;
+  let canFeedCount = 0;
+  for (const a of feedableAnimals) {
+    const needed = ANIMALS[a.species].feedPerCycle;
+    if (feedSim >= needed) {
+      feedSim -= needed;
+      canFeedCount++;
+    }
+  }
+  const totalFeedNeeded = feedableAnimals.reduce((sum, a) => sum + ANIMALS[a.species].feedPerCycle, 0);
 
   return (
     <div className="space-y-4">
+      {/* Batch Action Buttons */}
+      {(canFeedCount > 0 || collectibleAnimals.length > 0) && (
+        <div className="flex gap-2 flex-wrap">
+          {/* Collect All */}
+          <button
+            onClick={() => collectAllProducts()}
+            disabled={collectibleAnimals.length === 0}
+            className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+              collectibleAnimals.length > 0
+                ? 'bg-yellow-500 hover:bg-yellow-600 text-white border-yellow-600 shadow-lg shadow-yellow-200/50 active:scale-95'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+            }`}
+          >
+            <span className="text-lg">{'🧺'}</span>
+            Collect All
+            {collectibleAnimals.length > 0 && (
+              <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+                {collectibleAnimals.length}
+              </span>
+            )}
+          </button>
+
+          {/* Feed All */}
+          <button
+            onClick={() => feedAllAnimals()}
+            disabled={canFeedCount === 0}
+            className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+              canFeedCount > 0
+                ? 'bg-blue-500 hover:bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-200/50 active:scale-95'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+            }`}
+          >
+            <span className="text-lg">{'🫗'}</span>
+            Feed All
+            {canFeedCount > 0 && (
+              <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+                {canFeedCount}
+              </span>
+            )}
+            <span className="text-xs opacity-80">{'🫗'}{totalFeedNeeded > 0 ? Math.min(silo.feed || 0, totalFeedNeeded) : 0}</span>
+          </button>
+        </div>
+      )}
+
       {/* Habitats */}
       {SPECIES_LIST.map(species => {
         const def = ANIMALS[species];
@@ -37,7 +97,7 @@ export function AnimalPanel() {
                     disabled={coins < COSTS[species]}
                     className="px-3 py-1 text-xs font-medium rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
                   >
-                    Buy {'\u{1F4B0}'}{COSTS[species]}
+                    Buy {'💰'}{COSTS[species]}
                   </button>
                 )}
                 {nextUpgrade && (
@@ -46,7 +106,7 @@ export function AnimalPanel() {
                     disabled={coins < nextUpgrade.costCoins}
                     className="px-2 py-1 text-[10px] font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
                   >
-                    +{nextUpgrade.additionalCapacity} {'\u{1F4B0}'}{nextUpgrade.costCoins}
+                    +{nextUpgrade.additionalCapacity} {'💰'}{nextUpgrade.costCoins}
                   </button>
                 )}
               </div>
@@ -118,11 +178,11 @@ export function AnimalPanel() {
                             onClick={() => feedAnimal(animal.id)}
                             className="w-full py-1 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors"
                           >
-                            {'\u{1FAD9}'} Feed ({def.feedPerCycle})
+                            {'🫗'} Feed ({def.feedPerCycle})
                           </button>
                         )}
                         {!canCollect && !canFeed && !animal.fed && animal.age !== 'elder' && (
-                          <div className="text-[10px] text-stone-400 dark:text-gray-500">Need feed {'\u{1FAD9}'}</div>
+                          <div className="text-[10px] text-stone-400 dark:text-gray-500">Need feed {'🫗'}</div>
                         )}
                         {animal.fed && !animal.productReady && (
                           <div className="text-[10px] text-blue-500 dark:text-blue-400">Producing...</div>
@@ -145,15 +205,15 @@ export function AnimalPanel() {
         <span className="font-semibold text-stone-600 dark:text-stone-400">Barn:</span>
         {Object.entries(barn).filter(([, v]) => v > 0).map(([k, v]) => {
           const emojiMap: Record<string, string> = {
-            egg: '\u{1F95A}', milk: '\u{1F95B}', wool: '\u{1F9F6}', truffle: '\u{1F344}',
-            bread: '\u{1F35E}', cheese: '\u{1F9C0}', pie: '\u{1F967}', sweater: '\u{1F9E5}',
-            truffle_oil: '\u{1FAD2}', fish: '\u{1F41F}', yarn: '\u{1F9F5}',
-            quilted_blanket: '\u{1F9F4}', savory_fish_pie: '\u{1F967}',
-            crab_bisque: '\u{1F352}', honey: '\u{1F36F}', silk: '\u{1F9F5}',
+            egg: '🥚', milk: '🥛', wool: '🧶', truffle: '🍄',
+            bread: '🍞', cheese: '🧀', pie: '🥧', sweater: '🧥',
+            truffle_oil: '🫒', fish: '🐟', yarn: '🧵',
+            quilted_blanket: '🧴', savory_fish_pie: '🥧',
+            crab_bisque: '🍒', honey: '🍯', silk: '🧵',
           };
           return (
             <span key={k} className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full text-stone-700 dark:text-stone-300">
-              {emojiMap[k] || '\u{1F4E6}'} {v}
+              {emojiMap[k] || '📦'} {v}
             </span>
           );
         })}

@@ -169,6 +169,8 @@ export interface GameState {
   harvestAllPlots: () => void;
   feedAnimal: (animalId: string) => void;
   collectProduct: (animalId: string) => void;
+  feedAllAnimals: () => void;
+  collectAllProducts: () => void;
   buyAnimal: (species: AnimalSpecies, tier?: Tier) => void;
   startProduction: (buildingId: BuildingId, recipe: RecipeDef) => void;
   collectProduction: (buildingId: BuildingId, slotIndex: number) => void;
@@ -459,6 +461,44 @@ export const useGameStore = create<GameState>()(
           a.id === animalId ? { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age } : a
         );
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5, state.level);
+        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
+      },
+
+      feedAllAnimals: () => {
+        const state = get();
+        let feedAvailable = state.silo.feed || 0;
+        if (feedAvailable <= 0) return;
+        const newAnimals = state.animals.map(a => {
+          // Skip if already fed, producing, or elder
+          if (a.fed || a.productReady || a.age === 'elder') return a;
+          const feedNeeded = ANIMALS[a.species].feedPerCycle;
+          if (feedAvailable < feedNeeded) return a;
+          feedAvailable -= feedNeeded;
+          return { ...a, fed: true, fedAt: Date.now() };
+        });
+        const feedUsed = (state.silo.feed || 0) - feedAvailable;
+        if (feedUsed === 0) return;
+        set({
+          silo: { ...state.silo, feed: feedAvailable },
+          animals: newAnimals,
+        });
+      },
+
+      collectAllProducts: () => {
+        const state = get();
+        const newBarn = { ...state.barn };
+        let collectedCount = 0;
+        const newAnimals = state.animals.map(a => {
+          if (!a.productReady || a.cyclesRemaining <= 0) return a;
+          const def = ANIMALS[a.species];
+          newBarn[def.product] = (newBarn[def.product] || 0) + def.productYield;
+          const newCyclesRemaining = a.cyclesRemaining - 1;
+          const isElder = newCyclesRemaining <= 0;
+          collectedCount++;
+          return { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age };
+        });
+        if (collectedCount === 0) return;
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5 * collectedCount, state.level);
         set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
       },
 
