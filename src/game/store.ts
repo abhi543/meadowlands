@@ -172,6 +172,8 @@ export interface GameState {
   feedAllAnimals: () => void;
   collectAllProducts: () => void;
   buyAnimal: (species: AnimalSpecies, tier?: Tier) => void;
+  sellAnimal: (animalId: string) => void;
+  sellAllElderAnimals: () => void;
   startProduction: (buildingId: BuildingId, recipe: RecipeDef) => void;
   collectProduction: (buildingId: BuildingId, slotIndex: number) => void;
   startProductionAll: (buildingId: BuildingId, recipe: RecipeDef) => void;
@@ -530,6 +532,38 @@ export const useGameStore = create<GameState>()(
           coins: state.coins - cost,
           animals: [...state.animals, newAnimal],
           codex: { ...state.codex, [`${species}_${tier}`]: true },
+        });
+      },
+
+      sellAnimal: (animalId) => {
+        const state = get();
+        const animal = state.animals.find(a => a.id === animalId);
+        if (!animal || animal.age !== 'elder') return;
+        // Sell price: 25% of buy cost based on tier
+        const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
+        const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
+        const sellPrice = Math.max(5, Math.floor(costs[animal.species] * tierMult[animal.tier] * 0.25));
+        const newAnimals = state.animals.filter(a => a.id !== animalId);
+        set({
+          animals: newAnimals,
+          coins: state.coins + sellPrice,
+        });
+      },
+
+      sellAllElderAnimals: () => {
+        const state = get();
+        const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
+        const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
+        let totalCoins = 0;
+        const elders = state.animals.filter(a => a.age === 'elder');
+        if (elders.length === 0) return;
+        for (const animal of elders) {
+          totalCoins += Math.max(5, Math.floor(costs[animal.species] * tierMult[animal.tier] * 0.25));
+        }
+        const newAnimals = state.animals.filter(a => a.age !== 'elder');
+        set({
+          animals: newAnimals,
+          coins: state.coins + totalCoins,
         });
       },
 
