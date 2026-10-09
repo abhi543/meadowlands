@@ -2,8 +2,8 @@
 
 import { useGameStore } from '@/game/store';
 import {
-  ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES,
-  HABITAT_UPGRADES,
+  ANIMALS, TIER_COLORS, TIER_LABELS,
+  HABITAT_UPGRADES, BREED_REGISTRY,
   livestockBuyPrice, livestockSellPriceForAnimal,
   type AnimalSpecies, type Tier,
 } from '@/game/data';
@@ -18,7 +18,7 @@ export function LivestockMarketPanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          {'\u{1F3EA}'} Livestock Market
+          {'🏪'} Livestock Market
         </h3>
       </div>
 
@@ -51,6 +51,9 @@ export function LivestockMarketPanel() {
                       const canBuy = coins >= price;
                       // Only show common by default, uncommon+ require level
                       const showTier = tier === 'common' || currentCount > 0;
+                      const breedId = `${species}_${tier}`;
+                      const breedDef = BREED_REGISTRY[breedId];
+                      const breedName = breedDef?.name || TIER_LABELS[tier];
 
                       if (!showTier) return null;
 
@@ -66,9 +69,9 @@ export function LivestockMarketPanel() {
                             color: canBuy ? TIER_COLORS[tier] : '#9ca3af',
                           }}
                         >
-                          {TIER_LABELS[tier]}
-                          <br />
-                          {'\u{1F4B0}'}{price}
+                          <div className="font-bold">{TIER_LABELS[tier]}</div>
+                          <div className="text-[9px] opacity-80 truncate">{breedName}</div>
+                          <div>{'💰'}{price}</div>
                         </button>
                       );
                     })}
@@ -91,7 +94,19 @@ export function LivestockMarketPanel() {
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {elders.map(animal => {
                 const def = ANIMALS[animal.species];
-                const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+                const breedDef = BREED_REGISTRY[animal.breedId];
+                const breedName = breedDef?.name || TIER_LABELS[animal.tier];
+
+                // Use breed-specific elder market value
+                let sellPrice: number;
+                if (breedDef) {
+                  const cyclesCompleted = animal.maxCycles - animal.cyclesRemaining;
+                  if (cyclesCompleted <= 0) sellPrice = 0;
+                  else if (animal.cyclesRemaining <= 0) sellPrice = breedDef.elderMarketValue;
+                  else sellPrice = Math.floor(breedDef.elderMarketValue * (cyclesCompleted / animal.maxCycles));
+                } else {
+                  sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+                }
 
                 return (
                   <div
@@ -106,17 +121,20 @@ export function LivestockMarketPanel() {
                     <div className="text-[10px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
                       {TIER_LABELS[animal.tier]}
                     </div>
+                    <div className="text-[9px] font-medium text-stone-600 dark:text-stone-300 truncate">
+                      {breedName}
+                    </div>
                     <div className="text-[9px] text-stone-500 dark:text-gray-400">
                       {animal.maxCycles} cycles done
                     </div>
                     <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">
-                      {'\u{1F4B0}'}{sellPrice}
+                      {'💰'}{sellPrice}
                     </div>
                     <button
                       onClick={() => sellAnimal(animal.id)}
-                      className="w-full mt-1 py-1 text-[10px] font-bold rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors"
+                      className="w-full mt-1 py-1 text-[10px] font-bold rounded-md bg-amber-500 hover:bg-amber-600 text-white transition-colors"
                     >
-                      Sell
+                      Sell to Market
                     </button>
                   </div>
                 );
@@ -167,7 +185,7 @@ function HabitatUpgradeSection() {
                   disabled={coins < nextUpgrade.costCoins}
                   className="px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
                 >
-                  +{nextUpgrade.additionalCapacity} {'\u{1F4B0}'}{nextUpgrade.costCoins}
+                  +{nextUpgrade.additionalCapacity} {'💰'}{nextUpgrade.costCoins}
                 </button>
               ) : (
                 <span className="text-[10px] text-stone-400 dark:text-gray-500">Max</span>

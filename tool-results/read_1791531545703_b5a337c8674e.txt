@@ -1,0 +1,1993 @@
+     1→import { create } from 'zustand';
+     2→import { persist } from 'zustand/middleware';
+     3→import {
+     4→  CROPS, ANIMALS, PRODUCTS, BUILDINGS, FARMHANDS, WORKERS,
+     5→  WATER_ZONES, FISH_SPECIES, ROD_TIERS, ROD_TIER_ORDER, OUTFITS,
+     6→  HOURLY_EVENTS, SMUGGLER_LOOT, CHEF_ORDER_TEMPLATES,
+     7→  HABITAT_UPGRADES, BREEDING_SLOT_UPGRADES,
+     8→  ORDER_TEMPLATES, xpForLevel, MAX_LEVEL,
+     9→  TIER_MAX_CYCLES, ANIMAL_BUY_PRICES, ANIMAL_MARKET_PRICES,
+    10→  livestockSellPriceForAnimal, randomMaxCycles,
+    11→  WORKER_REGISTRY, WORKER_MAX_LEVEL, WORKER_DIVISIONS,
+    12→  workerUpgradeCost, workerEffectiveInterval, workerDoubleProcChance,
+    13→  workerTripleProcUnlocked, workerGemProcUnlocked, workerAutoSellBonus,
+    14→  workerHopperBuffer, workerAutoSellPayout, calculateBulkUpgrade,
+    15→  type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
+    16→  type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
+    17→  type WorkerType, type HourlyEventType,
+    18→  type WorkerRole, type WorkerDivision, type BulkMode,
+    19→  BIOMES, LURES, TRAIL_ENCOUNTERS, type BiomeId, type LureTypeId,
+    20→} from './data';
+    21→
+    22→// ---- Runtime types ----
+    23→
+    24→export interface PlotState {
+    25→  id: number;
+    26→  crop: CropId | null;
+    27→  plantedAt: number | null;
+    28→  ready: boolean;
+    29→}
+    30→
+    31→export interface AnimalInstance {
+    32→  id: string;
+    33→  species: AnimalSpecies;
+    34→  tier: Tier;
+    35→  fed: boolean;
+    36→  fedAt: number | null;
+    37→  productReady: boolean;
+    38→  age: 'baby' | 'adult' | 'elder';
+    39→  maxCycles: number;
+    40→  cyclesRemaining: number;
+    41→}
+    42→
+    43→export interface ProductionSlot {
+    44→  recipeId: string;
+    45→  recipeName: string;
+    46→  recipeEmoji: string;
+    47→  startedAt: number;
+    48→  durationSec: number;
+    49→  done: boolean;
+    50→}
+    51→
+    52→export interface OrderState {
+    53→  id: string;
+    54→  requested: { itemId: string; qty: number; emoji: string; name: string }[];
+    55→  coinReward: number;
+    56→  xpReward: number;
+    57→  trashedAt: number | null;
+    58→}
+    59→
+    60→export interface FarmhandInstance {
+    61→  id: string;
+    62→  role: FarmhandRole;
+    63→  level: number;
+    64→  xp: number;
+    65→  equippedOutfit: OutfitId | null;
+    66→}
+    67→
+    68→// Fishery
+    69→export interface FisheryState {
+    70→  unlockedZones: WaterZoneId[];
+    71→  rodTier: RodTier;
+    72→  lastCatchTimestamps: Record<WaterZoneId, number>;
+    73→  fishCodex: Record<string, boolean>;
+    74→}
+    75→
+    76→// Autonomous Workers (legacy — kept for migration)
+    77→export interface AutonomousWorkerInstance {
+    78→  id: string;
+    79→  type: WorkerType;
+    80→  gearTier: number;
+    81→  autoSell: boolean;
+    82→  lastProduceTime: number;
+    83→}
+    84→
+    85→// Unified Master Worker (v2.0)
+    86→export interface UnifiedWorkerInstance {
+    87→  role: WorkerRole;
+    88→  isHired: boolean;
+    89→  level: number;           // 1–120
+    90→  autoSell: boolean;       // true = Auto-Sell Mode, false = Hoard Mode
+    91→  lastActionTimestamp: number;
+    92→  bufferCount: number;     // Level 40+ hopper buffer cycles
+    93→  stats: {
+    94→    totalCoinsEarned: number;
+    95→    totalItemsProduced: number;
+    96→    totalGemsEarned: number;
+    97→  };
+    98→}
+    99→
+   100→// Hourly Events
+   101→export interface ActiveHourlyEvent {
+   102→  type: HourlyEventType;
+   103→  startedAt: number;
+   104→  chefOrder?: {
+   105→    requested: { itemId: string; qty: number; emoji: string; name: string }[];
+   106→    coinReward: number;
+   107→    xpReward: number;
+   108→    gemReward: number;
+   109→  };
+   110→  crowPlotIds?: number[];
+   111→  smugglerCrates?: number;
+   112→}
+   113→
+   114→// Notifications
+   115→export interface NotificationItem {
+   116→  id: string;
+   117→  message: string;
+   118→  emoji: string;
+   119→  createdAt: number;
+   120→  type: 'xp' | 'coin' | 'gem' | 'discovery' | 'event' | 'info';
+   121→}
+   122→
+   123→// Breeding
+   124→export interface ActiveBreeding {
+   125→  id: string;
+   126→  species: AnimalSpecies;
+   127→  parent1Id: string;
+   128→  parent2Id: string;
+   129→  startedAt: number;
+   130→  durationMs: number;
+   131→}
+   132→
+   133→export interface ActiveExpedition {
+   134→  id: string;
+   135→  biomeId: BiomeId;
+   136→  farmhandId: string;
+   137→  lureId: LureTypeId;
+   138→  startedAt: number;
+   139→  durationMs: number;
+   140→  midpointResolved: boolean;
+   141→  pendingChoice: {
+   142→    prompt: string;
+   143→    safeLabel: string;
+   144→    riskyLabel: string;
+   145→  } | null;
+   146→  riskyChosen: boolean | null; // null = not yet chosen
+   147→}
+   148→
+   149→export interface GameState {
+   150→  // Player
+   151→  coins: number;
+   152→  gems: number;
+   153→  xp: number;
+   154→  level: number;
+   155→
+   156→  // Storage
+   157→  silo: Record<string, number>;
+   158→  barn: Record<string, number>;
+   159→
+   160→  // Farm
+   161→  plots: PlotState[];
+   162→  unlockedPlots: number;
+   163→
+   164→  // Animals
+   165→  animals: AnimalInstance[];
+   166→  animalCapacity: Record<AnimalSpecies, number>;
+   167→
+   168→  // Production
+   169→  productionQueues: Record<BuildingId, ProductionSlot[]>;
+   170→
+   171→  // Orders
+   172→  orders: OrderState[];
+   173→
+   174→  // Farmhands
+   175→  farmhands: FarmhandInstance[];
+   176→
+   177→  // Codex (discovered breeds)
+   178→  codex: Record<string, boolean>;
+   179→
+   180→  // Fishery
+   181→  fishery: FisheryState;
+   182→
+   183→  // Autonomous Workers (legacy)
+   184→  autonomousWorkers: AutonomousWorkerInstance[];
+   185→
+   186→  // Unified Workers (v2.0)
+   187→  unifiedWorkers: Record<WorkerRole, UnifiedWorkerInstance>;
+   188→
+   189→  // Hourly Events
+   190→  activeEvent: ActiveHourlyEvent | null;
+   191→  lastEventTriggerTime: number;
+   192→
+   193→  // Notifications
+   194→  notifications: NotificationItem[];
+   195→
+   196→  // Breeding
+   197→  breedingSlots: number;
+   198→  activeBreedings: ActiveBreeding[];
+   199→
+   200→  // Wilderness Expeditions
+   201→  wilderness: {
+   202→    unlockedBiomes: Record<BiomeId, boolean>;
+   203→    activeExpeditions: ActiveExpedition[];
+   204→  };
+   205→
+   206→  // Habitat Upgrades
+   207→  habitatUpgradeSteps: Record<AnimalSpecies, number>;
+   208→
+   209→  // Time
+   210→  lastTick: number;
+   211→
+   212→  // --- Actions ---
+   213→  plantCrop: (plotId: number, cropId: CropId) => void;
+   214→  harvestPlot: (plotId: number) => void;
+   215→  plantAllCrops: (cropId: CropId) => void;
+   216→  harvestAllPlots: () => void;
+   217→  feedAnimal: (animalId: string) => void;
+   218→  collectProduct: (animalId: string) => void;
+   219→  feedAllAnimals: () => void;
+   220→  collectAllProducts: () => void;
+   221→  buyAnimal: (species: AnimalSpecies, tier?: Tier) => void;
+   222→  sellAnimal: (animalId: string) => void;
+   223→  sellAllElderAnimals: () => void;
+   224→  startProduction: (buildingId: BuildingId, recipe: RecipeDef) => void;
+   225→  collectProduction: (buildingId: BuildingId, slotIndex: number) => void;
+   226→  startProductionAll: (buildingId: BuildingId, recipe: RecipeDef) => void;
+   227→  collectProductionAll: (buildingId: BuildingId) => void;
+   228→  fulfillOrder: (orderId: string) => void;
+   229→  trashOrder: (orderId: string) => void;
+   230→  sellItem: (itemId: string, qty: number) => void;
+   231→  sellAllOfItem: (itemId: string) => void;
+   232→  sellAllItems: () => void;
+   233→  buyFarmhand: (role: FarmhandRole) => void;
+   234→  addSilo: (itemId: string, qty: number) => void;
+   235→  addBarn: (itemId: string, qty: number) => void;
+   236→
+   237→  // Fishery
+   238→  unlockFisheryZone: (zoneId: WaterZoneId) => void;
+   239→  upgradeFishingRod: () => void;
+   240→
+   241→  // Autonomous Workers (legacy)
+   242→  hireAutonomousWorker: (type: WorkerType) => void;
+   243→  toggleWorkerAutoSell: (workerId: string) => void;
+   244→  upgradeWorkerGear: (workerId: string) => void;
+   245→
+   246→  // Unified Workers (v2.0)
+   247→  hireUnifiedWorker: (role: WorkerRole) => void;
+   248→  upgradeUnifiedWorker: (role: WorkerRole, levelsToBuy: number) => void;
+   249→  toggleUnifiedWorkerMode: (role: WorkerRole) => void;
+   250→  bulkUpgradeUnifiedWorker: (role: WorkerRole, mode: BulkMode) => void;
+   251→
+   252→  // Outfits
+   253→  equipOutfit: (farmhandId: string, outfitId: OutfitId | null) => void;
+   254→
+   255→  // Events
+   256→  shooCrow: () => void;
+   257→  fulfillChefOrder: () => void;
+   258→  openSmugglerCrate: () => void;
+   259→
+   260→  // Breeding
+   261→  breedAnimals: (parent1Id: string, parent2Id: string) => void;
+   262→  upgradeBreedingSlot: () => void;
+   263→
+   264→  // Wilderness
+   265→  launchExpedition: (biomeId: BiomeId, farmhandId: string, lureId: LureTypeId) => void;
+   266→  resolveExpeditionChoice: (expeditionId: string, chooseRisky: boolean) => void;
+   267→
+   268→  // Habitat
+   269→  upgradeHabitat: (species: AnimalSpecies) => void;
+   270→
+   271→  // Notifications
+   272→  addNotification: (message: string, emoji: string, type: NotificationItem['type']) => void;
+   273→  clearNotifications: () => void;
+   274→
+   275→  tick: () => void;
+   276→  resetGame: () => void;
+   277→}
+   278→
+   279→const GRID_SIZE = 12;
+   280→
+   281→function generateOrders(count: number): OrderState[] {
+   282→  const orders: OrderState[] = [];
+   283→  const pool = [...ORDER_TEMPLATES];
+   284→  for (let i = 0; i < count; i++) {
+   285→    const template = pool[Math.floor(Math.random() * pool.length)];
+   286→    orders.push({
+   287→      id: `order_${Date.now()}_${i}`,
+   288→      ...template,
+   289→      trashedAt: null,
+   290→    });
+   291→  }
+   292→  return orders;
+   293→}
+   294→
+   295→function generateId(): string {
+   296→  return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+   297→}
+   298→
+   299→const initialPlots: PlotState[] = Array.from({ length: 20 }, (_, i) => ({
+   300→  id: i,
+   301→  crop: null,
+   302→  plantedAt: null,
+   303→  ready: false,
+   304→}));
+   305→
+   306→const initialAnimals: AnimalInstance[] = [
+   307→  { id: 'a1', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 7, cyclesRemaining: 7 },
+   308→  { id: 'a2', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 9, cyclesRemaining: 9 },
+   309→  { id: 'a3', species: 'cow', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 8, cyclesRemaining: 8 },
+   310→];
+   311→
+   312→const initialOrders = generateOrders(6);
+   313→
+   314→// Create default unified worker instances for all 13 roles
+   315→function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance> {
+   316→  const now = Date.now();
+   317→  const workers: Partial<Record<WorkerRole, UnifiedWorkerInstance>> = {};
+   318→  const allRoles: WorkerRole[] = [
+   319→    'farmer', 'lumberjack', 'fisherman', 'artisan',
+   320→    'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
+   321→    'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
+   322→  ];
+   323→  for (const role of allRoles) {
+   324→    workers[role] = {
+   325→      role,
+   326→      isHired: false,
+   327→      level: 1,
+   328→      autoSell: role === 'merchant', // merchant defaults to auto-sell
+   329→      lastActionTimestamp: now,
+   330→      bufferCount: 0,
+   331→      stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+   332→    };
+   333→  }
+   334→  return workers as Record<WorkerRole, UnifiedWorkerInstance>;
+   335→}
+   336→
+   337→const initialUnifiedWorkers = createDefaultUnifiedWorkers();
+   338→
+   339→// Fish catch logic
+   340→function rollFishCatch(zoneId: WaterZoneId, rodTier: RodTier, fishCodex: Record<string, boolean>): { speciesId: FishSpeciesId; isNew: boolean } | null {
+   341→  const zone = WATER_ZONES[zoneId];
+   342→  const rod = ROD_TIERS[rodTier];
+   343→
+   344→  const speciesList = zone.species.map(id => FISH_SPECIES[id]);
+   345→  const totalWeight = speciesList.reduce((sum, sp) => {
+   346→    let w = sp.dropWeight;
+   347→    if (sp.tier === 'rare') w *= (1 + rod.rareBoost);
+   348→    if (sp.tier === 'legendary') w *= (1 + rod.legendaryBoost);
+   349→    return sum + w;
+   350→  }, 0);
+   351→
+   352→  let roll = Math.random() * totalWeight;
+   353→  for (const sp of speciesList) {
+   354→    let w = sp.dropWeight;
+   355→    if (sp.tier === 'rare') w *= (1 + rod.rareBoost);
+   356→    if (sp.tier === 'legendary') w *= (1 + rod.legendaryBoost);
+   357→    roll -= w;
+   358→    if (roll <= 0) {
+   359→      const codexKey = `fish_${sp.id}`;
+   360→      const isNew = !fishCodex[codexKey];
+   361→      return { speciesId: sp.id, isNew };
+   362→    }
+   363→  }
+   364→  return null;
+   365→}
+   366→
+   367→// Smuggler loot roll
+   368→function rollSmugglerLoot(): { itemId: string; qty: number } {
+   369→  const totalWeight = SMUGGLER_LOOT.reduce((s, e) => s + e.weight, 0);
+   370→  let roll = Math.random() * totalWeight;
+   371→  for (const entry of SMUGGLER_LOOT) {
+   372→    roll -= entry.weight;
+   373→    if (roll <= 0) return { itemId: entry.itemId, qty: entry.qty };
+   374→  }
+   375→  return { itemId: 'gems', qty: 1 };
+   376→}
+   377→
+   378→// Chef order generator
+   379→function generateChefOrder() {
+   380→  const template = CHEF_ORDER_TEMPLATES[Math.floor(Math.random() * CHEF_ORDER_TEMPLATES.length)];
+   381→  return { ...template };
+   382→}
+   383→
+   384→function levelUpCheck(xp: number, level: number): { xp: number; level: number } {
+   385→  let newXp = xp;
+   386→  let newLevel = level;
+   387→  while (newLevel < MAX_LEVEL && newXp >= xpForLevel(newLevel)) {
+   388→    newXp -= xpForLevel(newLevel);
+   389→    newLevel++;
+   390→  }
+   391→  return { xp: newXp, level: newLevel };
+   392→}
+   393→
+   394→export const useGameStore = create<GameState>()(
+   395→  persist(
+   396→    (set, get) => ({
+   397→      coins: 100,
+   398→      gems: 10,
+   399→      xp: 0,
+   400→      level: 1,
+   401→
+   402→      silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
+   403→      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
+   404→
+   405→      plots: initialPlots,
+   406→      unlockedPlots: GRID_SIZE,
+   407→
+   408→      animals: initialAnimals,
+   409→      animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
+   410→
+   411→      productionQueues: {
+   412→        feed_mill: [],
+   413→        bakery: [],
+   414→        dairy: [],
+   415→        loom: [],
+   416→        press: [],
+   417→        tailor_shop: [],
+   418→        textiles: [],
+   419→      },
+   420→
+   421→      orders: initialOrders,
+   422→      farmhands: [],
+   423→      codex: { 'chicken_common': true, 'cow_common': true },
+   424→
+   425→      fishery: {
+   426→        unlockedZones: ['zone_pond' as WaterZoneId],
+   427→        rodTier: 'bamboo',
+   428→        lastCatchTimestamps: {
+   429→          zone_pond: Date.now(),
+   430→          zone_river: 0,
+   431→          zone_estuary: 0,
+   432→          zone_lake: 0,
+   433→          zone_ocean: 0,
+   434→        },
+   435→        fishCodex: {},
+   436→      },
+   437→
+   438→      autonomousWorkers: [],
+   439→      unifiedWorkers: initialUnifiedWorkers,
+   440→      activeEvent: null,
+   441→      lastEventTriggerTime: Date.now(),
+   442→
+   443→      notifications: [],
+   444→
+   445→      breedingSlots: 1,
+   446→      activeBreedings: [],
+   447→
+   448→      wilderness: {
+   449→        unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+   450→        activeExpeditions: [],
+   451→      },
+   452→
+   453→      habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
+   454→
+   455→      lastTick: Date.now(),
+   456→
+   457→      // ---- Actions ----
+   458→
+   459→      plantCrop: (plotId, cropId) => {
+   460→        const state = get();
+   461→        const plot = state.plots[plotId];
+   462→        if (!plot || plot.crop !== null) return;
+   463→        if (plotId >= state.unlockedPlots) return;
+   464→        const cropDef = CROPS[cropId];
+   465→        if (cropDef.seedCost > 0 && state.coins < cropDef.seedCost) return;
+   466→        if (cropDef.seedCost > 0) {
+   467→          set({ coins: state.coins - cropDef.seedCost });
+   468→        }
+   469→        const newPlots = [...state.plots];
+   470→        newPlots[plotId] = { id: plotId, crop: cropId, plantedAt: Date.now(), ready: false };
+   471→        set({ plots: newPlots });
+   472→      },
+   473→
+   474→      harvestPlot: (plotId) => {
+   475→        const state = get();
+   476→        const plot = state.plots[plotId];
+   477→        if (!plot || !plot.crop || !plot.ready) return;
+   478→        const cropDef = CROPS[plot.crop];
+   479→        const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + cropDef.yieldCount };
+   480→        const newPlots = [...state.plots];
+   481→        newPlots[plotId] = { id: plotId, crop: null, plantedAt: null, ready: false };
+   482→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3, state.level);
+   483→        set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
+   484→      },
+   485→
+   486→      plantAllCrops: (cropId) => {
+   487→        const state = get();
+   488→        const cropDef = CROPS[cropId];
+   489→        const now = Date.now();
+   490→        // Find all empty unlocked plots
+   491→        const emptyPlotIds: number[] = [];
+   492→        for (let i = 0; i < state.unlockedPlots; i++) {
+   493→          if (state.plots[i] && state.plots[i].crop === null) {
+   494→            emptyPlotIds.push(i);
+   495→          }
+   496→        }
+   497→        if (emptyPlotIds.length === 0) return;
+   498→        // Check if we can afford to plant all (each plot costs seedCost)
+   499→        const totalCost = emptyPlotIds.length * cropDef.seedCost;
+   500→        if (cropDef.seedCost > 0 && state.coins < totalCost) return;
+   501→        // Deduct cost and plant all
+   502→        const newPlots = [...state.plots];
+   503→        for (const pid of emptyPlotIds) {
+   504→          newPlots[pid] = { id: pid, crop: cropId, plantedAt: now, ready: false };
+   505→        }
+   506→        set({
+   507→          coins: state.coins - totalCost,
+   508→          plots: newPlots,
+   509→        });
+   510→      },
+   511→
+   512→      harvestAllPlots: () => {
+   513→        const state = get();
+   514→        const now = Date.now();
+   515→        const newSilo = { ...state.silo };
+   516→        const newPlots = [...state.plots];
+   517→        let harvestedCount = 0;
+   518→        for (let i = 0; i < state.unlockedPlots; i++) {
+   519→          const plot = state.plots[i];
+   520→          if (plot && plot.crop && plot.ready) {
+   521→            const cropDef = CROPS[plot.crop];
+   522→            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount;
+   523→            newPlots[i] = { id: i, crop: null, plantedAt: null, ready: false };
+   524→            harvestedCount++;
+   525→          }
+   526→        }
+   527→        if (harvestedCount === 0) return;
+   528→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3 * harvestedCount, state.level);
+   529→        set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
+   530→      },
+   531→
+   532→      feedAnimal: (animalId) => {
+   533→        const state = get();
+   534→        const animal = state.animals.find(a => a.id === animalId);
+   535→        if (!animal || animal.fed || animal.productReady) return;
+   536→        const feedNeeded = ANIMALS[animal.species].feedPerCycle;
+   537→        if ((state.silo.feed || 0) < feedNeeded) return;
+   538→        const newSilo = { ...state.silo, feed: state.silo.feed - feedNeeded };
+   539→        const newAnimals = state.animals.map(a =>
+   540→          a.id === animalId ? { ...a, fed: true, fedAt: Date.now() } : a
+   541→        );
+   542→        set({ silo: newSilo, animals: newAnimals });
+   543→      },
+   544→
+   545→      collectProduct: (animalId) => {
+   546→        const state = get();
+   547→        const animal = state.animals.find(a => a.id === animalId);
+   548→        if (!animal || !animal.productReady) return;
+   549→        if (animal.cyclesRemaining <= 0) return;
+   550→        const def = ANIMALS[animal.species];
+   551→        const newBarn = { ...state.barn, [def.product]: (state.barn[def.product] || 0) + def.productYield };
+   552→        const newCyclesRemaining = animal.cyclesRemaining - 1;
+   553→        const isElder = newCyclesRemaining <= 0;
+   554→        const newAnimals = state.animals.map(a =>
+   555→          a.id === animalId ? { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age } : a
+   556→        );
+   557→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5, state.level);
+   558→        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
+   559→      },
+   560→
+   561→      feedAllAnimals: () => {
+   562→        const state = get();
+   563→        let feedAvailable = state.silo.feed || 0;
+   564→        if (feedAvailable <= 0) return;
+   565→        const newAnimals = state.animals.map(a => {
+   566→          // Skip if already fed, producing, or elder
+   567→          if (a.fed || a.productReady || a.age === 'elder') return a;
+   568→          const feedNeeded = ANIMALS[a.species].feedPerCycle;
+   569→          if (feedAvailable < feedNeeded) return a;
+   570→          feedAvailable -= feedNeeded;
+   571→          return { ...a, fed: true, fedAt: Date.now() };
+   572→        });
+   573→        const feedUsed = (state.silo.feed || 0) - feedAvailable;
+   574→        if (feedUsed === 0) return;
+   575→        set({
+   576→          silo: { ...state.silo, feed: feedAvailable },
+   577→          animals: newAnimals,
+   578→        });
+   579→      },
+   580→
+   581→      collectAllProducts: () => {
+   582→        const state = get();
+   583→        const newBarn = { ...state.barn };
+   584→        let collectedCount = 0;
+   585→        const newAnimals = state.animals.map(a => {
+   586→          if (!a.productReady || a.cyclesRemaining <= 0) return a;
+   587→          const def = ANIMALS[a.species];
+   588→          newBarn[def.product] = (newBarn[def.product] || 0) + def.productYield;
+   589→          const newCyclesRemaining = a.cyclesRemaining - 1;
+   590→          const isElder = newCyclesRemaining <= 0;
+   591→          collectedCount++;
+   592→          return { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age };
+   593→        });
+   594→        if (collectedCount === 0) return;
+   595→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5 * collectedCount, state.level);
+   596→        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
+   597→      },
+   598→
+   599→      buyAnimal: (species, tier = 'common' as Tier) => {
+   600→        const state = get();
+   601→        const def = ANIMALS[species];
+   602→        const currentCount = state.animals.filter(a => a.species === species).length;
+   603→        if (currentCount >= (state.animalCapacity[species] || def.capacity)) return;
+   604→        const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
+   605→        const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
+   606→        const cost = Math.floor(costs[species] * tierMult[tier]);
+   607→        if (state.coins < cost) return;
+   608→        const maxCycles = randomMaxCycles(tier);
+   609→        const newAnimal: AnimalInstance = {
+   610→          id: generateId(),
+   611→          species,
+   612→          tier,
+   613→          fed: false,
+   614→          fedAt: null,
+   615→          productReady: false,
+   616→          age: 'adult',
+   617→          maxCycles,
+   618→          cyclesRemaining: maxCycles,
+   619→        };
+   620→        set({
+   621→          coins: state.coins - cost,
+   622→          animals: [...state.animals, newAnimal],
+   623→          codex: { ...state.codex, [`${species}_${tier}`]: true },
+   624→        });
+   625→      },
+   626→
+   627→      sellAnimal: (animalId) => {
+   628→        const state = get();
+   629→        const animal = state.animals.find(a => a.id === animalId);
+   630→        if (!animal || animal.age !== 'elder') return; // only elder animals can be sold
+   631→        const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+   632→        const newAnimals = state.animals.filter(a => a.id !== animalId);
+   633→        set({
+   634→          animals: newAnimals,
+   635→          coins: state.coins + sellPrice,
+   636→        });
+   637→      },
+   638→
+   639→      sellAllElderAnimals: () => {
+   640→        const state = get();
+   641→        const elders = state.animals.filter(a => a.age === 'elder');
+   642→        if (elders.length === 0) return;
+   643→        let totalCoins = 0;
+   644→        for (const animal of elders) {
+   645→          totalCoins += livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+   646→        }
+   647→        const newAnimals = state.animals.filter(a => a.age !== 'elder');
+   648→        set({
+   649→          animals: newAnimals,
+   650→          coins: state.coins + totalCoins,
+   651→        });
+   652→      },
+   653→
+   654→      startProduction: (buildingId, recipe) => {
+   655→        const state = get();
+   656→        const building = BUILDINGS[buildingId];
+   657→        if (!building) return;
+   658→        if (building.unlockLevel && state.level < building.unlockLevel) return;
+   659→        const queue = state.productionQueues[buildingId] || [];
+   660→        if (queue.filter(s => !s.done).length >= building.queueSlots) return;
+   661→
+   662→        const newSilo = { ...state.silo };
+   663→        const newBarn = { ...state.barn };
+   664→        for (const input of recipe.inputs) {
+   665→          const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+   666→          const storage = isCrop ? newSilo : newBarn;
+   667→          if ((storage[input.productId] || 0) < input.qty) return;
+   668→          storage[input.productId] = (storage[input.productId] || 0) - input.qty;
+   669→        }
+   670→
+   671→        const newSlot: ProductionSlot = {
+   672→          recipeId: recipe.id,
+   673→          recipeName: recipe.name,
+   674→          recipeEmoji: recipe.emoji,
+   675→          startedAt: Date.now(),
+   676→          durationSec: recipe.timeSec,
+   677→          done: false,
+   678→        };
+   679→
+   680→        set({
+   681→          silo: newSilo,
+   682→          barn: newBarn,
+   683→          productionQueues: {
+   684→            ...state.productionQueues,
+   685→            [buildingId]: [...queue, newSlot],
+   686→          },
+   687→        });
+   688→      },
+   689→
+   690→      collectProduction: (buildingId, slotIndex) => {
+   691→        const state = get();
+   692→        const queue = state.productionQueues[buildingId] || [];
+   693→        const slot = queue[slotIndex];
+   694→        if (!slot || !slot.done) return;
+   695→
+   696→        let outputItem = '';
+   697→        let outputQty = 0;
+   698→        const building = BUILDINGS[buildingId];
+   699→        for (const recipe of building.recipes) {
+   700→          if (recipe.id === slot.recipeId) {
+   701→            outputItem = recipe.output.productId;
+   702→            outputQty = recipe.output.qty;
+   703→            break;
+   704→          }
+   705→        }
+   706→        if (!outputItem) return;
+   707→
+   708→        const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
+   709→        const newSilo = { ...state.silo };
+   710→        const newBarn = { ...state.barn };
+   711→        if (isCropOutput) {
+   712→          newSilo[outputItem] = (newSilo[outputItem] || 0) + outputQty;
+   713→        } else {
+   714→          newBarn[outputItem] = (newBarn[outputItem] || 0) + outputQty;
+   715→        }
+   716→
+   717→        const newQueue = queue.filter((_, i) => i !== slotIndex);
+   718→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 8, state.level);
+   719→        set({
+   720→          silo: newSilo,
+   721→          barn: newBarn,
+   722→          productionQueues: {
+   723→            ...state.productionQueues,
+   724→            [buildingId]: newQueue,
+   725→          },
+   726→          xp: newXp,
+   727→          level: newLevel,
+   728→        });
+   729→      },
+   730→
+   731→      startProductionAll: (buildingId, recipe) => {
+   732→        const state = get();
+   733→        const building = BUILDINGS[buildingId];
+   734→        if (!building) return;
+   735→        if (building.unlockLevel && state.level < building.unlockLevel) return;
+   736→        const queue = state.productionQueues[buildingId] || [];
+   737→        const freeSlots = building.queueSlots - queue.filter(s => !s.done).length;
+   738→        if (freeSlots <= 0) return;
+   739→
+   740→        // Figure out how many times we can afford to craft this recipe
+   741→        const newSilo = { ...state.silo };
+   742→        const newBarn = { ...state.barn };
+   743→        let craftCount = 0;
+   744→        for (let i = 0; i < freeSlots; i++) {
+   745→          let canAfford = true;
+   746→          for (const input of recipe.inputs) {
+   747→            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+   748→            const storage = isCrop ? newSilo : newBarn;
+   749→            if ((storage[input.productId] || 0) < input.qty) {
+   750→              canAfford = false;
+   751→              break;
+   752→            }
+   753→          }
+   754→          if (!canAfford) break;
+   755→          // Deduct inputs
+   756→          for (const input of recipe.inputs) {
+   757→            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+   758→            const storage = isCrop ? newSilo : newBarn;
+   759→            storage[input.productId] = (storage[input.productId] || 0) - input.qty;
+   760→          }
+   761→          craftCount++;
+   762→        }
+   763→        if (craftCount === 0) return;
+   764→
+   765→        // Queue all slots (stagger start times slightly so they don't all finish at once)
+   766→        const now = Date.now();
+   767→        const newSlots: ProductionSlot[] = [];
+   768→        for (let i = 0; i < craftCount; i++) {
+   769→          newSlots.push({
+   770→            recipeId: recipe.id,
+   771→            recipeName: recipe.name,
+   772→            recipeEmoji: recipe.emoji,
+   773→            startedAt: now + i * 100, // stagger by 100ms
+   774→            durationSec: recipe.timeSec,
+   775→            done: false,
+   776→          });
+   777→        }
+   778→
+   779→        set({
+   780→          silo: newSilo,
+   781→          barn: newBarn,
+   782→          productionQueues: {
+   783→            ...state.productionQueues,
+   784→            [buildingId]: [...queue, ...newSlots],
+   785→          },
+   786→        });
+   787→      },
+   788→
+   789→      collectProductionAll: (buildingId) => {
+   790→        const state = get();
+   791→        const building = BUILDINGS[buildingId];
+   792→        if (!building) return;
+   793→        const queue = state.productionQueues[buildingId] || [];
+   794→
+   795→        const newSilo = { ...state.silo };
+   796→        const newBarn = { ...state.barn };
+   797→        let collectedCount = 0;
+   798→        const newQueue: ProductionSlot[] = [];
+   799→
+   800→        for (const slot of queue) {
+   801→          if (slot.done) {
+   802→            let outputItem = '';
+   803→            let outputQty = 0;
+   804→            for (const recipe of building.recipes) {
+   805→              if (recipe.id === slot.recipeId) {
+   806→                outputItem = recipe.output.productId;
+   807→                outputQty = recipe.output.qty;
+   808→                break;
+   809→              }
+   810→            }
+   811→            if (outputItem) {
+   812→              const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
+   813→              if (isCropOutput) {
+   814→                newSilo[outputItem] = (newSilo[outputItem] || 0) + outputQty;
+   815→              } else {
+   816→                newBarn[outputItem] = (newBarn[outputItem] || 0) + outputQty;
+   817→              }
+   818→              collectedCount++;
+   819→            }
+   820→          } else {
+   821→            newQueue.push(slot);
+   822→          }
+   823→        }
+   824→
+   825→        if (collectedCount === 0) return;
+   826→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 8 * collectedCount, state.level);
+   827→        set({
+   828→          silo: newSilo,
+   829→          barn: newBarn,
+   830→          productionQueues: {
+   831→            ...state.productionQueues,
+   832→            [buildingId]: newQueue,
+   833→          },
+   834→          xp: newXp,
+   835→          level: newLevel,
+   836→        });
+   837→      },
+   838→
+   839→      fulfillOrder: (orderId) => {
+   840→        const state = get();
+   841→        const order = state.orders.find(o => o.id === orderId);
+   842→        if (!order) return;
+   843→
+   844→        const newSilo = { ...state.silo };
+   845→        const newBarn = { ...state.barn };
+   846→        for (const item of order.requested) {
+   847→          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+   848→          const storage = isCrop ? newSilo : newBarn;
+   849→          if ((storage[item.itemId] || 0) < item.qty) return;
+   850→          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+   851→        }
+   852→
+   853→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + order.xpReward, state.level);
+   854→
+   855→        const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
+   856→        const newOrders = state.orders.map(o =>
+   857→          o.id === orderId
+   858→            ? { id: generateId(), ...newTemplate, trashedAt: null }
+   859→            : o
+   860→        );
+   861→
+   862→        set({
+   863→          silo: newSilo,
+   864→          barn: newBarn,
+   865→          coins: state.coins + order.coinReward,
+   866→          xp: newXp,
+   867→          level: newLevel,
+   868→          orders: newOrders,
+   869→        });
+   870→      },
+   871→
+   872→      trashOrder: (orderId) => {
+   873→        const state = get();
+   874→        const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
+   875→        const newOrders = state.orders.map(o =>
+   876→          o.id === orderId
+   877→            ? { id: generateId(), ...newTemplate, trashedAt: null }
+   878→            : o
+   879→        );
+   880→        set({ orders: newOrders });
+   881→      },
+   882→
+   883→      sellItem: (itemId, qty) => {
+   884→        const state = get();
+   885→        const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+   886→        const storage = isCrop ? state.silo : state.barn;
+   887→        const available = storage[itemId] || 0;
+   888→        if (available < qty) return;
+   889→        // Determine sell price
+   890→        let sellPrice = 1;
+   891→        if (itemId in CROPS) {
+   892→          const cropDef = CROPS[itemId as CropId];
+   893→          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+   894→        } else {
+   895→          const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
+   896→          if (product) sellPrice = product.sellPrice;
+   897→        }
+   898→        if (isCrop) {
+   899→          set({ silo: { ...state.silo, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+   900→        } else {
+   901→          set({ barn: { ...state.barn, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+   902→        }
+   903→      },
+   904→
+   905→      sellAllOfItem: (itemId) => {
+   906→        const state = get();
+   907→        const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+   908→        const storage = isCrop ? state.silo : state.barn;
+   909→        const qty = storage[itemId] || 0;
+   910→        if (qty <= 0) return;
+   911→        let sellPrice = 1;
+   912→        if (itemId in CROPS) {
+   913→          const cropDef = CROPS[itemId as CropId];
+   914→          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+   915→        } else {
+   916→          const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
+   917→          if (product) sellPrice = product.sellPrice;
+   918→        }
+   919→        if (isCrop) {
+   920→          set({ silo: { ...state.silo, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+   921→        } else {
+   922→          set({ barn: { ...state.barn, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+   923→        }
+   924→      },
+   925→
+   926→      sellAllItems: () => {
+   927→        const state = get();
+   928→        // Items excluded from shop (wheat, corn, feed are essential resources)
+   929→        const SHOP_HIDDEN = new Set(['wheat', 'corn', 'feed']);
+   930→        let totalCoins = 0;
+   931→        const newSilo = { ...state.silo };
+   932→        const newBarn = { ...state.barn };
+   933→        // Sell all silo items (crops + extras), skip hidden
+   934→        for (const [id, def] of Object.entries(CROPS)) {
+   935→          if (SHOP_HIDDEN.has(id)) continue;
+   936→          const qty = newSilo[id] || 0;
+   937→          if (qty > 0) {
+   938→            const sellPrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+   939→            totalCoins += sellPrice * qty;
+   940→            newSilo[id] = 0;
+   941→          }
+   942→        }
+   943→        const siloExtras = ['cotton', 'honey_comb', 'wild_berries', 'gold_nugget'];
+   944→        for (const id of siloExtras) {
+   945→          const qty = newSilo[id] || 0;
+   946→          if (qty > 0) {
+   947→            const product = PRODUCTS[id as keyof typeof PRODUCTS];
+   948→            if (product) {
+   949→              totalCoins += product.sellPrice * qty;
+   950→              newSilo[id] = 0;
+   951→            }
+   952→          }
+   953→        }
+   954→        // Sell all barn items, skip hidden
+   955→        for (const [id, def] of Object.entries(PRODUCTS)) {
+   956→          if (SHOP_HIDDEN.has(id)) continue;
+   957→          const qty = newBarn[id] || 0;
+   958→          if (qty > 0) {
+   959→            totalCoins += def.sellPrice * qty;
+   960→            newBarn[id] = 0;
+   961→          }
+   962→        }
+   963→        if (totalCoins === 0) return;
+   964→        set({ silo: newSilo, barn: newBarn, coins: state.coins + totalCoins });
+   965→      },
+   966→
+   967→      buyFarmhand: (role) => {
+   968→        const state = get();
+   969→        const cost = 100;
+   970→        if (state.coins < cost) return;
+   971→        const fh: FarmhandInstance = { id: generateId(), role, level: 1, xp: 0, equippedOutfit: null };
+   972→        set({ coins: state.coins - cost, farmhands: [...state.farmhands, fh] });
+   973→      },
+   974→
+   975→      addSilo: (itemId, qty) => {
+   976→        const state = get();
+   977→        set({ silo: { ...state.silo, [itemId]: (state.silo[itemId] || 0) + qty } });
+   978→      },
+   979→
+   980→      addBarn: (itemId, qty) => {
+   981→        const state = get();
+   982→        set({ barn: { ...state.barn, [itemId]: (state.barn[itemId] || 0) + qty } });
+   983→      },
+   984→
+   985→      // Fishery
+   986→      unlockFisheryZone: (zoneId) => {
+   987→        const state = get();
+   988→        if (state.fishery.unlockedZones.includes(zoneId)) return;
+   989→        const zone = WATER_ZONES[zoneId];
+   990→        if (state.level < zone.unlockLevel) return;
+   991→        if (zone.unlockCostCoins && state.coins < zone.unlockCostCoins) return;
+   992→        if (zone.unlockCostGems && state.gems < zone.unlockCostGems) return;
+   993→        set({
+   994→          coins: zone.unlockCostCoins ? state.coins - zone.unlockCostCoins : state.coins,
+   995→          gems: zone.unlockCostGems ? state.gems - zone.unlockCostGems : state.gems,
+   996→          fishery: {
+   997→            ...state.fishery,
+   998→            unlockedZones: [...state.fishery.unlockedZones, zoneId],
+   999→            lastCatchTimestamps: { ...state.fishery.lastCatchTimestamps, [zoneId]: Date.now() },
+  1000→          },
+  1001→        });
+  1002→      },
+  1003→
+  1004→      upgradeFishingRod: () => {
+  1005→        const state = get();
+  1006→        const currentIdx = ROD_TIER_ORDER.indexOf(state.fishery.rodTier);
+  1007→        if (currentIdx >= ROD_TIER_ORDER.length - 1) return;
+  1008→        const nextTier = ROD_TIER_ORDER[currentIdx + 1];
+  1009→        const nextDef = ROD_TIERS[nextTier];
+  1010→        if (state.level < nextDef.unlockLevel) return;
+  1011→        if (state.coins < nextDef.costCoins) return;
+  1012→        set({
+  1013→          coins: state.coins - nextDef.costCoins,
+  1014→          fishery: { ...state.fishery, rodTier: nextTier },
+  1015→        });
+  1016→      },
+  1017→
+  1018→      // Autonomous Workers
+  1019→      hireAutonomousWorker: (type) => {
+  1020→        const state = get();
+  1021→        const def = WORKERS[type];
+  1022→        const cost = 200;
+  1023→        if (state.coins < cost) return;
+  1024→        const worker: AutonomousWorkerInstance = {
+  1025→          id: generateId(),
+  1026→          type,
+  1027→          gearTier: 1,
+  1028→          autoSell: type === 'merchant',
+  1029→          lastProduceTime: Date.now(),
+  1030→        };
+  1031→        set({ coins: state.coins - cost, autonomousWorkers: [...state.autonomousWorkers, worker] });
+  1032→      },
+  1033→
+  1034→      toggleWorkerAutoSell: (workerId) => {
+  1035→        const state = get();
+  1036→        const newWorkers = state.autonomousWorkers.map(w =>
+  1037→          w.id === workerId ? { ...w, autoSell: !w.autoSell } : w
+  1038→        );
+  1039→        set({ autonomousWorkers: newWorkers });
+  1040→      },
+  1041→
+  1042→      upgradeWorkerGear: (workerId) => {
+  1043→        const state = get();
+  1044→        const worker = state.autonomousWorkers.find(w => w.id === workerId);
+  1045→        if (!worker) return;
+  1046→        const def = WORKERS[worker.type];
+  1047→        if (worker.gearTier >= def.gearTiers.length) return;
+  1048→        const nextGear = def.gearTiers[worker.gearTier]; // 0-indexed, gearTier is 1-indexed
+  1049→        if (state.coins < nextGear.costCoins || state.gems < nextGear.costGems) return;
+  1050→        const newWorkers = state.autonomousWorkers.map(w =>
+  1051→          w.id === workerId ? { ...w, gearTier: w.gearTier + 1 } : w
+  1052→        );
+  1053→        set({
+  1054→          coins: state.coins - nextGear.costCoins,
+  1055→          gems: state.gems - nextGear.costGems,
+  1056→          autonomousWorkers: newWorkers,
+  1057→        });
+  1058→      },
+  1059→
+  1060→      // Unified Workers (v2.0)
+  1061→      hireUnifiedWorker: (role) => {
+  1062→        const state = get();
+  1063→        const cfg = WORKER_REGISTRY[role];
+  1064→        if (state.level < cfg.unlockLevel) return;
+  1065→        if (state.coins < cfg.baseCost) return;
+  1066→        const now = Date.now();
+  1067→        const newWorkers = { ...state.unifiedWorkers };
+  1068→        newWorkers[role] = {
+  1069→          role,
+  1070→          isHired: true,
+  1071→          level: 1,
+  1072→          autoSell: role === 'merchant',
+  1073→          lastActionTimestamp: now,
+  1074→          bufferCount: 0,
+  1075→          stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+  1076→        };
+  1077→        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers });
+  1078→      },
+  1079→
+  1080→      upgradeUnifiedWorker: (role, levelsToBuy) => {
+  1081→        const state = get();
+  1082→        const worker = state.unifiedWorkers[role];
+  1083→        if (!worker || !worker.isHired) return;
+  1084→        if (worker.level >= WORKER_MAX_LEVEL) return;
+  1085→        const actualLevels = Math.min(levelsToBuy, WORKER_MAX_LEVEL - worker.level);
+  1086→        if (actualLevels <= 0) return;
+  1087→        // Calculate total cost
+  1088→        let totalCost = 0;
+  1089→        for (let i = 0; i < actualLevels; i++) {
+  1090→          totalCost += workerUpgradeCost(role, worker.level + i);
+  1091→        }
+  1092→        if (state.coins < totalCost) return;
+  1093→        const newWorkers = { ...state.unifiedWorkers };
+  1094→        newWorkers[role] = { ...worker, level: worker.level + actualLevels };
+  1095→        set({ coins: state.coins - totalCost, unifiedWorkers: newWorkers });
+  1096→      },
+  1097→
+  1098→      toggleUnifiedWorkerMode: (role) => {
+  1099→        const state = get();
+  1100→        const worker = state.unifiedWorkers[role];
+  1101→        if (!worker || !worker.isHired) return;
+  1102→        const newWorkers = { ...state.unifiedWorkers };
+  1103→        newWorkers[role] = { ...worker, autoSell: !worker.autoSell };
+  1104→        set({ unifiedWorkers: newWorkers });
+  1105→      },
+  1106→
+  1107→      bulkUpgradeUnifiedWorker: (role, mode) => {
+  1108→        const state = get();
+  1109→        const worker = state.unifiedWorkers[role];
+  1110→        if (!worker || !worker.isHired) return;
+  1111→        const result = calculateBulkUpgrade(role, worker.level, mode, state.coins);
+  1112→        if (result.levelsToBuy <= 0) return;
+  1113→        const newWorkers = { ...state.unifiedWorkers };
+  1114→        newWorkers[role] = { ...worker, level: worker.level + result.levelsToBuy };
+  1115→        set({ coins: state.coins - result.totalCost, unifiedWorkers: newWorkers });
+  1116→      },
+  1117→
+  1118→      // Outfits
+  1119→      equipOutfit: (farmhandId, outfitId) => {
+  1120→        const state = get();
+  1121→        const newFarmhands = state.farmhands.map(fh =>
+  1122→          fh.id === farmhandId ? { ...fh, equippedOutfit: outfitId } : fh
+  1123→        );
+  1124→        set({ farmhands: newFarmhands });
+  1125→      },
+  1126→
+  1127→      // Events
+  1128→      shooCrow: () => {
+  1129→        const state = get();
+  1130→        if (!state.activeEvent || state.activeEvent.type !== 'crow_attack') return;
+  1131→        set({ activeEvent: null });
+  1132→      },
+  1133→
+  1134→      fulfillChefOrder: () => {
+  1135→        const state = get();
+  1136→        if (!state.activeEvent || state.activeEvent.type !== 'vip_chef' || !state.activeEvent.chefOrder) return;
+  1137→        const order = state.activeEvent.chefOrder;
+  1138→
+  1139→        const newSilo = { ...state.silo };
+  1140→        const newBarn = { ...state.barn };
+  1141→        for (const item of order.requested) {
+  1142→          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+  1143→          const storage = isCrop ? newSilo : newBarn;
+  1144→          if ((storage[item.itemId] || 0) < item.qty) return;
+  1145→          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+  1146→        }
+  1147→
+  1148→        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + order.xpReward, state.level);
+  1149→        set({
+  1150→          silo: newSilo,
+  1151→          barn: newBarn,
+  1152→          coins: state.coins + order.coinReward,
+  1153→          gems: state.gems + order.gemReward,
+  1154→          xp: newXp,
+  1155→          level: newLevel,
+  1156→          activeEvent: null,
+  1157→        });
+  1158→      },
+  1159→
+  1160→      openSmugglerCrate: () => {
+  1161→        const state = get();
+  1162→        if (!state.activeEvent || state.activeEvent.type !== 'smuggler') return;
+  1163→        if ((state.activeEvent.smugglerCrates || 0) <= 0) return;
+  1164→
+  1165→        const loot = rollSmugglerLoot();
+  1166→        const newSilo = { ...state.silo };
+  1167→        const newBarn = { ...state.barn };
+  1168→        let newCoins = state.coins;
+  1169→        let newGems = state.gems;
+  1170→
+  1171→        if (loot.itemId === 'gems') {
+  1172→          newGems += loot.qty;
+  1173→        } else {
+  1174→          const product = PRODUCTS[loot.itemId as keyof typeof PRODUCTS];
+  1175→          if (product) {
+  1176→            const isCrop = loot.itemId in CROPS || loot.itemId === 'feed' || loot.itemId === 'cotton' || loot.itemId === 'honey_comb' || loot.itemId === 'wild_berries' || loot.itemId === 'gold_nugget';
+  1177→            if (isCrop) {
+  1178→              newSilo[loot.itemId] = (newSilo[loot.itemId] || 0) + loot.qty;
+  1179→            } else {
+  1180→              newBarn[loot.itemId] = (newBarn[loot.itemId] || 0) + loot.qty;
+  1181→            }
+  1182→          }
+  1183→        }
+  1184→
+  1185→        const newCrates = (state.activeEvent.smugglerCrates || 1) - 1;
+  1186→        set({
+  1187→          silo: newSilo,
+  1188→          barn: newBarn,
+  1189→          coins: newCoins,
+  1190→          gems: newGems,
+  1191→          activeEvent: newCrates <= 0 ? null : { ...state.activeEvent, smugglerCrates: newCrates },
+  1192→        });
+  1193→      },
+  1194→
+  1195→      // Breeding
+  1196→      breedAnimals: (parent1Id, parent2Id) => {
+  1197→        const state = get();
+  1198→        const parent1 = state.animals.find(a => a.id === parent1Id);
+  1199→        const parent2 = state.animals.find(a => a.id === parent2Id);
+  1200→        if (!parent1 || !parent2) return;
+  1201→        if (parent1.species !== parent2.species) return;
+  1202→        if (state.activeBreedings.length >= state.breedingSlots) return;
+  1203→
+  1204→        // Determine offspring tier
+  1205→        let offspringTier: Tier = parent1.tier;
+  1206→        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+  1207→        const maxTierIdx = Math.max(tierOrder.indexOf(parent1.tier), tierOrder.indexOf(parent2.tier));
+  1208→        // 30% chance to breed up a tier
+  1209→        if (Math.random() < 0.3 && maxTierIdx < tierOrder.length - 1) {
+  1210→          offspringTier = tierOrder[maxTierIdx + 1];
+  1211→        } else {
+  1212→          offspringTier = tierOrder[maxTierIdx];
+  1213→        }
+  1214→
+  1215→        const breeding: ActiveBreeding = {
+  1216→          id: generateId(),
+  1217→          species: parent1.species,
+  1218→          parent1Id,
+  1219→          parent2Id,
+  1220→          startedAt: Date.now(),
+  1221→          durationMs: 120000, // 2 min
+  1222→        };
+  1223→
+  1224→        // Mark parents as unavailable (fed state)
+  1225→        const newAnimals = state.animals.map(a => {
+  1226→          if (a.id === parent1Id || a.id === parent2Id) {
+  1227→            return { ...a, fed: true, fedAt: Date.now() };
+  1228→          }
+  1229→          return a;
+  1230→        });
+  1231→
+  1232→        set({
+  1233→          animals: newAnimals,
+  1234→          activeBreedings: [...state.activeBreedings, breeding],
+  1235→          codex: { ...state.codex, [`${parent1.species}_${offspringTier}`]: true },
+  1236→        });
+  1237→      },
+  1238→
+  1239→      upgradeBreedingSlot: () => {
+  1240→        const state = get();
+  1241→        const nextSlot = state.breedingSlots + 1;
+  1242→        const upgrade = BREEDING_SLOT_UPGRADES.find(u => u.slotIndex === nextSlot);
+  1243→        if (!upgrade) return;
+  1244→        if (state.level < upgrade.unlockLevel) return;
+  1245→        if (state.gems < upgrade.costGems) return;
+  1246→        set({
+  1247→          gems: state.gems - upgrade.costGems,
+  1248→          breedingSlots: nextSlot,
+  1249→        });
+  1250→      },
+  1251→
+  1252→      // Wilderness
+  1253→      launchExpedition: (biomeId, farmhandId, lureId) => {
+  1254→        const state = get();
+  1255→        const biome = BIOMES[biomeId];
+  1256→        if (!biome) return;
+  1257→        // Check level unlock
+  1258→        if (state.level < biome.unlockLevel) return;
+  1259→        // Check dispatch fee
+  1260→        if (state.coins < biome.dispatchFee) return;
+  1261→        // Check farmhand exists and isn't already on an expedition
+  1262→        const farmhand = state.farmhands.find(fh => fh.id === farmhandId);
+  1263→        if (!farmhand) return;
+  1264→        const isBusy = state.wilderness.activeExpeditions.some(e => e.farmhandId === farmhandId);
+  1265→        if (isBusy) return;
+  1266→        // Check lure exists in barn
+  1267→        const lureDef = LURES[lureId];
+  1268→        if (!lureDef) return;
+  1269→        const lureQty = state.barn[lureDef.productId] || 0;
+  1270→        if (lureQty < 1) return;
+  1271→
+  1272→        const lure = LURES[lureId];
+  1273→        const durationMs = Math.floor(biome.baseDurationMs * lure.timeMultiplier);
+  1274→
+  1275→        const newExpedition: ActiveExpedition = {
+  1276→          id: generateId(),
+  1277→          biomeId,
+  1278→          farmhandId,
+  1279→          lureId,
+  1280→          startedAt: Date.now(),
+  1281→          durationMs,
+  1282→          midpointResolved: false,
+  1283→          pendingChoice: null,
+  1284→          riskyChosen: null,
+  1285→        };
+  1286→
+  1287→        // Consume lure and dispatch fee
+  1288→        const newBarn = { ...state.barn, [lureDef.productId]: lureQty - 1 };
+  1289→
+  1290→        set({
+  1291→          coins: state.coins - biome.dispatchFee,
+  1292→          barn: newBarn,
+  1293→          wilderness: {
+  1294→            ...state.wilderness,
+  1295→            activeExpeditions: [...state.wilderness.activeExpeditions, newExpedition],
+  1296→          },
+  1297→        });
+  1298→      },
+  1299→
+  1300→      resolveExpeditionChoice: (expeditionId, chooseRisky) => {
+  1301→        const state = get();
+  1302→        const expedition = state.wilderness.activeExpeditions.find(e => e.id === expeditionId);
+  1303→        if (!expedition || !expedition.pendingChoice) return;
+  1304→        
+  1305→        const updatedExpeditions = state.wilderness.activeExpeditions.map(e => {
+  1306→          if (e.id === expeditionId) {
+  1307→            return { ...e, midpointResolved: true, pendingChoice: null, riskyChosen: chooseRisky };
+  1308→          }
+  1309→          return e;
+  1310→        });
+  1311→        
+  1312→        set({
+  1313→          wilderness: {
+  1314→            ...state.wilderness,
+  1315→            activeExpeditions: updatedExpeditions,
+  1316→          },
+  1317→        });
+  1318→      },
+  1319→
+  1320→      // Habitat
+  1321→      upgradeHabitat: (species) => {
+  1322→        const state = get();
+  1323→        const currentStep = state.habitatUpgradeSteps[species] || 0;
+  1324→        const nextUpgrade = HABITAT_UPGRADES.find(u => u.species === species && u.step === currentStep + 1);
+  1325→        if (!nextUpgrade) return;
+  1326→        if (state.coins < nextUpgrade.costCoins) return;
+  1327→        set({
+  1328→          coins: state.coins - nextUpgrade.costCoins,
+  1329→          animalCapacity: { ...state.animalCapacity, [species]: (state.animalCapacity[species] || ANIMALS[species].capacity) + nextUpgrade.additionalCapacity },
+  1330→          habitatUpgradeSteps: { ...state.habitatUpgradeSteps, [species]: currentStep + 1 },
+  1331→        });
+  1332→      },
+  1333→
+  1334→      // Notifications
+  1335→      addNotification: (message, emoji, type) => {
+  1336→        const state = get();
+  1337→        const notification: NotificationItem = {
+  1338→          id: generateId(),
+  1339→          message,
+  1340→          emoji,
+  1341→          createdAt: Date.now(),
+  1342→          type,
+  1343→        };
+  1344→        const newNotifications = [notification, ...state.notifications].slice(0, 20);
+  1345→        set({ notifications: newNotifications });
+  1346→      },
+  1347→
+  1348→      clearNotifications: () => {
+  1349→        set({ notifications: [] });
+  1350→      },
+  1351→
+  1352→      tick: () => {
+  1353→        const now = Date.now();
+  1354→        const state = get();
+  1355→
+  1356→        // Update plots (with rainstorm boost)
+  1357→        const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
+  1358→        const newPlots = state.plots.map(p => {
+  1359→          if (p.crop && p.plantedAt && !p.ready) {
+  1360→            const elapsed = (now - p.plantedAt) / 1000;
+  1361→            const effectiveElapsed = rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed;
+  1362→            const growTime = CROPS[p.crop].growTimeSec;
+  1363→            if (effectiveElapsed >= growTime) {
+  1364→              return { ...p, ready: true };
+  1365→            }
+  1366→          }
+  1367→          return p;
+  1368→        });
+  1369→
+  1370→        // Update animal production
+  1371→        const newAnimals = state.animals.map(a => {
+  1372→          if (a.fed && a.fedAt && !a.productReady) {
+  1373→            const elapsed = (now - a.fedAt) / 1000;
+  1374→            const prodTime = ANIMALS[a.species].productionTimeSec;
+  1375→            if (elapsed >= prodTime) {
+  1376→              return { ...a, productReady: true };
+  1377→            }
+  1378→          }
+  1379→          return a;
+  1380→        });
+  1381→
+  1382→        // Update production queues
+  1383→        const newQueues: Record<BuildingId, ProductionSlot[]> = { ...state.productionQueues };
+  1384→        for (const buildingId of Object.keys(BUILDINGS) as BuildingId[]) {
+  1385→          const queue = state.productionQueues[buildingId] || [];
+  1386→          newQueues[buildingId] = queue.map(slot => {
+  1387→            if (!slot.done) {
+  1388→              const elapsed = (now - slot.startedAt) / 1000;
+  1389→              if (elapsed >= slot.durationSec) {
+  1390→                return { ...slot, done: true };
+  1391→              }
+  1392→            }
+  1393→            return slot;
+  1394→          });
+  1395→        }
+  1396→
+  1397→        // Multi-zone fishery: iterate ALL unlocked zones in parallel
+  1398→        let newBarn = { ...state.barn };
+  1399→        let newSilo = { ...state.silo };
+  1400→        let newGems = state.gems;
+  1401→        let newCodex = { ...state.codex };
+  1402→        let newFishCodex = { ...state.fishery.fishCodex };
+  1403→        const newCatchTimestamps = { ...state.fishery.lastCatchTimestamps };
+  1404→
+  1405→        // Only catch fish if at least one fisherman exists (farmhand, autonomous, or unified)
+  1406→        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman') || (state.unifiedWorkers.fisherman?.isHired);
+  1407→
+  1408→        const rod = ROD_TIERS[state.fishery.rodTier];
+  1409→        if (hasFisherman) {
+  1410→        for (const zoneId of state.fishery.unlockedZones) {
+  1411→          const zone = WATER_ZONES[zoneId];
+  1412→          const lastCatch = state.fishery.lastCatchTimestamps[zoneId] || 0;
+  1413→          if (lastCatch === 0) continue;
+  1414→          const interval = zone.baseIntervalMs * rod.speedMultiplier;
+  1415→          // Outfit bonus
+  1416→          const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
+  1417→          const effectiveInterval = hasSlicker ? interval * 0.67 : interval;
+  1418→
+  1419→          if (now - lastCatch >= effectiveInterval) {
+  1420→            const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
+  1421→            if (catchResult) {
+  1422→              const fishDef = FISH_SPECIES[catchResult.speciesId];
+  1423→              newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + 1;
+  1424→              newBarn.fish = (newBarn.fish || 0) + 1;
+  1425→              const codexKey = `fish_${catchResult.speciesId}`;
+  1426→              newFishCodex[codexKey] = true;
+  1427→              newCodex[codexKey] = true;
+  1428→              if (catchResult.isNew) {
+  1429→                newGems += fishDef.codexGems;
+  1430→              }
+  1431→              // Lanternfish gem bonus
+  1432→              if (catchResult.speciesId === 'lanternfish') {
+  1433→                newGems += 1;
+  1434→              }
+  1435→            }
+  1436→            newCatchTimestamps[zoneId] = now;
+  1437→          }
+  1438→        }
+  1439→        } // end if (hasFisherman)
+  1440→
+  1441→        // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
+  1442→        let newCoins = state.coins;
+  1443→        const newWorkers = state.autonomousWorkers.map(w => {
+  1444→          const def = WORKERS[w.type];
+  1445→          const gear = def.gearTiers[w.gearTier - 1] || def.gearTiers[0];
+  1446→          const interval = def.baseIntervalMs * gear.speedMultiplier;
+  1447→
+  1448→          if (now - w.lastProduceTime >= interval) {
+  1449→            if (w.type === 'merchant') {
+  1450→              // Auto-sell: find something in barn to sell
+  1451→              if (w.autoSell) {
+  1452→                for (const [itemId, qty] of Object.entries(newBarn)) {
+  1453→                  if (qty > 1) {
+  1454→                    const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
+  1455→                    if (product && product.sellPrice > 0) {
+  1456→                      const sellQty = Math.min(qty - 1, 3);
+  1457→                      newBarn[itemId] = (newBarn[itemId] || 0) - sellQty;
+  1458→                      newCoins += product.sellPrice * sellQty;
+  1459→                      break;
+  1460→                    }
+  1461→                  }
+  1462→                }
+  1463→              }
+  1464→            } else if (def.produces) {
+  1465→              if (w.autoSell) {
+  1466→                const product = PRODUCTS[def.produces as keyof typeof PRODUCTS];
+  1467→                if (product) {
+  1468→                  newCoins += product.sellPrice * (def.producesQty || 1);
+  1469→                }
+  1470→              } else {
+  1471→                const isSilo = def.produces === 'honey_comb' || def.produces === 'wild_berries' || def.produces === 'gold_nugget' || def.produces === 'cotton';
+  1472→                if (isSilo) {
+  1473→                  newSilo[def.produces] = (newSilo[def.produces] || 0) + (def.producesQty || 1);
+  1474→                } else {
+  1475→                  newBarn[def.produces] = (newBarn[def.produces] || 0) + (def.producesQty || 1);
+  1476→                }
+  1477→              }
+  1478→            }
+  1479→            return { ...w, lastProduceTime: now };
+  1480→          }
+  1481→          return w;
+  1482→        });
+  1483→
+  1484→        // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
+  1485→        let unifiedWorkersModified = false;
+  1486→        const updatedUnifiedWorkers = { ...state.unifiedWorkers };
+  1487→        for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
+  1488→          const worker = updatedUnifiedWorkers[role];
+  1489→          if (!worker || !worker.isHired) continue;
+  1490→
+  1491→          const cfg = WORKER_REGISTRY[role];
+  1492→          const effectiveInterval = workerEffectiveInterval(role, worker.level);
+  1493→          const elapsed = now - worker.lastActionTimestamp;
+  1494→
+  1495→          if (elapsed >= effectiveInterval) {
+  1496→            const cycles = Math.min(
+  1497→              Math.floor(elapsed / effectiveInterval),
+  1498→              1 + workerHopperBuffer(worker.level) // cap cycles by hopper buffer
+  1499→            );
+  1500→            unifiedWorkersModified = true;
+  1501→
+  1502→            // Update timestamp (keep remainder)
+  1503→            const newTimestamp = now - (elapsed % effectiveInterval);
+  1504→
+  1505→            for (let c = 0; c < cycles; c++) {
+  1506→              // ---- Double/Triple Proc ----
+  1507→              let multiplier = 1;
+  1508→              const doubleChance = workerDoubleProcChance(worker.level);
+  1509→              if (Math.random() < doubleChance) {
+  1510→                if (workerTripleProcUnlocked(worker.level) && Math.random() < 0.15) {
+  1511→                  multiplier = 3; // Triple yield!
+  1512→                } else {
+  1513→                  multiplier = 2; // Double yield
+  1514→                }
+  1515→              }
+  1516→
+  1517→              // ---- Level 60+ Gem Drop (5% per cycle) ----
+  1518→              if (workerGemProcUnlocked(worker.level) && Math.random() < 0.05) {
+  1519→                newGems += 1;
+  1520→                worker.stats.totalGemsEarned += 1;
+  1521→              }
+  1522→
+  1523→              // ---- Dual-Channel Mode Routing ----
+  1524→              if (worker.autoSell) {
+  1525→                // AUTO-SELL MODE: Direct coin liquidation
+  1526→                const payout = workerAutoSellPayout(role, worker.level);
+  1527→                const earned = payout * multiplier;
+  1528→                newCoins += earned;
+  1529→                worker.stats.totalCoinsEarned += earned;
+  1530→              } else {
+  1531→                // HOARD MODE: Deposit items to storage
+  1532→                if (role === 'merchant') {
+  1533→                  // Merchant in hoard mode: sells silo crops at premium, keeps items
+  1534→                  // Does nothing in hoard mode — items stay in storage for VIP orders
+  1535→                } else if (role === 'barn_overseer') {
+  1536→                  // Barn Overseer in hoard: auto-fills animal troughs
+  1537→                  const feedNeeded = state.animals.filter(a => !a.fed && !a.productReady).length;
+  1538→                  if (feedNeeded > 0 && (newSilo.feed || 0) > 0) {
+  1539→                    const feedToUse = Math.min(feedNeeded, newSilo.feed);
+  1540→                    newSilo.feed = (newSilo.feed || 0) - feedToUse;
+  1541→                  }
+  1542→                } else if (cfg.hoardItem) {
+  1543→                  // Deposit hoard item to barn or silo
+  1544→                  const qty = multiplier;
+  1545→                  if (cfg.hoardIsSilo) {
+  1546→                    newSilo[cfg.hoardItem] = (newSilo[cfg.hoardItem] || 0) + qty;
+  1547→                  } else {
+  1548→                    newBarn[cfg.hoardItem] = (newBarn[cfg.hoardItem] || 0) + qty;
+  1549→                  }
+  1550→                  worker.stats.totalItemsProduced += qty;
+  1551→                }
+  1552→              }
+  1553→            }
+  1554→
+  1555→            // Update the worker instance
+  1556→            updatedUnifiedWorkers[role] = {
+  1557→              ...worker,
+  1558→              lastActionTimestamp: newTimestamp,
+  1559→              stats: { ...worker.stats },
+  1560→            };
+  1561→          }
+  1562→        }
+  1563→
+  1564→        // Hourly events: trigger every 60 min
+  1565→        let newActiveEvent = state.activeEvent;
+  1566→        let newLastEventTriggerTime = state.lastEventTriggerTime;
+  1567→        if (!state.activeEvent && now - state.lastEventTriggerTime >= 3600000) {
+  1568→          const eventTypes: HourlyEventType[] = ['vip_chef', 'crow_attack', 'rainstorm', 'smuggler'];
+  1569→          const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+  1570→          const eventDef = HOURLY_EVENTS[eventType];
+  1571→
+  1572→          const newEvent: ActiveHourlyEvent = {
+  1573→            type: eventType,
+  1574→            startedAt: now,
+  1575→          };
+  1576→
+  1577→          if (eventType === 'vip_chef') {
+  1578→            newEvent.chefOrder = generateChefOrder();
+  1579→          } else if (eventType === 'crow_attack') {
+  1580→            // Select 2-3 random growing plots
+  1581→            const growingPlots = state.plots.filter(p => p.crop && !p.ready);
+  1582→            const crowCount = Math.min(growingPlots.length, 2 + Math.floor(Math.random() * 2));
+  1583→            newEvent.crowPlotIds = growingPlots.slice(0, crowCount).map(p => p.id);
+  1584→          } else if (eventType === 'smuggler') {
+  1585→            newEvent.smugglerCrates = 1 + Math.floor(Math.random() * 3);
+  1586→          }
+  1587→
+  1588→          newActiveEvent = newEvent;
+  1589→          newLastEventTriggerTime = now;
+  1590→        }
+  1591→
+  1592→        // Check if active event has expired
+  1593→        if (newActiveEvent) {
+  1594→          const eventDef = HOURLY_EVENTS[newActiveEvent.type];
+  1595→          if (now - newActiveEvent.startedAt >= eventDef.durationMs) {
+  1596→            newActiveEvent = null;
+  1597→          }
+  1598→        }
+  1599→
+  1600→        // Breeding completion
+  1601→        const newActiveBreedings = state.activeBreedings.filter(b => {
+  1602→          if (now - b.startedAt >= b.durationMs) {
+  1603→            // Breeding complete — add offspring
+  1604→            const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+  1605→            // Pick a random tier based on parents
+  1606→            const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
+  1607→            const offspringMaxCycles = randomMaxCycles(offspringTier);
+  1608→            const newAnimal: AnimalInstance = {
+  1609→              id: generateId(),
+  1610→              species: b.species,
+  1611→              tier: offspringTier,
+  1612→              fed: false,
+  1613→              fedAt: null,
+  1614→              productReady: false,
+  1615→              age: 'baby',
+  1616→              maxCycles: offspringMaxCycles,
+  1617→              cyclesRemaining: offspringMaxCycles,
+  1618→            };
+  1619→            // Add to animals — we need to set state, but in a filter we can't
+  1620→            // We'll handle this outside the filter
+  1621→            return false;
+  1622→          }
+  1623→          return true;
+  1624→        });
+  1625→
+  1626→        // Actually process completed breedings
+  1627→        const completedBreedings = state.activeBreedings.filter(b => now - b.startedAt >= b.durationMs);
+  1628→        let breedingAnimals = [...newAnimals];
+  1629→        for (const b of completedBreedings) {
+  1630→          const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
+  1631→          const offspringMaxCycles = randomMaxCycles(offspringTier);
+  1632→          const newAnimal: AnimalInstance = {
+  1633→            id: generateId(),
+  1634→            species: b.species,
+  1635→            tier: offspringTier,
+  1636→            fed: false,
+  1637→            fedAt: null,
+  1638→            productReady: false,
+  1639→            age: 'baby',
+  1640→            maxCycles: offspringMaxCycles,
+  1641→            cyclesRemaining: offspringMaxCycles,
+  1642→          };
+  1643→          breedingAnimals.push(newAnimal);
+  1644→          // Reset parents
+  1645→          breedingAnimals = breedingAnimals.map(a => {
+  1646→            if (a.id === b.parent1Id || a.id === b.parent2Id) {
+  1647→              return { ...a, fed: false, fedAt: null };
+  1648→            }
+  1649→            return a;
+  1650→          });
+  1651→          newCodex[`${b.species}_${offspringTier}`] = true;
+  1652→        }
+  1653→
+  1654→    // --- Expedition Processing ---
+  1655→    const currentWilderness = get().wilderness;
+  1656→    let expeditionsToUpdate = [...currentWilderness.activeExpeditions];
+  1657→    let animalsToAdd: AnimalInstance[] = [];
+  1658→    let gemBonuses = 0;
+  1659→    let codexUpdates: Record<string, boolean> = {};
+  1660→    let notificationsToAdd: { message: string; emoji: string; type: string }[] = [];
+  1661→    let coinsFromExpeditions = 0;
+  1662→    const stateForExpedition = get();
+  1663→
+  1664→    expeditionsToUpdate = expeditionsToUpdate.map(expedition => {
+  1665→      const elapsed = now - expedition.startedAt;
+  1666→
+  1667→      // 1. Trigger midpoint encounter
+  1668→      if (elapsed >= expedition.durationMs * 0.5 && !expedition.midpointResolved && !expedition.pendingChoice) {
+  1669→        const encounter = TRAIL_ENCOUNTERS[Math.floor(Math.random() * TRAIL_ENCOUNTERS.length)];
+  1670→        return {
+  1671→          ...expedition,
+  1672→          pendingChoice: {
+  1673→            prompt: encounter.prompt,
+  1674→            safeLabel: encounter.safeLabel,
+  1675→            riskyLabel: encounter.riskyLabel,
+  1676→          },
+  1677→        };
+  1678→      }
+  1679→
+  1680→      // 2. Resolve completed expedition
+  1681→      if (elapsed >= expedition.durationMs && expedition.midpointResolved) {
+  1682→        const biome = BIOMES[expedition.biomeId];
+  1683→        const lure = LURES[expedition.lureId];
+  1684→        
+  1685→        // Determine outcome based on midpoint choice
+  1686→        let success = true;
+  1687→        let tierBoost = 0;
+  1688→        
+  1689→        if (expedition.riskyChosen) {
+  1690→          // Risky path: 40% chance of failure
+  1691→          if (Math.random() < 0.4) {
+  1692→            success = false;
+  1693→          } else {
+  1694→            tierBoost = 0.15; // boost rare/legendary chances
+  1695→          }
+  1696→        }
+  1697→
+  1698→        if (success) {
+  1699→          // Weighted random selection from biome species pool
+  1700→          const pool = biome.speciesPool;
+  1701→          const totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
+  1702→          let roll = Math.random() * totalWeight;
+  1703→          let selected = pool[0];
+  1704→          for (const p of pool) {
+  1705→            roll -= p.weight;
+  1706→            if (roll <= 0) { selected = p; break; }
+  1707→          }
+  1708→
+  1709→          // Apply lure rare/legendary boost - possibly upgrade tier
+  1710→          const rareChance = lure.rareBoost + tierBoost;
+  1711→          const legendaryChance = lure.legendaryBoost + (tierBoost * 0.5);
+  1712→          if (selected.tier === 'common' && Math.random() < rareChance) {
+  1713→            selected = { ...selected, tier: 'rare' };
+  1714→          } else if (selected.tier === 'uncommon' && Math.random() < rareChance * 0.7) {
+  1715→            selected = { ...selected, tier: 'rare' };
+  1716→          }
+  1717→          if (selected.tier === 'rare' && Math.random() < legendaryChance) {
+  1718→            selected = { ...selected, tier: 'legendary' };
+  1719→          }
+  1720→
+  1721→          // Check habitat capacity
+  1722→          const currentCount = stateForExpedition.animals.filter(a => a.species === selected.species).length;
+  1723→          const maxCapacity = stateForExpedition.animalCapacity[selected.species] || ANIMALS[selected.species].capacity;
+  1724→
+  1725→          if (currentCount < maxCapacity) {
+  1726→            const maxCycles = randomMaxCycles(selected.tier);
+  1727→            const newAnimal: AnimalInstance = {
+  1728→              id: generateId(),
+  1729→              species: selected.species,
+  1730→              tier: selected.tier,
+  1731→              fed: false,
+  1732→              fedAt: null,
+  1733→              productReady: false,
+  1734→              age: 'adult',
+  1735→              maxCycles,
+  1736→              cyclesRemaining: maxCycles,
+  1737→            };
+  1738→            animalsToAdd.push(newAnimal);
+  1739→
+  1740→            // Codex + gems
+  1741→            const codexKey = `${selected.species}_${selected.tier}`;
+  1742→            if (!stateForExpedition.codex[codexKey]) {
+  1743→              codexUpdates[codexKey] = true;
+  1744→              const gemBonus = selected.tier === 'legendary' ? 50 : selected.tier === 'rare' ? 20 : 5;
+  1745→              gemBonuses += gemBonus;
+  1746→            }
+  1747→
+  1748→            const animalName = ANIMALS[selected.species].name;
+  1749→            notificationsToAdd.push({
+  1750→              message: `Rescued ${selected.tier} ${animalName} from ${biome.name}!`,
+  1751→              emoji: ANIMALS[selected.species].emoji,
+  1752→              type: 'success',
+  1753→            });
+  1754→          } else {
+  1755→            notificationsToAdd.push({
+  1756→              message: `${ANIMALS[selected.species].name} habitat full — animal released to wild.`,
+  1757→              emoji: '\u{1F4AB}',
+  1758→              type: 'info',
+  1759→            });
+  1760→          }
+  1761→        } else {
+  1762→          // Failed risky path
+  1763→          notificationsToAdd.push({
+  1764→            message: `Expedition to ${biome.name} failed — lure was lost!`,
+  1765→            emoji: '\u{1F4A8}',
+  1766→            type: 'warning',
+  1767→          });
+  1768→        }
+  1769→
+  1770→        // Mark as completed (return null to filter out)
+  1771→        return null as any;
+  1772→      }
+  1773→
+  1774→      return expedition;
+  1775→    }).filter(Boolean);
+  1776→
+  1777→    // Apply expedition results
+  1778→    if (animalsToAdd.length > 0 || gemBonuses > 0 || Object.keys(codexUpdates).length > 0 || notificationsToAdd.length > 0) {
+  1779→      const currentState = get();
+  1780→      // Unlock biomes based on level
+  1781→      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
+  1782→      for (const [biomeId, biome] of Object.entries(BIOMES)) {
+  1783→        if (currentState.level >= biome.unlockLevel) {
+  1784→          unlockedBiomes[biomeId as BiomeId] = true;
+  1785→        }
+  1786→      }
+  1787→      
+  1788→      set({
+  1789→        animals: [...currentState.animals, ...animalsToAdd],
+  1790→        gems: currentState.gems + gemBonuses,
+  1791→        codex: { ...currentState.codex, ...codexUpdates },
+  1792→        wilderness: {
+  1793→          unlockedBiomes,
+  1794→          activeExpeditions: expeditionsToUpdate,
+  1795→        },
+  1796→      });
+  1797→
+  1798→      for (const n of notificationsToAdd) {
+  1799→        currentState.addNotification(n.message, n.emoji, n.type as any);
+  1800→      }
+  1801→    } else {
+  1802→      // Still need to update expedition state (midpoint choices, biome unlocks)
+  1803→      const currentState = get();
+  1804→      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
+  1805→      for (const [biomeId, biome] of Object.entries(BIOMES)) {
+  1806→        if (currentState.level >= biome.unlockLevel) {
+  1807→          unlockedBiomes[biomeId as BiomeId] = true;
+  1808→        }
+  1809→      }
+  1810→      
+  1811→      if (expeditionsToUpdate !== currentWilderness.activeExpeditions || unlockedBiomes !== currentWilderness.unlockedBiomes) {
+  1812→        set({
+  1813→          wilderness: {
+  1814→            unlockedBiomes,
+  1815→            activeExpeditions: expeditionsToUpdate,
+  1816→          },
+  1817→        });
+  1818→      }
+  1819→    }
+  1820→
+  1821→        // Level up check
+  1822→        const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
+  1823→
+  1824→        set({
+  1825→          plots: newPlots,
+  1826→          animals: completedBreedings.length > 0 ? breedingAnimals : newAnimals,
+  1827→          productionQueues: newQueues,
+  1828→          barn: newBarn,
+  1829→          silo: newSilo,
+  1830→          coins: newCoins,
+  1831→          gems: newGems,
+  1832→          codex: newCodex,
+  1833→          fishery: {
+  1834→            ...state.fishery,
+  1835→            lastCatchTimestamps: newCatchTimestamps,
+  1836→            fishCodex: newFishCodex,
+  1837→          },
+  1838→          autonomousWorkers: newWorkers,
+  1839→          unifiedWorkers: unifiedWorkersModified ? updatedUnifiedWorkers : state.unifiedWorkers,
+  1840→          activeEvent: newActiveEvent,
+  1841→          lastEventTriggerTime: newLastEventTriggerTime,
+  1842→          activeBreedings: newActiveBreedings,
+  1843→          xp: finalXp,
+  1844→          level: finalLevel,
+  1845→          lastTick: now,
+  1846→        });
+  1847→      },
+  1848→
+  1849→      resetGame: () => {
+  1850→        set({
+  1851→          coins: 100, gems: 10, xp: 0, level: 1,
+  1852→          silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
+  1853→          barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
+  1854→          plots: initialPlots, unlockedPlots: GRID_SIZE,
+  1855→          animals: initialAnimals,
+  1856→          animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
+  1857→          productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
+  1858→          orders: generateOrders(6),
+  1859→          farmhands: [], codex: { 'chicken_common': true, 'cow_common': true },
+  1860→          fishery: {
+  1861→            unlockedZones: ['zone_pond' as WaterZoneId],
+  1862→            rodTier: 'bamboo',
+  1863→            lastCatchTimestamps: { zone_pond: Date.now(), zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+  1864→            fishCodex: {},
+  1865→          },
+  1866→          autonomousWorkers: [],
+  1867→          unifiedWorkers: initialUnifiedWorkers,
+  1868→          activeEvent: null,
+  1869→          lastEventTriggerTime: Date.now(),
+  1870→          notifications: [],
+  1871→          breedingSlots: 1,
+  1872→          activeBreedings: [],
+  1873→          wilderness: {
+  1874→            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+  1875→            activeExpeditions: [],
+  1876→          },
+  1877→          habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
+  1878→          lastTick: Date.now(),
+  1879→        });
+  1880→      },
+  1881→    }),
+  1882→    {
+  1883→      name: 'meadowlands-save',
+  1884→      partialize: (state) => ({
+  1885→        coins: state.coins, gems: state.gems, xp: state.xp, level: state.level,
+  1886→        silo: state.silo, barn: state.barn,
+  1887→        plots: state.plots, unlockedPlots: state.unlockedPlots,
+  1888→        animals: state.animals, animalCapacity: state.animalCapacity,
+  1889→        productionQueues: state.productionQueues,
+  1890→        orders: state.orders, farmhands: state.farmhands, codex: state.codex,
+  1891→        fishery: state.fishery,
+  1892→        autonomousWorkers: state.autonomousWorkers,
+  1893→        unifiedWorkers: state.unifiedWorkers,
+  1894→        activeEvent: state.activeEvent,
+  1895→        lastEventTriggerTime: state.lastEventTriggerTime,
+  1896→        notifications: state.notifications,
+  1897→        breedingSlots: state.breedingSlots,
+  1898→        activeBreedings: state.activeBreedings,
+  1899→        wilderness: state.wilderness,
+  1900→        habitatUpgradeSteps: state.habitatUpgradeSteps,
+  1901→      }),
+  1902→      merge: (persistedState, currentState) => {
+  1903→        const persisted = persistedState as Partial<GameState>;
+  1904→        const merged = { ...currentState, ...persisted };
+  1905→
+  1906→        // Migration: if fishery doesn't exist, create it
+  1907→        if (!merged.fishery) {
+  1908→          merged.fishery = {
+  1909→            unlockedZones: ['zone_pond'],
+  1910→            rodTier: 'bamboo',
+  1911→            lastCatchTimestamps: { zone_pond: Date.now(), zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+  1912→            fishCodex: {},
+  1913→          };
+  1914→        }
+  1915→
+  1916→        // Migration: if lastFishTime exists (old format), migrate to per-zone timestamps
+  1917→        if ((persisted as Record<string, unknown>).lastFishTime && merged.fishery) {
+  1918→          if (!merged.fishery.lastCatchTimestamps.zone_pond || merged.fishery.lastCatchTimestamps.zone_pond === 0) {
+  1919→            merged.fishery.lastCatchTimestamps.zone_pond = (persisted as Record<string, unknown>).lastFishTime as number;
+  1920→          }
+  1921→        }
+  1922→
+  1923→        // Migration: add new building queues if missing
+  1924→        if (!merged.productionQueues.tailor_shop) {
+  1925→          merged.productionQueues = { ...merged.productionQueues, tailor_shop: [], textiles: [] };
+  1926→        }
+  1927→        if (!merged.productionQueues.textiles) {
+  1928→          merged.productionQueues = { ...merged.productionQueues, textiles: [] };
+  1929→        }
+  1930→
+  1931→        // Migration: add missing state fields
+  1932→        if (!merged.autonomousWorkers) merged.autonomousWorkers = [];
+  1933→        if (!merged.unifiedWorkers) merged.unifiedWorkers = createDefaultUnifiedWorkers();
+  1934→        if (!merged.activeEvent) merged.activeEvent = null;
+  1935→        if (!merged.lastEventTriggerTime) merged.lastEventTriggerTime = Date.now();
+  1936→        if (!merged.notifications) merged.notifications = [];
+  1937→        if (!merged.breedingSlots) merged.breedingSlots = 1;
+  1938→        if (!merged.activeBreedings) merged.activeBreedings = [];
+  1939→        if (!merged.habitatUpgradeSteps) merged.habitatUpgradeSteps = { chicken: 0, cow: 0, sheep: 0, pig: 0 };
+  1940→
+  1941→        // Migration: add new silo/barn keys
+  1942→        if (!merged.silo.cotton) merged.silo = { ...merged.silo, cotton: 0, honey_comb: 0, wild_berries: 0, gold_nugget: 0 };
+  1943→        if (!merged.barn.yarn) merged.barn = { ...merged.barn, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 };
+  1944→
+  1945→        // Migration: animals with missing cycles fields
+  1946→        if (merged.animals) {
+  1947→          merged.animals = merged.animals.map((a: AnimalInstance) => {
+  1948→            if (a.maxCycles === undefined) {
+  1949→              const mc = randomMaxCycles(a.tier);
+  1950→              return { ...a, maxCycles: mc, cyclesRemaining: mc };
+  1951→            }
+  1952→            return a;
+  1953→          });
+  1954→        }
+  1955→
+  1956→        // Migration: wilderness state
+  1957→        if (!merged.wilderness) {
+  1958→          merged.wilderness = {
+  1959→            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+  1960→            activeExpeditions: [],
+  1961→          };
+  1962→        }
+  1963→
+  1964→        // Migration: farmhands with missing equippedOutfit
+  1965→        if (merged.farmhands) {
+  1966→          merged.farmhands = merged.farmhands.map((fh: FarmhandInstance) => {
+  1967→            if (fh.equippedOutfit === undefined) {
+  1968→              return { ...fh, equippedOutfit: null };
+  1969→            }
+  1970→            return fh;
+  1971→          });
+  1972→        }
+  1973→
+  1974→        // Migration: production slots with missing recipeName/recipeEmoji
+  1975→        if (merged.productionQueues) {
+  1976→          for (const buildingId of Object.keys(merged.productionQueues) as BuildingId[]) {
+  1977→            merged.productionQueues[buildingId] = merged.productionQueues[buildingId].map((slot: ProductionSlot) => {
+  1978→              if (!slot.recipeName || !slot.recipeEmoji) {
+  1979→                const building = BUILDINGS[buildingId];
+  1980→                const recipe = building?.recipes.find(r => r.id === slot.recipeId);
+  1981→                return { ...slot, recipeName: recipe?.name || slot.recipeId, recipeEmoji: recipe?.emoji || '' };
+  1982→              }
+  1983→              return slot;
+  1984→            });
+  1985→          }
+  1986→        }
+  1987→
+  1988→        return merged as GameState;
+  1989→      },
+  1990→    }
+  1991→  )
+  1992→);
+  1993→

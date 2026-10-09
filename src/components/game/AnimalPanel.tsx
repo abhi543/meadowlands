@@ -1,10 +1,18 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, HABITAT_UPGRADES, type AnimalSpecies, type Tier } from '@/game/data';
+import { ANIMALS, TIER_COLORS, TIER_LABELS, HABITAT_UPGRADES, BREED_REGISTRY, type AnimalSpecies, type Tier } from '@/game/data';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
+
+// Tier-specific border/bg classes per PRD spec
+const TIER_CARD_STYLES: Record<Tier, string> = {
+  common: 'border-stone-400 dark:border-stone-500 bg-stone-900/60',
+  uncommon: 'border-emerald-500 dark:border-emerald-400 bg-emerald-950/40 shadow-emerald-950/30',
+  rare: 'border-sky-500 dark:border-sky-400 bg-sky-950/40 shadow-sky-950/30',
+  legendary: 'border-amber-400 dark:border-amber-300 bg-amber-950/60 shadow-amber-500/30 ring-1 ring-amber-300',
+};
 
 export function AnimalPanel() {
   const { animals, silo, barn, coins, level, feedAnimal, collectProduct, feedAllAnimals, collectAllProducts, buyAnimal, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
@@ -122,35 +130,62 @@ export function AnimalPanel() {
                 {myAnimals.map(animal => {
                   const canFeed = !animal.fed && !animal.productReady && (silo.feed || 0) >= def.feedPerCycle;
                   const canCollect = animal.productReady;
+                  const breedDef = BREED_REGISTRY[animal.breedId];
+                  const breedName = breedDef?.name || TIER_LABELS[animal.tier];
+                  const visualTheme = breedDef?.visualTheme;
+
+                  // Production time - use breed-specific if available
+                  const prodTimeSec = breedDef ? breedDef.baseIntervalMs / 1000 : def.productionTimeSec;
 
                   // Progress bar for production
                   let prodProgress = 0;
                   if (animal.fed && animal.fedAt && !animal.productReady) {
-                    prodProgress = Math.min(1, (Date.now() - animal.fedAt) / (def.productionTimeSec * 1000));
+                    prodProgress = Math.min(1, (Date.now() - animal.fedAt) / (prodTimeSec * 1000));
                   }
+
+                  // Determine yield info for display
+                  const yieldInfo = breedDef
+                    ? `${breedDef.baseYieldAmount}x ${breedDef.primaryProductKey.replace(/_/g, ' ')}`
+                    : `${def.productYield}x ${def.product}`;
 
                   return (
                     <div
                       key={animal.id}
                       className={`rounded-lg border-2 p-2 text-center transition-all ${
                         animal.age === 'elder'
-                          ? 'bg-gray-50 dark:bg-gray-900/50 border-gray-300 dark:border-gray-600'
+                          ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-500'
                           : canCollect
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600 shadow-sm'
+                          ? `bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600 shadow-sm ${animal.tier === 'legendary' ? 'animate-pulse' : ''}`
                           : animal.fed && !animal.productReady
                           ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
-                          : 'bg-stone-50 dark:bg-stone-900/30 border-stone-200 dark:border-gray-700'
+                          : TIER_CARD_STYLES[animal.tier]
                       }`}
                     >
-                      <div className="text-2xl mb-1">{def.emoji}</div>
-                      <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: TIER_COLORS[animal.tier] }}>
-                        {TIER_LABELS[animal.tier]}
+                      {/* Breed name + Tier badge */}
+                      <div className="text-2xl mb-0.5">{def.emoji}</div>
+                      <div className="text-[10px] font-bold leading-tight" style={{ color: TIER_COLORS[animal.tier] }}>
+                        {animal.tier === 'legendary' && '✨ '}{TIER_LABELS[animal.tier]}
                       </div>
+                      <div className="text-[9px] font-medium text-stone-700 dark:text-stone-300 mt-0.5 leading-tight truncate" title={breedName}>
+                        {breedName}
+                      </div>
+                      {visualTheme && (
+                        <div className="text-[8px] text-stone-400 dark:text-stone-500 italic truncate" title={visualTheme}>
+                          {visualTheme}
+                        </div>
+                      )}
 
                       {/* Cycles display */}
                       <div className="text-[9px] text-stone-500 dark:text-gray-400 mt-0.5">
                         {animal.cyclesRemaining}/{animal.maxCycles} cycles
                         {animal.age === 'elder' && ' (elder)'}
+                      </div>
+
+                      {/* Yield info */}
+                      <div className="text-[8px] text-stone-400 dark:text-stone-500 mt-0.5">
+                        {yieldInfo}
+                        {breedDef?.bonusDrop && <span className="text-emerald-500"> +proc</span>}
+                        {breedDef?.gemMilestoneEveryN && <span className="text-amber-400"> +gems</span>}
                       </div>
 
                       {/* Production Progress */}
@@ -168,7 +203,11 @@ export function AnimalPanel() {
                         {canCollect && (
                           <button
                             onClick={() => collectProduct(animal.id)}
-                            className="w-full py-1 text-xs font-bold rounded-md bg-yellow-500 hover:bg-yellow-600 text-white transition-colors animate-pulse"
+                            className={`w-full py-1 text-xs font-bold rounded-md text-white transition-colors ${
+                              animal.tier === 'legendary'
+                                ? 'bg-amber-500 hover:bg-amber-600 animate-pulse'
+                                : 'bg-yellow-500 hover:bg-yellow-600'
+                            }`}
                           >
                             {def.productEmoji} Collect
                           </button>
@@ -188,7 +227,7 @@ export function AnimalPanel() {
                           <div className="text-[10px] text-blue-500 dark:text-blue-400">Producing...</div>
                         )}
                         {animal.age === 'elder' && (
-                          <div className="text-[10px] text-stone-400 dark:text-gray-500 italic">Elder — sell at market</div>
+                          <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium italic">Ready for Livestock Market</div>
                         )}
                       </div>
                     </div>
@@ -210,6 +249,15 @@ export function AnimalPanel() {
             truffle_oil: '🫒', fish: '🐟', yarn: '🧵',
             quilted_blanket: '🧴', savory_fish_pie: '🥧',
             crab_bisque: '🍒', honey: '🍯', silk: '🧵',
+            // Breed-specific products
+            egg_blue: '🥚', egg_obsidian: '🥚', egg_golden: '🥚',
+            milk_rich_cream: '🥛', milk_alpine: '🥛', milk_starlight: '🥛',
+            wool_patterned: '🧶', wool_merino: '🧶', wool_gilded: '🧶',
+            truffle_white: '🍄', truffle_alba: '🍄', truffle_diamond: '🍄',
+            soft_down_feather: '🪶', glossy_quill: '🪶',
+            churned_butter: '🧈', yak_wool: '🧶',
+            horn_shavings: '🦴', lanolin_balm: '🧴',
+            ancient_coin: '🪙', foraged_nut: '🥜', ancient_hoard: '💰',
           };
           return (
             <span key={k} className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full text-stone-700 dark:text-stone-300">

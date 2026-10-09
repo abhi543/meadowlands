@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, BREEDING_SLOT_UPGRADES, type AnimalSpecies, type Tier } from '@/game/data';
+import { ANIMALS, TIER_COLORS, TIER_LABELS, BREEDING_SLOT_UPGRADES, BREED_REGISTRY, type AnimalSpecies, type Tier } from '@/game/data';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
@@ -16,10 +16,10 @@ export function BreedingPanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          {'\u{1F43E}'} Breeding
+          {'🐾'} Breeding
         </h3>
         <span className="text-xs text-stone-500 dark:text-gray-400">
-          {breedingSlots} slot{breedingSlots > 1 ? 's' : ''} {'\u2022'} {activeBreedings.length} active
+          {breedingSlots} slot{breedingSlots > 1 ? 's' : ''} • {activeBreedings.length} active
         </span>
       </div>
 
@@ -30,7 +30,7 @@ export function BreedingPanel() {
           disabled={level < nextSlotUpgrade.unlockLevel || gems < nextSlotUpgrade.costGems}
           className="w-full py-2 text-xs font-medium rounded-lg bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
         >
-          Unlock Slot {nextSlotUpgrade.slotIndex} {'\u{1F48E}'}{nextSlotUpgrade.costGems}
+          Unlock Slot {nextSlotUpgrade.slotIndex} {'💎'}{nextSlotUpgrade.costGems}
           {level < nextSlotUpgrade.unlockLevel && ` (Lv.${nextSlotUpgrade.unlockLevel})`}
         </button>
       )}
@@ -45,13 +45,19 @@ export function BreedingPanel() {
             const remaining = Math.max(0, Math.ceil((b.durationMs - elapsed) / 1000));
             const speciesDef = ANIMALS[b.species];
 
+            // Look up parent breed names
+            const parent1 = animals.find(a => a.id === b.parent1Id);
+            const parent2 = animals.find(a => a.id === b.parent2Id);
+            const parent1Name = parent1 ? (BREED_REGISTRY[parent1.breedId]?.name || TIER_LABELS[parent1.tier]) : '';
+            const parent2Name = parent2 ? (BREED_REGISTRY[parent2.breedId]?.name || TIER_LABELS[parent2.tier]) : '';
+
             return (
               <div key={b.id} className="bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 rounded-lg p-2.5">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{speciesDef.emoji}</span>
                     <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
-                      {speciesDef.name} breeding
+                      {parent1Name} × {parent2Name}
                     </span>
                   </div>
                   <span className="text-[10px] text-violet-500 dark:text-violet-400">{remaining}s</span>
@@ -95,38 +101,49 @@ export function BreedingPanel() {
                 ) : (
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-1.5">
-                      {myAnimals.slice(0, 6).map(animal => (
-                        <div
-                          key={animal.id}
-                          className="rounded-lg border p-1.5 text-center"
-                          style={{
-                            borderColor: TIER_COLORS[animal.tier],
-                            backgroundColor: `${TIER_COLORS[animal.tier]}10`,
-                          }}
-                        >
-                          <div className="text-sm">{def.emoji}</div>
-                          <div className="text-[9px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
-                            {TIER_LABELS[animal.tier]}
+                      {myAnimals.slice(0, 6).map(animal => {
+                        const breedDef = BREED_REGISTRY[animal.breedId];
+                        const breedName = breedDef?.name || TIER_LABELS[animal.tier];
+                        return (
+                          <div
+                            key={animal.id}
+                            className="rounded-lg border p-1.5 text-center"
+                            style={{
+                              borderColor: TIER_COLORS[animal.tier],
+                              backgroundColor: `${TIER_COLORS[animal.tier]}10`,
+                            }}
+                          >
+                            <div className="text-sm">{def.emoji}</div>
+                            <div className="text-[9px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
+                              {TIER_LABELS[animal.tier]}
+                            </div>
+                            <div className="text-[8px] text-stone-600 dark:text-stone-300 truncate">
+                              {breedName}
+                            </div>
+                            <div className="text-[8px] text-stone-500 dark:text-gray-400">
+                              {animal.cyclesRemaining}/{animal.maxCycles} cycles
+                            </div>
                           </div>
-                          <div className="text-[8px] text-stone-500 dark:text-gray-400">
-                            {animal.cyclesRemaining}/{animal.maxCycles} cycles
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {/* Breed buttons for pairs */}
                     {activeBreedings.length < breedingSlots && (
                       <div className="space-y-1">
                         {myAnimals.slice(0, 4).map((a1, i) =>
-                          myAnimals.slice(i + 1, i + 2).map(a2 => (
-                            <button
-                              key={`${a1.id}-${a2.id}`}
-                              onClick={() => breedAnimals(a1.id, a2.id)}
-                              className="w-full py-1.5 text-xs font-medium rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-colors flex items-center justify-center gap-2"
-                            >
-                              {def.emoji} {TIER_LABELS[a1.tier]} {'\u00D7'} {TIER_LABELS[a2.tier]} {'\u2192'} Breed
-                            </button>
-                          ))
+                          myAnimals.slice(i + 1, i + 2).map(a2 => {
+                            const breed1 = BREED_REGISTRY[a1.breedId]?.name || TIER_LABELS[a1.tier];
+                            const breed2 = BREED_REGISTRY[a2.breedId]?.name || TIER_LABELS[a2.tier];
+                            return (
+                              <button
+                                key={`${a1.id}-${a2.id}`}
+                                onClick={() => breedAnimals(a1.id, a2.id)}
+                                className="w-full py-1.5 text-xs font-medium rounded-lg bg-violet-500 hover:bg-violet-600 text-white transition-colors flex items-center justify-center gap-2"
+                              >
+                                {def.emoji} {breed1} × {breed2} → Breed
+                              </button>
+                            );
+                          })
                         )}
                       </div>
                     )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { BUILDINGS, ANIMALS, CROPS, WORKERS, WATER_ZONES, ROD_TIERS, ROD_TIER_ORDER, PRODUCTS } from '@/game/data';
+import { BUILDINGS, ANIMALS, CROPS, WORKERS, WATER_ZONES, ROD_TIERS, ROD_TIER_ORDER, PRODUCTS, BREED_REGISTRY, TIER_COLORS, TIER_LABELS, type AnimalSpecies, type Tier } from '@/game/data';
 import { useState } from 'react';
 
 type GuideTab = 'production' | 'animals' | 'workers' | 'fishery' | 'tips';
@@ -82,27 +82,54 @@ function ProductionGuide() {
 }
 
 function AnimalGuide() {
+  const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
+  const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+
   return (
     <div className="space-y-3">
-      <h4 className="font-semibold text-stone-800 dark:text-gray-200">Animal Info</h4>
+      <h4 className="font-semibold text-stone-800 dark:text-gray-200">Animal Breeds</h4>
       <p className="text-xs text-stone-500 dark:text-gray-400">
-        Feed animals, wait for production, then collect. Animals have a limited number of productive cycles based on their tier.
+        Feed animals, wait for production, then collect. Each breed has unique products, bonus drops, and lifespans. Higher tiers yield more valuable goods.
       </p>
-      <div className="space-y-2">
-        {Object.values(ANIMALS).map(animal => (
-          <div key={animal.species} className="flex items-center gap-3 bg-stone-50 dark:bg-stone-900/30 rounded-lg p-2">
-            <span className="text-2xl">{animal.emoji}</span>
-            <div className="flex-1">
-              <div className="font-medium text-stone-800 dark:text-gray-200 text-sm">{animal.name}</div>
-              <div className="text-xs text-stone-500 dark:text-gray-400">
-                {animal.productEmoji} {animal.product} {'\u2022'} {animal.productionTimeSec}s/cycle {'\u2022'} {animal.feedPerCycle} feed/cycle {'\u2022'} cap {animal.capacity}
+      <div className="space-y-3">
+        {SPECIES_LIST.map(species => {
+          const def = ANIMALS[species];
+          return (
+            <div key={species} className="bg-stone-50 dark:bg-stone-900/30 rounded-lg p-2">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xl">{def.emoji}</span>
+                <div>
+                  <div className="font-medium text-stone-800 dark:text-gray-200 text-sm">{def.name}</div>
+                  <div className="text-xs text-stone-500 dark:text-gray-400">
+                    {def.productEmoji} {def.product} • {def.productionTimeSec}s/cycle • {def.feedPerCycle} feed/cycle • cap {def.capacity}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1">
+                {TIERS.map(tier => {
+                  const breedId = `${species}_${tier}`;
+                  const breed = BREED_REGISTRY[breedId];
+                  if (!breed) return null;
+                  return (
+                    <div key={tier} className="rounded border p-1.5 text-xs" style={{ borderColor: TIER_COLORS[tier] + '60', backgroundColor: TIER_COLORS[tier] + '10' }}>
+                      <div className="font-bold" style={{ color: TIER_COLORS[tier] }}>
+                        {TIER_LABELS[tier]}: {breed.name}
+                      </div>
+                      <div className="text-stone-500 dark:text-stone-400">
+                        {breed.baseYieldAmount}x {breed.primaryProductKey.replace(/_/g, ' ')} • {breed.maxCycles} cycles
+                        {breed.bonusDrop && ` • ${Math.round(breed.bonusDrop.chance * 100)}%: ${breed.bonusDrop.itemKey.replace(/_/g, ' ')}`}
+                        {breed.gemMilestoneEveryN && ` • +gem every ${breed.gemMilestoneEveryN}th`}
+                      </div>
+                      <div className="text-stone-400 dark:text-stone-500">
+                        Elder: {breed.elderMarketValue} coins • Codex: {breed.codexGemReward} gems
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-      <div className="text-xs text-stone-500 dark:text-gray-400">
-        <strong>Tier Cycles:</strong> Common: 8, Uncommon: 12, Rare: 16, Legendary: 20
+          );
+        })}
       </div>
     </div>
   );

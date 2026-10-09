@@ -34,6 +34,187 @@ export function randomMaxCycles(tier: Tier): number {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+// ============================================================
+// Breed Registry — 16 Named Variants (4 species × 4 tiers)
+// ============================================================
+
+export interface BreedDefinition {
+  id: string;
+  species: AnimalSpecies;
+  tier: Tier;
+  name: string;
+  visualTheme: string;
+  baseIntervalMs: number;
+  maxCycles: number;
+  primaryProductKey: string;
+  baseYieldAmount: number;
+  bonusDrop?: {
+    itemKey: string;
+    chance: number; // 0.0 to 1.0
+    directCoins?: number;
+  };
+  gemMilestoneEveryN?: number; // e.g. every 3rd or 5th harvest
+  elderMarketValue: number;
+  codexGemReward: number;
+}
+
+export const BREED_REGISTRY: Record<string, BreedDefinition> = {
+  // ---- Chickens ----
+  chicken_common: {
+    id: 'chicken_common', species: 'chicken', tier: 'common',
+    name: 'Rhode Island Red', visualTheme: 'Rustic Brown Plumage',
+    baseIntervalMs: 60000, maxCycles: 15,
+    primaryProductKey: 'egg', baseYieldAmount: 2,
+    elderMarketValue: 250, codexGemReward: 0,
+  },
+  chicken_uncommon: {
+    id: 'chicken_uncommon', species: 'chicken', tier: 'uncommon',
+    name: 'Pasture Araucana', visualTheme: 'Powder Blue Feathers',
+    baseIntervalMs: 60000, maxCycles: 18,
+    primaryProductKey: 'egg_blue', baseYieldAmount: 2,
+    bonusDrop: { itemKey: 'soft_down_feather', chance: 0.10 },
+    elderMarketValue: 375, codexGemReward: 5,
+  },
+  chicken_rare: {
+    id: 'chicken_rare', species: 'chicken', tier: 'rare',
+    name: 'Midnight Silkie', visualTheme: 'Fluffy Obsidian Down',
+    baseIntervalMs: 60000, maxCycles: 22,
+    primaryProductKey: 'egg_obsidian', baseYieldAmount: 3,
+    bonusDrop: { itemKey: 'glossy_quill', chance: 0.20 },
+    elderMarketValue: 625, codexGemReward: 20,
+  },
+  chicken_legendary: {
+    id: 'chicken_legendary', species: 'chicken', tier: 'legendary',
+    name: 'Solar Phoenix Hen', visualTheme: 'Fiery Amber Plumage',
+    baseIntervalMs: 60000, maxCycles: 26,
+    primaryProductKey: 'egg_golden', baseYieldAmount: 4,
+    gemMilestoneEveryN: 5, elderMarketValue: 1250, codexGemReward: 50,
+  },
+
+  // ---- Cows ----
+  cow_common: {
+    id: 'cow_common', species: 'cow', tier: 'common',
+    name: 'Holstein-Friesian', visualTheme: 'Black & White Spotted',
+    baseIntervalMs: 120000, maxCycles: 12,
+    primaryProductKey: 'milk', baseYieldAmount: 2,
+    elderMarketValue: 750, codexGemReward: 0,
+  },
+  cow_uncommon: {
+    id: 'cow_uncommon', species: 'cow', tier: 'uncommon',
+    name: 'Jersey Buttercup', visualTheme: 'Fawn Tan Coat',
+    baseIntervalMs: 120000, maxCycles: 15,
+    primaryProductKey: 'milk_rich_cream', baseYieldAmount: 2,
+    bonusDrop: { itemKey: 'churned_butter', chance: 0.15 },
+    elderMarketValue: 1125, codexGemReward: 5,
+  },
+  cow_rare: {
+    id: 'cow_rare', species: 'cow', tier: 'rare',
+    name: 'Highland Shaggy Yak', visualTheme: 'Caramel Shag Coat',
+    baseIntervalMs: 120000, maxCycles: 18,
+    primaryProductKey: 'milk_alpine', baseYieldAmount: 3,
+    bonusDrop: { itemKey: 'yak_wool', chance: 0.25 },
+    elderMarketValue: 1875, codexGemReward: 20,
+  },
+  cow_legendary: {
+    id: 'cow_legendary', species: 'cow', tier: 'legendary',
+    name: 'Celestial Star-Bovine', visualTheme: 'Midnight Constellation',
+    baseIntervalMs: 120000, maxCycles: 21,
+    primaryProductKey: 'milk_starlight', baseYieldAmount: 4,
+    gemMilestoneEveryN: 4, elderMarketValue: 3750, codexGemReward: 50,
+  },
+
+  // ---- Sheep ----
+  sheep_common: {
+    id: 'sheep_common', species: 'sheep', tier: 'common',
+    name: 'Dorset White Horn', visualTheme: 'Ivory Fluffy Fleece',
+    baseIntervalMs: 150000, maxCycles: 10,
+    primaryProductKey: 'wool', baseYieldAmount: 2,
+    elderMarketValue: 1200, codexGemReward: 0,
+  },
+  sheep_uncommon: {
+    id: 'sheep_uncommon', species: 'sheep', tier: 'uncommon',
+    name: 'Jacob Four-Horn', visualTheme: 'Piebald Spotted Wool',
+    baseIntervalMs: 150000, maxCycles: 13,
+    primaryProductKey: 'wool_patterned', baseYieldAmount: 2,
+    bonusDrop: { itemKey: 'horn_shavings', chance: 0.15 },
+    elderMarketValue: 1800, codexGemReward: 5,
+  },
+  sheep_rare: {
+    id: 'sheep_rare', species: 'sheep', tier: 'rare',
+    name: 'Merino Cloud Sheep', visualTheme: 'Dense Crimped Fleece',
+    baseIntervalMs: 150000, maxCycles: 15,
+    primaryProductKey: 'wool_merino', baseYieldAmount: 3,
+    bonusDrop: { itemKey: 'lanolin_balm', chance: 0.25 },
+    elderMarketValue: 3000, codexGemReward: 20,
+  },
+  sheep_legendary: {
+    id: 'sheep_legendary', species: 'sheep', tier: 'legendary',
+    name: 'Golden Fleece Ram', visualTheme: 'Spun Gold Metallic',
+    baseIntervalMs: 150000, maxCycles: 18,
+    primaryProductKey: 'wool_gilded', baseYieldAmount: 4,
+    gemMilestoneEveryN: 3, elderMarketValue: 6000, codexGemReward: 50,
+  },
+
+  // ---- Pigs ----
+  pig_common: {
+    id: 'pig_common', species: 'pig', tier: 'common',
+    name: 'Yorkshire Pink', visualTheme: 'Rose Pink Hide',
+    baseIntervalMs: 180000, maxCycles: 8,
+    primaryProductKey: 'truffle', baseYieldAmount: 2,
+    elderMarketValue: 2200, codexGemReward: 0,
+  },
+  pig_uncommon: {
+    id: 'pig_uncommon', species: 'pig', tier: 'uncommon',
+    name: 'Berkshire Black', visualTheme: 'Black with White Socks',
+    baseIntervalMs: 180000, maxCycles: 10,
+    primaryProductKey: 'truffle_white', baseYieldAmount: 2,
+    bonusDrop: { itemKey: 'ancient_coin', chance: 0.15, directCoins: 100 },
+    elderMarketValue: 3300, codexGemReward: 5,
+  },
+  pig_rare: {
+    id: 'pig_rare', species: 'pig', tier: 'rare',
+    name: 'Iberian Bristle Boar', visualTheme: 'Slate Grey Bristle',
+    baseIntervalMs: 180000, maxCycles: 12,
+    primaryProductKey: 'truffle_alba', baseYieldAmount: 3,
+    bonusDrop: { itemKey: 'foraged_nut', chance: 0.25 },
+    elderMarketValue: 5500, codexGemReward: 20,
+  },
+  pig_legendary: {
+    id: 'pig_legendary', species: 'pig', tier: 'legendary',
+    name: 'Gilded Snout Chimera', visualTheme: 'Mottled Jade-Gold',
+    baseIntervalMs: 180000, maxCycles: 14,
+    primaryProductKey: 'truffle_diamond', baseYieldAmount: 4,
+    bonusDrop: { itemKey: 'ancient_hoard', chance: 1.0, directCoins: 500 },
+    gemMilestoneEveryN: 1, elderMarketValue: 11000, codexGemReward: 50,
+  },
+};
+
+// Helper: get the default breedId for a given species (common tier)
+export function defaultBreedId(species: AnimalSpecies): string {
+  return `${species}_common`;
+}
+
+// Helper: get all breed IDs for a given species
+export function breedsForSpecies(species: AnimalSpecies): string[] {
+  return Object.values(BREED_REGISTRY).filter(b => b.species === species).map(b => b.id);
+}
+
+// Breed-specific discovery hints for undiscovered breeds in the codex
+export const BREED_DISCOVERY_HINTS: Record<string, string> = {
+  chicken_uncommon: 'Found in Woodland Expeditions with Berry Lure',
+  chicken_rare: 'Lured with Glazed Berry Pastry on the Alpine Ridge',
+  chicken_legendary: 'Breeding two Rare hens has a small chance',
+  cow_uncommon: 'Found in Ridge Expeditions with Truffle Lure',
+  cow_rare: 'Deep Cave expeditions with Nectar Lure',
+  cow_legendary: 'Breeding two Rare cows has a small chance',
+  sheep_uncommon: 'Found in Ridge Expeditions with Berry Lure',
+  sheep_rare: 'Deep Cave expeditions with Truffle Lure',
+  sheep_legendary: 'Breeding two Rare sheep has a small chance',
+  pig_uncommon: 'Found in Cave Expeditions with Truffle Lure',
+  pig_rare: 'Peak expeditions with Nectar Lure',
+  pig_legendary: 'Breeding two Rare pigs has a small chance',
+};
+
 // --- Crops ---
 export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton';
 
@@ -75,8 +256,8 @@ export interface AnimalDef {
 
 export const ANIMALS: Record<AnimalSpecies, AnimalDef> = {
   chicken: { species: 'chicken', name: 'Chicken', emoji: '\u{1F414}', habitat: 'Chicken Coop', habitatEmoji: '\u{1F3E0}', capacity: 6, feedPerCycle: 1, product: 'egg', productEmoji: '\u{1F95A}', productYield: 1, productionTimeSec: 60 },
-  cow:     { species: 'cow',     name: 'Cow',     emoji: '\u{1F404}', habitat: 'Cow Barn',     habitatEmoji: '\u{1F316}', capacity: 4, feedPerCycle: 2, product: 'milk', productEmoji: '\u{1F95B}', productYield: 1, productionTimeSec: 90 },
-  sheep:   { species: 'sheep',   name: 'Sheep',   emoji: '\u{1F411}', habitat: 'Sheep Pasture', habitatEmoji: '\u{1F7E9}', capacity: 4, feedPerCycle: 2, product: 'wool', productEmoji: '\u{1F9F6}', productYield: 1, productionTimeSec: 120 },
+  cow:     { species: 'cow',     name: 'Cow',     emoji: '\u{1F404}', habitat: 'Cow Barn',     habitatEmoji: '\u{1F316}', capacity: 4, feedPerCycle: 2, product: 'milk', productEmoji: '\u{1F95B}', productYield: 1, productionTimeSec: 120 },
+  sheep:   { species: 'sheep',   name: 'Sheep',   emoji: '\u{1F411}', habitat: 'Sheep Pasture', habitatEmoji: '\u{1F7E9}', capacity: 4, feedPerCycle: 2, product: 'wool', productEmoji: '\u{1F9F6}', productYield: 1, productionTimeSec: 150 },
   pig:     { species: 'pig',     name: 'Pig',     emoji: '\u{1F437}', habitat: 'Pig Pen',     habitatEmoji: '\u{1F3E0}', capacity: 4, feedPerCycle: 3, product: 'truffle', productEmoji: '\u{1F344}', productYield: 1, productionTimeSec: 180 },
 };
 

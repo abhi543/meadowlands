@@ -23,9 +23,31 @@ const BUILDING_THEME: Record<BuildingId, {
 function getIngredientSourceHint(itemId: string): string {
   if (itemId in CROPS) return `Grow ${CROPS[itemId as keyof typeof CROPS].name} on Farm`;
   if (itemId === 'egg') return 'Collect from Chickens';
+  if (itemId === 'egg_blue') return 'Pasture Araucana (Uncommon Chicken)';
+  if (itemId === 'egg_obsidian') return 'Midnight Silkie (Rare Chicken)';
+  if (itemId === 'egg_golden') return 'Solar Phoenix Hen (Legendary)';
   if (itemId === 'milk') return 'Collect from Cows';
+  if (itemId === 'milk_rich_cream') return 'Jersey Buttercup (Uncommon Cow)';
+  if (itemId === 'milk_alpine') return 'Highland Shaggy Yak (Rare Cow)';
+  if (itemId === 'milk_starlight') return 'Celestial Star-Bovine (Legendary)';
   if (itemId === 'wool') return 'Collect from Sheep';
+  if (itemId === 'wool_patterned') return 'Jacob Four-Horn (Uncommon Sheep)';
+  if (itemId === 'wool_merino') return 'Merino Cloud Sheep (Rare Sheep)';
+  if (itemId === 'wool_gilded') return 'Golden Fleece Ram (Legendary)';
   if (itemId === 'truffle') return 'Collect from Pigs';
+  if (itemId === 'truffle_white') return 'Berkshire Black (Uncommon Pig)';
+  if (itemId === 'truffle_alba') return 'Iberian Bristle Boar (Rare Pig)';
+  if (itemId === 'truffle_diamond') return 'Gilded Snout Chimera (Legendary)';
+  // Breed bonus drops
+  if (itemId === 'soft_down_feather') return 'Proc: Pasture Araucana (10% chance)';
+  if (itemId === 'glossy_quill') return 'Proc: Midnight Silkie (20% chance)';
+  if (itemId === 'churned_butter') return 'Proc: Jersey Buttercup (15% chance)';
+  if (itemId === 'yak_wool') return 'Proc: Highland Shaggy Yak (25% chance)';
+  if (itemId === 'horn_shavings') return 'Proc: Jacob Four-Horn (15% chance)';
+  if (itemId === 'lanolin_balm') return 'Proc: Merino Cloud Sheep (25% chance)';
+  if (itemId === 'ancient_coin') return 'Proc: Berkshire Black (15% chance)';
+  if (itemId === 'foraged_nut') return 'Proc: Iberian Bristle Boar (25% chance)';
+  if (itemId === 'ancient_hoard') return 'Proc: Gilded Snout Chimera (100%)';
   if (itemId === 'fish') return 'Catch at Fishery or use Auto-Fisher';
   if (itemId === 'feed') return 'Craft at Feed Mill';
   if (itemId === 'bread') return 'Bake at Bakery';

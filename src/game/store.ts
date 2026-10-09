@@ -17,6 +17,7 @@ import {
   type WorkerType, type HourlyEventType,
   type WorkerRole, type WorkerDivision, type BulkMode,
   BIOMES, LURES, TRAIL_ENCOUNTERS, type BiomeId, type LureTypeId,
+  BREED_REGISTRY, defaultBreedId, type BreedDefinition,
 } from './data';
 
 // ---- Runtime types ----
@@ -32,12 +33,14 @@ export interface AnimalInstance {
   id: string;
   species: AnimalSpecies;
   tier: Tier;
+  breedId: string;
   fed: boolean;
   fedAt: number | null;
   productReady: boolean;
   age: 'baby' | 'adult' | 'elder';
   maxCycles: number;
   cyclesRemaining: number;
+  cyclesCompletedTotal: number;
 }
 
 export interface ProductionSlot {
@@ -304,9 +307,9 @@ const initialPlots: PlotState[] = Array.from({ length: 20 }, (_, i) => ({
 }));
 
 const initialAnimals: AnimalInstance[] = [
-  { id: 'a1', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 7, cyclesRemaining: 7 },
-  { id: 'a2', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 9, cyclesRemaining: 9 },
-  { id: 'a3', species: 'cow', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 8, cyclesRemaining: 8 },
+  { id: 'a1', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0 },
+  { id: 'a2', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0 },
+  { id: 'a3', species: 'cow', tier: 'common', breedId: 'cow_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 12, cyclesRemaining: 12, cyclesCompletedTotal: 0 },
 ];
 
 const initialOrders = generateOrders(6);
@@ -547,15 +550,57 @@ export const useGameStore = create<GameState>()(
         const animal = state.animals.find(a => a.id === animalId);
         if (!animal || !animal.productReady) return;
         if (animal.cyclesRemaining <= 0) return;
-        const def = ANIMALS[animal.species];
-        const newBarn = { ...state.barn, [def.product]: (state.barn[def.product] || 0) + def.productYield };
+
+        // Use breed registry for breed-specific yields
+        const breedDef = BREED_REGISTRY[animal.breedId];
+        const speciesDef = ANIMALS[animal.species];
+        const newBarn = { ...state.barn };
+        let additionalCoins = 0;
+        let additionalGems = 0;
+        let additionalXp = 5;
+        const newCodex = { ...state.codex };
+
+        // 1. Primary Product Yield
+        if (breedDef) {
+          newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount;
+        } else {
+          // Fallback to species default
+          newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield;
+        }
+
+        // 2. Secondary Bonus Drop Procs
+        if (breedDef?.bonusDrop && Math.random() < breedDef.bonusDrop.chance) {
+          if (breedDef.bonusDrop.itemKey) {
+            newBarn[breedDef.bonusDrop.itemKey] = (newBarn[breedDef.bonusDrop.itemKey] || 0) + 1;
+          }
+          if (breedDef.bonusDrop.directCoins) {
+            additionalCoins += breedDef.bonusDrop.directCoins;
+          }
+        }
+
+        // 3. Gem Milestones (Legendary Perks)
+        const totalCompleted = animal.cyclesCompletedTotal + 1;
+        if (breedDef?.gemMilestoneEveryN && totalCompleted % breedDef.gemMilestoneEveryN === 0) {
+          additionalGems += animal.species === 'pig' ? 2 : 1;
+        }
+
+        // 4. Codex Discovery Handling (first-time breed discovery)
+        const codexKey = animal.breedId;
+        if (!newCodex[codexKey]) {
+          newCodex[codexKey] = true;
+          if (breedDef) additionalGems += breedDef.codexGemReward;
+        }
+
+        // 5. Tier-based XP
+        additionalXp = animal.tier === 'legendary' ? 25 : animal.tier === 'rare' ? 15 : animal.tier === 'uncommon' ? 8 : 5;
+
         const newCyclesRemaining = animal.cyclesRemaining - 1;
         const isElder = newCyclesRemaining <= 0;
         const newAnimals = state.animals.map(a =>
-          a.id === animalId ? { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age } : a
+          a.id === animalId ? { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, cyclesCompletedTotal: totalCompleted, age: isElder ? 'elder' : a.age } : a
         );
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5, state.level);
-        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
+        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel, coins: state.coins + additionalCoins, gems: state.gems + additionalGems, codex: newCodex });
       },
 
       feedAllAnimals: () => {
@@ -582,18 +627,58 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const newBarn = { ...state.barn };
         let collectedCount = 0;
+        let additionalCoins = 0;
+        let additionalGems = 0;
+        let additionalXp = 0;
+        const newCodex = { ...state.codex };
+
         const newAnimals = state.animals.map(a => {
           if (!a.productReady || a.cyclesRemaining <= 0) return a;
-          const def = ANIMALS[a.species];
-          newBarn[def.product] = (newBarn[def.product] || 0) + def.productYield;
+
+          const breedDef = BREED_REGISTRY[a.breedId];
+          const speciesDef = ANIMALS[a.species];
+
+          // 1. Primary Product Yield
+          if (breedDef) {
+            newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount;
+          } else {
+            newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield;
+          }
+
+          // 2. Secondary Bonus Drop Procs
+          if (breedDef?.bonusDrop && Math.random() < breedDef.bonusDrop.chance) {
+            if (breedDef.bonusDrop.itemKey) {
+              newBarn[breedDef.bonusDrop.itemKey] = (newBarn[breedDef.bonusDrop.itemKey] || 0) + 1;
+            }
+            if (breedDef.bonusDrop.directCoins) {
+              additionalCoins += breedDef.bonusDrop.directCoins;
+            }
+          }
+
+          // 3. Gem Milestones
+          const totalCompleted = a.cyclesCompletedTotal + 1;
+          if (breedDef?.gemMilestoneEveryN && totalCompleted % breedDef.gemMilestoneEveryN === 0) {
+            additionalGems += a.species === 'pig' ? 2 : 1;
+          }
+
+          // 4. Codex Discovery
+          const codexKey = a.breedId;
+          if (!newCodex[codexKey]) {
+            newCodex[codexKey] = true;
+            if (breedDef) additionalGems += breedDef.codexGemReward;
+          }
+
+          // 5. Tier-based XP
+          additionalXp += a.tier === 'legendary' ? 25 : a.tier === 'rare' ? 15 : a.tier === 'uncommon' ? 8 : 5;
+
           const newCyclesRemaining = a.cyclesRemaining - 1;
           const isElder = newCyclesRemaining <= 0;
           collectedCount++;
-          return { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, age: isElder ? 'elder' : a.age };
+          return { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, cyclesCompletedTotal: totalCompleted, age: isElder ? 'elder' : a.age };
         });
         if (collectedCount === 0) return;
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 5 * collectedCount, state.level);
-        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel });
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
+        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel, coins: state.coins + additionalCoins, gems: state.gems + additionalGems, codex: newCodex });
       },
 
       buyAnimal: (species, tier = 'common' as Tier) => {
@@ -605,22 +690,29 @@ export const useGameStore = create<GameState>()(
         const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
         const cost = Math.floor(costs[species] * tierMult[tier]);
         if (state.coins < cost) return;
-        const maxCycles = randomMaxCycles(tier);
+
+        // Use breed registry for max cycles
+        const breedId = `${species}_${tier}`;
+        const breedDef = BREED_REGISTRY[breedId];
+        const maxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(tier);
+
         const newAnimal: AnimalInstance = {
           id: generateId(),
           species,
           tier,
+          breedId,
           fed: false,
           fedAt: null,
           productReady: false,
           age: 'adult',
           maxCycles,
           cyclesRemaining: maxCycles,
+          cyclesCompletedTotal: 0,
         };
         set({
           coins: state.coins - cost,
           animals: [...state.animals, newAnimal],
-          codex: { ...state.codex, [`${species}_${tier}`]: true },
+          codex: { ...state.codex, [breedId]: true },
         });
       },
 
@@ -628,7 +720,20 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const animal = state.animals.find(a => a.id === animalId);
         if (!animal || animal.age !== 'elder') return; // only elder animals can be sold
-        const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+
+        // Use breed-specific elder market value from BREED_REGISTRY
+        const breedDef = BREED_REGISTRY[animal.breedId];
+        let sellPrice: number;
+        if (breedDef) {
+          // Proportional price based on cycles completed vs max
+          const cyclesCompleted = animal.maxCycles - animal.cyclesRemaining;
+          if (cyclesCompleted <= 0) sellPrice = 0;
+          else if (animal.cyclesRemaining <= 0) sellPrice = breedDef.elderMarketValue;
+          else sellPrice = Math.floor(breedDef.elderMarketValue * (cyclesCompleted / animal.maxCycles));
+        } else {
+          sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+        }
+
         const newAnimals = state.animals.filter(a => a.id !== animalId);
         set({
           animals: newAnimals,
@@ -642,7 +747,15 @@ export const useGameStore = create<GameState>()(
         if (elders.length === 0) return;
         let totalCoins = 0;
         for (const animal of elders) {
-          totalCoins += livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+          const breedDef = BREED_REGISTRY[animal.breedId];
+          if (breedDef) {
+            const cyclesCompleted = animal.maxCycles - animal.cyclesRemaining;
+            if (cyclesCompleted <= 0) { /* no coins */ }
+            else if (animal.cyclesRemaining <= 0) totalCoins += breedDef.elderMarketValue;
+            else totalCoins += Math.floor(breedDef.elderMarketValue * (cyclesCompleted / animal.maxCycles));
+          } else {
+            totalCoins += livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+          }
         }
         const newAnimals = state.animals.filter(a => a.age !== 'elder');
         set({
@@ -1201,16 +1314,17 @@ export const useGameStore = create<GameState>()(
         if (parent1.species !== parent2.species) return;
         if (state.activeBreedings.length >= state.breedingSlots) return;
 
-        // Determine offspring tier
-        let offspringTier: Tier = parent1.tier;
+        // Determine offspring tier based on parent tiers
         const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
         const maxTierIdx = Math.max(tierOrder.indexOf(parent1.tier), tierOrder.indexOf(parent2.tier));
-        // 30% chance to breed up a tier
+        let offspringTier: Tier;
+        // 30% chance to breed UP a tier
         if (Math.random() < 0.3 && maxTierIdx < tierOrder.length - 1) {
           offspringTier = tierOrder[maxTierIdx + 1];
         } else {
           offspringTier = tierOrder[maxTierIdx];
         }
+        const offspringBreedId = `${parent1.species}_${offspringTier}`;
 
         const breeding: ActiveBreeding = {
           id: generateId(),
@@ -1232,7 +1346,7 @@ export const useGameStore = create<GameState>()(
         set({
           animals: newAnimals,
           activeBreedings: [...state.activeBreedings, breeding],
-          codex: { ...state.codex, [`${parent1.species}_${offspringTier}`]: true },
+          codex: { ...state.codex, [offspringBreedId]: true },
         });
       },
 
@@ -1371,7 +1485,9 @@ export const useGameStore = create<GameState>()(
         const newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
             const elapsed = (now - a.fedAt) / 1000;
-            const prodTime = ANIMALS[a.species].productionTimeSec;
+            // Use breed-specific production time from BREED_REGISTRY if available
+            const breedDef = BREED_REGISTRY[a.breedId];
+            const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
             if (elapsed >= prodTime) {
               return { ...a, productReady: true };
             }
@@ -1600,45 +1716,46 @@ export const useGameStore = create<GameState>()(
         // Breeding completion
         const newActiveBreedings = state.activeBreedings.filter(b => {
           if (now - b.startedAt >= b.durationMs) {
-            // Breeding complete — add offspring
-            const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
-            // Pick a random tier based on parents
-            const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
-            const offspringMaxCycles = randomMaxCycles(offspringTier);
-            const newAnimal: AnimalInstance = {
-              id: generateId(),
-              species: b.species,
-              tier: offspringTier,
-              fed: false,
-              fedAt: null,
-              productReady: false,
-              age: 'baby',
-              maxCycles: offspringMaxCycles,
-              cyclesRemaining: offspringMaxCycles,
-            };
-            // Add to animals — we need to set state, but in a filter we can't
-            // We'll handle this outside the filter
             return false;
           }
           return true;
         });
 
-        // Actually process completed breedings
+        // Actually process completed breedings — use parent tiers for proper offspring tier roll
         const completedBreedings = state.activeBreedings.filter(b => now - b.startedAt >= b.durationMs);
         let breedingAnimals = [...newAnimals];
         for (const b of completedBreedings) {
-          const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
-          const offspringMaxCycles = randomMaxCycles(offspringTier);
+          // Look up parent animals to determine offspring tier properly
+          const parent1 = breedingAnimals.find(a => a.id === b.parent1Id);
+          const parent2 = breedingAnimals.find(a => a.id === b.parent2Id);
+          const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+          let offspringTier: Tier;
+          if (parent1 && parent2) {
+            const maxTierIdx = Math.max(tierOrder.indexOf(parent1.tier), tierOrder.indexOf(parent2.tier));
+            if (Math.random() < 0.3 && maxTierIdx < tierOrder.length - 1) {
+              offspringTier = tierOrder[maxTierIdx + 1];
+            } else {
+              offspringTier = tierOrder[maxTierIdx];
+            }
+          } else {
+            // Fallback if parents not found
+            offspringTier = Math.random() < 0.3 ? 'uncommon' : 'common';
+          }
+          const offspringBreedId = `${b.species}_${offspringTier}`;
+          const breedDef = BREED_REGISTRY[offspringBreedId];
+          const offspringMaxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier);
           const newAnimal: AnimalInstance = {
             id: generateId(),
             species: b.species,
             tier: offspringTier,
+            breedId: offspringBreedId,
             fed: false,
             fedAt: null,
             productReady: false,
             age: 'baby',
             maxCycles: offspringMaxCycles,
             cyclesRemaining: offspringMaxCycles,
+            cyclesCompletedTotal: 0,
           };
           breedingAnimals.push(newAnimal);
           // Reset parents
@@ -1648,7 +1765,7 @@ export const useGameStore = create<GameState>()(
             }
             return a;
           });
-          newCodex[`${b.species}_${offspringTier}`] = true;
+          newCodex[offspringBreedId] = true;
         }
 
     // --- Expedition Processing ---
@@ -1723,25 +1840,29 @@ export const useGameStore = create<GameState>()(
           const maxCapacity = stateForExpedition.animalCapacity[selected.species] || ANIMALS[selected.species].capacity;
 
           if (currentCount < maxCapacity) {
-            const maxCycles = randomMaxCycles(selected.tier);
+            const breedId = `${selected.species}_${selected.tier}`;
+            const breedDef = BREED_REGISTRY[breedId];
+            const maxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(selected.tier);
             const newAnimal: AnimalInstance = {
               id: generateId(),
               species: selected.species,
               tier: selected.tier,
+              breedId,
               fed: false,
               fedAt: null,
               productReady: false,
               age: 'adult',
               maxCycles,
               cyclesRemaining: maxCycles,
+              cyclesCompletedTotal: 0,
             };
             animalsToAdd.push(newAnimal);
 
             // Codex + gems
-            const codexKey = `${selected.species}_${selected.tier}`;
+            const codexKey = breedId;
             if (!stateForExpedition.codex[codexKey]) {
               codexUpdates[codexKey] = true;
-              const gemBonus = selected.tier === 'legendary' ? 50 : selected.tier === 'rare' ? 20 : 5;
+              const gemBonus = breedDef ? breedDef.codexGemReward : (selected.tier === 'legendary' ? 50 : selected.tier === 'rare' ? 20 : 5);
               gemBonuses += gemBonus;
             }
 
@@ -1945,12 +2066,40 @@ export const useGameStore = create<GameState>()(
         // Migration: animals with missing cycles fields
         if (merged.animals) {
           merged.animals = merged.animals.map((a: AnimalInstance) => {
-            if (a.maxCycles === undefined) {
-              const mc = randomMaxCycles(a.tier);
-              return { ...a, maxCycles: mc, cyclesRemaining: mc };
+            let updated = { ...a };
+            if (updated.maxCycles === undefined) {
+              const breedId = `${a.species}_${a.tier}`;
+              const breedDef = BREED_REGISTRY[breedId];
+              const mc = breedDef ? breedDef.maxCycles : randomMaxCycles(a.tier);
+              updated = { ...updated, maxCycles: mc, cyclesRemaining: mc };
             }
-            return a;
+            // Migration: add breedId if missing
+            if (!updated.breedId) {
+              updated = { ...updated, breedId: `${a.species}_${a.tier}` };
+            }
+            // Migration: add cyclesCompletedTotal if missing
+            if (updated.cyclesCompletedTotal === undefined) {
+              updated = { ...updated, cyclesCompletedTotal: 0 };
+            }
+            return updated;
           });
+        }
+
+        // Migration: add new barn keys for breed-specific products
+        if (merged.barn) {
+          const newBarnKeys = [
+            'egg_blue', 'egg_obsidian', 'egg_golden', 'soft_down_feather', 'glossy_quill',
+            'milk_rich_cream', 'milk_alpine', 'milk_starlight', 'churned_butter', 'yak_wool',
+            'wool_patterned', 'wool_merino', 'wool_gilded', 'horn_shavings', 'lanolin_balm',
+            'truffle_white', 'truffle_alba', 'truffle_diamond', 'ancient_coin', 'foraged_nut', 'ancient_hoard',
+          ];
+          let barnUpdated = false;
+          for (const key of newBarnKeys) {
+            if (merged.barn[key] === undefined) {
+              merged.barn = { ...merged.barn, [key]: 0 };
+              barnUpdated = true;
+            }
+          }
         }
 
         // Migration: wilderness state
