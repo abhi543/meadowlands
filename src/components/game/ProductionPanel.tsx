@@ -63,6 +63,11 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'silk') return 'Weave at Textiles';
   if (itemId === 'sweater') return 'Craft at Tailor Shop';
   if (itemId === 'pie') return 'Bake at Bakery';
+  // Territory-locked items
+  if (itemId === 'iron_ore' || itemId === 'gold_ore') return 'Mine at Quarry Ridge (Parcel required)';
+  if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';
+  if (itemId === 'smoked_trout') return 'Fish at Riverfront Estuary (Parcel required)';
+  if (itemId === 'fine_sail') return 'Weave at Guild Loom in Highland Meadow (Parcel required)';
   return 'Produce or gather';
 }
 

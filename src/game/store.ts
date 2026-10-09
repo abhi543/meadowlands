@@ -18,6 +18,10 @@ import {
   type WorkerRole, type WorkerDivision, type BulkMode,
   BIOMES, LURES, TRAIL_ENCOUNTERS, type BiomeId, type LureTypeId,
   BREED_REGISTRY, defaultBreedId, type BreedDefinition,
+  PARCEL_CONFIGS, PARCEL_ORDER, ESTATE_AURAS, getEstateAura,
+  generateParcelDebris, generateFreightContract,
+  type ParcelId, type ParcelState, type DebrisEntity, type FreightContract, type EstateAuraTier,
+  FACILITY_FOOTPRINTS, FREIGHT_CONTRACT_TEMPLATES,
 } from './data';
 
 // ---- Runtime types ----
@@ -209,6 +213,12 @@ export interface GameState {
   // Habitat Upgrades
   habitatUpgradeSteps: Record<AnimalSpecies, number>;
 
+  // Territory Expansion
+  parcels: Record<ParcelId, ParcelState>;
+  activeFreightContract: FreightContract | null;
+  freightContractRefreshAt: number; // timestamp when next contract auto-refreshes
+  currentEstateAura: EstateAuraTier;
+
   // Time
   lastTick: number;
 
@@ -270,6 +280,15 @@ export interface GameState {
 
   // Habitat
   upgradeHabitat: (species: AnimalSpecies) => void;
+
+  // Territory Expansion
+  unlockParcel: (parcelId: ParcelId) => void;
+  startClearingDebris: (parcelId: ParcelId, debrisId: string) => void;
+  acceptFreightContract: () => void;
+  fulfillFreightContract: () => void;
+  failFreightContract: () => void;
+  refreshFreightContract: () => void;
+  recalculateEstateAura: () => void;
 
   // Notifications
   addNotification: (message: string, emoji: string, type: NotificationItem['type']) => void;
@@ -338,6 +357,25 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
 }
 
 const initialUnifiedWorkers = createDefaultUnifiedWorkers();
+
+// Create initial parcel states
+function createInitialParcels(): Record<ParcelId, ParcelState> {
+  const parcels: Partial<Record<ParcelId, ParcelState>> = {};
+  for (const parcelId of PARCEL_ORDER) {
+    const config = PARCEL_CONFIGS[parcelId];
+    parcels[parcelId] = {
+      id: parcelId,
+      isUnlocked: parcelId === 'parcel_core', // only core starts unlocked
+      unlockedAt: parcelId === 'parcel_core' ? Date.now() : null,
+      debris: parcelId === 'parcel_core' ? [] : generateParcelDebris(parcelId),
+      placedBuildingId: null,
+    };
+  }
+  return parcels as Record<ParcelId, ParcelState>;
+}
+
+const initialParcels = createInitialParcels();
+const initialEstateAura = getEstateAura(1);
 
 // Fish catch logic
 function rollFishCatch(zoneId: WaterZoneId, rodTier: RodTier, fishCodex: Record<string, boolean>): { speciesId: FishSpeciesId; isNew: boolean } | null {
@@ -454,6 +492,11 @@ export const useGameStore = create<GameState>()(
       },
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
+
+      parcels: initialParcels,
+      activeFreightContract: null,
+      freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000, // First contract in 24h
+      currentEstateAura: initialEstateAura,
 
       lastTick: Date.now(),
 
@@ -1445,6 +1488,140 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // ---- Territory Expansion Actions ----
+
+      unlockParcel: (parcelId) => {
+        const state = get();
+        const target = state.parcels[parcelId];
+        const config = PARCEL_CONFIGS[parcelId];
+        if (!target || target.isUnlocked) return;
+        if (state.level < config.levelReq || state.coins < config.coinCost) return;
+
+        const newParcels = {
+          ...state.parcels,
+          [parcelId]: {
+            ...target,
+            isUnlocked: true,
+            unlockedAt: Date.now(),
+          },
+        };
+
+        set({
+          coins: state.coins - config.coinCost,
+          parcels: newParcels,
+        });
+
+        // Recalculate estate aura after unlocking
+        const parcelsClaimed = Object.values(newParcels).filter(p => p.isUnlocked).length;
+        set({ currentEstateAura: getEstateAura(parcelsClaimed) });
+      },
+
+      startClearingDebris: (parcelId, debrisId) => {
+        const state = get();
+        const parcel = state.parcels[parcelId];
+        if (!parcel || !parcel.isUnlocked) return;
+
+        const debris = parcel.debris.find(d => d.id === debrisId);
+        if (!debris || debris.cleared || debris.clearingStartedAt) return;
+        if (state.coins < debris.clearCost) return;
+
+        const updatedDebris = parcel.debris.map(d =>
+          d.id === debrisId ? { ...d, clearingStartedAt: Date.now() } : d
+        );
+
+        set({
+          coins: state.coins - debris.clearCost,
+          parcels: {
+            ...state.parcels,
+            [parcelId]: { ...parcel, debris: updatedDebris },
+          },
+        });
+      },
+
+      acceptFreightContract: () => {
+        const state = get();
+        const contract = state.activeFreightContract;
+        if (!contract || contract.acceptedAt || contract.completed) return;
+        if (state.coins < contract.entryDeposit) return;
+
+        // Check if Shipping Basin is unlocked
+        const portUnlocked = state.parcels.parcel_port_basin?.isUnlocked;
+        if (!portUnlocked) return;
+
+        // Find the matching template to get delivery window
+        const template = FREIGHT_CONTRACT_TEMPLATES.find(t => t.title === contract.title);
+        const deliveryWindowMs = template?.durationMs || 8 * 60 * 60 * 1000;
+
+        set({
+          coins: state.coins - contract.entryDeposit,
+          activeFreightContract: {
+            ...contract,
+            acceptedAt: Date.now(),
+            expiresAt: Date.now() + deliveryWindowMs, // Reset expiry to delivery window
+          },
+        });
+      },
+
+      fulfillFreightContract: () => {
+        const state = get();
+        const contract = state.activeFreightContract;
+        if (!contract || !contract.acceptedAt || contract.completed) return;
+
+        // Check if all requirements are met
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        for (const req of contract.requirements) {
+          const isCrop = req.itemId in CROPS || req.itemId === 'feed' || req.itemId === 'cotton' || req.itemId === 'honey_comb' || req.itemId === 'wild_berries' || req.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[req.itemId] || 0) < req.qty) return; // Not enough items
+          storage[req.itemId] = (storage[req.itemId] || 0) - req.qty;
+        }
+
+        // Contract fulfilled! Award rewards
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 50, state.level);
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          coins: state.coins + contract.coinReward,
+          gems: state.gems + contract.gemReward,
+          xp: newXp,
+          level: newLevel,
+          activeFreightContract: null,
+          freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000, // Next contract in 24h
+        });
+      },
+
+      failFreightContract: () => {
+        const state = get();
+        const contract = state.activeFreightContract;
+        if (!contract || !contract.acceptedAt || contract.completed) return;
+        // Cargo ship leaves — forfeit entry deposit (already deducted)
+        set({
+          activeFreightContract: null,
+          freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000,
+        });
+      },
+
+      refreshFreightContract: () => {
+        const state = get();
+        if (state.gems < 10) return; // Costs 10 gems to refresh
+        const newContract = generateFreightContract();
+        set({
+          gems: state.gems - 10,
+          activeFreightContract: newContract,
+          freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000,
+        });
+      },
+
+      recalculateEstateAura: () => {
+        const state = get();
+        const parcelsClaimed = Object.values(state.parcels).filter(p => p.isUnlocked).length;
+        const newAura = getEstateAura(parcelsClaimed);
+        if (newAura.parcelsClaimed !== state.currentEstateAura.parcelsClaimed) {
+          set({ currentEstateAura: newAura });
+        }
+      },
+
       // Notifications
       addNotification: (message, emoji, type) => {
         const state = get();
@@ -1939,6 +2116,51 @@ export const useGameStore = create<GameState>()(
       }
     }
 
+        // --- Territory Expansion Tick ---
+        // 1. Process debris clearing timers
+        let parcelsUpdated = { ...state.parcels };
+        let parcelsChanged = false;
+        for (const parcelId of Object.keys(parcelsUpdated) as ParcelId[]) {
+          const parcel = parcelsUpdated[parcelId];
+          const updatedDebris = parcel.debris.map(d => {
+            if (d.clearingStartedAt && !d.cleared && (now - d.clearingStartedAt >= d.clearDurationMs)) {
+              parcelsChanged = true;
+              return { ...d, cleared: true, clearingStartedAt: null };
+            }
+            return d;
+          });
+          if (parcelsChanged) {
+            parcelsUpdated[parcelId] = { ...parcel, debris: updatedDebris };
+          }
+        }
+
+        // 2. Auto-generate freight contracts when refresh timer expires
+        let updatedFreightContract = state.activeFreightContract;
+        let updatedFreightRefreshAt = state.freightContractRefreshAt;
+        if (!state.activeFreightContract && now >= state.freightContractRefreshAt) {
+          const portUnlocked = state.parcels.parcel_port_basin?.isUnlocked;
+          if (portUnlocked) {
+            updatedFreightContract = generateFreightContract();
+            updatedFreightRefreshAt = now + 24 * 60 * 60 * 1000;
+          }
+        }
+
+        // 3. Check freight contract expiry (for accepted contracts past delivery window)
+        if (updatedFreightContract && updatedFreightContract.acceptedAt && !updatedFreightContract.completed) {
+          if (now > updatedFreightContract.expiresAt) {
+            // Contract expired — auto-fail (cargo ship leaves)
+            updatedFreightContract = null;
+            updatedFreightRefreshAt = now + 24 * 60 * 60 * 1000;
+          }
+        }
+
+        // 4. Recalculate estate aura if parcels changed
+        let updatedEstateAura = state.currentEstateAura;
+        if (parcelsChanged) {
+          const parcelsClaimed = Object.values(parcelsUpdated).filter(p => p.isUnlocked).length;
+          updatedEstateAura = getEstateAura(parcelsClaimed);
+        }
+
         // Level up check
         const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
 
@@ -1961,6 +2183,10 @@ export const useGameStore = create<GameState>()(
           activeEvent: newActiveEvent,
           lastEventTriggerTime: newLastEventTriggerTime,
           activeBreedings: newActiveBreedings,
+          parcels: parcelsChanged ? parcelsUpdated : state.parcels,
+          activeFreightContract: updatedFreightContract,
+          freightContractRefreshAt: updatedFreightRefreshAt,
+          currentEstateAura: updatedEstateAura,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -1996,6 +2222,10 @@ export const useGameStore = create<GameState>()(
             activeExpeditions: [],
           },
           habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
+          parcels: createInitialParcels(),
+          activeFreightContract: null,
+          freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000,
+          currentEstateAura: getEstateAura(1),
           lastTick: Date.now(),
         });
       },
@@ -2019,6 +2249,10 @@ export const useGameStore = create<GameState>()(
         activeBreedings: state.activeBreedings,
         wilderness: state.wilderness,
         habitatUpgradeSteps: state.habitatUpgradeSteps,
+        parcels: state.parcels,
+        activeFreightContract: state.activeFreightContract,
+        freightContractRefreshAt: state.freightContractRefreshAt,
+        currentEstateAura: state.currentEstateAura,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
@@ -2132,6 +2366,21 @@ export const useGameStore = create<GameState>()(
               return slot;
             });
           }
+        }
+
+        // Migration: territory expansion state
+        if (!merged.parcels) {
+          merged.parcels = createInitialParcels();
+        }
+        if ((merged as Record<string, unknown>).activeFreightContract === undefined) {
+          merged.activeFreightContract = null;
+        }
+        if ((merged as Record<string, unknown>).freightContractRefreshAt === undefined) {
+          merged.freightContractRefreshAt = Date.now() + 24 * 60 * 60 * 1000;
+        }
+        if (!merged.currentEstateAura) {
+          const parcelsClaimed = Object.values(merged.parcels || {}).filter((p: any) => p?.isUnlocked).length;
+          merged.currentEstateAura = getEstateAura(parcelsClaimed || 1);
         }
 
         return merged as GameState;

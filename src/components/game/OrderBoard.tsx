@@ -40,6 +40,11 @@ function getItemSourceHint(itemId: string): string {
   if (itemId === 'quilted_blanket') return 'Craft at Tailor Shop';
   if (itemId === 'savory_fish_pie') return 'Bake at Bakery (fish)';
   if (itemId === 'crab_bisque') return 'Craft at Dairy (fish)';
+  // Territory-locked items
+  if (itemId === 'iron_ore' || itemId === 'gold_ore') return 'Mine at Quarry Ridge (Parcel required)';
+  if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';
+  if (itemId === 'smoked_trout') return 'Fish at Riverfront Estuary (Parcel required)';
+  if (itemId === 'fine_sail') return 'Weave at Guild Loom in Highland Meadow (Parcel required)';
   // Check if it's a product made in a building
   for (const [bId, bDef] of Object.entries(BUILDINGS)) {
     for (const recipe of bDef.recipes) {

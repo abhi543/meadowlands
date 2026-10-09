@@ -1165,3 +1165,352 @@ export function workerAutoSellPayout(role: WorkerRole, level: number): number {
   const cfg = WORKER_REGISTRY[role];
   return Math.round(cfg.autoSellPayout * workerAutoSellBonus(level));
 }
+
+// ============================================================
+// Territory Expansion — Parcels, Facilities, Freight & Auras
+// ============================================================
+
+// --- Parcel IDs ---
+export type ParcelId =
+  | 'parcel_core'
+  | 'parcel_east_river'
+  | 'parcel_west_alluvium'
+  | 'parcel_south_quarry'
+  | 'parcel_north_highland'
+  | 'parcel_deep_orchard'
+  | 'parcel_port_basin';
+
+// --- Debris Entity (boulders, stumps, brambles on a parcel) ---
+export interface DebrisEntity {
+  id: string;
+  type: 'boulder' | 'stump' | 'brambles';
+  clearCost: number;
+  clearDurationMs: number;
+  clearingStartedAt: number | null;
+  cleared: boolean;
+}
+
+// --- Parcel Config (static definition) ---
+export interface ParcelConfig {
+  id: ParcelId;
+  name: string;
+  emoji: string;
+  levelReq: number;
+  coinCost: number;
+  debrisClearCost: number;
+  debrisClearDurationMs: number;
+  uniqueFeature: string;
+  lockedCapability: string;
+  position: { row: number; col: number }; // Map grid position (0-2)
+  color: string;       // Tailwind accent color for borders/badges
+  bgGradient: string;  // Tailwind gradient classes
+}
+
+// --- Parcel Runtime State ---
+export interface ParcelState {
+  id: ParcelId;
+  isUnlocked: boolean;
+  unlockedAt: number | null;
+  debris: DebrisEntity[];
+  placedBuildingId: string | null;
+}
+
+// --- Facility Footprint ---
+export interface FacilityFootprint {
+  id: string;
+  name: string;
+  emoji: string;
+  tiles: { rows: number; cols: number };
+  requiredZone: ParcelId | 'any_cleared';
+  description: string;
+}
+
+// --- Estate Aura Tiers ---
+export interface EstateAuraTier {
+  parcelsClaimed: number;
+  title: string;
+  emoji: string;
+  effect: string;
+  effectDetail: {
+    type: 'growth_speed' | 'order_refresh' | 'order_coin_bonus' | 'instant_mature_chance';
+    value: number; // multiplier or percentage
+  };
+}
+
+// --- Freight Contract ---
+export interface FreightContract {
+  id: string;
+  title: string;
+  emoji: string;
+  requirements: { itemId: string; qty: number; emoji: string; name: string }[];
+  coinReward: number;
+  gemReward: number;
+  blueprintReward?: string;
+  expiresAt: number;
+  acceptedAt: number | null;
+  completed: boolean;
+  entryDeposit: number; // 10% of total payout
+}
+
+// --- Freight Contract Template ---
+export interface FreightContractTemplate {
+  title: string;
+  emoji: string;
+  requirements: { itemId: string; qty: number; emoji: string; name: string }[];
+  coinReward: number;
+  gemReward: number;
+  blueprintReward?: string;
+  durationMs: number; // delivery window from acceptance
+}
+
+// ---- PARCEL CONFIGS ----
+export const PARCEL_CONFIGS: Record<ParcelId, ParcelConfig> = {
+  parcel_core: {
+    id: 'parcel_core',
+    name: 'Homestead Center',
+    emoji: '\u{1F3E1}',
+    levelReq: 1,
+    coinCost: 0,
+    debrisClearCost: 0,
+    debrisClearDurationMs: 0,
+    uniqueFeature: 'Standard loam soil',
+    lockedCapability: 'Starter 6 Crop Plots, Small Coop, Feed Mill',
+    position: { row: 1, col: 1 },
+    color: 'text-stone-500 dark:text-stone-400',
+    bgGradient: 'from-stone-100 to-stone-200 dark:from-stone-800 dark:to-stone-900',
+  },
+  parcel_east_river: {
+    id: 'parcel_east_river',
+    name: 'Riverfront Estuary',
+    emoji: '\u{1F4A7}',
+    levelReq: 12,
+    coinCost: 45000,
+    debrisClearCost: 5000,
+    debrisClearDurationMs: 5 * 60 * 1000,
+    uniqueFeature: 'Flowing river bank',
+    lockedCapability: 'Waterwheel, Dock Fishery, Freshwater Trout',
+    position: { row: 1, col: 2 },
+    color: 'text-cyan-600 dark:text-cyan-400',
+    bgGradient: 'from-cyan-100 to-sky-100 dark:from-cyan-900 dark:to-sky-900',
+  },
+  parcel_west_alluvium: {
+    id: 'parcel_west_alluvium',
+    name: 'Fertile Alluvium',
+    emoji: '\u{1F33E}',
+    levelReq: 18,
+    coinCost: 110000,
+    debrisClearCost: 15000,
+    debrisClearDurationMs: 12 * 60 * 1000,
+    uniqueFeature: 'Black peat soil (+25% crop speed)',
+    lockedCapability: '2x Growth Speed for root crops (Carrots, Pumpkins)',
+    position: { row: 1, col: 0 },
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bgGradient: 'from-emerald-100 to-green-100 dark:from-emerald-900 dark:to-green-900',
+  },
+  parcel_south_quarry: {
+    id: 'parcel_south_quarry',
+    name: 'Quarry Ridge',
+    emoji: '\u26CF',
+    levelReq: 26,
+    coinCost: 280000,
+    debrisClearCost: 40000,
+    debrisClearDurationMs: 25 * 60 * 1000,
+    uniqueFeature: 'Exposed rock veins',
+    lockedCapability: 'Prospector Mine Shaft, Iron & Gold Ore harvesting',
+    position: { row: 2, col: 1 },
+    color: 'text-slate-600 dark:text-slate-400',
+    bgGradient: 'from-slate-100 to-gray-200 dark:from-slate-800 dark:to-gray-900',
+  },
+  parcel_north_highland: {
+    id: 'parcel_north_highland',
+    name: 'Highland Meadow',
+    emoji: '\u{1F343}',
+    levelReq: 34,
+    coinCost: 650000,
+    debrisClearCost: 90000,
+    debrisClearDurationMs: 45 * 60 * 1000,
+    uniqueFeature: 'High-altitude chill',
+    lockedCapability: 'Secondary Pasture, Highland Yaks, Cloud Sheep',
+    position: { row: 0, col: 1 },
+    color: 'text-teal-600 dark:text-teal-400',
+    bgGradient: 'from-teal-100 to-cyan-100 dark:from-teal-900 dark:to-cyan-900',
+  },
+  parcel_deep_orchard: {
+    id: 'parcel_deep_orchard',
+    name: 'Sunken Grove',
+    emoji: '\u{1F34E}',
+    levelReq: 44,
+    coinCost: 1400000,
+    debrisClearCost: 200000,
+    debrisClearDurationMs: 90 * 60 * 1000,
+    uniqueFeature: 'Ancient deep loam',
+    lockedCapability: 'Fruit Orchard (Apples, Cherries), 4x Apiaries',
+    position: { row: 0, col: 0 },
+    color: 'text-rose-600 dark:text-rose-400',
+    bgGradient: 'from-rose-100 to-pink-100 dark:from-rose-900 dark:to-pink-900',
+  },
+  parcel_port_basin: {
+    id: 'parcel_port_basin',
+    name: 'Shipping Basin',
+    emoji: '\u{1F6A2}',
+    levelReq: 54,
+    coinCost: 3200000,
+    debrisClearCost: 500000,
+    debrisClearDurationMs: 180 * 60 * 1000,
+    uniqueFeature: 'Coastal deep water',
+    lockedCapability: 'Grand Cargo Port, Freight Export Terminal',
+    position: { row: 2, col: 2 },
+    color: 'text-blue-600 dark:text-blue-400',
+    bgGradient: 'from-blue-100 to-indigo-100 dark:from-blue-900 dark:to-indigo-900',
+  },
+};
+
+export const PARCEL_ORDER: ParcelId[] = [
+  'parcel_core',
+  'parcel_east_river',
+  'parcel_west_alluvium',
+  'parcel_south_quarry',
+  'parcel_north_highland',
+  'parcel_deep_orchard',
+  'parcel_port_basin',
+];
+
+// ---- FACILITY FOOTPRINTS ----
+export const FACILITY_FOOTPRINTS: FacilityFootprint[] = [
+  { id: 'bakery_hearth', name: 'Bakery & Hearth', emoji: '\u{1F3ED}', tiles: { rows: 2, cols: 2 }, requiredZone: 'any_cleared', description: 'Artisan bread, fruit pies, tarts' },
+  { id: 'guild_loom', name: 'Guild Loom', emoji: '\u{1F9F5}', tiles: { rows: 3, cols: 3 }, requiredZone: 'parcel_north_highland', description: 'Sweaters, fine fabrics, sails' },
+  { id: 'artisan_cheese_press', name: 'Artisan Cheese Press', emoji: '\u{1F9C0}', tiles: { rows: 2, cols: 3 }, requiredZone: 'any_cleared', description: 'Aged cheddar, starlight cheese' },
+  { id: 'industrial_waterwheel', name: 'Industrial Waterwheel', emoji: '\u{1F4A7}', tiles: { rows: 3, cols: 4 }, requiredZone: 'parcel_east_river', description: 'Auto-irrigates 8 adjacent plots' },
+  { id: 'mine_extraction_rig', name: 'Mine Extraction Rig', emoji: '\u26CF', tiles: { rows: 4, cols: 4 }, requiredZone: 'parcel_south_quarry', description: 'High-yield ore output, Gem extraction' },
+  { id: 'cargo_freight_crane', name: 'Cargo Freight Crane', emoji: '\u{1F6A2}', tiles: { rows: 4, cols: 5 }, requiredZone: 'parcel_port_basin', description: 'Global industrial delivery board access' },
+];
+
+// ---- ESTATE AURA TIERS ----
+export const ESTATE_AURAS: EstateAuraTier[] = [
+  { parcelsClaimed: 1, title: 'Homestead',          emoji: '\u{1F3E1}', effect: 'Standard operation.',                                                  effectDetail: { type: 'growth_speed',            value: 1.0  } },
+  { parcelsClaimed: 2, title: 'River Settlement',   emoji: '\u{1F4A7}', effect: 'Irrigation Boost: -10% growth timer on all farm plots.',              effectDetail: { type: 'growth_speed',            value: 0.9  } },
+  { parcelsClaimed: 4, title: 'County Domain',       emoji: '\u{1F3DB}', effect: 'Logistics Mastery: Order Board refresh timers reduced by 50%.',      effectDetail: { type: 'order_refresh',           value: 0.5  } },
+  { parcelsClaimed: 6, title: 'Grand Agricultural Estate', emoji: '\u{1F3EF}', effect: 'Bulk Freight Margin: +15% coin yield on all completed orders.', effectDetail: { type: 'order_coin_bonus',        value: 1.15 } },
+  { parcelsClaimed: 7, title: 'Regional Sovereign',  emoji: '\u{1F451}', effect: 'Overdrive Field: +10% chance for instant crop maturity on harvest.', effectDetail: { type: 'instant_mature_chance',    value: 0.10 } },
+];
+
+export function getEstateAura(parcelsClaimed: number): EstateAuraTier {
+  let result = ESTATE_AURAS[0];
+  for (const aura of ESTATE_AURAS) {
+    if (parcelsClaimed >= aura.parcelsClaimed) result = aura;
+  }
+  return result;
+}
+
+// ---- FREIGHT CONTRACT TEMPLATES ----
+export const FREIGHT_CONTRACT_TEMPLATES: FreightContractTemplate[] = [
+  {
+    title: 'The Royal Naval Provision',
+    emoji: '\u2693',
+    requirements: [
+      { itemId: 'bread',   qty: 40, emoji: '\u{1F35E}', name: 'Artisan Bread' },
+      { itemId: 'cheese',  qty: 25, emoji: '\u{1F9C0}', name: 'Aged Cheese' },
+      { itemId: 'fish',    qty: 30, emoji: '\u{1F41F}', name: 'Smoked Trout' },
+      { itemId: 'sweater', qty: 20, emoji: '\u{1F9E5}', name: 'Fine Wool Sweater' },
+    ],
+    coinReward: 120000,
+    gemReward: 45,
+    blueprintReward: 'gilded_gear',
+    durationMs: 8 * 60 * 60 * 1000, // 8 hours
+  },
+  {
+    title: 'Eastern Silk Road Caravan',
+    emoji: '\u{1F42D}',
+    requirements: [
+      { itemId: 'fabric', qty: 50, emoji: '\u{1F9F5}', name: 'Fine Fabric' },
+      { itemId: 'silk',   qty: 30, emoji: '\u{1F33F}', name: 'Raw Silk' },
+      { itemId: 'yarn',   qty: 60, emoji: '\u{1F9F6}', name: 'Yarn' },
+      { itemId: 'honey',  qty: 25, emoji: '\u{1F36F}', name: 'Golden Honey' },
+    ],
+    coinReward: 95000,
+    gemReward: 35,
+    durationMs: 8 * 60 * 60 * 1000,
+  },
+  {
+    title: 'Miner\'s Feast Delivery',
+    emoji: '\u26CF',
+    requirements: [
+      { itemId: 'bread',  qty: 60, emoji: '\u{1F35E}', name: 'Rye Bread' },
+      { itemId: 'cheese', qty: 40, emoji: '\u{1F9C0}', name: 'Cheddar Wheel' },
+      { itemId: 'pie',    qty: 30, emoji: '\u{1F967}', name: 'Hearty Pie' },
+    ],
+    coinReward: 80000,
+    gemReward: 25,
+    durationMs: 8 * 60 * 60 * 1000,
+  },
+  {
+    title: 'Luxury Textile Shipment',
+    emoji: '\u{1F457}',
+    requirements: [
+      { itemId: 'sweater',         qty: 35, emoji: '\u{1F9E5}', name: 'Cashmere Sweater' },
+      { itemId: 'quilted_blanket', qty: 20, emoji: '\u{1F6CB}', name: 'Quilted Blanket' },
+      { itemId: 'fabric',          qty: 45, emoji: '\u{1F9F5}', name: 'Silk Fabric' },
+    ],
+    coinReward: 150000,
+    gemReward: 50,
+    blueprintReward: 'ornate_frame',
+    durationMs: 8 * 60 * 60 * 1000,
+  },
+  {
+    title: 'Highland Provision Run',
+    emoji: '\u{1F343}',
+    requirements: [
+      { itemId: 'milk',    qty: 50, emoji: '\u{1F95B}', name: 'Fresh Milk' },
+      { itemId: 'wool',    qty: 40, emoji: '\u{1F412}', name: 'Highland Wool' },
+      { itemId: 'cheese',  qty: 30, emoji: '\u{1F9C0}', name: 'Highland Cheese' },
+      { itemId: 'bread',   qty: 50, emoji: '\u{1F35E}', name: 'Stone Bread' },
+    ],
+    coinReward: 110000,
+    gemReward: 40,
+    durationMs: 8 * 60 * 60 * 1000,
+  },
+];
+
+/** Generate random debris entities for a parcel */
+export function generateParcelDebris(parcelId: ParcelId): DebrisEntity[] {
+  if (parcelId === 'parcel_core') return []; // Core has no debris
+  const config = PARCEL_CONFIGS[parcelId];
+  const count = 2 + Math.floor(Math.random() * 3); // 2-4 debris
+  const types: DebrisEntity['type'][] = ['boulder', 'stump', 'brambles'];
+  const debris: DebrisEntity[] = [];
+  for (let i = 0; i < count; i++) {
+    const type = types[i % 3];
+    // Cost/duration scale down from parcel total by count
+    const perDebrisCost = Math.round(config.debrisClearCost / count);
+    const perDebrisDuration = Math.round(config.debrisClearDurationMs / count);
+    debris.push({
+      id: `debris_${parcelId}_${i}`,
+      type,
+      clearCost: perDebrisCost,
+      clearDurationMs: perDebrisDuration,
+      clearingStartedAt: null,
+      cleared: false,
+    });
+  }
+  return debris;
+}
+
+/** Generate a freight contract from templates */
+export function generateFreightContract(): FreightContract {
+  const template = FREIGHT_CONTRACT_TEMPLATES[Math.floor(Math.random() * FREIGHT_CONTRACT_TEMPLATES.length)];
+  const id = `freight_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const entryDeposit = Math.round((template.coinReward + template.gemReward * 100) * 0.1); // 10% of total value
+  return {
+    id,
+    title: template.title,
+    emoji: template.emoji,
+    requirements: [...template.requirements],
+    coinReward: template.coinReward,
+    gemReward: template.gemReward,
+    blueprintReward: template.blueprintReward,
+    expiresAt: Date.now() + 24 * 60 * 60 * 1000, // Available for 24h before acceptance
+    acceptedAt: null,
+    completed: false,
+    entryDeposit,
+  };
+}

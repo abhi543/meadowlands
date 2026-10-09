@@ -4,7 +4,7 @@ import { useGameStore } from '@/game/store';
 import { xpForLevel } from '@/game/data';
 
 export function HUD() {
-  const { coins, gems, xp, level, silo, barn, resetGame } = useGameStore();
+  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame } = useGameStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
@@ -14,6 +14,9 @@ export function HUD() {
   const siloMax = 50 + level * 5;
   const barnUsed = Object.values(barn).reduce((a, b) => a + b, 0);
   const barnMax = 30 + level * 3;
+
+  const auraTitle = currentEstateAura?.title || 'Homestead';
+  const auraEmoji = currentEstateAura?.emoji || '\u{1F3E1}';
 
   return (
     <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 dark:from-amber-800 dark:via-orange-800 dark:to-red-800 rounded-2xl p-3 shadow-lg text-white">
@@ -31,6 +34,14 @@ export function HUD() {
             </div>
           </div>
         </div>
+
+        {/* Estate Aura Pill */}
+        {auraTitle !== 'Homestead' && (
+          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-[10px] flex items-center gap-1">
+            <span>{auraEmoji}</span>
+            <span className="font-medium">{auraTitle}</span>
+          </div>
+        )}
 
         {/* Currency */}
         <div className="flex items-center gap-2 ml-auto">
