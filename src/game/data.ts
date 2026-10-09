@@ -39,12 +39,12 @@ export interface CropDef {
 }
 
 export const CROPS: Record<CropId, CropDef> = {
-  wheat:       { id: 'wheat',       name: 'Wheat',       emoji: '\u{1F33E}', growTimeSec: 30,  yieldCount: 2, seedCost: 0 },
+  wheat:       { id: 'wheat',       name: 'Wheat',       emoji: '\u{1F33E}', growTimeSec: 60,  yieldCount: 2, seedCost: 0 },
   corn:        { id: 'corn',        name: 'Corn',        emoji: '\u{1F33D}', growTimeSec: 60,  yieldCount: 2, seedCost: 0 },
   carrot:      { id: 'carrot',      name: 'Carrot',      emoji: '\u{1F955}', growTimeSec: 90,  yieldCount: 3, seedCost: 5 },
   strawberry:  { id: 'strawberry',  name: 'Strawberry',  emoji: '\u{1F353}', growTimeSec: 120, yieldCount: 3, seedCost: 10 },
   soybean:     { id: 'soybean',     name: 'Soybean',     emoji: '\u{1FADB}', growTimeSec: 180, yieldCount: 4, seedCost: 15 },
-  pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 300, yieldCount: 5, seedCost: 25 },
+  pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 600, yieldCount: 5, seedCost: 25 },
   cotton:      { id: 'cotton',      name: 'Cotton',      emoji: '\u{1F33F}', growTimeSec: 150, yieldCount: 8, seedCost: 12 },
 };
 
@@ -66,7 +66,7 @@ export interface AnimalDef {
 }
 
 export const ANIMALS: Record<AnimalSpecies, AnimalDef> = {
-  chicken: { species: 'chicken', name: 'Chicken', emoji: '\u{1F414}', habitat: 'Chicken Coop', habitatEmoji: '\u{1F3E0}', capacity: 6, feedPerCycle: 1, product: 'egg', productEmoji: '\u{1F95A}', productYield: 1, productionTimeSec: 45 },
+  chicken: { species: 'chicken', name: 'Chicken', emoji: '\u{1F414}', habitat: 'Chicken Coop', habitatEmoji: '\u{1F3E0}', capacity: 6, feedPerCycle: 1, product: 'egg', productEmoji: '\u{1F95A}', productYield: 1, productionTimeSec: 60 },
   cow:     { species: 'cow',     name: 'Cow',     emoji: '\u{1F404}', habitat: 'Cow Barn',     habitatEmoji: '\u{1F316}', capacity: 4, feedPerCycle: 2, product: 'milk', productEmoji: '\u{1F95B}', productYield: 1, productionTimeSec: 90 },
   sheep:   { species: 'sheep',   name: 'Sheep',   emoji: '\u{1F411}', habitat: 'Sheep Pasture', habitatEmoji: '\u{1F7E9}', capacity: 4, feedPerCycle: 2, product: 'wool', productEmoji: '\u{1F9F6}', productYield: 1, productionTimeSec: 120 },
   pig:     { species: 'pig',     name: 'Pig',     emoji: '\u{1F437}', habitat: 'Pig Pen',     habitatEmoji: '\u{1F3E0}', capacity: 4, feedPerCycle: 3, product: 'truffle', productEmoji: '\u{1F344}', productYield: 1, productionTimeSec: 180 },
@@ -155,13 +155,13 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   feed_mill: {
     id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 20,
     recipes: [
-      { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 15 },
+      { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
     ],
   },
   bakery: {
     id: 'bakery', name: 'Bakery', emoji: '\u{1F3ED}', queueSlots: 20,
     recipes: [
-      { id: 'make_bread', name: 'Bake Bread', emoji: '\u{1F35E}', inputs: [{ productId: 'wheat', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 1 }, timeSec: 30 },
+      { id: 'make_bread', name: 'Bake Bread', emoji: '\u{1F35E}', inputs: [{ productId: 'wheat', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 1 }, timeSec: 60 },
       { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
       { id: 'make_savory_fish_pie', name: 'Savory Fish Pie', emoji: '\u{1F967}', inputs: [{ productId: 'fish', qty: 2 }, { productId: 'wheat', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'savory_fish_pie', qty: 1 }, timeSec: 75 },
       { id: 'make_crab_bisque', name: 'Crab Bisque', emoji: '\u{1F352}', inputs: [{ productId: 'fish', qty: 3 }, { productId: 'milk', qty: 1 }], output: { productId: 'crab_bisque', qty: 1 }, timeSec: 90 },
@@ -170,28 +170,28 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   dairy: {
     id: 'dairy', name: 'Dairy', emoji: '\u{1F9C0}', queueSlots: 20,
     recipes: [
-      { id: 'make_cheese', name: 'Make Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk', qty: 2 }], output: { productId: 'cheese', qty: 1 }, timeSec: 45 },
+      { id: 'make_cheese', name: 'Make Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk', qty: 2 }], output: { productId: 'cheese', qty: 1 }, timeSec: 60 },
     ],
   },
   loom: {
     id: 'loom', name: 'Loom', emoji: '\u{1F9F5}', queueSlots: 20,
     recipes: [
       { id: 'make_sweater', name: 'Weave Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
-      { id: 'make_yarn', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool', qty: 1 }], output: { productId: 'yarn', qty: 2 }, timeSec: 20 },
+      { id: 'make_yarn', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool', qty: 1 }], output: { productId: 'yarn', qty: 2 }, timeSec: 60 },
     ],
   },
   press: {
     id: 'press', name: 'Press', emoji: '\u{1FAD2}', queueSlots: 20,
     recipes: [
       { id: 'make_truffle_oil', name: 'Press Truffle Oil', emoji: '\u{1FAD2}', inputs: [{ productId: 'truffle', qty: 2 }], output: { productId: 'truffle_oil', qty: 1 }, timeSec: 90 },
-      { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 30 },
+      { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 60 },
     ],
   },
   tailor_shop: {
     id: 'tailor_shop', name: 'Tailor Shop', emoji: '\u{1F9E5}', queueSlots: 20, unlockLevel: 18,
     recipes: [
-      { id: 'make_sweater_ts', name: 'Knit Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'yarn', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 50 },
-      { id: 'make_yarn_ts', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 3 }], output: { productId: 'yarn', qty: 2 }, timeSec: 25 },
+      { id: 'make_sweater_ts', name: 'Knit Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'yarn', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
+      { id: 'make_yarn_ts', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 3 }], output: { productId: 'yarn', qty: 2 }, timeSec: 60 },
       { id: 'make_quilted_blanket', name: 'Quilt Blanket', emoji: '\u{1F9F4}', inputs: [{ productId: 'yarn', qty: 4 }, { productId: 'wool', qty: 2 }], output: { productId: 'quilted_blanket', qty: 1 }, timeSec: 120 },
     ],
   },
@@ -239,12 +239,12 @@ export interface WaterZoneDef {
 export const WATER_ZONES: Record<WaterZoneId, WaterZoneDef> = {
   zone_pond: {
     id: 'zone_pond', name: 'Farmstead Pond', emoji: '\u{1F327}\uFE0F', waterType: 'freshwater',
-    unlockLevel: 1, baseIntervalMs: 30000,
+    unlockLevel: 1, baseIntervalMs: 60000,
     species: ['carp', 'catfish', 'perch'],
   },
   zone_river: {
     id: 'zone_river', name: 'Forest River Stream', emoji: '\u{1F4A7}', waterType: 'freshwater',
-    unlockLevel: 5, baseIntervalMs: 45000, unlockCostCoins: 500,
+    unlockLevel: 5, baseIntervalMs: 60000, unlockCostCoins: 500,
     species: ['trout', 'salmon', 'bass'],
   },
   zone_estuary: {
@@ -363,7 +363,7 @@ export interface GearTierDef {
 export const WORKERS: Record<WorkerType, WorkerDef> = {
   fisherman: {
     type: 'fisherman', name: 'Auto Fisherman', emoji: '\u{1F3A3}',
-    description: 'Catches fish autonomously', baseIntervalMs: 45000,
+    description: 'Catches fish autonomously', baseIntervalMs: 60000,
     produces: 'fish', producesEmoji: '\u{1F41F}', producesQty: 1,
     gearTiers: [
       { tier: 1, name: 'Basic Net', speedMultiplier: 1.0, costCoins: 0, costGems: 0 },
