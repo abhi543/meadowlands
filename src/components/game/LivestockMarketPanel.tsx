@@ -80,53 +80,53 @@ export function LivestockMarketPanel() {
         </div>
       </div>
 
-      {/* Sell Section */}
+      {/* Sell Section — Elder Animals Only */}
       <div className="space-y-2">
-        <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">Sell Animals</h4>
-        {animals.length === 0 ? (
-          <div className="text-center py-4 text-sm text-stone-400 dark:text-gray-500 italic">No animals to sell</div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {animals.map(animal => {
-              const def = ANIMALS[animal.species];
-              const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
-              const canSell = sellPrice > 0;
+        <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">Sell Elder Animals</h4>
+        {(() => {
+          const elders = animals.filter(a => a.age === 'elder');
+          return elders.length === 0 ? (
+            <div className="text-center py-4 text-sm text-stone-400 dark:text-gray-500 italic">No elder animals to sell</div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {elders.map(animal => {
+                const def = ANIMALS[animal.species];
+                const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
 
-              return (
-                <div
-                  key={animal.id}
-                  className="rounded-lg border-2 p-2 text-center"
-                  style={{
-                    borderColor: TIER_COLORS[animal.tier],
-                    backgroundColor: `${TIER_COLORS[animal.tier]}10`,
-                  }}
-                >
-                  <div className="text-xl mb-0.5">{def.emoji}</div>
-                  <div className="text-[10px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
-                    {TIER_LABELS[animal.tier]}
-                  </div>
-                  <div className="text-[9px] text-stone-500 dark:text-gray-400">
-                    {animal.cyclesRemaining}/{animal.maxCycles} cycles
-                    {animal.age === 'elder' && ' (elder)'}
-                  </div>
-                  <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">
-                    {'\u{1F4B0}'}{sellPrice}
-                  </div>
-                  {canSell && (
+                return (
+                  <div
+                    key={animal.id}
+                    className="rounded-lg border-2 p-2 text-center"
+                    style={{
+                      borderColor: TIER_COLORS[animal.tier],
+                      backgroundColor: `${TIER_COLORS[animal.tier]}10`,
+                    }}
+                  >
+                    <div className="text-xl mb-0.5">{def.emoji}</div>
+                    <div className="text-[10px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
+                      {TIER_LABELS[animal.tier]}
+                    </div>
+                    <div className="text-[9px] text-stone-500 dark:text-gray-400">
+                      {animal.maxCycles} cycles done
+                    </div>
+                    <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">
+                      {'\u{1F4B0}'}{sellPrice}
+                    </div>
                     <button
                       onClick={() => sellAnimal(animal.id)}
-                      className={`w-full mt-1 py-1 text-[10px] font-bold rounded-md text-white transition-colors ${
-                        animal.age === 'elder'
-                          ? 'bg-red-500 hover:bg-red-600'
-                          : 'bg-orange-500 hover:bg-orange-600'
-                      }`}
+                      className="w-full mt-1 py-1 text-[10px] font-bold rounded-md bg-red-500 hover:bg-red-600 text-white transition-colors"
                     >
-                      {animal.age === 'elder' ? 'Sell' : 'Market Sell'}
+                      Sell
                     </button>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+        {animals.filter(a => a.age !== 'elder').length > 0 && (
+          <div className="text-[10px] text-stone-400 dark:text-gray-500 text-center mt-1">
+            {animals.filter(a => a.age !== 'elder').length} active animal{animals.filter(a => a.age !== 'elder').length !== 1 ? 's' : ''} still producing — sell when elder
           </div>
         )}
       </div>

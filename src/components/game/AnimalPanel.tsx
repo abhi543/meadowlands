@@ -1,13 +1,13 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, HABITAT_UPGRADES, livestockSellPriceForAnimal, type AnimalSpecies, type Tier } from '@/game/data';
+import { ANIMALS, TIER_COLORS, TIER_LABELS, TIER_MAX_CYCLES, HABITAT_UPGRADES, type AnimalSpecies, type Tier } from '@/game/data';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
 
 export function AnimalPanel() {
-  const { animals, silo, barn, coins, level, feedAnimal, collectProduct, feedAllAnimals, collectAllProducts, buyAnimal, sellAnimal, sellAllElderAnimals, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
+  const { animals, silo, barn, coins, level, feedAnimal, collectProduct, feedAllAnimals, collectAllProducts, buyAnimal, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
 
   // Compute batch action counts
   const feedableAnimals = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder');
@@ -24,15 +24,11 @@ export function AnimalPanel() {
     }
   }
   const totalFeedNeeded = feedableAnimals.reduce((sum, a) => sum + ANIMALS[a.species].feedPerCycle, 0);
-  const elderCount = animals.filter(a => a.age === 'elder').length;
-  const elderTotalValue = animals
-    .filter(a => a.age === 'elder')
-    .reduce((sum, a) => sum + livestockSellPriceForAnimal(a.species, a.tier, a.cyclesRemaining, a.maxCycles), 0);
 
   return (
     <div className="space-y-4">
       {/* Batch Action Buttons */}
-      {(canFeedCount > 0 || collectibleAnimals.length > 0 || elderCount > 0) && (
+      {(canFeedCount > 0 || collectibleAnimals.length > 0) && (
         <div className="flex gap-2 flex-wrap">
           {/* Collect All */}
           <button
@@ -72,20 +68,6 @@ export function AnimalPanel() {
             )}
             <span className="text-xs opacity-80">{'🫗'}{totalFeedNeeded > 0 ? Math.min(silo.feed || 0, totalFeedNeeded) : 0}</span>
           </button>
-
-          {/* Sell All Elders */}
-          {elderCount > 0 && (
-            <button
-              onClick={() => sellAllElderAnimals()}
-              className="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white border-red-600 shadow-lg shadow-red-200/50 active:scale-95"
-            >
-              <span className="text-lg">{'🏪'}</span>
-              Sell Elders
-              <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
-                {elderCount} {'💰'}{elderTotalValue}
-              </span>
-            </button>
-          )}
         </div>
       )}
 
@@ -205,23 +187,9 @@ export function AnimalPanel() {
                         {animal.fed && !animal.productReady && (
                           <div className="text-[10px] text-blue-500 dark:text-blue-400">Producing...</div>
                         )}
-                        {/* Sell button — available for any animal that has completed at least 1 cycle */}
-                        {(() => {
-                          const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
-                          const canSell = sellPrice > 0;
-                          return canSell ? (
-                            <button
-                              onClick={() => sellAnimal(animal.id)}
-                              className={`w-full py-1 text-xs font-bold rounded-md text-white transition-colors ${
-                                animal.age === 'elder'
-                                  ? 'bg-red-500 hover:bg-red-600'
-                                  : 'bg-orange-500 hover:bg-orange-600'
-                              }`}
-                            >
-                              {'💰'}{sellPrice} {animal.age === 'elder' ? 'Sell' : 'Market'}
-                            </button>
-                          ) : null;
-                        })()}
+                        {animal.age === 'elder' && (
+                          <div className="text-[10px] text-stone-400 dark:text-gray-500 italic">Elder — sell at market</div>
+                        )}
                       </div>
                     </div>
                   );

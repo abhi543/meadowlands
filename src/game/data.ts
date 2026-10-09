@@ -26,6 +26,14 @@ export const TIER_MAX_CYCLES: Record<Tier, number> = {
   legendary: 20,
 };
 
+// Randomize max cycles for a new animal: ±30% around the tier base, clamped to [4, 30]
+export function randomMaxCycles(tier: Tier): number {
+  const base = TIER_MAX_CYCLES[tier];
+  const min = Math.max(4, Math.floor(base * 0.7));
+  const max = Math.min(30, Math.ceil(base * 1.3));
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
 // --- Crops ---
 export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton';
 

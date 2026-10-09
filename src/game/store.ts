@@ -7,7 +7,7 @@ import {
   HABITAT_UPGRADES, BREEDING_SLOT_UPGRADES,
   ORDER_TEMPLATES, xpForLevel, MAX_LEVEL,
   TIER_MAX_CYCLES, ANIMAL_BUY_PRICES, ANIMAL_MARKET_PRICES,
-  livestockSellPriceForAnimal,
+  livestockSellPriceForAnimal, randomMaxCycles,
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
   type WorkerType, type HourlyEventType,
@@ -248,9 +248,9 @@ const initialPlots: PlotState[] = Array.from({ length: 20 }, (_, i) => ({
 }));
 
 const initialAnimals: AnimalInstance[] = [
-  { id: 'a1', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: TIER_MAX_CYCLES.common, cyclesRemaining: TIER_MAX_CYCLES.common },
-  { id: 'a2', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: TIER_MAX_CYCLES.common, cyclesRemaining: TIER_MAX_CYCLES.common },
-  { id: 'a3', species: 'cow', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: TIER_MAX_CYCLES.common, cyclesRemaining: TIER_MAX_CYCLES.common },
+  { id: 'a1', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 7, cyclesRemaining: 7 },
+  { id: 'a2', species: 'chicken', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 9, cyclesRemaining: 9 },
+  { id: 'a3', species: 'cow', tier: 'common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 8, cyclesRemaining: 8 },
 ];
 
 const initialOrders = generateOrders(6);
@@ -518,6 +518,7 @@ export const useGameStore = create<GameState>()(
         const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
         const cost = Math.floor(costs[species] * tierMult[tier]);
         if (state.coins < cost) return;
+        const maxCycles = randomMaxCycles(tier);
         const newAnimal: AnimalInstance = {
           id: generateId(),
           species,
@@ -526,8 +527,8 @@ export const useGameStore = create<GameState>()(
           fedAt: null,
           productReady: false,
           age: 'adult',
-          maxCycles: TIER_MAX_CYCLES[tier],
-          cyclesRemaining: TIER_MAX_CYCLES[tier],
+          maxCycles,
+          cyclesRemaining: maxCycles,
         };
         set({
           coins: state.coins - cost,
@@ -539,10 +540,8 @@ export const useGameStore = create<GameState>()(
       sellAnimal: (animalId) => {
         const state = get();
         const animal = state.animals.find(a => a.id === animalId);
-        if (!animal) return;
-        // Proportional market price based on cycles completed
+        if (!animal || animal.age !== 'elder') return; // only elder animals can be sold
         const sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
-        if (sellPrice <= 0) return; // can't sell an animal that hasn't produced anything
         const newAnimals = state.animals.filter(a => a.id !== animalId);
         set({
           animals: newAnimals,
@@ -1312,6 +1311,7 @@ export const useGameStore = create<GameState>()(
             const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
             // Pick a random tier based on parents
             const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
+            const offspringMaxCycles = randomMaxCycles(offspringTier);
             const newAnimal: AnimalInstance = {
               id: generateId(),
               species: b.species,
@@ -1320,8 +1320,8 @@ export const useGameStore = create<GameState>()(
               fedAt: null,
               productReady: false,
               age: 'baby',
-              maxCycles: TIER_MAX_CYCLES[offspringTier],
-              cyclesRemaining: TIER_MAX_CYCLES[offspringTier],
+              maxCycles: offspringMaxCycles,
+              cyclesRemaining: offspringMaxCycles,
             };
             // Add to animals — we need to set state, but in a filter we can't
             // We'll handle this outside the filter
@@ -1335,6 +1335,7 @@ export const useGameStore = create<GameState>()(
         let breedingAnimals = [...newAnimals];
         for (const b of completedBreedings) {
           const offspringTier: Tier = Math.random() < 0.3 ? 'uncommon' : 'common';
+          const offspringMaxCycles = randomMaxCycles(offspringTier);
           const newAnimal: AnimalInstance = {
             id: generateId(),
             species: b.species,
@@ -1343,8 +1344,8 @@ export const useGameStore = create<GameState>()(
             fedAt: null,
             productReady: false,
             age: 'baby',
-            maxCycles: TIER_MAX_CYCLES[offspringTier],
-            cyclesRemaining: TIER_MAX_CYCLES[offspringTier],
+            maxCycles: offspringMaxCycles,
+            cyclesRemaining: offspringMaxCycles,
           };
           breedingAnimals.push(newAnimal);
           // Reset parents
@@ -1476,7 +1477,8 @@ export const useGameStore = create<GameState>()(
         if (merged.animals) {
           merged.animals = merged.animals.map((a: AnimalInstance) => {
             if (a.maxCycles === undefined) {
-              return { ...a, maxCycles: TIER_MAX_CYCLES[a.tier], cyclesRemaining: TIER_MAX_CYCLES[a.tier] };
+              const mc = randomMaxCycles(a.tier);
+              return { ...a, maxCycles: mc, cyclesRemaining: mc };
             }
             return a;
           });
