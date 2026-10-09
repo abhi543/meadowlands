@@ -10,15 +10,16 @@ export function ShopPanel() {
 
   const allItems: { id: string; name: string; emoji: string; qty: number; sellPrice: number; isCrop: boolean }[] = [];
 
-  // Crops from silo
+  // Crops from silo (exclude wheat, corn)
+  const SHOP_HIDDEN_CROPS = new Set(['wheat', 'corn']);
   for (const [id, def] of Object.entries(CROPS)) {
+    if (SHOP_HIDDEN_CROPS.has(id)) continue;
     const qty = silo[id] || 0;
     if (qty > 0) allItems.push({ id, name: def.name, emoji: def.emoji, qty, sellPrice: Math.max(1, Math.floor(def.seedCost / 2) + 1), isCrop: true });
   }
 
-  // Other silo items
+  // Other silo items (exclude feed)
   const siloExtras: { id: string; name: string; emoji: string; sellPrice: number }[] = [
-    { id: 'feed', name: 'Animal Feed', emoji: '🫗', sellPrice: 2 },
     { id: 'cotton', name: 'Cotton', emoji: '🌿', sellPrice: 6 },
     { id: 'honey_comb', name: 'Honey Comb', emoji: '🍯', sellPrice: 12 },
     { id: 'wild_berries', name: 'Wild Berries', emoji: '🍇', sellPrice: 8 },
@@ -29,8 +30,10 @@ export function ShopPanel() {
     if (qty > 0) allItems.push({ id: extra.id, name: extra.name, emoji: extra.emoji, qty, sellPrice: extra.sellPrice, isCrop: true });
   }
 
-  // Products from barn
+  // Products from barn (exclude feed)
+  const SHOP_HIDDEN_PRODUCTS = new Set(['feed']);
   for (const [id, def] of Object.entries(PRODUCTS)) {
+    if (SHOP_HIDDEN_PRODUCTS.has(id)) continue;
     const qty = barn[id] || 0;
     if (qty > 0) allItems.push({ id, name: def.name, emoji: def.emoji, qty, sellPrice: def.sellPrice, isCrop: false });
   }

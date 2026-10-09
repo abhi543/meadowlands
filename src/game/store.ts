@@ -807,11 +807,14 @@ export const useGameStore = create<GameState>()(
 
       sellAllItems: () => {
         const state = get();
+        // Items excluded from shop (wheat, corn, feed are essential resources)
+        const SHOP_HIDDEN = new Set(['wheat', 'corn', 'feed']);
         let totalCoins = 0;
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
-        // Sell all silo items (crops + extras)
+        // Sell all silo items (crops + extras), skip hidden
         for (const [id, def] of Object.entries(CROPS)) {
+          if (SHOP_HIDDEN.has(id)) continue;
           const qty = newSilo[id] || 0;
           if (qty > 0) {
             const sellPrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
@@ -819,7 +822,7 @@ export const useGameStore = create<GameState>()(
             newSilo[id] = 0;
           }
         }
-        const siloExtras = ['feed', 'cotton', 'honey_comb', 'wild_berries', 'gold_nugget'];
+        const siloExtras = ['cotton', 'honey_comb', 'wild_berries', 'gold_nugget'];
         for (const id of siloExtras) {
           const qty = newSilo[id] || 0;
           if (qty > 0) {
@@ -830,8 +833,9 @@ export const useGameStore = create<GameState>()(
             }
           }
         }
-        // Sell all barn items
+        // Sell all barn items, skip hidden
         for (const [id, def] of Object.entries(PRODUCTS)) {
+          if (SHOP_HIDDEN.has(id)) continue;
           const qty = newBarn[id] || 0;
           if (qty > 0) {
             totalCoins += def.sellPrice * qty;
