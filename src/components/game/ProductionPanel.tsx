@@ -63,6 +63,12 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'silk') return 'Weave at Textiles';
   if (itemId === 'sweater') return 'Craft at Tailor Shop';
   if (itemId === 'pie') return 'Bake at Bakery';
+  // Supply chain: crafted from breed-specific products
+  if (itemId === 'golden_shawl') return 'Weave at Loom (3 Gilded Wool)';
+  if (itemId === 'merino_sweater') return 'Weave at Loom (2 Merino Wool)';
+  if (itemId === 'rich_butter') return 'Churn at Dairy (2 Rich Cream)';
+  if (itemId === 'alpine_cheese') return 'Age at Dairy (2 Alpine Milk)';
+  if (itemId === 'golden_cake') return 'Bake at Bakery (Golden Egg + Bread)';
   // Territory-locked items
   if (itemId === 'iron_ore' || itemId === 'gold_ore') return 'Mine at Quarry Ridge (Parcel required)';
   if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';

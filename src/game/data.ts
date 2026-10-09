@@ -285,7 +285,7 @@ export const HABITAT_UPGRADES: HabitatUpgradeStep[] = [
 ];
 
 // --- Products ---
-export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar';
+export type ProductId = 'feed' | 'egg' | 'egg_blue' | 'egg_obsidian' | 'egg_golden' | 'milk' | 'milk_rich_cream' | 'milk_alpine' | 'milk_starlight' | 'wool' | 'wool_patterned' | 'wool_merino' | 'wool_gilded' | 'truffle' | 'truffle_white' | 'truffle_alba' | 'truffle_diamond' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar' | 'golden_shawl' | 'merino_sweater' | 'rich_butter' | 'alpine_cheese' | 'golden_cake' | 'horn_shavings' | 'lanolin_balm' | 'ancient_coin';
 
 export interface ProductDef {
   id: ProductId;
@@ -298,9 +298,21 @@ export interface ProductDef {
 export const PRODUCTS: Record<ProductId, ProductDef> = {
   feed:             { id: 'feed',             name: 'Animal Feed',      emoji: '\u{1FAD9}', category: 'raw',          sellPrice: 2 },
   egg:              { id: 'egg',              name: 'Egg',              emoji: '\u{1F95A}', category: 'animal',       sellPrice: 5 },
+  egg_blue:         { id: 'egg_blue',         name: 'Blue Egg',         emoji: '\u{1F95A}', category: 'animal',       sellPrice: 8 },
+  egg_obsidian:     { id: 'egg_obsidian',     name: 'Obsidian Egg',     emoji: '\u{1F95A}', category: 'animal',       sellPrice: 15 },
+  egg_golden:       { id: 'egg_golden',       name: 'Golden Egg',       emoji: '\u{1F95A}', category: 'animal',       sellPrice: 30 },
   milk:             { id: 'milk',             name: 'Milk',             emoji: '\u{1F95B}', category: 'animal',       sellPrice: 8 },
+  milk_rich_cream:  { id: 'milk_rich_cream',  name: 'Rich Cream',       emoji: '\u{1F95B}', category: 'animal',       sellPrice: 14 },
+  milk_alpine:      { id: 'milk_alpine',      name: 'Alpine Milk',      emoji: '\u{1F95B}', category: 'animal',       sellPrice: 22 },
+  milk_starlight:   { id: 'milk_starlight',   name: 'Starlight Milk',   emoji: '\u{1F95B}', category: 'animal',       sellPrice: 45 },
   wool:             { id: 'wool',             name: 'Wool',             emoji: '\u{1F9F6}', category: 'animal',       sellPrice: 10 },
+  wool_patterned:   { id: 'wool_patterned',   name: 'Patterned Wool',   emoji: '\u{1F9F6}', category: 'animal',       sellPrice: 18 },
+  wool_merino:      { id: 'wool_merino',      name: 'Merino Wool',      emoji: '\u{1F9F6}', category: 'animal',       sellPrice: 30 },
+  wool_gilded:      { id: 'wool_gilded',      name: 'Gilded Wool',      emoji: '\u{1F9F6}', category: 'animal',       sellPrice: 55 },
   truffle:          { id: 'truffle',          name: 'Truffle',          emoji: '\u{1F344}', category: 'animal',       sellPrice: 15 },
+  truffle_white:    { id: 'truffle_white',    name: 'White Truffle',    emoji: '\u{1F344}', category: 'animal',       sellPrice: 25 },
+  truffle_alba:     { id: 'truffle_alba',     name: 'Alba Truffle',     emoji: '\u{1F344}', category: 'animal',       sellPrice: 42 },
+  truffle_diamond:  { id: 'truffle_diamond',  name: 'Diamond Truffle',  emoji: '\u{1F344}', category: 'animal',       sellPrice: 80 },
   bread:            { id: 'bread',            name: 'Bread',            emoji: '\u{1F35E}', category: 'manufactured', sellPrice: 20 },
   cheese:           { id: 'cheese',           name: 'Cheese',           emoji: '\u{1F9C0}', category: 'manufactured', sellPrice: 25 },
   pie:              { id: 'pie',              name: 'Pie',              emoji: '\u{1F967}', category: 'manufactured', sellPrice: 35 },
@@ -322,6 +334,16 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   lure_berry:       { id: 'lure_berry',       name: 'Glazed Berry Pastry', emoji: '\u{1F353}', category: 'manufactured', sellPrice: 45 },
   lure_truffle:     { id: 'lure_truffle',     name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', category: 'manufactured', sellPrice: 80 },
   lure_nectar:      { id: 'lure_nectar',      name: 'Celestial Ambrosia',  emoji: '\u{2728}',  category: 'manufactured', sellPrice: 200 },
+  // Crafted from breed-specific products (supply chain integration)
+  golden_shawl:     { id: 'golden_shawl',     name: 'Golden Shawl',     emoji: '\u{1F9E5}', category: 'manufactured', sellPrice: 180 },
+  merino_sweater:   { id: 'merino_sweater',   name: 'Merino Sweater',   emoji: '\u{1F9E5}', category: 'manufactured', sellPrice: 90 },
+  rich_butter:      { id: 'rich_butter',      name: 'Rich Butter',      emoji: '\u{1F9C8}', category: 'manufactured', sellPrice: 35 },
+  alpine_cheese:    { id: 'alpine_cheese',    name: 'Alpine Cheese',    emoji: '\u{1F9C0}', category: 'manufactured', sellPrice: 60 },
+  golden_cake:      { id: 'golden_cake',      name: 'Golden Cake',      emoji: '\u{1F370}', category: 'manufactured', sellPrice: 120 },
+  // Bonus drop items from high-tier breeds
+  horn_shavings:    { id: 'horn_shavings',    name: 'Horn Shavings',    emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 12 },
+  lanolin_balm:     { id: 'lanolin_balm',     name: 'Lanolin Balm',     emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 20 },
+  ancient_coin:     { id: 'ancient_coin',     name: 'Ancient Coin',     emoji: '\u{1FA99}', category: 'raw',          sellPrice: 50 },
 };
 
 // --- Production Buildings ---
@@ -360,6 +382,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
       { id: 'make_savory_fish_pie', name: 'Savory Fish Pie', emoji: '\u{1F967}', inputs: [{ productId: 'fish', qty: 2 }, { productId: 'wheat', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'savory_fish_pie', qty: 1 }, timeSec: 75 },
       { id: 'make_crab_bisque', name: 'Crab Bisque', emoji: '\u{1F352}', inputs: [{ productId: 'fish', qty: 3 }, { productId: 'milk', qty: 1 }], output: { productId: 'crab_bisque', qty: 1 }, timeSec: 90 },
+      // Supply chain: breed-specific egg recipes
+      { id: 'make_golden_cake', name: 'Bake Golden Cake', emoji: '\u{1F370}', inputs: [{ productId: 'egg_golden', qty: 1 }, { productId: 'bread', qty: 1 }], output: { productId: 'golden_cake', qty: 1 }, timeSec: 90 },
       { id: 'make_lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', inputs: [{ productId: 'pie', qty: 1 }, { productId: 'strawberry', qty: 4 }], output: { productId: 'lure_berry', qty: 1 }, timeSec: 150 },
     ],
   },
@@ -367,6 +391,9 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'dairy', name: 'Dairy', emoji: '\u{1F9C0}', queueSlots: 20,
     recipes: [
       { id: 'make_cheese', name: 'Make Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk', qty: 2 }], output: { productId: 'cheese', qty: 1 }, timeSec: 60 },
+      // Supply chain: breed-specific milk recipes
+      { id: 'make_rich_butter', name: 'Churn Rich Butter', emoji: '\u{1F9C8}', inputs: [{ productId: 'milk_rich_cream', qty: 2 }], output: { productId: 'rich_butter', qty: 1 }, timeSec: 75 },
+      { id: 'make_alpine_cheese', name: 'Age Alpine Cheese', emoji: '\u{1F9C0}', inputs: [{ productId: 'milk_alpine', qty: 2 }], output: { productId: 'alpine_cheese', qty: 1 }, timeSec: 90 },
     ],
   },
   loom: {
@@ -374,6 +401,10 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_sweater', name: 'Weave Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool', qty: 3 }], output: { productId: 'sweater', qty: 1 }, timeSec: 60 },
       { id: 'make_yarn', name: 'Spin Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool', qty: 1 }], output: { productId: 'yarn', qty: 2 }, timeSec: 60 },
+      // Supply chain: breed-specific wool recipes
+      { id: 'make_yarn_patterned', name: 'Spin Patterned Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool_patterned', qty: 1 }], output: { productId: 'yarn', qty: 3 }, timeSec: 45 },
+      { id: 'make_merino_sweater', name: 'Weave Merino Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool_merino', qty: 2 }], output: { productId: 'merino_sweater', qty: 1 }, timeSec: 90 },
+      { id: 'make_golden_shawl', name: 'Weave Golden Shawl', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool_gilded', qty: 3 }], output: { productId: 'golden_shawl', qty: 1 }, timeSec: 120 },
     ],
   },
   press: {

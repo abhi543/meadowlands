@@ -258,6 +258,9 @@ export function AnimalPanel() {
             churned_butter: '🧈', yak_wool: '🧶',
             horn_shavings: '🦴', lanolin_balm: '🧴',
             ancient_coin: '🪙', foraged_nut: '🥜', ancient_hoard: '💰',
+            // Crafted from breed-specific products
+            golden_shawl: '🧥', merino_sweater: '🧥', rich_butter: '🧈',
+            alpine_cheese: '🧀', golden_cake: '🎂',
           };
           return (
             <span key={k} className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full text-stone-700 dark:text-stone-300">
