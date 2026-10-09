@@ -12,6 +12,7 @@ import { FarmhandPanel } from '@/components/game/FarmhandPanel';
 import { CodexPanel } from '@/components/game/CodexPanel';
 import { FisheryPanel } from '@/components/game/FisheryPanel';
 import { AutonomousWorkerPanel } from '@/components/game/AutonomousWorkerPanel';
+import { WorkersHubPanel } from '@/components/game/WorkersHubPanel';
 import { EventBanner } from '@/components/game/EventBanner';
 import { GuidePanel } from '@/components/game/GuidePanel';
 import { LivestockMarketPanel } from '@/components/game/LivestockMarketPanel';
@@ -105,12 +106,7 @@ export default function Home() {
           {activeTab === 'orders' && <OrderBoard />}
           {activeTab === 'shop' && <ShopPanel />}
           {activeTab === 'farmhands' && (
-            <div className="space-y-4">
-              <FarmhandPanel />
-              <div className="border-t border-stone-200 dark:border-gray-700 pt-3">
-                <AutonomousWorkerPanel />
-              </div>
-            </div>
+            <WorkersHubPanel />
           )}
           {activeTab === 'fishery' && <FisheryPanel />}
           {activeTab === 'wilderness' && <WildernessPanel />}

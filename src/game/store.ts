@@ -8,9 +8,14 @@ import {
   ORDER_TEMPLATES, xpForLevel, MAX_LEVEL,
   TIER_MAX_CYCLES, ANIMAL_BUY_PRICES, ANIMAL_MARKET_PRICES,
   livestockSellPriceForAnimal, randomMaxCycles,
+  WORKER_REGISTRY, WORKER_MAX_LEVEL, WORKER_DIVISIONS,
+  workerUpgradeCost, workerEffectiveInterval, workerDoubleProcChance,
+  workerTripleProcUnlocked, workerGemProcUnlocked, workerAutoSellBonus,
+  workerHopperBuffer, workerAutoSellPayout, calculateBulkUpgrade,
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
   type WorkerType, type HourlyEventType,
+  type WorkerRole, type WorkerDivision, type BulkMode,
   BIOMES, LURES, TRAIL_ENCOUNTERS, type BiomeId, type LureTypeId,
 } from './data';
 
@@ -68,13 +73,28 @@ export interface FisheryState {
   fishCodex: Record<string, boolean>;
 }
 
-// Autonomous Workers
+// Autonomous Workers (legacy — kept for migration)
 export interface AutonomousWorkerInstance {
   id: string;
   type: WorkerType;
   gearTier: number;
   autoSell: boolean;
   lastProduceTime: number;
+}
+
+// Unified Master Worker (v2.0)
+export interface UnifiedWorkerInstance {
+  role: WorkerRole;
+  isHired: boolean;
+  level: number;           // 1–120
+  autoSell: boolean;       // true = Auto-Sell Mode, false = Hoard Mode
+  lastActionTimestamp: number;
+  bufferCount: number;     // Level 40+ hopper buffer cycles
+  stats: {
+    totalCoinsEarned: number;
+    totalItemsProduced: number;
+    totalGemsEarned: number;
+  };
 }
 
 // Hourly Events
@@ -160,8 +180,11 @@ export interface GameState {
   // Fishery
   fishery: FisheryState;
 
-  // Autonomous Workers
+  // Autonomous Workers (legacy)
   autonomousWorkers: AutonomousWorkerInstance[];
+
+  // Unified Workers (v2.0)
+  unifiedWorkers: Record<WorkerRole, UnifiedWorkerInstance>;
 
   // Hourly Events
   activeEvent: ActiveHourlyEvent | null;
@@ -215,10 +238,16 @@ export interface GameState {
   unlockFisheryZone: (zoneId: WaterZoneId) => void;
   upgradeFishingRod: () => void;
 
-  // Autonomous Workers
+  // Autonomous Workers (legacy)
   hireAutonomousWorker: (type: WorkerType) => void;
   toggleWorkerAutoSell: (workerId: string) => void;
   upgradeWorkerGear: (workerId: string) => void;
+
+  // Unified Workers (v2.0)
+  hireUnifiedWorker: (role: WorkerRole) => void;
+  upgradeUnifiedWorker: (role: WorkerRole, levelsToBuy: number) => void;
+  toggleUnifiedWorkerMode: (role: WorkerRole) => void;
+  bulkUpgradeUnifiedWorker: (role: WorkerRole, mode: BulkMode) => void;
 
   // Outfits
   equipOutfit: (farmhandId: string, outfitId: OutfitId | null) => void;
@@ -281,6 +310,31 @@ const initialAnimals: AnimalInstance[] = [
 ];
 
 const initialOrders = generateOrders(6);
+
+// Create default unified worker instances for all 13 roles
+function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance> {
+  const now = Date.now();
+  const workers: Partial<Record<WorkerRole, UnifiedWorkerInstance>> = {};
+  const allRoles: WorkerRole[] = [
+    'farmer', 'lumberjack', 'fisherman', 'artisan',
+    'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
+    'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
+  ];
+  for (const role of allRoles) {
+    workers[role] = {
+      role,
+      isHired: false,
+      level: 1,
+      autoSell: role === 'merchant', // merchant defaults to auto-sell
+      lastActionTimestamp: now,
+      bufferCount: 0,
+      stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+    };
+  }
+  return workers as Record<WorkerRole, UnifiedWorkerInstance>;
+}
+
+const initialUnifiedWorkers = createDefaultUnifiedWorkers();
 
 // Fish catch logic
 function rollFishCatch(zoneId: WaterZoneId, rodTier: RodTier, fishCodex: Record<string, boolean>): { speciesId: FishSpeciesId; isNew: boolean } | null {
@@ -382,6 +436,7 @@ export const useGameStore = create<GameState>()(
       },
 
       autonomousWorkers: [],
+      unifiedWorkers: initialUnifiedWorkers,
       activeEvent: null,
       lastEventTriggerTime: Date.now(),
 
@@ -1002,6 +1057,64 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // Unified Workers (v2.0)
+      hireUnifiedWorker: (role) => {
+        const state = get();
+        const cfg = WORKER_REGISTRY[role];
+        if (state.level < cfg.unlockLevel) return;
+        if (state.coins < cfg.baseCost) return;
+        const now = Date.now();
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = {
+          role,
+          isHired: true,
+          level: 1,
+          autoSell: role === 'merchant',
+          lastActionTimestamp: now,
+          bufferCount: 0,
+          stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+        };
+        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers });
+      },
+
+      upgradeUnifiedWorker: (role, levelsToBuy) => {
+        const state = get();
+        const worker = state.unifiedWorkers[role];
+        if (!worker || !worker.isHired) return;
+        if (worker.level >= WORKER_MAX_LEVEL) return;
+        const actualLevels = Math.min(levelsToBuy, WORKER_MAX_LEVEL - worker.level);
+        if (actualLevels <= 0) return;
+        // Calculate total cost
+        let totalCost = 0;
+        for (let i = 0; i < actualLevels; i++) {
+          totalCost += workerUpgradeCost(role, worker.level + i);
+        }
+        if (state.coins < totalCost) return;
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = { ...worker, level: worker.level + actualLevels };
+        set({ coins: state.coins - totalCost, unifiedWorkers: newWorkers });
+      },
+
+      toggleUnifiedWorkerMode: (role) => {
+        const state = get();
+        const worker = state.unifiedWorkers[role];
+        if (!worker || !worker.isHired) return;
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = { ...worker, autoSell: !worker.autoSell };
+        set({ unifiedWorkers: newWorkers });
+      },
+
+      bulkUpgradeUnifiedWorker: (role, mode) => {
+        const state = get();
+        const worker = state.unifiedWorkers[role];
+        if (!worker || !worker.isHired) return;
+        const result = calculateBulkUpgrade(role, worker.level, mode, state.coins);
+        if (result.levelsToBuy <= 0) return;
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = { ...worker, level: worker.level + result.levelsToBuy };
+        set({ coins: state.coins - result.totalCost, unifiedWorkers: newWorkers });
+      },
+
       // Outfits
       equipOutfit: (farmhandId, outfitId) => {
         const state = get();
@@ -1289,8 +1402,8 @@ export const useGameStore = create<GameState>()(
         let newFishCodex = { ...state.fishery.fishCodex };
         const newCatchTimestamps = { ...state.fishery.lastCatchTimestamps };
 
-        // Only catch fish if at least one fisherman exists (farmhand or autonomous)
-        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman');
+        // Only catch fish if at least one fisherman exists (farmhand, autonomous, or unified)
+        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman') || (state.unifiedWorkers.fisherman?.isHired);
 
         const rod = ROD_TIERS[state.fishery.rodTier];
         if (hasFisherman) {
@@ -1325,7 +1438,7 @@ export const useGameStore = create<GameState>()(
         }
         } // end if (hasFisherman)
 
-        // Autonomous workers tick
+        // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
         let newCoins = state.coins;
         const newWorkers = state.autonomousWorkers.map(w => {
           const def = WORKERS[w.type];
@@ -1367,6 +1480,86 @@ export const useGameStore = create<GameState>()(
           }
           return w;
         });
+
+        // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
+        let unifiedWorkersModified = false;
+        const updatedUnifiedWorkers = { ...state.unifiedWorkers };
+        for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
+          const worker = updatedUnifiedWorkers[role];
+          if (!worker || !worker.isHired) continue;
+
+          const cfg = WORKER_REGISTRY[role];
+          const effectiveInterval = workerEffectiveInterval(role, worker.level);
+          const elapsed = now - worker.lastActionTimestamp;
+
+          if (elapsed >= effectiveInterval) {
+            const cycles = Math.min(
+              Math.floor(elapsed / effectiveInterval),
+              1 + workerHopperBuffer(worker.level) // cap cycles by hopper buffer
+            );
+            unifiedWorkersModified = true;
+
+            // Update timestamp (keep remainder)
+            const newTimestamp = now - (elapsed % effectiveInterval);
+
+            for (let c = 0; c < cycles; c++) {
+              // ---- Double/Triple Proc ----
+              let multiplier = 1;
+              const doubleChance = workerDoubleProcChance(worker.level);
+              if (Math.random() < doubleChance) {
+                if (workerTripleProcUnlocked(worker.level) && Math.random() < 0.15) {
+                  multiplier = 3; // Triple yield!
+                } else {
+                  multiplier = 2; // Double yield
+                }
+              }
+
+              // ---- Level 60+ Gem Drop (5% per cycle) ----
+              if (workerGemProcUnlocked(worker.level) && Math.random() < 0.05) {
+                newGems += 1;
+                worker.stats.totalGemsEarned += 1;
+              }
+
+              // ---- Dual-Channel Mode Routing ----
+              if (worker.autoSell) {
+                // AUTO-SELL MODE: Direct coin liquidation
+                const payout = workerAutoSellPayout(role, worker.level);
+                const earned = payout * multiplier;
+                newCoins += earned;
+                worker.stats.totalCoinsEarned += earned;
+              } else {
+                // HOARD MODE: Deposit items to storage
+                if (role === 'merchant') {
+                  // Merchant in hoard mode: sells silo crops at premium, keeps items
+                  // Does nothing in hoard mode — items stay in storage for VIP orders
+                } else if (role === 'barn_overseer') {
+                  // Barn Overseer in hoard: auto-fills animal troughs
+                  const feedNeeded = state.animals.filter(a => !a.fed && !a.productReady).length;
+                  if (feedNeeded > 0 && (newSilo.feed || 0) > 0) {
+                    const feedToUse = Math.min(feedNeeded, newSilo.feed);
+                    newSilo.feed = (newSilo.feed || 0) - feedToUse;
+                  }
+                } else if (cfg.hoardItem) {
+                  // Deposit hoard item to barn or silo
+                  const qty = multiplier;
+                  if (cfg.hoardIsSilo) {
+                    newSilo[cfg.hoardItem] = (newSilo[cfg.hoardItem] || 0) + qty;
+                  } else {
+                    newBarn[cfg.hoardItem] = (newBarn[cfg.hoardItem] || 0) + qty;
+                  }
+                  worker.stats.totalItemsProduced += qty;
+                }
+              }
+            }
+
+            // Update the worker instance
+            updatedUnifiedWorkers[role] = {
+              ...worker,
+              lastActionTimestamp: newTimestamp,
+              stats: { ...worker.stats },
+            };
+          }
+        }
 
         // Hourly events: trigger every 60 min
         let newActiveEvent = state.activeEvent;
@@ -1643,6 +1836,7 @@ export const useGameStore = create<GameState>()(
             fishCodex: newFishCodex,
           },
           autonomousWorkers: newWorkers,
+          unifiedWorkers: unifiedWorkersModified ? updatedUnifiedWorkers : state.unifiedWorkers,
           activeEvent: newActiveEvent,
           lastEventTriggerTime: newLastEventTriggerTime,
           activeBreedings: newActiveBreedings,
@@ -1670,6 +1864,7 @@ export const useGameStore = create<GameState>()(
             fishCodex: {},
           },
           autonomousWorkers: [],
+          unifiedWorkers: initialUnifiedWorkers,
           activeEvent: null,
           lastEventTriggerTime: Date.now(),
           notifications: [],
@@ -1695,6 +1890,7 @@ export const useGameStore = create<GameState>()(
         orders: state.orders, farmhands: state.farmhands, codex: state.codex,
         fishery: state.fishery,
         autonomousWorkers: state.autonomousWorkers,
+        unifiedWorkers: state.unifiedWorkers,
         activeEvent: state.activeEvent,
         lastEventTriggerTime: state.lastEventTriggerTime,
         notifications: state.notifications,
@@ -1734,6 +1930,7 @@ export const useGameStore = create<GameState>()(
 
         // Migration: add missing state fields
         if (!merged.autonomousWorkers) merged.autonomousWorkers = [];
+        if (!merged.unifiedWorkers) merged.unifiedWorkers = createDefaultUnifiedWorkers();
         if (!merged.activeEvent) merged.activeEvent = null;
         if (!merged.lastEventTriggerTime) merged.lastEventTriggerTime = Date.now();
         if (!merged.notifications) merged.notifications = [];

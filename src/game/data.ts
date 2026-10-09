@@ -703,3 +703,284 @@ export function livestockSellPriceForAnimal(species: AnimalSpecies, tier: Tier, 
 export function livestockBuyPrice(species: AnimalSpecies, tier: Tier): number {
   return Math.floor(ANIMAL_BUY_PRICES[species] * TIER_MULTIPLIER[tier]);
 }
+
+// ============================================================
+// Unified Master Worker Ecosystem (v2.0) — 13 Workers, 120 Levels
+// ============================================================
+
+export type WorkerDivision = 'farmhand' | 'autonomous' | 'utility';
+
+export type WorkerRole =
+  // Division A: Farmhands (Site Buffers)
+  | 'farmer' | 'lumberjack' | 'fisherman' | 'artisan'
+  // Division B: Autonomous Specialists (Passive Harvesters)
+  | 'auto_fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector'
+  // Division C: Utility Specialists (Converters)
+  | 'alchemist' | 'barn_overseer' | 'cellar_ager' | 'tinkerer';
+
+export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: string; roles: WorkerRole[] }> = {
+  farmhand: {
+    label: 'Field Crew',
+    emoji: '\u{1F33E}',
+    roles: ['farmer', 'lumberjack', 'fisherman', 'artisan'],
+  },
+  autonomous: {
+    label: 'Harvesters',
+    emoji: '\u{1F41D}',
+    roles: ['auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector'],
+  },
+  utility: {
+    label: 'Specialists',
+    emoji: '\u{2699}',
+    roles: ['alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer'],
+  },
+};
+
+export interface WorkerRegistryDef {
+  role: WorkerRole;
+  name: string;
+  emoji: string;
+  description: string;
+  division: WorkerDivision;
+  baseCost: number;
+  baseIntervalMs: number;
+  exponent: number;      // cost scaling exponent (1.068 – 1.082)
+  unlockLevel: number;
+  // Auto-Sell payout (coins per cycle at base)
+  autoSellPayout: number;
+  // Hoard mode deposit
+  hoardItem?: string;      // item ID deposited to barn/silo
+  hoardItemEmoji?: string;
+  hoardIsSilo?: boolean;   // true = silo, false = barn
+  // Secondary/rare item (for higher-level procs)
+  rareItem?: string;
+  rareItemEmoji?: string;
+  rareItemSellPrice?: number;
+}
+
+export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
+  // --- Division A: Farmhands ---
+  farmer: {
+    role: 'farmer', name: 'Field Hand', emoji: '\u{1F468}\u200D\u{1F33E}',
+    description: 'Accelerates crop timers and auto-replants', division: 'farmhand',
+    baseCost: 50, baseIntervalMs: 30000, exponent: 1.068, unlockLevel: 1,
+    autoSellPayout: 5, hoardItem: 'wheat', hoardItemEmoji: '\u{1F33E}', hoardIsSilo: true,
+  },
+  lumberjack: {
+    role: 'lumberjack', name: 'Timberjack', emoji: '\u{1FA93}',
+    description: 'Harvests timber from perimeter orchards', division: 'farmhand',
+    baseCost: 150, baseIntervalMs: 45000, exponent: 1.070, unlockLevel: 4,
+    autoSellPayout: 6, hoardItem: 'softwood', hoardItemEmoji: '\u{1FAB5}', hoardIsSilo: false,
+  },
+  fisherman: {
+    role: 'fisherman', name: 'Dock Master', emoji: '\u{1F3A3}',
+    description: 'Drives active dock catches with reeling bonus', division: 'farmhand',
+    baseCost: 300, baseIntervalMs: 45000, exponent: 1.071, unlockLevel: 6,
+    autoSellPayout: 15, hoardItem: 'fish', hoardItemEmoji: '\u{1F41F}', hoardIsSilo: false,
+    rareItem: 'trout', rareItemEmoji: '\u{1F41F}', rareItemSellPrice: 35,
+  },
+  artisan: {
+    role: 'artisan', name: 'Guild Craftsman', emoji: '\u{1F9D1}\u200D\u{1F3A8}',
+    description: 'Cuts manufacturing duration at production buildings', division: 'farmhand',
+    baseCost: 800, baseIntervalMs: 60000, exponent: 1.073, unlockLevel: 10,
+    autoSellPayout: 20, hoardItem: 'bread', hoardItemEmoji: '\u{1F35E}', hoardIsSilo: false,
+  },
+  // --- Division B: Autonomous Specialists ---
+  auto_fisherman: {
+    role: 'auto_fisherman', name: 'Automated Trawler', emoji: '\u{1F3A3}',
+    description: 'Passively trawls for fish on background timer', division: 'autonomous',
+    baseCost: 500, baseIntervalMs: 60000, exponent: 1.072, unlockLevel: 8,
+    autoSellPayout: 15, hoardItem: 'fish', hoardItemEmoji: '\u{1F41F}', hoardIsSilo: false,
+    rareItem: 'trout', rareItemEmoji: '\u{1F41F}', rareItemSellPrice: 35,
+  },
+  beekeeper: {
+    role: 'beekeeper', name: 'Apiary Tender', emoji: '\u{1F36F}',
+    description: 'Tends hives for honeycomb and royal jelly', division: 'autonomous',
+    baseCost: 1000, baseIntervalMs: 90000, exponent: 1.074, unlockLevel: 12,
+    autoSellPayout: 25, hoardItem: 'honey_comb', hoardItemEmoji: '\u{1F36F}', hoardIsSilo: false,
+    rareItem: 'honey', rareItemEmoji: '\u{1F36F}', rareItemSellPrice: 60,
+  },
+  forager: {
+    role: 'forager', name: 'Wilderness Scout', emoji: '\u{1F347}',
+    description: 'Gathers wild berries and forest herbs', division: 'autonomous',
+    baseCost: 2200, baseIntervalMs: 120000, exponent: 1.075, unlockLevel: 16,
+    autoSellPayout: 20, hoardItem: 'wild_berries', hoardItemEmoji: '\u{1F347}', hoardIsSilo: true,
+    rareItem: 'forest_herbs', rareItemEmoji: '\u{1F33F}', rareItemSellPrice: 45,
+  },
+  merchant: {
+    role: 'merchant', name: 'Roadside Peddler', emoji: '\u{1F4B0}',
+    description: 'Auto-sells surplus silo crops at +20% premium', division: 'autonomous',
+    baseCost: 5000, baseIntervalMs: 180000, exponent: 1.078, unlockLevel: 22,
+    autoSellPayout: 30,
+  },
+  prospector: {
+    role: 'prospector', name: 'Quarry Miner', emoji: '\u{26CF}',
+    description: 'Digs for iron ore and gold nuggets', division: 'autonomous',
+    baseCost: 10000, baseIntervalMs: 300000, exponent: 1.080, unlockLevel: 28,
+    autoSellPayout: 40, hoardItem: 'gold_nugget', hoardItemEmoji: '\u2B50', hoardIsSilo: true,
+    rareItem: 'iron_ore', rareItemEmoji: '\u26CF', rareItemSellPrice: 120,
+  },
+  // --- Division C: Utility Specialists ---
+  alchemist: {
+    role: 'alchemist', name: 'Botanical Synthesizer', emoji: '\u{2697}',
+    description: 'Brews growth elixirs and super feed', division: 'utility',
+    baseCost: 3500, baseIntervalMs: 150000, exponent: 1.076, unlockLevel: 18,
+    autoSellPayout: 85, hoardItem: 'growth_elixir', hoardItemEmoji: '\u{1F9EA}', hoardIsSilo: false,
+  },
+  barn_overseer: {
+    role: 'barn_overseer', name: 'Quartermaster', emoji: '\u{1F4E6}',
+    description: 'Compacts items into crates and auto-fills troughs', division: 'utility',
+    baseCost: 4200, baseIntervalMs: 120000, exponent: 1.076, unlockLevel: 20,
+    autoSellPayout: 40,
+  },
+  cellar_ager: {
+    role: 'cellar_ager', name: 'Vintage Sommelier', emoji: '\u{1F377}',
+    description: 'Ages items for 3x–10x value multiplier', division: 'utility',
+    baseCost: 7500, baseIntervalMs: 240000, exponent: 1.078, unlockLevel: 25,
+    autoSellPayout: 75, hoardItem: 'vintage_reserve', hoardItemEmoji: '\u{1F377}', hoardIsSilo: false,
+  },
+  tinkerer: {
+    role: 'tinkerer', name: 'Machinist', emoji: '\u{1F527}',
+    description: 'Overclocks buildings 2x and salvages parts', division: 'utility',
+    baseCost: 12500, baseIntervalMs: 300000, exponent: 1.082, unlockLevel: 30,
+    autoSellPayout: 50, hoardItem: 'nails', hoardItemEmoji: '\u{1F529}', hoardIsSilo: false,
+  },
+};
+
+// --- 120-Level Progression Math ---
+
+export const WORKER_MAX_LEVEL = 120;
+
+/** Cost to upgrade from level L to L+1 */
+export function workerUpgradeCost(role: WorkerRole, currentLevel: number): number {
+  if (currentLevel >= WORKER_MAX_LEVEL) return 0;
+  const cfg = WORKER_REGISTRY[role];
+  const linearDamp = 1 + currentLevel / 12;
+  return Math.floor(cfg.baseCost * Math.pow(cfg.exponent, currentLevel - 1) * linearDamp);
+}
+
+/** Speed multiplier: asymptotically approaches 0.25× at level 120 */
+export function workerSpeedMultiplier(level: number): number {
+  const progressRatio = Math.max(0, Math.min(1, (WORKER_MAX_LEVEL - level) / (WORKER_MAX_LEVEL - 1)));
+  return 0.25 + 0.75 * Math.pow(progressRatio, 1.15);
+}
+
+/** Overdrive bonus: additional -20% at level 120 */
+export function workerOverdrive(level: number): number {
+  return level >= WORKER_MAX_LEVEL ? 0.8 : 1.0;
+}
+
+/** Effective interval in ms for a worker at given level */
+export function workerEffectiveInterval(role: WorkerRole, level: number): number {
+  const cfg = WORKER_REGISTRY[role];
+  return Math.floor(cfg.baseIntervalMs * workerSpeedMultiplier(level) * workerOverdrive(level));
+}
+
+/** Double proc chance: 0% at L1, ~60% at L120 */
+export function workerDoubleProcChance(level: number): number {
+  return Math.min(0.60, (level - 1) / 200);
+}
+
+/** Triple proc unlocked at level 100+ (15% chance to upgrade double→triple) */
+export function workerTripleProcUnlocked(level: number): boolean {
+  return level >= 100;
+}
+
+/** Gem proc unlocked at level 60+ (5% chance per cycle) */
+export function workerGemProcUnlocked(level: number): boolean {
+  return level >= 60;
+}
+
+/** Auto-sell bonus: +10% at level 20+ (Apprentice rank) */
+export function workerAutoSellBonus(level: number): number {
+  return level >= 20 ? 1.10 : 1.0;
+}
+
+/** Hopper buffer capacity: 0 below level 40, up to 5 at level 59+ */
+export function workerHopperBuffer(level: number): number {
+  if (level < 40) return 0;
+  if (level < 59) return Math.min(5, Math.floor((level - 40) / 4) + 1);
+  return 5;
+}
+
+/** District Aura: +10% speed to adjacent buildings at level 80+ */
+export function workerDistrictAura(level: number): boolean {
+  return level >= 80;
+}
+
+// --- Milestone Ranks ---
+
+export interface MilestoneRank {
+  minLevel: number;
+  maxLevel: number;
+  title: string;
+  emoji: string;
+  color: string;         // tailwind text color class
+  borderColor: string;   // tailwind border color class
+  bgColor: string;       // tailwind bg color class
+}
+
+export const MILESTONE_RANKS: MilestoneRank[] = [
+  { minLevel: 1,   maxLevel: 19,  title: 'Novice',      emoji: '\u{1F9F1}', color: 'text-stone-500 dark:text-stone-400',       borderColor: 'border-stone-300 dark:border-stone-600',       bgColor: 'bg-stone-50 dark:bg-stone-900/30' },
+  { minLevel: 20,  maxLevel: 39,  title: 'Apprentice',  emoji: '\u{1FA91}', color: 'text-amber-600 dark:text-amber-400',       borderColor: 'border-amber-300 dark:border-amber-700',       bgColor: 'bg-amber-50 dark:bg-amber-900/20' },
+  { minLevel: 40,  maxLevel: 59,  title: 'Journeyman',  emoji: '\u{1F6E1}', color: 'text-slate-500 dark:text-slate-400',       borderColor: 'border-slate-300 dark:border-slate-600',       bgColor: 'bg-slate-50 dark:bg-slate-900/30' },
+  { minLevel: 60,  maxLevel: 79,  title: 'Craftsman',   emoji: '\u2694',    color: 'text-blue-600 dark:text-blue-400',         borderColor: 'border-blue-300 dark:border-blue-700',         bgColor: 'bg-blue-50 dark:bg-blue-900/20' },
+  { minLevel: 80,  maxLevel: 99,  title: 'Expert',      emoji: '\u{1F3F5}', color: 'text-purple-600 dark:text-purple-400',     borderColor: 'border-purple-300 dark:border-purple-700',     bgColor: 'bg-purple-50 dark:bg-purple-900/20' },
+  { minLevel: 100, maxLevel: 119, title: 'Grandmaster', emoji: '\u{1F4A0}', color: 'text-rose-600 dark:text-rose-400',         borderColor: 'border-rose-300 dark:border-rose-700',         bgColor: 'bg-rose-50 dark:bg-rose-900/20' },
+  { minLevel: 120, maxLevel: 120, title: 'Mythic',      emoji: '\u{1F52E}', color: 'text-fuchsia-500 dark:text-fuchsia-300',   borderColor: 'border-fuchsia-400 dark:border-fuchsia-600',   bgColor: 'bg-fuchsia-50 dark:bg-fuchsia-900/20' },
+];
+
+export function getMilestoneRank(level: number): MilestoneRank {
+  for (const rank of MILESTONE_RANKS) {
+    if (level >= rank.minLevel && level <= rank.maxLevel) return rank;
+  }
+  return MILESTONE_RANKS[0];
+}
+
+// --- Bulk Upgrade Engine ---
+
+export type BulkMode = 'x1' | 'x10' | 'MAX';
+
+export interface BulkUpgradeResult {
+  levelsToBuy: number;
+  totalCost: number;
+}
+
+export function calculateBulkUpgrade(role: WorkerRole, currentLevel: number, mode: BulkMode, currentCoins: number): BulkUpgradeResult {
+  if (currentLevel >= WORKER_MAX_LEVEL) return { levelsToBuy: 0, totalCost: 0 };
+
+  if (mode === 'x1') {
+    const cost = workerUpgradeCost(role, currentLevel);
+    return currentCoins >= cost ? { levelsToBuy: 1, totalCost: cost } : { levelsToBuy: 0, totalCost: cost };
+  }
+
+  if (mode === 'x10') {
+    const maxLevels = Math.min(10, WORKER_MAX_LEVEL - currentLevel);
+    let totalCost = 0;
+    let affordable = 0;
+    for (let i = 0; i < maxLevels; i++) {
+      const cost = workerUpgradeCost(role, currentLevel + i);
+      if (totalCost + cost > currentCoins) break;
+      totalCost += cost;
+      affordable++;
+    }
+    return { levelsToBuy: affordable, totalCost };
+  }
+
+  // MAX mode
+  let levelsToBuy = 0;
+  let totalCost = 0;
+  while (currentLevel + levelsToBuy < WORKER_MAX_LEVEL) {
+    const nextCost = workerUpgradeCost(role, currentLevel + levelsToBuy);
+    if (totalCost + nextCost > currentCoins) break;
+    totalCost += nextCost;
+    levelsToBuy++;
+  }
+  return { levelsToBuy, totalCost };
+}
+
+/** Get the total payout for a worker in auto-sell mode (per cycle) */
+export function workerAutoSellPayout(role: WorkerRole, level: number): number {
+  const cfg = WORKER_REGISTRY[role];
+  return Math.round(cfg.autoSellPayout * workerAutoSellBonus(level));
+}
