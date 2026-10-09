@@ -1,0 +1,506 @@
+     1→'use client';
+     2→
+     3→import { useGameStore } from '@/game/store';
+     4→import {
+     5→  PARCEL_CONFIGS, PARCEL_ORDER, FACILITY_FOOTPRINTS,
+     6→  ESTATE_AURAS, getEstateAura,
+     7→  CROPS, PRODUCTS,
+     8→  type ParcelId, type ParcelState, type DebrisEntity,
+     9→} from '@/game/data';
+    10→import { useState } from 'react';
+    11→
+    12→const DEBRIS_EMOJI: Record<DebrisEntity['type'], string> = {
+    13→  boulder: '\u{1FAA8}',
+    14→  stump: '\u{1F332}',
+    15→  brambles: '\u{1F33F}',
+    16→};
+    17→
+    18→const DEBRIS_LABEL: Record<DebrisEntity['type'], string> = {
+    19→  boulder: 'Boulder',
+    20→  stump: 'Tree Stump',
+    21→  brambles: 'Brambles',
+    22→};
+    23→
+    24→function formatDuration(ms: number): string {
+    25→  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+    26→  if (totalSec < 60) return `${totalSec}s`;
+    27→  const min = Math.floor(totalSec / 60);
+    28→  const sec = totalSec % 60;
+    29→  if (min < 60) return `${min}m ${sec}s`;
+    30→  const hr = Math.floor(min / 60);
+    31→  const rm = min % 60;
+    32→  return `${hr}h ${rm}m`;
+    33→}
+    34→
+    35→function formatCoin(n: number): string {
+    36→  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    37→  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    38→  return n.toLocaleString();
+    39→}
+    40→
+    41→export function TerritoryMapView() {
+    42→  const {
+    43→    parcels, coins, gems, level,
+    44→    activeFreightContract, freightContractRefreshAt, currentEstateAura,
+    45→    silo, barn,
+    46→    unlockParcel, startClearingDebris,
+    47→    acceptFreightContract, fulfillFreightContract, failFreightContract, refreshFreightContract,
+    48→  } = useGameStore();
+    49→
+    50→  const [selectedParcel, setSelectedParcel] = useState<ParcelId | null>(null);
+    51→  const [showFreightPanel, setShowFreightPanel] = useState(false);
+    52→
+    53→  const parcelsClaimed = Object.values(parcels).filter(p => p.isUnlocked).length;
+    54→  const estateAura = currentEstateAura || getEstateAura(parcelsClaimed);
+    55→
+    56→  // Freight contract helpers
+    57→  const portUnlocked = parcels.parcel_port_basin?.isUnlocked;
+    58→  const contract = activeFreightContract;
+    59→  const canFulfillContract = contract && contract.acceptedAt && !contract.completed && (() => {
+    60→    for (const req of contract.requirements) {
+    61→      const isCrop = req.itemId in CROPS || req.itemId === 'feed' || req.itemId === 'cotton' || req.itemId === 'honey_comb' || req.itemId === 'wild_berries' || req.itemId === 'gold_nugget';
+    62→      const storage = isCrop ? silo : barn;
+    63→      if ((storage[req.itemId] || 0) < req.qty) return false;
+    64→    }
+    65→    return true;
+    66→  })();
+    67→
+    68→  const contractExpiresIn = contract?.acceptedAt
+    69→    ? Math.max(0, contract.expiresAt - Date.now())
+    70→    : 0;
+    71→
+    72→  const now = Date.now();
+    73→
+    74→  return (
+    75→    <div className="space-y-3">
+    76→      {/* Estate Aura Banner */}
+    77→      <div className="bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 dark:from-amber-800 dark:via-orange-800 dark:to-red-800 rounded-xl p-3 text-white shadow-lg">
+    78→        <div className="flex items-center gap-2">
+    79→          <span className="text-2xl">{estateAura.emoji}</span>
+    80→          <div className="flex-1">
+    81→            <div className="font-bold text-sm">{estateAura.title}</div>
+    82→            <div className="text-xs opacity-90">{estateAura.effect}</div>
+    83→          </div>
+    84→          <div className="bg-white/20 backdrop-blur-sm rounded-lg px-2 py-1 text-xs font-bold">
+    85→            {parcelsClaimed}/{PARCEL_ORDER.length} Parcels
+    86→          </div>
+    87→        </div>
+    88→      </div>
+    89→
+    90→      {/* Territory Map Grid */}
+    91→      <div className="bg-stone-100 dark:bg-gray-900 rounded-xl p-2 border border-stone-200 dark:border-gray-700">
+    92→        <h3 className="font-bold text-sm text-stone-700 dark:text-gray-200 mb-2 flex items-center gap-2">
+    93→          {'\u{1F5FA}'} Territory Map
+    94→        </h3>
+    95→        <div className="grid grid-cols-3 gap-2">
+    96→          {PARCEL_ORDER.map(parcelId => {
+    97→            const config = PARCEL_CONFIGS[parcelId];
+    98→            const parcel = parcels[parcelId];
+    99→            const isUnlocked = parcel?.isUnlocked;
+   100→            const canUnlock = !isUnlocked && level >= config.levelReq && coins >= config.coinCost;
+   101→            const isSelected = selectedParcel === parcelId;
+   102→            const debrisCleared = parcel?.debris.filter(d => d.cleared).length || 0;
+   103→            const debrisTotal = parcel?.debris.length || 0;
+   104→            const allDebrisCleared = debrisTotal === 0 || debrisCleared === debrisTotal;
+   105→
+   106→            return (
+   107→              <button
+   108→                key={parcelId}
+   109→                onClick={() => setSelectedParcel(isSelected ? null : parcelId)}
+   110→                className={`relative rounded-xl p-2.5 border-2 transition-all duration-200 text-left min-h-[100px] ${
+   111→                  isUnlocked
+   112→                    ? `bg-gradient-to-br ${config.bgGradient} ${config.color} border-stone-300 dark:border-gray-600 hover:border-stone-400 dark:hover:border-gray-500`
+   113→                    : canUnlock
+   114→                      ? 'bg-stone-200/60 dark:bg-gray-800/60 border-amber-400 dark:border-amber-600 hover:border-amber-500 cursor-pointer'
+   115→                      : 'bg-stone-300/40 dark:bg-gray-800/30 border-stone-300 dark:border-gray-700 opacity-70'
+   116→                } ${isSelected ? 'ring-2 ring-amber-400 scale-[1.02]' : ''}`}
+   117→              >
+   118→                {/* Cloud overlay for locked parcels */}
+   119→                {!isUnlocked && (
+   120→                  <div className="absolute inset-0 bg-stone-400/20 dark:bg-gray-600/30 rounded-xl flex items-center justify-center">
+   121→                    <span className="text-3xl opacity-50">{'\u{2601}'}</span>
+   122→                  </div>
+   123→                )}
+   124→
+   125→                <div className="relative z-10">
+   126→                  <div className="flex items-center gap-1.5 mb-1">
+   127→                    <span className="text-lg">{isUnlocked ? config.emoji : '\u{1F512}'}</span>
+   128→                    <span className={`text-[11px] font-bold leading-tight ${isUnlocked ? config.color : 'text-stone-500 dark:text-gray-400'}`}>
+   129→                      {config.name}
+   130→                    </span>
+   131→                  </div>
+   132→
+   133→                  {isUnlocked ? (
+   134→                    <div className="space-y-0.5">
+   135→                      <div className="text-[10px] text-stone-600 dark:text-gray-400 italic">{config.uniqueFeature}</div>
+   136→                      {debrisTotal > 0 && (
+   137→                        <div className={`text-[10px] font-medium ${allDebrisCleared ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+   138→                          {'\u{1F9F9}'} Debris: {debrisCleared}/{debrisTotal}
+   139→                          {allDebrisCleared && ' \u2705'}
+   140→                        </div>
+   141→                      )}
+   142→                    </div>
+   143→                  ) : (
+   144→                    <div className="space-y-0.5">
+   145→                      <div className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">
+   146→                        Lv {config.levelReq} {'\u2022'} {formatCoin(config.coinCost)} {'\u{1F4B0}'}
+   147→                      </div>
+   148→                      {level < config.levelReq ? (
+   149→                        <div className="text-[9px] text-red-500 dark:text-red-400">Need Level {config.levelReq}</div>
+   150→                      ) : coins < config.coinCost ? (
+   151→                        <div className="text-[9px] text-red-500 dark:text-red-400">Need {formatCoin(config.coinCost)} coins</div>
+   152→                      ) : (
+   153→                        <div className="text-[9px] text-green-600 dark:text-green-400 font-medium">Ready to unlock!</div>
+   154→                      )}
+   155→                    </div>
+   156→                  )}
+   157→                </div>
+   158→              </button>
+   159→            );
+   160→          })}
+   161→        </div>
+   162→      </div>
+   163→
+   164→      {/* Selected Parcel Detail */}
+   165→      {selectedParcel && (() => {
+   166→        const parcelId = selectedParcel;
+   167→        const config = PARCEL_CONFIGS[parcelId];
+   168→        const parcel = parcels[parcelId];
+   169→        const isUnlocked = parcel?.isUnlocked;
+   170→        const canUnlock = !isUnlocked && level >= config.levelReq && coins >= config.coinCost;
+   171→
+   172→        return (
+   173→          <div className="bg-white dark:bg-gray-900 rounded-xl border-2 border-stone-200 dark:border-gray-700 overflow-hidden">
+   174→            {/* Header */}
+   175→            <div className={`bg-gradient-to-r ${config.bgGradient} dark:from-gray-800 dark:to-gray-800 px-4 py-3 border-b border-stone-200 dark:border-gray-700`}>
+   176→              <div className="flex items-center justify-between">
+   177→                <div className="flex items-center gap-2">
+   178→                  <span className="text-3xl">{config.emoji}</span>
+   179→                  <div>
+   180→                    <h3 className={`font-bold text-lg ${config.color}`}>{config.name}</h3>
+   181→                    <p className={`text-xs text-stone-600 dark:text-gray-400`}>
+   182→                      {isUnlocked ? 'Unlocked' : `Level ${config.levelReq} Required`}
+   183→                    </p>
+   184→                  </div>
+   185→                </div>
+   186→                {!isUnlocked && canUnlock && (
+   187→                  <button
+   188→                    onClick={() => { unlockParcel(parcelId); }}
+   189→                    className="px-4 py-2 text-sm font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-lg active:scale-95"
+   190→                  >
+   191→                    {'\u{1F513}'} Unlock ({formatCoin(config.coinCost)} {'\u{1F4B0}'})
+   192→                  </button>
+   193→                )}
+   194→              </div>
+   195→            </div>
+   196→
+   197→            <div className="p-3 space-y-3">
+   198→              {/* Unique Feature */}
+   199→              <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2.5 border border-amber-200 dark:border-amber-800">
+   200→                <div className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1">{'\u{2728}'} Unique Land Feature</div>
+   201→                <div className="text-xs text-amber-600 dark:text-amber-400">{config.uniqueFeature}</div>
+   202→              </div>
+   203→
+   204→              {/* Locked Capability */}
+   205→              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-2.5 border border-blue-200 dark:border-blue-800">
+   206→                <div className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">{'\u{1F511}'} Unlocks</div>
+   207→                <div className="text-xs text-blue-600 dark:text-blue-400">{config.lockedCapability}</div>
+   208→              </div>
+   209→
+   210→              {/* Debris Clearing (if unlocked) */}
+   211→              {isUnlocked && parcel.debris.length > 0 && (
+   212→                <div>
+   213→                  <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider mb-2">{'\u{1F9F9}'} Debris Clearing</h4>
+   214→                  <div className="space-y-1.5">
+   215→                    {parcel.debris.map(debris => {
+   216→                      const isClearing = debris.clearingStartedAt !== null && !debris.cleared;
+   217→                      const progress = isClearing
+   218→                        ? Math.min(1, (now - (debris.clearingStartedAt || 0)) / debris.clearDurationMs)
+   219→                        : 0;
+   220→                      const remaining = isClearing
+   221→                        ? Math.max(0, debris.clearDurationMs - (now - (debris.clearingStartedAt || 0)))
+   222→                        : 0;
+   223→
+   224→                      return (
+   225→                        <div
+   226→                          key={debris.id}
+   227→                          className={`flex items-center gap-2 rounded-lg p-2 border ${
+   228→                            debris.cleared
+   229→                              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+   230→                              : isClearing
+   231→                                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+   232→                                : 'bg-stone-50 dark:bg-stone-900/30 border-stone-100 dark:border-gray-800'
+   233→                          }`}
+   234→                        >
+   235→                          <span className="text-lg">{DEBRIS_EMOJI[debris.type]}</span>
+   236→                          <div className="flex-1 min-w-0">
+   237→                            <div className="text-xs font-medium text-stone-700 dark:text-gray-300">
+   238→                              {DEBRIS_LABEL[debris.type]}
+   239→                              {debris.cleared && ' \u2705'}
+   240→                            </div>
+   241→                            {isClearing && (
+   242→                              <div className="mt-1">
+   243→                                <div className="w-full h-2 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+   244→                                  <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${progress * 100}%` }} />
+   245→                                </div>
+   246→                                <div className="text-[10px] text-stone-400 dark:text-gray-500 mt-0.5">
+   247→                                  Clearing: {formatDuration(remaining)} remaining
+   248→                                </div>
+   249→                              </div>
+   250→                            )}
+   251→                            {!debris.cleared && !isClearing && (
+   252→                              <div className="text-[10px] text-stone-400 dark:text-gray-500">
+   253→                                Cost: {formatCoin(debris.clearCost)} {'\u{1F4B0}'} {'\u2022'} {formatDuration(debris.clearDurationMs)}
+   254→                              </div>
+   255→                            )}
+   256→                          </div>
+   257→                          {!debris.cleared && !isClearing && (
+   258→                            <button
+   259→                              onClick={() => startClearingDebris(parcelId, debris.id)}
+   260→                              disabled={coins < debris.clearCost}
+   261→                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors shrink-0"
+   262→                            >
+   263→                              Clear
+   264→                            </button>
+   265→                          )}
+   266→                        </div>
+   267→                      );
+   268→                    })}
+   269→                  </div>
+   270→                </div>
+   271→              )}
+   272→
+   273→              {/* Facility Footprints applicable to this parcel */}
+   274→              <div>
+   275→                <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider mb-2">{'\u{1F3D7}'} Facilities</h4>
+   276→                <div className="space-y-1.5">
+   277→                  {FACILITY_FOOTPRINTS.map(facility => {
+   278→                    const isApplicable = facility.requiredZone === parcelId || (facility.requiredZone === 'any_cleared' && isUnlocked);
+   279→                    if (!isApplicable) return null;
+   280→                    const canPlace = isUnlocked && (parcel.debris.every(d => d.cleared) || parcel.debris.length === 0);
+   281→
+   282→                    return (
+   283→                      <div key={facility.id} className={`flex items-center gap-2 rounded-lg p-2 border ${canPlace ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' : 'bg-stone-50 dark:bg-stone-900/30 border-stone-100 dark:border-gray-800'}`}>
+   284→                        <span className="text-lg">{facility.emoji}</span>
+   285→                        <div className="flex-1 min-w-0">
+   286→                          <div className="text-xs font-medium text-stone-700 dark:text-gray-300">{facility.name}</div>
+   287→                          <div className="text-[10px] text-stone-500 dark:text-gray-400">
+   288→                            {facility.tiles.rows}x{facility.tiles.cols} tiles {'\u2022'} {facility.description}
+   289→                          </div>
+   290→                        </div>
+   291→                        {canPlace ? (
+   292→                          <span className="text-xs text-green-600 dark:text-green-400 font-medium">{'\u2705'} Ready</span>
+   293→                        ) : (
+   294→                          <span className="text-[10px] text-stone-400 dark:text-gray-500">{'\u{1F512}'}</span>
+   295→                        )}
+   296→                      </div>
+   297→                    );
+   298→                  })}
+   299→                  {FACILITY_FOOTPRINTS.filter(f => f.requiredZone === parcelId || (f.requiredZone === 'any_cleared' && isUnlocked)).length === 0 && (
+   300→                    <div className="text-xs text-stone-400 dark:text-gray-500 italic">No facilities require this zone specifically.</div>
+   301→                  )}
+   302→                </div>
+   303→              </div>
+   304→            </div>
+   305→          </div>
+   306→        );
+   307→      })()}
+   308→
+   309→      {/* Estate Aura Progression */}
+   310→      <div className="bg-white dark:bg-gray-900 rounded-xl border border-stone-200 dark:border-gray-700 p-3">
+   311→        <h3 className="font-bold text-sm text-stone-800 dark:text-gray-100 mb-2 flex items-center gap-2">
+   312→          {'\u{1F3F0}'} Estate Prestige Milestones
+   313→        </h3>
+   314→        <div className="space-y-1.5">
+   315→          {ESTATE_AURAS.map(aura => {
+   316→            const isReached = parcelsClaimed >= aura.parcelsClaimed;
+   317→            const isNext = !isReached && parcelsClaimed < aura.parcelsClaimed && (ESTATE_AURAS.findIndex(a => a.parcelsClaimed === aura.parcelsClaimed) === 0 || parcelsClaimed >= ESTATE_AURAS[ESTATE_AURAS.findIndex(a => a.parcelsClaimed === aura.parcelsClaimed) - 1]?.parcelsClaimed);
+   318→
+   319→            return (
+   320→              <div key={aura.parcelsClaimed} className={`flex items-center gap-2 rounded-lg p-2 border ${
+   321→                isReached
+   322→                  ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+   323→                  : isNext
+   324→                    ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+   325→                    : 'bg-stone-50 dark:bg-stone-900/30 border-stone-100 dark:border-gray-800'
+   326→              }`}>
+   327→                <span className="text-lg">{isReached ? aura.emoji : '\u{1F512}'}</span>
+   328→                <div className="flex-1 min-w-0">
+   329→                  <div className="text-xs font-medium text-stone-700 dark:text-gray-300">
+   330→                    {aura.parcelsClaimed} Parcel{aura.parcelsClaimed > 1 ? 's' : ''}: {aura.title}
+   331→                  </div>
+   332→                  <div className="text-[10px] text-stone-500 dark:text-gray-400">{aura.effect}</div>
+   333→                </div>
+   334→                {isReached ? (
+   335→                  <span className="text-green-600 dark:text-green-400 text-xs font-bold">{'\u2705'}</span>
+   336→                ) : isNext ? (
+   337→                  <span className="text-amber-600 dark:text-amber-400 text-[10px] font-medium">Next</span>
+   338→                ) : null}
+   339→              </div>
+   340→            );
+   341→          })}
+   342→        </div>
+   343→      </div>
+   344→
+   345→      {/* Freight Contract Section */}
+   346→      <div className="bg-white dark:bg-gray-900 rounded-xl border border-stone-200 dark:border-gray-700 overflow-hidden">
+   347→        <div
+   348→          className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-800 dark:to-indigo-800 px-4 py-3 border-b border-blue-200 dark:border-blue-700 cursor-pointer"
+   349→          onClick={() => setShowFreightPanel(!showFreightPanel)}
+   350→        >
+   351→          <div className="flex items-center justify-between text-white">
+   352→            <div className="flex items-center gap-2">
+   353→              <span className="text-2xl">{'\u{1F6A2}'}</span>
+   354→              <div>
+   355→                <h3 className="font-bold text-lg">Cargo Freight Port</h3>
+   356→                <p className="text-xs opacity-90">
+   357→                  {portUnlocked
+   358→                    ? contract ? 'Active Contract' : 'Awaiting Contract...'
+   359→                    : 'Unlock Shipping Basin (Lv 54) to access'}
+   360→                </p>
+   361→              </div>
+   362→            </div>
+   363→            <span className={`transition-transform duration-200 ${showFreightPanel ? 'rotate-180' : ''}`}>{'\u25BC'}</span>
+   364→          </div>
+   365→        </div>
+   366→
+   367→        {showFreightPanel && (
+   368→          <div className="p-3 space-y-3">
+   369→            {!portUnlocked ? (
+   370→              <div className="text-center py-6 space-y-2">
+   371→                <div className="text-3xl">{'\u{1F512}'}</div>
+   372→                <p className="text-sm text-stone-400 dark:text-gray-500 italic">Unlock the Shipping Basin parcel to access freight contracts.</p>
+   373→                <p className="text-xs text-stone-400 dark:text-gray-500">Requires Level 54 {'\u2022'} 3,200,000 {'\u{1F4B0}'}</p>
+   374→              </div>
+   375→            ) : !contract ? (
+   376→              <div className="text-center py-4 space-y-2">
+   377→                <div className="text-2xl">{'\u{1F4E6}'}</div>
+   378→                <p className="text-sm text-stone-500 dark:text-gray-400">No active freight contract.</p>
+   379→                <p className="text-xs text-stone-400 dark:text-gray-500">
+   380→                  Next contract in: {formatDuration(Math.max(0, freightContractRefreshAt - now))}
+   381→                </p>
+   382→                <button
+   383→                  onClick={refreshFreightContract}
+   384→                  disabled={gems < 10}
+   385→                  className="mt-2 px-4 py-2 text-sm font-bold rounded-xl bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-all"
+   386→                >
+   387→                  {'\u{1F48E}'} Instant Refresh (10 Gems)
+   388→                </button>
+   389→              </div>
+   390→            ) : (
+   391→              <div className="space-y-3">
+   392→                {/* Contract Header */}
+   393→                <div className="flex items-center gap-2">
+   394→                  <span className="text-2xl">{contract.emoji}</span>
+   395→                  <div className="flex-1">
+   396→                    <div className="font-bold text-sm text-stone-800 dark:text-gray-100">{contract.title}</div>
+   397→                    <div className="text-xs text-stone-500 dark:text-gray-400">
+   398→                      {contract.acceptedAt
+   399→                        ? <>Delivery Window: {formatDuration(contractExpiresIn)} remaining</>
+   400→                        : <>Available {'\u2022'} Entry Deposit: {formatCoin(contract.entryDeposit)} {'\u{1F4B0}'}</>
+   401→                      }
+   402→                    </div>
+   403→                  </div>
+   404→                </div>
+   405→
+   406→                {/* Requirements */}
+   407→                <div className="space-y-1.5">
+   408→                  {contract.requirements.map((req, i) => {
+   409→                    const isCrop = req.itemId in CROPS || req.itemId === 'feed' || req.itemId === 'cotton' || req.itemId === 'honey_comb' || req.itemId === 'wild_berries' || req.itemId === 'gold_nugget';
+   410→                    const storage = isCrop ? silo : barn;
+   411→                    const have = storage[req.itemId] || 0;
+   412→                    const enough = have >= req.qty;
+   413→
+   414→                    return (
+   415→                      <div key={i} className="flex items-center justify-between text-sm rounded-lg p-1.5 bg-stone-50 dark:bg-stone-900/30">
+   416→                        <span className="flex items-center gap-1.5">
+   417→                          <span className="text-base">{req.emoji}</span>
+   418→                          <span className="text-stone-700 dark:text-gray-300">{req.name}</span>
+   419→                        </span>
+   420→                        <span className={`font-mono text-xs font-semibold ${enough ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+   421→                          {have}/{req.qty}
+   422→                        </span>
+   423→                      </div>
+   424→                    );
+   425→                  })}
+   426→                </div>
+   427→
+   428→                {/* Rewards */}
+   429→                <div className="flex items-center gap-3 text-xs bg-amber-50 dark:bg-amber-950/20 rounded-lg p-2 border border-amber-200 dark:border-amber-800">
+   430→                  <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
+   431→                    {'\u{1F4B0}'} {formatCoin(contract.coinReward)}
+   432→                  </span>
+   433→                  <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold">
+   434→                    {'\u{1F48E}'} {contract.gemReward} Gems
+   435→                  </span>
+   436→                  {contract.blueprintReward && (
+   437→                    <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-semibold">
+   438→                      {'\u{1F4D0}'} {contract.blueprintReward}
+   439→                    </span>
+   440→                  )}
+   441→                </div>
+   442→
+   443→                {/* Actions */}
+   444→                <div className="flex gap-2">
+   445→                  {!contract.acceptedAt ? (
+   446→                    <button
+   447→                      onClick={acceptFreightContract}
+   448→                      disabled={coins < contract.entryDeposit}
+   449→                      className="flex-1 py-2 text-sm font-bold rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-all"
+   450→                    >
+   451→                      {'\u2705'} Accept Contract ({formatCoin(contract.entryDeposit)} deposit)
+   452→                    </button>
+   453→                  ) : (
+   454→                    <>
+   455→                      <button
+   456→                        onClick={fulfillFreightContract}
+   457→                        disabled={!canFulfillContract}
+   458→                        className="flex-1 py-2 text-sm font-bold rounded-xl bg-green-600 hover:bg-green-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-all"
+   459→                      >
+   460→                        {'\u{1F6A2}'} Ship Cargo
+   461→                      </button>
+   462→                      <button
+   463→                        onClick={failFreightContract}
+   464→                        className="px-4 py-2 text-sm font-medium rounded-xl bg-stone-200 dark:bg-gray-700 hover:bg-red-100 dark:hover:bg-red-900/30 text-stone-600 dark:text-gray-400 transition-colors"
+   465→                      >
+   466→                        {'\u{1F5D1}'} Abandon
+   467→                      </button>
+   468→                    </>
+   469→                  )}
+   470→                </div>
+   471→
+   472→                {/* Expiry Warning */}
+   473→                {contract.acceptedAt && contractExpiresIn < 2 * 60 * 60 * 1000 && (
+   474→                  <div className="flex items-center gap-1.5 text-[10px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1.5">
+   475→                    <span>{'\u26A0'}</span>
+   476→                    <span className="font-medium">Time running out!</span> Only {formatDuration(contractExpiresIn)} left to deliver.
+   477→                  </div>
+   478→                )}
+   479→
+   480→                {/* Missing items hints */}
+   481→                {contract.acceptedAt && !canFulfillContract && (
+   482→                  <div className="space-y-1">
+   483→                    {contract.requirements.map((req, i) => {
+   484→                      const isCrop = req.itemId in CROPS || req.itemId === 'feed' || req.itemId === 'cotton' || req.itemId === 'honey_comb' || req.itemId === 'wild_berries' || req.itemId === 'gold_nugget';
+   485→                      const storage = isCrop ? silo : barn;
+   486→                      const have = storage[req.itemId] || 0;
+   487→                      if (have >= req.qty) return null;
+   488→                      return (
+   489→                        <div key={i} className="flex items-center gap-1.5 text-[10px] text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
+   490→                          <span>{req.emoji}</span>
+   491→                          <span>Need {req.qty - have} more {req.name}</span>
+   492→                          <span className="text-red-400 dark:text-red-500">{'\u2192'} Produce at buildings or expand territory</span>
+   493→                        </div>
+   494→                      );
+   495→                    })}
+   496→                  </div>
+   497→                )}
+   498→              </div>
+   499→            )}
+   500→          </div>
+   501→        )}
+   502→      </div>
+   503→    </div>
+   504→  );
+   505→}
+   506→

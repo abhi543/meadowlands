@@ -96,7 +96,7 @@ export default function Home() {
         <HUD />
       </header>
 
-      <main className="max-w-2xl mx-auto p-3 pt-2 pb-36">
+      <main className="max-w-2xl mx-auto p-3 pt-2 pb-28">
         {/* Event Banner */}
         <EventBanner />
 
@@ -121,25 +121,25 @@ export default function Home() {
       {/** Floating Notifications */}
       <FloatingNumbers />
 
-      {/* Bottom Tab Bar - 2-row grid for all tabs visible */}
+      {/* Bottom Tab Bar - Compact 2-row grid (6+5) so all 11 tabs are visible */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
-        <div className="max-w-2xl mx-auto grid grid-cols-5 gap-1 p-1.5">
+        <div className="max-w-2xl mx-auto grid grid-cols-6 gap-0.5 px-1 pt-1 pb-1.5">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-2 px-1 rounded-xl flex flex-col items-center gap-1 transition-all duration-200 ${
+                className={`py-1.5 px-0.5 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 ${
                   isActive
-                    ? `${tab.bgActive} ${tab.color} shadow-sm scale-105`
+                    ? `${tab.bgActive} ${tab.color} shadow-sm`
                     : `text-stone-400 dark:text-gray-500 ${tab.bgInactive}`
                 }`}
               >
-                <span className={`transition-transform duration-200 ${isActive ? 'text-2xl' : 'text-xl'}`}>
+                <span className={`transition-transform duration-200 leading-none ${isActive ? 'text-xl' : 'text-lg'}`}>
                   {tab.emoji}
                 </span>
-                <span className={`text-[10px] leading-tight ${isActive ? 'font-bold' : 'font-medium'}`}>
+                <span className={`text-[9px] leading-tight truncate w-full text-center ${isActive ? 'font-bold' : 'font-medium'}`}>
                   {tab.label}
                 </span>
               </button>
