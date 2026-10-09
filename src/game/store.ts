@@ -11,6 +11,7 @@ import {
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
   type WorkerType, type HourlyEventType,
+  BIOMES, LURES, TRAIL_ENCOUNTERS, type BiomeId, type LureTypeId,
 } from './data';
 
 // ---- Runtime types ----
@@ -109,6 +110,22 @@ export interface ActiveBreeding {
   durationMs: number;
 }
 
+export interface ActiveExpedition {
+  id: string;
+  biomeId: BiomeId;
+  farmhandId: string;
+  lureId: LureTypeId;
+  startedAt: number;
+  durationMs: number;
+  midpointResolved: boolean;
+  pendingChoice: {
+    prompt: string;
+    safeLabel: string;
+    riskyLabel: string;
+  } | null;
+  riskyChosen: boolean | null; // null = not yet chosen
+}
+
 export interface GameState {
   // Player
   coins: number;
@@ -156,6 +173,12 @@ export interface GameState {
   // Breeding
   breedingSlots: number;
   activeBreedings: ActiveBreeding[];
+
+  // Wilderness Expeditions
+  wilderness: {
+    unlockedBiomes: Record<BiomeId, boolean>;
+    activeExpeditions: ActiveExpedition[];
+  };
 
   // Habitat Upgrades
   habitatUpgradeSteps: Record<AnimalSpecies, number>;
@@ -208,6 +231,10 @@ export interface GameState {
   // Breeding
   breedAnimals: (parent1Id: string, parent2Id: string) => void;
   upgradeBreedingSlot: () => void;
+
+  // Wilderness
+  launchExpedition: (biomeId: BiomeId, farmhandId: string, lureId: LureTypeId) => void;
+  resolveExpeditionChoice: (expeditionId: string, chooseRisky: boolean) => void;
 
   // Habitat
   upgradeHabitat: (species: AnimalSpecies) => void;
@@ -362,6 +389,11 @@ export const useGameStore = create<GameState>()(
 
       breedingSlots: 1,
       activeBreedings: [],
+
+      wilderness: {
+        unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+        activeExpeditions: [],
+      },
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -1104,6 +1136,74 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // Wilderness
+      launchExpedition: (biomeId, farmhandId, lureId) => {
+        const state = get();
+        const biome = BIOMES[biomeId];
+        if (!biome) return;
+        // Check level unlock
+        if (state.level < biome.unlockLevel) return;
+        // Check dispatch fee
+        if (state.coins < biome.dispatchFee) return;
+        // Check farmhand exists and isn't already on an expedition
+        const farmhand = state.farmhands.find(fh => fh.id === farmhandId);
+        if (!farmhand) return;
+        const isBusy = state.wilderness.activeExpeditions.some(e => e.farmhandId === farmhandId);
+        if (isBusy) return;
+        // Check lure exists in barn
+        const lureDef = LURES[lureId];
+        if (!lureDef) return;
+        const lureQty = state.barn[lureDef.productId] || 0;
+        if (lureQty < 1) return;
+
+        const lure = LURES[lureId];
+        const durationMs = Math.floor(biome.baseDurationMs * lure.timeMultiplier);
+
+        const newExpedition: ActiveExpedition = {
+          id: generateId(),
+          biomeId,
+          farmhandId,
+          lureId,
+          startedAt: Date.now(),
+          durationMs,
+          midpointResolved: false,
+          pendingChoice: null,
+          riskyChosen: null,
+        };
+
+        // Consume lure and dispatch fee
+        const newBarn = { ...state.barn, [lureDef.productId]: lureQty - 1 };
+
+        set({
+          coins: state.coins - biome.dispatchFee,
+          barn: newBarn,
+          wilderness: {
+            ...state.wilderness,
+            activeExpeditions: [...state.wilderness.activeExpeditions, newExpedition],
+          },
+        });
+      },
+
+      resolveExpeditionChoice: (expeditionId, chooseRisky) => {
+        const state = get();
+        const expedition = state.wilderness.activeExpeditions.find(e => e.id === expeditionId);
+        if (!expedition || !expedition.pendingChoice) return;
+        
+        const updatedExpeditions = state.wilderness.activeExpeditions.map(e => {
+          if (e.id === expeditionId) {
+            return { ...e, midpointResolved: true, pendingChoice: null, riskyChosen: chooseRisky };
+          }
+          return e;
+        });
+        
+        set({
+          wilderness: {
+            ...state.wilderness,
+            activeExpeditions: updatedExpeditions,
+          },
+        });
+      },
+
       // Habitat
       upgradeHabitat: (species) => {
         const state = get();
@@ -1358,6 +1458,173 @@ export const useGameStore = create<GameState>()(
           newCodex[`${b.species}_${offspringTier}`] = true;
         }
 
+    // --- Expedition Processing ---
+    const currentWilderness = get().wilderness;
+    let expeditionsToUpdate = [...currentWilderness.activeExpeditions];
+    let animalsToAdd: AnimalInstance[] = [];
+    let gemBonuses = 0;
+    let codexUpdates: Record<string, boolean> = {};
+    let notificationsToAdd: { message: string; emoji: string; type: string }[] = [];
+    let coinsFromExpeditions = 0;
+    const stateForExpedition = get();
+
+    expeditionsToUpdate = expeditionsToUpdate.map(expedition => {
+      const elapsed = now - expedition.startedAt;
+
+      // 1. Trigger midpoint encounter
+      if (elapsed >= expedition.durationMs * 0.5 && !expedition.midpointResolved && !expedition.pendingChoice) {
+        const encounter = TRAIL_ENCOUNTERS[Math.floor(Math.random() * TRAIL_ENCOUNTERS.length)];
+        return {
+          ...expedition,
+          pendingChoice: {
+            prompt: encounter.prompt,
+            safeLabel: encounter.safeLabel,
+            riskyLabel: encounter.riskyLabel,
+          },
+        };
+      }
+
+      // 2. Resolve completed expedition
+      if (elapsed >= expedition.durationMs && expedition.midpointResolved) {
+        const biome = BIOMES[expedition.biomeId];
+        const lure = LURES[expedition.lureId];
+        
+        // Determine outcome based on midpoint choice
+        let success = true;
+        let tierBoost = 0;
+        
+        if (expedition.riskyChosen) {
+          // Risky path: 40% chance of failure
+          if (Math.random() < 0.4) {
+            success = false;
+          } else {
+            tierBoost = 0.15; // boost rare/legendary chances
+          }
+        }
+
+        if (success) {
+          // Weighted random selection from biome species pool
+          const pool = biome.speciesPool;
+          const totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
+          let roll = Math.random() * totalWeight;
+          let selected = pool[0];
+          for (const p of pool) {
+            roll -= p.weight;
+            if (roll <= 0) { selected = p; break; }
+          }
+
+          // Apply lure rare/legendary boost - possibly upgrade tier
+          const rareChance = lure.rareBoost + tierBoost;
+          const legendaryChance = lure.legendaryBoost + (tierBoost * 0.5);
+          if (selected.tier === 'common' && Math.random() < rareChance) {
+            selected = { ...selected, tier: 'rare' };
+          } else if (selected.tier === 'uncommon' && Math.random() < rareChance * 0.7) {
+            selected = { ...selected, tier: 'rare' };
+          }
+          if (selected.tier === 'rare' && Math.random() < legendaryChance) {
+            selected = { ...selected, tier: 'legendary' };
+          }
+
+          // Check habitat capacity
+          const currentCount = stateForExpedition.animals.filter(a => a.species === selected.species).length;
+          const maxCapacity = stateForExpedition.animalCapacity[selected.species] || ANIMALS[selected.species].capacity;
+
+          if (currentCount < maxCapacity) {
+            const maxCycles = randomMaxCycles(selected.tier);
+            const newAnimal: AnimalInstance = {
+              id: generateId(),
+              species: selected.species,
+              tier: selected.tier,
+              fed: false,
+              fedAt: null,
+              productReady: false,
+              age: 'adult',
+              maxCycles,
+              cyclesRemaining: maxCycles,
+            };
+            animalsToAdd.push(newAnimal);
+
+            // Codex + gems
+            const codexKey = `${selected.species}_${selected.tier}`;
+            if (!stateForExpedition.codex[codexKey]) {
+              codexUpdates[codexKey] = true;
+              const gemBonus = selected.tier === 'legendary' ? 50 : selected.tier === 'rare' ? 20 : 5;
+              gemBonuses += gemBonus;
+            }
+
+            const animalName = ANIMALS[selected.species].name;
+            notificationsToAdd.push({
+              message: `Rescued ${selected.tier} ${animalName} from ${biome.name}!`,
+              emoji: ANIMALS[selected.species].emoji,
+              type: 'success',
+            });
+          } else {
+            notificationsToAdd.push({
+              message: `${ANIMALS[selected.species].name} habitat full — animal released to wild.`,
+              emoji: '\u{1F4AB}',
+              type: 'info',
+            });
+          }
+        } else {
+          // Failed risky path
+          notificationsToAdd.push({
+            message: `Expedition to ${biome.name} failed — lure was lost!`,
+            emoji: '\u{1F4A8}',
+            type: 'warning',
+          });
+        }
+
+        // Mark as completed (return null to filter out)
+        return null as any;
+      }
+
+      return expedition;
+    }).filter(Boolean);
+
+    // Apply expedition results
+    if (animalsToAdd.length > 0 || gemBonuses > 0 || Object.keys(codexUpdates).length > 0 || notificationsToAdd.length > 0) {
+      const currentState = get();
+      // Unlock biomes based on level
+      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
+      for (const [biomeId, biome] of Object.entries(BIOMES)) {
+        if (currentState.level >= biome.unlockLevel) {
+          unlockedBiomes[biomeId as BiomeId] = true;
+        }
+      }
+      
+      set({
+        animals: [...currentState.animals, ...animalsToAdd],
+        gems: currentState.gems + gemBonuses,
+        codex: { ...currentState.codex, ...codexUpdates },
+        wilderness: {
+          unlockedBiomes,
+          activeExpeditions: expeditionsToUpdate,
+        },
+      });
+
+      for (const n of notificationsToAdd) {
+        currentState.addNotification(n.message, n.emoji, n.type as any);
+      }
+    } else {
+      // Still need to update expedition state (midpoint choices, biome unlocks)
+      const currentState = get();
+      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
+      for (const [biomeId, biome] of Object.entries(BIOMES)) {
+        if (currentState.level >= biome.unlockLevel) {
+          unlockedBiomes[biomeId as BiomeId] = true;
+        }
+      }
+      
+      if (expeditionsToUpdate !== currentWilderness.activeExpeditions || unlockedBiomes !== currentWilderness.unlockedBiomes) {
+        set({
+          wilderness: {
+            unlockedBiomes,
+            activeExpeditions: expeditionsToUpdate,
+          },
+        });
+      }
+    }
+
         // Level up check
         const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
 
@@ -1408,6 +1675,10 @@ export const useGameStore = create<GameState>()(
           notifications: [],
           breedingSlots: 1,
           activeBreedings: [],
+          wilderness: {
+            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+            activeExpeditions: [],
+          },
           habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
           lastTick: Date.now(),
         });
@@ -1429,6 +1700,7 @@ export const useGameStore = create<GameState>()(
         notifications: state.notifications,
         breedingSlots: state.breedingSlots,
         activeBreedings: state.activeBreedings,
+        wilderness: state.wilderness,
         habitatUpgradeSteps: state.habitatUpgradeSteps,
       }),
       merge: (persistedState, currentState) => {
@@ -1482,6 +1754,14 @@ export const useGameStore = create<GameState>()(
             }
             return a;
           });
+        }
+
+        // Migration: wilderness state
+        if (!merged.wilderness) {
+          merged.wilderness = {
+            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
+            activeExpeditions: [],
+          };
         }
 
         // Migration: farmhands with missing equippedOutfit

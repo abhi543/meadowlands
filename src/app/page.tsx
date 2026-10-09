@@ -12,13 +12,13 @@ import { FarmhandPanel } from '@/components/game/FarmhandPanel';
 import { CodexPanel } from '@/components/game/CodexPanel';
 import { FisheryPanel } from '@/components/game/FisheryPanel';
 import { AutonomousWorkerPanel } from '@/components/game/AutonomousWorkerPanel';
-import { BreedingPanel } from '@/components/game/BreedingPanel';
 import { EventBanner } from '@/components/game/EventBanner';
 import { GuidePanel } from '@/components/game/GuidePanel';
 import { LivestockMarketPanel } from '@/components/game/LivestockMarketPanel';
+import { WildernessPanel } from '@/components/game/WildernessPanel';
 import { FloatingNumbers } from '@/components/game/FloatingNumbers';
 
-type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'farmhands' | 'fishery' | 'breeding' | 'market' | 'guide';
+type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'farmhands' | 'fishery' | 'wilderness' | 'market' | 'guide';
 
 interface TabDef {
   id: TabId;
@@ -37,7 +37,7 @@ const TABS: TabDef[] = [
   { id: 'shop',       label: 'Shop',     emoji: '🏪', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
   { id: 'farmhands',  label: 'Workers',  emoji: '👷', color: 'text-violet-600 dark:text-violet-400',     bgActive: 'bg-violet-100 dark:bg-violet-900/40',   bgInactive: 'hover:bg-violet-50 dark:hover:bg-violet-900/20' },
   { id: 'fishery',    label: 'Fishery',  emoji: '🎣', color: 'text-cyan-600 dark:text-cyan-400',         bgActive: 'bg-cyan-100 dark:bg-cyan-900/40',       bgInactive: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/20' },
-  { id: 'breeding',   label: 'Breed',    emoji: '🐾', color: 'text-pink-600 dark:text-pink-400',         bgActive: 'bg-pink-100 dark:bg-pink-900/40',       bgInactive: 'hover:bg-pink-50 dark:hover:bg-pink-900/20' },
+  { id: 'wilderness', label: 'Wild',     emoji: '🏕️', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
   { id: 'market',     label: 'Market',   emoji: '💰', color: 'text-yellow-600 dark:text-yellow-400',     bgActive: 'bg-yellow-100 dark:bg-yellow-900/40',   bgInactive: 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20' },
   { id: 'guide',      label: 'Guide',    emoji: '📖', color: 'text-indigo-600 dark:text-indigo-400',     bgActive: 'bg-indigo-100 dark:bg-indigo-900/40',   bgInactive: 'hover:bg-indigo-50 dark:hover:bg-indigo-900/20' },
 ];
@@ -113,7 +113,7 @@ export default function Home() {
             </div>
           )}
           {activeTab === 'fishery' && <FisheryPanel />}
-          {activeTab === 'breeding' && <BreedingPanel />}
+          {activeTab === 'wilderness' && <WildernessPanel />}
           {activeTab === 'market' && <LivestockMarketPanel />}
           {activeTab === 'guide' && <GuidePanel />}
         </div>

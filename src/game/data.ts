@@ -104,7 +104,7 @@ export const HABITAT_UPGRADES: HabitatUpgradeStep[] = [
 ];
 
 // --- Products ---
-export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk';
+export type ProductId = 'feed' | 'egg' | 'milk' | 'wool' | 'truffle' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar';
 
 export interface ProductDef {
   id: ProductId;
@@ -136,6 +136,11 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   gold_nugget:      { id: 'gold_nugget',      name: 'Gold Nugget',      emoji: '\u{2B50}',  category: 'raw',          sellPrice: 50 },
   cotton:           { id: 'cotton',           name: 'Cotton',           emoji: '\u{1F33F}', category: 'raw',          sellPrice: 6 },
   silk:             { id: 'silk',             name: 'Silk',             emoji: '\u{1F9F5}', category: 'manufactured', sellPrice: 30 },
+  // Lure items (crafted for wilderness expeditions)
+  lure_basic:       { id: 'lure_basic',       name: 'Sweet Seed Cluster',  emoji: '\u{1F33E}', category: 'manufactured', sellPrice: 15 },
+  lure_berry:       { id: 'lure_berry',       name: 'Glazed Berry Pastry', emoji: '\u{1F353}', category: 'manufactured', sellPrice: 45 },
+  lure_truffle:     { id: 'lure_truffle',     name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', category: 'manufactured', sellPrice: 80 },
+  lure_nectar:      { id: 'lure_nectar',      name: 'Celestial Ambrosia',  emoji: '\u{2728}',  category: 'manufactured', sellPrice: 200 },
 };
 
 // --- Production Buildings ---
@@ -164,6 +169,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 20,
     recipes: [
       { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
+      { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
     ],
   },
   bakery: {
@@ -173,6 +179,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
       { id: 'make_savory_fish_pie', name: 'Savory Fish Pie', emoji: '\u{1F967}', inputs: [{ productId: 'fish', qty: 2 }, { productId: 'wheat', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'savory_fish_pie', qty: 1 }, timeSec: 75 },
       { id: 'make_crab_bisque', name: 'Crab Bisque', emoji: '\u{1F352}', inputs: [{ productId: 'fish', qty: 3 }, { productId: 'milk', qty: 1 }], output: { productId: 'crab_bisque', qty: 1 }, timeSec: 90 },
+      { id: 'make_lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', inputs: [{ productId: 'pie', qty: 1 }, { productId: 'strawberry', qty: 4 }], output: { productId: 'lure_berry', qty: 1 }, timeSec: 150 },
     ],
   },
   dairy: {
@@ -193,6 +200,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_truffle_oil', name: 'Press Truffle Oil', emoji: '\u{1FAD2}', inputs: [{ productId: 'truffle', qty: 2 }], output: { productId: 'truffle_oil', qty: 1 }, timeSec: 90 },
       { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 60 },
+      { id: 'make_lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', inputs: [{ productId: 'truffle_oil', qty: 1 }, { productId: 'cheese', qty: 2 }], output: { productId: 'lure_truffle', qty: 1 }, timeSec: 180 },
+      { id: 'make_lure_nectar', name: 'Celestial Ambrosia', emoji: '\u{2728}', inputs: [{ productId: 'truffle_oil', qty: 2 }, { productId: 'sweater', qty: 2 }, { productId: 'fish', qty: 6 }], output: { productId: 'lure_nectar', qty: 1 }, timeSec: 300 },
     ],
   },
   tailor_shop: {
@@ -531,6 +540,127 @@ export const ORDER_TEMPLATES: OrderTemplate[] = [
   { requested: [{ itemId: 'yarn', qty: 2, emoji: '\u{1F9F5}', name: 'Yarn' }], coinReward: 45, xpReward: 25 },
   { requested: [{ itemId: 'savory_fish_pie', qty: 1, emoji: '\u{1F967}', name: 'Savory Fish Pie' }], coinReward: 100, xpReward: 55 },
 ];
+
+// --- Wilderness Expeditions ---
+export type BiomeId = 'biome_woods' | 'biome_ridge' | 'biome_caves' | 'biome_peaks';
+export type LureTypeId = 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar';
+
+export interface BiomeDef {
+  id: BiomeId;
+  name: string;
+  emoji: string;
+  description: string;
+  unlockLevel: number;
+  baseDurationMs: number;
+  dispatchFee: number;
+  // Species + tier combinations available in this biome
+  speciesPool: { species: AnimalSpecies; tier: Tier; name: string; weight: number }[];
+}
+
+export const BIOMES: Record<BiomeId, BiomeDef> = {
+  biome_woods: {
+    id: 'biome_woods', name: 'Whispering Woods', emoji: '\u{1F332}',
+    description: 'Dense forest teeming with common and uncommon breeds.',
+    unlockLevel: 14, baseDurationMs: 180_000, dispatchFee: 2500,
+    speciesPool: [
+      { species: 'chicken', tier: 'common', name: 'Rhode Island Red', weight: 50 },
+      { species: 'cow', tier: 'common', name: 'Jersey Cow', weight: 30 },
+      { species: 'pig', tier: 'common', name: 'Berkshire Pig', weight: 20 },
+      { species: 'chicken', tier: 'uncommon', name: 'Ameraucana Hen', weight: 15 },
+      { species: 'cow', tier: 'uncommon', name: 'Holstein Calf', weight: 10 },
+    ],
+  },
+  biome_ridge: {
+    id: 'biome_ridge', name: 'Alpine Ridge', emoji: '\u{26F0}\uFE0F',
+    description: 'Windswept highland pastures hide uncommon and rare breeds.',
+    unlockLevel: 22, baseDurationMs: 360_000, dispatchFee: 8000,
+    speciesPool: [
+      { species: 'cow', tier: 'uncommon', name: 'Highland Shaggy Cow', weight: 40 },
+      { species: 'sheep', tier: 'uncommon', name: 'Jacob Multi-Horn', weight: 30 },
+      { species: 'pig', tier: 'uncommon', name: 'Wild Boar', weight: 20 },
+      { species: 'cow', tier: 'rare', name: 'Aurochs Bull', weight: 10 },
+      { species: 'sheep', tier: 'rare', name: 'Blue Faced Leicester', weight: 8 },
+    ],
+  },
+  biome_caves: {
+    id: 'biome_caves', name: 'Luminescent Caverns', emoji: '\u{1F48A}',
+    description: 'Glowing grottos shelter rare and legendary creatures.',
+    unlockLevel: 32, baseDurationMs: 600_000, dispatchFee: 22000,
+    speciesPool: [
+      { species: 'chicken', tier: 'rare', name: 'Silkie Chicken', weight: 35 },
+      { species: 'cow', tier: 'rare', name: 'Aurora Bovine', weight: 25 },
+      { species: 'sheep', tier: 'rare', name: 'Golden Fleece Sheep', weight: 20 },
+      { species: 'chicken', tier: 'legendary', name: 'Phoenix Rooster', weight: 5 },
+      { species: 'pig', tier: 'legendary', name: 'Truffle Sovereign', weight: 3 },
+    ],
+  },
+  biome_peaks: {
+    id: 'biome_peaks', name: 'Sunken Volcano Peaks', emoji: '\u{1F30B}',
+    description: 'Molten cradle of mythic legends. Only the finest lures prevail.',
+    unlockLevel: 42, baseDurationMs: 900_000, dispatchFee: 60000,
+    speciesPool: [
+      { species: 'chicken', tier: 'legendary', name: 'Phoenix Rooster', weight: 30 },
+      { species: 'cow', tier: 'legendary', name: 'Celestial Ox', weight: 20 },
+      { species: 'sheep', tier: 'legendary', name: 'Cloudwalker Ewe', weight: 15 },
+      { species: 'pig', tier: 'legendary', name: 'Infernal Boar', weight: 10 },
+    ],
+  },
+};
+
+export interface LureDef {
+  id: LureTypeId;
+  name: string;
+  emoji: string;
+  productId: string; // the PRODUCT id this lure maps to
+  targetTier: Tier; // primary tier this lure attracts
+  // Modifiers applied when this lure is used
+  timeMultiplier: number;  // e.g. 0.8 = 20% faster
+  rareBoost: number;       // +chance to trigger rare encounter
+  legendaryBoost: number;  // +chance to trigger legendary encounter
+}
+
+export const LURES: Record<LureTypeId, LureDef> = {
+  lure_basic: {
+    id: 'lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', productId: 'lure_basic',
+    targetTier: 'common', timeMultiplier: 1.0, rareBoost: 0, legendaryBoost: 0,
+  },
+  lure_berry: {
+    id: 'lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', productId: 'lure_berry',
+    targetTier: 'uncommon', timeMultiplier: 0.8, rareBoost: 0.10, legendaryBoost: 0,
+  },
+  lure_truffle: {
+    id: 'lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', productId: 'lure_truffle',
+    targetTier: 'rare', timeMultiplier: 1.0, rareBoost: 0.35, legendaryBoost: 0.05,
+  },
+  lure_nectar: {
+    id: 'lure_nectar', name: 'Celestial Ambrosia', emoji: '\u{2728}', productId: 'lure_nectar',
+    targetTier: 'legendary', timeMultiplier: 1.0, rareBoost: 0.5, legendaryBoost: 0.25,
+  },
+};
+
+// Trail encounter prompts used at the midpoint of expeditions
+export const TRAIL_ENCOUNTERS = [
+  {
+    prompt: 'Your Farmhand spots fresh tracks leading toward a steep bramble ridge, while a gentle path follows the riverbank.',
+    safeLabel: 'Follow the Riverbank',
+    riskyLabel: 'Scale the Ridge',
+  },
+  {
+    prompt: 'A faint glow emanates from a cave entrance ahead. The main trail continues through open meadow.',
+    safeLabel: 'Stay on the Meadow Trail',
+    riskyLabel: 'Enter the Glowing Cave',
+  },
+  {
+    prompt: 'Fog rolls in. A well-worn path leads through the clearing, but a shadow darts between the ancient trees.',
+    safeLabel: 'Take the Cleared Path',
+    riskyLabel: 'Chase the Shadow',
+  },
+  {
+    prompt: 'You hear distant howling. A sheltered den offers safety, while a narrow ridge leads toward the sound.',
+    safeLabel: 'Take Shelter in the Den',
+    riskyLabel: 'Follow the Howling',
+  },
+] as const;
 
 // --- Livestock Market ---
 export const ANIMAL_BUY_PRICES: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
