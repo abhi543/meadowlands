@@ -292,7 +292,15 @@ export interface GameState {
 
   // Notifications
   addNotification: (message: string, emoji: string, type: NotificationItem['type']) => void;
-  clearNotifications: () => void;
+  // Cloud Sync & Auth
+  isDirty: boolean;
+  isGuest: boolean;
+  lastCloudSyncTimestamp: number | null;
+  markDirty: () => void;
+  markClean: () => void;
+  claimAccountLinkReward: () => void;
+  loadCloudSave: (payload: Partial<GameState>) => void;
+  fastForwardOfflineTime: (elapsedMs: number) => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -499,6 +507,11 @@ export const useGameStore = create<GameState>()(
       currentEstateAura: initialEstateAura,
 
       lastTick: Date.now(),
+
+      // Cloud Sync & Auth
+      isDirty: false,
+      isGuest: true,
+      lastCloudSyncTimestamp: null,
 
       // ---- Actions ----
 
@@ -2216,6 +2229,89 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // Cloud Sync & Auth Actions
+      markDirty: () => {
+        set({ isDirty: true });
+      },
+
+      markClean: () => {
+        set({ isDirty: false, lastCloudSyncTimestamp: Date.now() });
+      },
+
+      claimAccountLinkReward: () => {
+        const state = get();
+        set({
+          gems: state.gems + 50,
+          isGuest: false,
+          isDirty: true,
+        });
+        state.addNotification('Homestead Protected! Claimed +50 Gems bonus.', '💎', 'info');
+      },
+
+      loadCloudSave: (payload) => {
+        const state = get();
+        set({
+          ...state,
+          ...payload,
+          isDirty: false,
+          lastCloudSyncTimestamp: Date.now(),
+          lastTick: Date.now(),
+        });
+        get().addNotification('Cloud save synchronized successfully.', '☁️', 'info');
+      },
+
+      fastForwardOfflineTime: (elapsedMs) => {
+        if (elapsedMs <= 0) return;
+        const now = Date.now();
+        const state = get();
+
+        // 1. Advance plots
+        const auraMultiplier = state.currentEstateAura?.effectDetail?.type === 'growth_speed'
+          ? state.currentEstateAura.effectDetail.value
+          : 1.0;
+        const newPlots = state.plots.map(p => {
+          if (p.crop && p.plantedAt && !p.ready) {
+            const cropDef = CROPS[p.crop];
+            const growMs = cropDef.growTimeSec * 1000 * auraMultiplier;
+            if (now - p.plantedAt >= growMs) {
+              return { ...p, ready: true };
+            }
+          }
+          return p;
+        });
+
+        // 2. Advance animals
+        const newAnimals = state.animals.map(a => {
+          if (a.fed && a.fedAt && !a.productReady) {
+            const def = ANIMALS[a.species];
+            const cycleMs = def.productionTimeSec * 1000;
+            if (now - a.fedAt >= cycleMs) {
+              return { ...a, productReady: true, fed: false, fedAt: null };
+            }
+          }
+          return a;
+        });
+
+        // 3. Advance production queues
+        const newQueues = { ...state.productionQueues };
+        for (const bId of Object.keys(newQueues) as BuildingId[]) {
+          newQueues[bId] = newQueues[bId].map(slot => {
+            if (!slot.done && now - slot.startedAt >= slot.durationSec * 1000) {
+              return { ...slot, done: true };
+            }
+            return slot;
+          });
+        }
+
+        set({
+          plots: newPlots,
+          animals: newAnimals,
+          productionQueues: newQueues,
+          lastTick: now,
+          isDirty: true,
+        });
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -2250,6 +2346,9 @@ export const useGameStore = create<GameState>()(
           freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000,
           currentEstateAura: getEstateAura(1),
           lastTick: Date.now(),
+          isDirty: false,
+          isGuest: true,
+          lastCloudSyncTimestamp: null,
         });
       },
     }),
@@ -2276,6 +2375,8 @@ export const useGameStore = create<GameState>()(
         activeFreightContract: state.activeFreightContract,
         freightContractRefreshAt: state.freightContractRefreshAt,
         currentEstateAura: state.currentEstateAura,
+        isGuest: state.isGuest,
+        lastCloudSyncTimestamp: state.lastCloudSyncTimestamp,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
@@ -2405,6 +2506,11 @@ export const useGameStore = create<GameState>()(
           const parcelsClaimed = Object.values(merged.parcels || {}).filter((p: any) => p?.isUnlocked).length;
           merged.currentEstateAura = getEstateAura(parcelsClaimed || 1);
         }
+
+        // Migration: auth and cloud sync state
+        if (merged.isGuest === undefined) merged.isGuest = true;
+        if (merged.lastCloudSyncTimestamp === undefined) merged.lastCloudSyncTimestamp = null;
+        merged.isDirty = false;
 
         return merged as GameState;
       },

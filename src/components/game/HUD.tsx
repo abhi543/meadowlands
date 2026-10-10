@@ -3,8 +3,15 @@
 import { useGameStore } from '@/game/store';
 import { xpForLevel } from '@/game/data';
 
-export function HUD() {
-  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame } = useGameStore();
+import { useAuthStore } from '@/store/useAuthStore';
+
+interface HUDProps {
+  onOpenAuthModal?: () => void;
+}
+
+export function HUD({ onOpenAuthModal }: HUDProps) {
+  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame, isGuest, isDirty } = useGameStore();
+  const { user } = useAuthStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
@@ -41,6 +48,26 @@ export function HUD() {
             <span>{auraEmoji}</span>
             <span className="font-medium">{auraTitle}</span>
           </div>
+        )}
+
+        {/* Cloud Sync & Account Button */}
+        {onOpenAuthModal && (
+          <button
+            onClick={onOpenAuthModal}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm ${
+              !user || isGuest
+                ? 'bg-amber-300 hover:bg-amber-200 text-stone-900 ring-2 ring-amber-400/50 animate-pulse'
+                : isDirty
+                ? 'bg-sky-400 hover:bg-sky-300 text-stone-950'
+                : 'bg-white/20 hover:bg-white/30 text-white'
+            }`}
+            title={!user || isGuest ? 'Link account to get 50 Gems!' : 'Cloud save active'}
+          >
+            <span>☁️</span>
+            <span>
+              {!user || isGuest ? 'Save (+50💎)' : isDirty ? 'Syncing...' : 'Synced'}
+            </span>
+          </button>
         )}
 
         {/* Currency */}

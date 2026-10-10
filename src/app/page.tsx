@@ -19,6 +19,10 @@ import { LivestockMarketPanel } from '@/components/game/LivestockMarketPanel';
 import { WildernessPanel } from '@/components/game/WildernessPanel';
 import { TerritoryMapView } from '@/components/game/TerritoryMapView';
 import { FloatingNumbers } from '@/components/game/FloatingNumbers';
+import { SaveProgressModal } from '@/components/auth/SaveProgressModal';
+import { SaveConflictModal } from '@/components/auth/SaveConflictModal';
+import { useAuthStore } from '@/store/useAuthStore';
+import { initSyncManager, checkCloudSaveOnLogin } from '@/lib/syncManager';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
 
@@ -59,7 +63,27 @@ function useHydrated() {
 export default function Home() {
   const tick = useGameStore(s => s.tick);
   const [activeTab, setActiveTab] = useState<TabId>('farm');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const hydrated = useHydrated();
+
+  const user = useAuthStore(s => s.user);
+  const isGuest = useAuthStore(s => s.isGuest);
+
+  // Initialize Supabase Auth and Bandwidth-Throttled Sync Manager on Mount
+  useEffect(() => {
+    useAuthStore.getState().initAuth();
+    const teardownSync = initSyncManager();
+    return () => {
+      teardownSync();
+    };
+  }, []);
+
+  // When player authenticates, check for cloud save conflict or auto-sync
+  useEffect(() => {
+    if (hydrated && user && !isGuest) {
+      checkCloudSaveOnLogin();
+    }
+  }, [hydrated, user, isGuest]);
 
   // Game tick loop
   useEffect(() => {
@@ -93,7 +117,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       {/* Header */}
       <header className="sticky top-0 z-50 p-3 pb-0">
-        <HUD />
+        <HUD onOpenAuthModal={() => setAuthModalOpen(true)} />
       </header>
 
       <main className="max-w-2xl mx-auto p-3 pt-2 pb-28">
@@ -117,6 +141,10 @@ export default function Home() {
           {activeTab === 'guide' && <GuidePanel />}
         </div>
       </main>
+
+      {/** Modals & Overlays **/}
+      <SaveProgressModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <SaveConflictModal />
 
       {/** Floating Notifications */}
       <FloatingNumbers />
