@@ -14,6 +14,9 @@ import { FisheryPanel } from '@/components/game/FisheryPanel';
 import { AutonomousWorkerPanel } from '@/components/game/AutonomousWorkerPanel';
 import { WorkersHubPanel } from '@/components/game/WorkersHubPanel';
 import { EventBanner } from '@/components/game/EventBanner';
+import { EventTopBanner } from '@/components/game/events/EventTopBanner';
+import { EventDetailModal } from '@/components/game/events/EventDetailModal';
+import { RelicMonumentsPanel } from '@/components/game/events/RelicMonumentsPanel';
 import { GuidePanel } from '@/components/game/GuidePanel';
 import { LivestockMarketPanel } from '@/components/game/LivestockMarketPanel';
 import { WildernessPanel } from '@/components/game/WildernessPanel';
@@ -64,6 +67,8 @@ export default function Home() {
   const tick = useGameStore(s => s.tick);
   const [activeTab, setActiveTab] = useState<TabId>('farm');
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [eventModalOpen, setEventModalOpen] = useState(false);
+  const [relicsModalOpen, setRelicsModalOpen] = useState(false);
   const hydrated = useHydrated();
 
   const user = useAuthStore(s => s.user);
@@ -121,7 +126,13 @@ export default function Home() {
       </header>
 
       <main className="max-w-2xl mx-auto p-3 pt-2 pb-28">
-        {/* Event Banner */}
+        {/* Dynamic Long-Form Systemic Event Engine Banner */}
+        <EventTopBanner
+          onOpenDetail={() => setEventModalOpen(true)}
+          onOpenRelics={() => setRelicsModalOpen(true)}
+        />
+
+        {/* Legacy Hourly Event Banner */}
         <EventBanner />
 
         {/* Tab Content */}
@@ -145,6 +156,18 @@ export default function Home() {
       {/** Modals & Overlays **/}
       <SaveProgressModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
       <SaveConflictModal />
+      <EventDetailModal
+        isOpen={eventModalOpen}
+        onClose={() => setEventModalOpen(false)}
+        onOpenRelics={() => {
+          setEventModalOpen(false);
+          setRelicsModalOpen(true);
+        }}
+      />
+      <RelicMonumentsPanel
+        isOpen={relicsModalOpen}
+        onClose={() => setRelicsModalOpen(false)}
+      />
 
       {/** Floating Notifications */}
       <FloatingNumbers />

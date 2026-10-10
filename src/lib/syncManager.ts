@@ -85,6 +85,10 @@ export function extractSavePayload(state: GameState) {
     freightContractRefreshAt: state.freightContractRefreshAt,
     currentEstateAura: state.currentEstateAura,
     isGuest: state.isGuest,
+    relics: state.relics,
+    systemicEvent: state.systemicEvent,
+    systemicEventCooldowns: state.systemicEventCooldowns,
+    lastSystemicEventCompletedAt: state.lastSystemicEventCompletedAt,
   };
 }
 

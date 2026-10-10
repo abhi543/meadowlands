@@ -23,6 +23,72 @@ import {
   type ParcelId, type ParcelState, type DebrisEntity, type FreightContract, type EstateAuraTier,
   FACILITY_FOOTPRINTS, FREIGHT_CONTRACT_TEMPLATES,
 } from './data';
+import {
+  SYSTEMIC_EVENTS, FAIR_ITEM_SCORES,
+  type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
+} from './eventsData';
+import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
+
+// ---- Dynamic Event Engine & Relics Types (v2.3) ----
+
+export interface RelicsState {
+  royalCrownCrestUntil: number | null; // +15% order coin payouts active for 24h
+  mineralAshUntil: number | null;      // 3x crop growth speed active for 60m
+  smugglersCompass: boolean;          // -20% wilderness outpost expedition timers permanent
+  countyFairTrophy: boolean;          // permanent farm monument generating 3 gems/day
+  lastCountyFairGemClaim: number | null;
+  feastOfKingsUnlocked: boolean;       // luxury 40,000 coin dish in bakery/market
+  circusCub: boolean;                 // exclusive companion granting +10% passive farm XP
+  glowingSpores: number;              // count of instant-finish alchemical spores
+  masterArtisanLedger: boolean;       // permanently reduces all machine craft times by -5%
+  ancientSunRelic: boolean;           // permanent +15% player XP multiplier
+  superFeedCharges: number;           // double yield production cycles count for livestock
+}
+
+export const DEFAULT_RELICS: RelicsState = {
+  royalCrownCrestUntil: null,
+  mineralAshUntil: null,
+  smugglersCompass: false,
+  countyFairTrophy: false,
+  lastCountyFairGemClaim: null,
+  feastOfKingsUnlocked: false,
+  circusCub: false,
+  glowingSpores: 0,
+  masterArtisanLedger: false,
+  ancientSunRelic: false,
+  superFeedCharges: 0,
+};
+
+export interface SystemicEventState {
+  id: SystemicEventId;
+  phase: SystemicEventPhase; // 'forecast' | 'active' | 'settlement'
+  forecastEndsAt: number;
+  activeEndsAt: number;
+  currentStage: number; // 1-indexed (1, 2, 3, 4)
+  progress: number;
+  target: number;
+  claimedStages: number[];
+  isCompleted: boolean;
+  activeFirePositions?: number[];
+  locustPlotIds?: number[];
+  fairPoints?: number;
+  smugglerContractsCompleted?: number;
+  donatedMaterials?: number;
+  lastNotifiedTMinus10?: boolean;
+}
+
+export const DEFAULT_EVENT_COOLDOWNS: Record<SystemicEventId, number> = {
+  royal_fleet: 0,
+  barn_fire: 0,
+  midnight_smuggler: 0,
+  locust_swarm: 0,
+  county_fair: 0,
+  salmon_run: 0,
+  carnival_circus: 0,
+  alchemical_bloom: 0,
+  artisan_masterclass: 0,
+  ancient_ruins: 0,
+};
 
 // ---- Runtime types ----
 
@@ -219,6 +285,12 @@ export interface GameState {
   freightContractRefreshAt: number; // timestamp when next contract auto-refreshes
   currentEstateAura: EstateAuraTier;
 
+  // Dynamic Long-Form Systemic Event Engine (v2.3)
+  systemicEvent: SystemicEventState | null;
+  systemicEventCooldowns: Record<SystemicEventId, number>;
+  lastSystemicEventCompletedAt: number | null;
+  relics: RelicsState;
+
   // Time
   lastTick: number;
 
@@ -301,6 +373,22 @@ export interface GameState {
   claimAccountLinkReward: () => void;
   loadCloudSave: (payload: Partial<GameState>) => void;
   fastForwardOfflineTime: (elapsedMs: number) => void;
+
+  // Dynamic Long-Form Event Actions (v2.3)
+  triggerSystemicEvent: (id?: SystemicEventId) => void;
+  advanceSystemicEventPhase: () => void;
+  extinguishBrushfire: (plotIndex: number) => void;
+  captureLocust: (plotIndex: number) => void;
+  deliverFleetCrates: (items: { itemId: string; qty: number }[]) => boolean;
+  deliverSmugglerContract: (items: { itemId: string; qty: number }[]) => boolean;
+  submitCountyFairProduce: (items: { itemId: string; qty: number }[]) => number;
+  catchMigrationFish: () => void;
+  supplyCarnivalFeeds: (items: { itemId: string; qty: number }[]) => boolean;
+  donateRuinsMaterials: (items: { itemId: string; qty: number }[]) => boolean;
+  claimSystemicGrandReward: () => void;
+  dismissSystemicEvent: () => void;
+  claimCountyFairTrophy: () => boolean;
+  useGlowingSpore: (buildingId: BuildingId, slotIndex: number) => boolean;
 
   tick: () => void;
   resetGame: () => void;
@@ -506,6 +594,12 @@ export const useGameStore = create<GameState>()(
       freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000, // First contract in 24h
       currentEstateAura: initialEstateAura,
 
+      // Dynamic Long-Form Systemic Event Engine & Relics (v2.3)
+      systemicEvent: null,
+      systemicEventCooldowns: DEFAULT_EVENT_COOLDOWNS,
+      lastSystemicEventCompletedAt: null,
+      relics: DEFAULT_RELICS,
+
       lastTick: Date.now(),
 
       // Cloud Sync & Auth
@@ -538,8 +632,35 @@ export const useGameStore = create<GameState>()(
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + cropDef.yieldCount };
         const newPlots = [...state.plots];
         newPlots[plotId] = { id: plotId, crop: null, plantedAt: null, ready: false };
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3, state.level);
-        set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
+
+        // Alchemical Bloom Event Integration
+        let newSystemicEvent = state.systemicEvent;
+        let newRelics = { ...state.relics };
+        if (state.systemicEvent?.id === 'alchemical_bloom' && state.systemicEvent.phase === 'active') {
+          const newProg = state.systemicEvent.progress + 1;
+          const isDone = newProg >= state.systemicEvent.target;
+          newSystemicEvent = {
+            ...state.systemicEvent,
+            progress: newProg,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          };
+          if (Math.random() < 0.5) {
+            newRelics.glowingSpores += 1;
+            state.addNotification('✨ Harvested a Glowing Alchemical Spore!', '🍄', 'info');
+          }
+        }
+
+        const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * xpMultiplier), state.level);
+        set({
+          silo: newSilo,
+          plots: newPlots,
+          xp: newXp,
+          level: newLevel,
+          systemicEvent: newSystemicEvent,
+          relics: newRelics,
+        });
       },
 
       plantAllCrops: (cropId) => {
@@ -584,8 +705,39 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (harvestedCount === 0) return;
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + 3 * harvestedCount, state.level);
-        set({ silo: newSilo, plots: newPlots, xp: newXp, level: newLevel });
+
+        // Alchemical Bloom Event Integration
+        let newSystemicEvent = state.systemicEvent;
+        let newRelics = { ...state.relics };
+        if (state.systemicEvent?.id === 'alchemical_bloom' && state.systemicEvent.phase === 'active') {
+          const newProg = state.systemicEvent.progress + harvestedCount;
+          const isDone = newProg >= state.systemicEvent.target;
+          newSystemicEvent = {
+            ...state.systemicEvent,
+            progress: newProg,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          };
+          let sporesFound = 0;
+          for (let s = 0; s < harvestedCount; s++) {
+            if (Math.random() < 0.5) sporesFound++;
+          }
+          if (sporesFound > 0) {
+            newRelics.glowingSpores += sporesFound;
+            state.addNotification(`✨ Harvested ${sporesFound} Glowing Alchemical Spores!`, '🍄', 'info');
+          }
+        }
+
+        const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * harvestedCount * xpMultiplier), state.level);
+        set({
+          silo: newSilo,
+          plots: newPlots,
+          xp: newXp,
+          level: newLevel,
+          systemicEvent: newSystemicEvent,
+          relics: newRelics,
+        });
       },
 
       feedAnimal: (animalId) => {
@@ -1019,7 +1171,11 @@ export const useGameStore = create<GameState>()(
           storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
         }
 
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + order.xpReward, state.level);
+        const crownBonus = (state.relics.royalCrownCrestUntil && state.relics.royalCrownCrestUntil > Date.now()) ? 1.15 : 1.0;
+        const coinsEarned = Math.round(order.coinReward * crownBonus);
+
+        const xpBonus = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(order.xpReward * xpBonus), state.level);
 
         const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
         const newOrders = state.orders.map(o =>
@@ -1031,7 +1187,7 @@ export const useGameStore = create<GameState>()(
         set({
           silo: newSilo,
           barn: newBarn,
-          coins: state.coins + order.coinReward,
+          coins: state.coins + coinsEarned,
           xp: newXp,
           level: newLevel,
           orders: newOrders,
@@ -1680,13 +1836,26 @@ export const useGameStore = create<GameState>()(
         const now = Date.now();
         const state = get();
 
-        // Update plots (with rainstorm boost)
+        // Systemic event physics modifiers (v2.3)
+        const isAlchemicalBloom = state.systemicEvent?.id === 'alchemical_bloom' && state.systemicEvent.phase === 'active';
+        const isBarnFireActive = state.systemicEvent?.id === 'barn_fire' && state.systemicEvent.phase === 'active';
+        const firePlotIds = state.systemicEvent?.activeFirePositions || [];
+        const isAshSoilActive = Boolean(state.relics?.mineralAshUntil && state.relics.mineralAshUntil > now);
+        const ashMultiplier = isAshSoilActive ? 3.0 : 1.0;
+
+        // Update plots
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
         const newPlots = state.plots.map(p => {
           if (p.crop && p.plantedAt && !p.ready) {
+            // Under barn_fire, unwatered/burning plots are frozen
+            if (isBarnFireActive && firePlotIds.includes(p.id)) {
+              return p;
+            }
             const elapsed = (now - p.plantedAt) / 1000;
-            const effectiveElapsed = rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed;
-            const growTime = CROPS[p.crop].growTimeSec;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier;
+            const cropBaseSec = CROPS[p.crop].growTimeSec;
+            // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
+            const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
             if (effectiveElapsed >= growTime) {
               return { ...p, ready: true };
             }
@@ -1708,13 +1877,18 @@ export const useGameStore = create<GameState>()(
           return a;
         });
 
-        // Update production queues
+        // Update production queues (with Artisan Masterclass and Master Ledger modifiers)
+        const isArtisanMasterclass = state.systemicEvent?.id === 'artisan_masterclass' && state.systemicEvent.phase === 'active';
+        const masterLedgerMultiplier = state.relics?.masterArtisanLedger ? 1.0526 : 1.0; // -5% duration means ~1.0526x effective speed
         const newQueues: Record<BuildingId, ProductionSlot[]> = { ...state.productionQueues };
         for (const buildingId of Object.keys(BUILDINGS) as BuildingId[]) {
           const queue = state.productionQueues[buildingId] || [];
+          const isArtisanWorkshop = buildingId === 'bakery' || buildingId === 'loom' || buildingId === 'press';
+          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier;
+
           newQueues[buildingId] = queue.map(slot => {
             if (!slot.done) {
-              const elapsed = (now - slot.startedAt) / 1000;
+              const elapsed = ((now - slot.startedAt) / 1000) * speedMultiplier;
               if (elapsed >= slot.durationSec) {
                 return { ...slot, done: true };
               }
@@ -1923,6 +2097,63 @@ export const useGameStore = create<GameState>()(
           const eventDef = HOURLY_EVENTS[newActiveEvent.type];
           if (now - newActiveEvent.startedAt >= eventDef.durationMs) {
             newActiveEvent = null;
+          }
+        }
+
+        // --- Dynamic Long-Form Systemic Event Engine Lifecycle (v2.3) ---
+        let currentSystemicEvent = state.systemicEvent;
+        let updatedCooldowns = { ...state.systemicEventCooldowns };
+
+        if (currentSystemicEvent) {
+          const eventDef = SYSTEMIC_EVENTS[currentSystemicEvent.id];
+
+          // 1. Forecast -> Active Transition
+          if (currentSystemicEvent.phase === 'forecast' && now >= currentSystemicEvent.forecastEndsAt) {
+            let firePositions: number[] = [];
+            let locustPositions: number[] = [];
+
+            if (currentSystemicEvent.id === 'barn_fire') {
+              const visiblePlots = state.plots.slice(0, state.unlockedPlots).map(p => p.id);
+              firePositions = [...visiblePlots].sort(() => Math.random() - 0.5).slice(0, Math.min(5, visiblePlots.length));
+            } else if (currentSystemicEvent.id === 'locust_swarm') {
+              const cropPlots = state.plots.slice(0, state.unlockedPlots).filter(p => p.crop).map(p => p.id);
+              locustPositions = cropPlots.slice(0, 6);
+            }
+
+            currentSystemicEvent = {
+              ...currentSystemicEvent,
+              phase: 'active',
+              activeFirePositions: firePositions,
+              locustPlotIds: locustPositions,
+            };
+
+            sendLocalEventPushNotification(
+              `⚡ ${eventDef.name} is now ACTIVE!`,
+              eventDef.mechanicalShift
+            );
+          }
+          // 2. Active T-10m Urgency Reminder
+          else if (
+            currentSystemicEvent.phase === 'active' &&
+            !currentSystemicEvent.lastNotifiedTMinus10 &&
+            currentSystemicEvent.activeEndsAt - now <= 10 * 60 * 1000 &&
+            currentSystemicEvent.activeEndsAt - now > 0
+          ) {
+            currentSystemicEvent = {
+              ...currentSystemicEvent,
+              lastNotifiedTMinus10: true,
+            };
+            sendLocalEventPushNotification(
+              `⏳ Only 10 minutes left for ${eventDef.name}!`,
+              `Deliver provisions and wrap up objectives before time runs out!`
+            );
+          }
+          // 3. Active -> Settlement Transition on Expiration
+          else if (currentSystemicEvent.phase === 'active' && now >= currentSystemicEvent.activeEndsAt) {
+            currentSystemicEvent = {
+              ...currentSystemicEvent,
+              phase: 'settlement',
+            };
           }
         }
 
@@ -2223,6 +2454,8 @@ export const useGameStore = create<GameState>()(
           activeFreightContract: updatedFreightContract,
           freightContractRefreshAt: updatedFreightRefreshAt,
           currentEstateAura: updatedEstateAura,
+          systemicEvent: currentSystemicEvent,
+          systemicEventCooldowns: updatedCooldowns,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -2312,6 +2545,475 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // ---- Dynamic Systemic Event Actions (v2.3) ----
+      triggerSystemicEvent: (id) => {
+        const state = get();
+        const now = Date.now();
+        const allEventIds = Object.keys(SYSTEMIC_EVENTS) as SystemicEventId[];
+        let targetId = id;
+        if (!targetId) {
+          const eligible = allEventIds.filter(eid => (state.systemicEventCooldowns[eid] || 0) <= now);
+          targetId = eligible.length > 0
+            ? eligible[Math.floor(Math.random() * eligible.length)]
+            : allEventIds[Math.floor(Math.random() * allEventIds.length)];
+        }
+        const def = SYSTEMIC_EVENTS[targetId];
+        const newEvent: SystemicEventState = {
+          id: targetId,
+          phase: 'forecast',
+          forecastEndsAt: now + def.forecastDurationMs,
+          activeEndsAt: now + def.forecastDurationMs + def.activeDurationMs,
+          currentStage: 1,
+          progress: 0,
+          target: def.stages[0].targetCount,
+          claimedStages: [],
+          isCompleted: false,
+          activeFirePositions: [],
+          locustPlotIds: [],
+          fairPoints: 0,
+          smugglerContractsCompleted: 0,
+          donatedMaterials: 0,
+        };
+
+        state.addNotification(`⚠️ Approaching: ${def.name} in ${Math.round(def.forecastDurationMs / 60000)}m!`, def.emoji, 'event');
+        sendLocalEventPushNotification(`⚠️ Forewarning: ${def.name}`, def.premise);
+        set({ systemicEvent: newEvent, isDirty: true });
+      },
+
+      advanceSystemicEventPhase: () => {
+        const state = get();
+        if (!state.systemicEvent) return;
+        const now = Date.now();
+        const def = SYSTEMIC_EVENTS[state.systemicEvent.id];
+
+        if (state.systemicEvent.phase === 'forecast') {
+          let firePositions: number[] = [];
+          let locustPositions: number[] = [];
+          if (state.systemicEvent.id === 'barn_fire') {
+            const visiblePlots = state.plots.slice(0, state.unlockedPlots).map(p => p.id);
+            firePositions = [...visiblePlots].sort(() => Math.random() - 0.5).slice(0, Math.min(5, visiblePlots.length));
+          } else if (state.systemicEvent.id === 'locust_swarm') {
+            const cropPlots = state.plots.slice(0, state.unlockedPlots).filter(p => p.crop).map(p => p.id);
+            locustPositions = cropPlots.slice(0, 6);
+          }
+
+          set({
+            systemicEvent: {
+              ...state.systemicEvent,
+              phase: 'active',
+              activeEndsAt: now + def.activeDurationMs,
+              activeFirePositions: firePositions,
+              locustPlotIds: locustPositions,
+            },
+            isDirty: true,
+          });
+          state.addNotification(`⚡ ${def.name} is now ACTIVE!`, def.emoji, 'event');
+          sendLocalEventPushNotification(`⚡ ${def.name} Active!`, def.mechanicalShift);
+        } else if (state.systemicEvent.phase === 'active') {
+          set({
+            systemicEvent: {
+              ...state.systemicEvent,
+              phase: 'settlement',
+            },
+            isDirty: true,
+          });
+        }
+      },
+
+      extinguishBrushfire: (plotIndex) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'barn_fire' || state.systemicEvent.phase !== 'active') return;
+        const currentFires = state.systemicEvent.activeFirePositions || [];
+        if (!currentFires.includes(plotIndex)) return;
+
+        const nextFires = currentFires.filter(p => p !== plotIndex);
+        const newProgress = state.systemicEvent.progress + 1;
+        const isDone = newProgress >= 5 || nextFires.length === 0;
+
+        set({
+          systemicEvent: {
+            ...state.systemicEvent,
+            activeFirePositions: nextFires,
+            progress: newProgress,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`💧 Extinguished brushfire flare-up! (${newProgress}/5)`, '🪣', 'info');
+      },
+
+      captureLocust: (plotIndex) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'locust_swarm' || state.systemicEvent.phase !== 'active') return;
+        const currentLocusts = state.systemicEvent.locustPlotIds || [];
+        const nextLocusts = currentLocusts.filter(p => p !== plotIndex);
+        const newProgress = state.systemicEvent.progress + 1;
+        const isDone = newProgress >= 30;
+
+        if (!isDone && nextLocusts.length < 3) {
+          const matureCropPlotIds = state.plots.slice(0, state.unlockedPlots).filter(p => p.crop && !nextLocusts.includes(p.id)).map(p => p.id);
+          if (matureCropPlotIds.length > 0) {
+            nextLocusts.push(matureCropPlotIds[Math.floor(Math.random() * matureCropPlotIds.length)]);
+          }
+        }
+
+        set({
+          systemicEvent: {
+            ...state.systemicEvent,
+            locustPlotIds: nextLocusts,
+            progress: newProgress,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🦗 Captured locust into containment jar! (${newProgress}/30)`, '🫙', 'info');
+      },
+
+      deliverFleetCrates: (items) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'royal_fleet' || state.systemicEvent.phase !== 'active') return false;
+        const def = SYSTEMIC_EVENTS.royal_fleet;
+        const currentStageDef = def.stages[state.systemicEvent.currentStage - 1];
+        if (!currentStageDef) return false;
+
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let totalItemsDelivered = 0;
+
+        for (const item of items) {
+          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[item.itemId] || 0) < item.qty) return false;
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+          totalItemsDelivered += item.qty;
+        }
+
+        if (totalItemsDelivered === 0) return false;
+
+        let newProgress = state.systemicEvent.progress + totalItemsDelivered;
+        let nextStage = state.systemicEvent.currentStage;
+        let isDone = false;
+
+        if (newProgress >= currentStageDef.targetCount) {
+          if (nextStage < def.stages.length) {
+            nextStage += 1;
+            state.addNotification(`⚓ Royal Shipping Ladder Stage ${nextStage} Unlocked!`, '🚢', 'info');
+          } else {
+            isDone = true;
+            state.addNotification(`👑 Royal Fleet fully provisioned! Ready for grand payoff.`, '🏆', 'info');
+          }
+        }
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          systemicEvent: {
+            ...state.systemicEvent,
+            progress: newProgress,
+            currentStage: nextStage,
+            target: def.stages[nextStage - 1]?.targetCount || currentStageDef.targetCount,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      deliverSmugglerContract: (items) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'midnight_smuggler' || state.systemicEvent.phase !== 'active') return false;
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+
+        for (const item of items) {
+          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[item.itemId] || 0) < item.qty) return false;
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+        }
+
+        const newProgress = state.systemicEvent.progress + 1;
+        const isDone = newProgress >= 3;
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          systemicEvent: {
+            ...state.systemicEvent,
+            progress: newProgress,
+            smugglerContractsCompleted: newProgress,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`⛵ Smuggler trade contract fulfilled! (${newProgress}/3)`, '📦', 'info');
+        return true;
+      },
+
+      submitCountyFairProduce: (items) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'county_fair' || state.systemicEvent.phase !== 'active') return 0;
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let pointsEarned = 0;
+
+        for (const item of items) {
+          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[item.itemId] || 0) < item.qty) continue;
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+
+          const scoreDef = FAIR_ITEM_SCORES[item.itemId] || { points: 1, rarity: 'common' };
+          pointsEarned += scoreDef.points * item.qty;
+        }
+
+        if (pointsEarned === 0) return 0;
+
+        const newPoints = (state.systemicEvent.fairPoints || 0) + pointsEarned;
+        const isDone = newPoints >= 600;
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          systemicEvent: {
+            ...state.systemicEvent,
+            fairPoints: newPoints,
+            progress: newPoints,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🎪 Submitted exhibition produce for +${pointsEarned} pts! (Total: ${newPoints}/600)`, '🏅', 'info');
+        return pointsEarned;
+      },
+
+      catchMigrationFish: () => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'salmon_run' || state.systemicEvent.phase !== 'active') return;
+        const newProgress = state.systemicEvent.progress + 1;
+        const isDone = newProgress >= 15;
+        const newBarn = { ...state.barn, fish: (state.barn.fish || 0) + 1 };
+
+        let bonusGems = 0;
+        if (Math.random() < 0.25) {
+          bonusGems = 1;
+        }
+
+        set({
+          barn: newBarn,
+          gems: state.gems + bonusGems,
+          systemicEvent: {
+            ...state.systemicEvent,
+            progress: newProgress,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(
+          bonusGems > 0
+            ? `🐟 Hooked a Golden Migration Salmon & salvaged an antique lockbox (+1 💎)! (${newProgress}/15)`
+            : `🐟 Hooked a Golden Migration Salmon! (${newProgress}/15)`,
+          '🎣',
+          'info'
+        );
+      },
+
+      supplyCarnivalFeeds: (items) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'carnival_circus' || state.systemicEvent.phase !== 'active') return false;
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let totalCount = 0;
+
+        for (const item of items) {
+          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[item.itemId] || 0) < item.qty) return false;
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+          totalCount += item.qty;
+        }
+
+        if (totalCount === 0) return false;
+
+        const newProgress = state.systemicEvent.progress + totalCount;
+        const isDone = newProgress >= 100;
+        let nextStage = state.systemicEvent.currentStage;
+        if (newProgress >= 50) nextStage = 3;
+        else if (newProgress >= 20) nextStage = 2;
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          systemicEvent: {
+            ...state.systemicEvent,
+            progress: newProgress,
+            currentStage: nextStage,
+            target: nextStage === 3 ? 100 : nextStage === 2 ? 50 : 20,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🦁 Supplied ${totalCount} animal feeds to carnival menagerie! (${newProgress}/100)`, '🥩', 'info');
+        return true;
+      },
+
+      donateRuinsMaterials: (items) => {
+        const state = get();
+        if (!state.systemicEvent || state.systemicEvent.id !== 'ancient_ruins' || state.systemicEvent.phase !== 'active') return false;
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let totalCount = 0;
+
+        for (const item of items) {
+          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+          const storage = isCrop ? newSilo : newBarn;
+          if ((storage[item.itemId] || 0) < item.qty) return false;
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+          totalCount += item.qty;
+        }
+
+        if (totalCount === 0) return false;
+
+        const newProgress = state.systemicEvent.progress + totalCount;
+        const isDone = newProgress >= 120;
+        let nextStage = state.systemicEvent.currentStage;
+        if (newProgress >= 60) nextStage = 3;
+        else if (newProgress >= 25) nextStage = 2;
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          systemicEvent: {
+            ...state.systemicEvent,
+            progress: newProgress,
+            currentStage: nextStage,
+            target: nextStage === 3 ? 120 : nextStage === 2 ? 60 : 25,
+            isCompleted: isDone,
+            phase: isDone ? 'settlement' : 'active',
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🏛️ Donated ${totalCount} materials to temple excavation! (${newProgress}/120)`, '⛏️', 'info');
+        return true;
+      },
+
+      claimSystemicGrandReward: () => {
+        const state = get();
+        if (!state.systemicEvent) return;
+        const def = SYSTEMIC_EVENTS[state.systemicEvent.id];
+        const now = Date.now();
+        const newRelics = { ...state.relics };
+
+        if (state.systemicEvent.id === 'royal_fleet') {
+          newRelics.royalCrownCrestUntil = now + 24 * 60 * 60 * 1000;
+        } else if (state.systemicEvent.id === 'barn_fire') {
+          newRelics.mineralAshUntil = now + 60 * 60 * 1000;
+        } else if (state.systemicEvent.id === 'midnight_smuggler') {
+          newRelics.smugglersCompass = true;
+        } else if (state.systemicEvent.id === 'locust_swarm') {
+          newRelics.superFeedCharges += 5;
+        } else if (state.systemicEvent.id === 'county_fair') {
+          newRelics.countyFairTrophy = true;
+        } else if (state.systemicEvent.id === 'salmon_run') {
+          newRelics.feastOfKingsUnlocked = true;
+        } else if (state.systemicEvent.id === 'carnival_circus') {
+          newRelics.circusCub = true;
+        } else if (state.systemicEvent.id === 'alchemical_bloom') {
+          newRelics.glowingSpores += 8;
+        } else if (state.systemicEvent.id === 'artisan_masterclass') {
+          newRelics.masterArtisanLedger = true;
+        } else if (state.systemicEvent.id === 'ancient_ruins') {
+          newRelics.ancientSunRelic = true;
+        }
+
+        const newCooldowns = {
+          ...state.systemicEventCooldowns,
+          [def.id]: now + def.cooldownMs,
+        };
+
+        set({
+          coins: state.coins + def.grandReward.coins,
+          gems: state.gems + def.grandReward.gems,
+          relics: newRelics,
+          systemicEvent: null,
+          systemicEventCooldowns: newCooldowns,
+          lastSystemicEventCompletedAt: now,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🏆 GRAND BOUNTY CLAIMED: +${def.grandReward.coins.toLocaleString()} Coins, +${def.grandReward.gems} Gems & ${def.grandReward.relicName}!`,
+          def.grandReward.relicEmoji,
+          'info'
+        );
+      },
+
+      dismissSystemicEvent: () => {
+        const state = get();
+        if (!state.systemicEvent) return;
+        const def = SYSTEMIC_EVENTS[state.systemicEvent.id];
+        const now = Date.now();
+        set({
+          systemicEvent: null,
+          systemicEventCooldowns: {
+            ...state.systemicEventCooldowns,
+            [def.id]: now + def.cooldownMs,
+          },
+          lastSystemicEventCompletedAt: now,
+          isDirty: true,
+        });
+      },
+
+      claimCountyFairTrophy: () => {
+        const state = get();
+        if (!state.relics.countyFairTrophy) return false;
+        const now = Date.now();
+        if (state.relics.lastCountyFairGemClaim && now - state.relics.lastCountyFairGemClaim < 24 * 60 * 60 * 1000) {
+          return false;
+        }
+        set({
+          gems: state.gems + 3,
+          relics: {
+            ...state.relics,
+            lastCountyFairGemClaim: now,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🏆 Claimed +3 Daily Gems from the County Fair Trophy!', '💎', 'info');
+        return true;
+      },
+
+      useGlowingSpore: (buildingId, slotIndex) => {
+        const state = get();
+        if (state.relics.glowingSpores <= 0) return false;
+        const queue = state.productionQueues[buildingId] || [];
+        if (!queue[slotIndex] || queue[slotIndex].done) return false;
+
+        const newQueue = [...queue];
+        newQueue[slotIndex] = { ...newQueue[slotIndex], done: true };
+
+        set({
+          relics: {
+            ...state.relics,
+            glowingSpores: state.relics.glowingSpores - 1,
+          },
+          productionQueues: {
+            ...state.productionQueues,
+            [buildingId]: newQueue,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🧪 Alchemical Spore instantly finished production queue!', '✨', 'info');
+        return true;
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -2345,6 +3047,11 @@ export const useGameStore = create<GameState>()(
           activeFreightContract: null,
           freightContractRefreshAt: Date.now() + 24 * 60 * 60 * 1000,
           currentEstateAura: getEstateAura(1),
+          // Dynamic Long-Form Systemic Event Engine & Relics (v2.3)
+          systemicEvent: null,
+          systemicEventCooldowns: DEFAULT_EVENT_COOLDOWNS,
+          lastSystemicEventCompletedAt: null,
+          relics: DEFAULT_RELICS,
           lastTick: Date.now(),
           isDirty: false,
           isGuest: true,
@@ -2366,6 +3073,10 @@ export const useGameStore = create<GameState>()(
         unifiedWorkers: state.unifiedWorkers,
         activeEvent: state.activeEvent,
         lastEventTriggerTime: state.lastEventTriggerTime,
+        systemicEvent: state.systemicEvent,
+        systemicEventCooldowns: state.systemicEventCooldowns,
+        lastSystemicEventCompletedAt: state.lastSystemicEventCompletedAt,
+        relics: state.relics,
         notifications: state.notifications,
         breedingSlots: state.breedingSlots,
         activeBreedings: state.activeBreedings,
@@ -2511,6 +3222,12 @@ export const useGameStore = create<GameState>()(
         if (merged.isGuest === undefined) merged.isGuest = true;
         if (merged.lastCloudSyncTimestamp === undefined) merged.lastCloudSyncTimestamp = null;
         merged.isDirty = false;
+
+        // Migration: dynamic long-form event engine and relics (v2.3)
+        if (!merged.systemicEvent) merged.systemicEvent = null;
+        if (!merged.systemicEventCooldowns) merged.systemicEventCooldowns = DEFAULT_EVENT_COOLDOWNS;
+        if (merged.lastSystemicEventCompletedAt === undefined) merged.lastSystemicEventCompletedAt = null;
+        if (!merged.relics) merged.relics = DEFAULT_RELICS;
 
         return merged as GameState;
       },
