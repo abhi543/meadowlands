@@ -2473,6 +2473,7 @@ export const useGameStore = create<GameState>()(
 
       claimAccountLinkReward: () => {
         const state = get();
+        if (!state.isGuest) return;
         set({
           gems: state.gems + 50,
           isGuest: false,

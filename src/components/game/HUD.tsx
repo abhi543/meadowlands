@@ -10,8 +10,8 @@ interface HUDProps {
 }
 
 export function HUD({ onOpenAuthModal }: HUDProps) {
-  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame, isGuest, isDirty } = useGameStore();
-  const { user } = useAuthStore();
+  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame, isDirty } = useGameStore();
+  const { user, isGuest } = useAuthStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);

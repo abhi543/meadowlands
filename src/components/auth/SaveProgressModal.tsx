@@ -253,7 +253,7 @@ export function SaveProgressModal({ isOpen, onClose }: SaveProgressModalProps) {
                         onClick={resetOtpState}
                         className="text-[10px] text-amber-600 dark:text-amber-400 hover:underline"
                       >
-                        Change
+                        Change Email
                       </button>
                     </div>
                     <input
@@ -273,6 +273,23 @@ export function SaveProgressModal({ isOpen, onClose }: SaveProgressModalProps) {
                     >
                       {isLoading ? 'Verifying...' : 'Verify & Claim 50 💎'}
                     </button>
+                    <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1">
+                      <span>Didn't receive the code?</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          clearError();
+                          await sendEmailOtp(otpEmail);
+                        }}
+                        disabled={isLoading}
+                        className="text-amber-600 dark:text-amber-400 font-semibold hover:underline"
+                      >
+                        Resend Code
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-stone-400 dark:text-stone-500 text-center pt-0.5">
+                      💡 Tip: You can also tap the login link directly inside the email!
+                    </p>
                   </form>
                 )}
               </div>

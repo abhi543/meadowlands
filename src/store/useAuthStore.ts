@@ -54,23 +54,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           isGuest: isAnon,
           isLoading: false,
         });
-      } else {
-        // Zero-friction guest start: sign in anonymously if enabled, or stay local guest
-        try {
-          const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-          if (!anonError && anonData.user) {
-            set({
-              user: anonData.user,
-              session: anonData.session,
-              isGuest: true,
-              isLoading: false,
-            });
-          } else {
-            set({ user: null, session: null, isGuest: true, isLoading: false });
-          }
-        } catch {
-          set({ user: null, session: null, isGuest: true, isLoading: false });
+
+        // Ensure game store reflects authenticated state across browser restarts
+        if (!isAnon) {
+          useGameStore.setState({ isGuest: false });
         }
+      } else {
+        // Zero-friction guest start: stay local guest without creating ghost anonymous users
+        set({ user: null, session: null, isGuest: true, isLoading: false });
       }
 
       // 2. Listen to auth state changes
@@ -82,17 +73,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             session,
             isGuest: isAnon,
             isLoading: false,
+            otpSent: false,
+            otpEmail: '',
           });
 
-          // If linked from guest to permanent account, claim bonus reward
-          if (event === 'SIGNED_IN' && !isAnon) {
+          if (!isAnon) {
             const gameStore = useGameStore.getState();
-            if (gameStore.isGuest) {
+            if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && gameStore.isGuest) {
               gameStore.claimAccountLinkReward();
+            } else {
+              useGameStore.setState({ isGuest: false });
             }
           }
         } else {
           set({ user: null, session: null, isGuest: true, isLoading: false });
+          useGameStore.setState({ isGuest: true });
         }
       });
     } catch (err: any) {
@@ -139,6 +134,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         email,
         options: {
           shouldCreateUser: true,
+          emailRedirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
         },
       });
 
@@ -206,6 +202,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await supabase.auth.signOut();
     } finally {
       set({ user: null, session: null, isGuest: true, isLoading: false, error: null });
+      useGameStore.setState({ isGuest: true });
     }
   },
 
