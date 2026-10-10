@@ -1125,7 +1125,19 @@ export const useGameStore = create<GameState>()(
         const cost = 100;
         if (state.coins < cost) return;
         const fh: FarmhandInstance = { id: generateId(), role, level: 1, xp: 0, equippedOutfit: null };
-        set({ coins: state.coins - cost, farmhands: [...state.farmhands, fh] });
+        let newFishery = state.fishery;
+        if (role === 'fisherman') {
+          const now = Date.now();
+          const newTimestamps = { ...state.fishery.lastCatchTimestamps };
+          for (const zoneId of state.fishery.unlockedZones) {
+            if (!newTimestamps[zoneId] || newTimestamps[zoneId] === 0) {
+              newTimestamps[zoneId] = now;
+            }
+          }
+          newFishery = { ...state.fishery, lastCatchTimestamps: newTimestamps };
+        }
+        set({ coins: state.coins - cost, farmhands: [...state.farmhands, fh], fishery: newFishery });
+        state.addNotification('Fisherman hired! Automatically catching fish in unlocked waters.', '🎣', 'info');
       },
 
       addSilo: (itemId, qty) => {
@@ -1230,7 +1242,18 @@ export const useGameStore = create<GameState>()(
           bufferCount: 0,
           stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
         };
-        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers });
+        let newFishery = state.fishery;
+        if (role === 'fisherman' || role === 'auto_fisherman') {
+          const newTimestamps = { ...state.fishery.lastCatchTimestamps };
+          for (const zoneId of state.fishery.unlockedZones) {
+            if (!newTimestamps[zoneId] || newTimestamps[zoneId] === 0) {
+              newTimestamps[zoneId] = now;
+            }
+          }
+          newFishery = { ...state.fishery, lastCatchTimestamps: newTimestamps };
+        }
+        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers, fishery: newFishery });
+        state.addNotification(`${cfg.name} hired!`, cfg.emoji, 'info');
       },
 
       upgradeUnifiedWorker: (role, levelsToBuy) => {
@@ -1696,7 +1719,7 @@ export const useGameStore = create<GameState>()(
         const newCatchTimestamps = { ...state.fishery.lastCatchTimestamps };
 
         // Only catch fish if at least one fisherman exists (farmhand, autonomous, or unified)
-        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman') || (state.unifiedWorkers.fisherman?.isHired);
+        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman') || Boolean(state.unifiedWorkers?.fisherman?.isHired) || Boolean(state.unifiedWorkers?.auto_fisherman?.isHired);
 
         const rod = ROD_TIERS[state.fishery.rodTier];
         if (hasFisherman) {
