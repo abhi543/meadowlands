@@ -25,7 +25,7 @@ import {
   FACILITY_FOOTPRINTS, FREIGHT_CONTRACT_TEMPLATES,
 } from './data';
 import {
-  SYSTEMIC_EVENTS, FAIR_ITEM_SCORES,
+  SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, getEligibleRandomEvents,
   type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
 } from './eventsData';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
@@ -290,6 +290,8 @@ export interface GameState {
   systemicEvent: SystemicEventState | null;
   systemicEventCooldowns: Record<SystemicEventId, number>;
   lastSystemicEventCompletedAt: number | null;
+  nextSurpriseEventTime: number | null;
+  surpriseEventAlert: { id: SystemicEventId; timestamp: number } | null;
   relics: RelicsState;
 
   // Time
@@ -391,6 +393,7 @@ export interface GameState {
   dismissSystemicEvent: () => void;
   claimCountyFairTrophy: () => boolean;
   useGlowingSpore: (buildingId: BuildingId, slotIndex: number) => boolean;
+  clearSurpriseEventAlert: () => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -600,6 +603,8 @@ export const useGameStore = create<GameState>()(
       systemicEvent: null,
       systemicEventCooldowns: DEFAULT_EVENT_COOLDOWNS,
       lastSystemicEventCompletedAt: null,
+      nextSurpriseEventTime: null,
+      surpriseEventAlert: null,
       relics: DEFAULT_RELICS,
 
       lastTick: Date.now(),
@@ -2159,6 +2164,45 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // Surprise Random Event Trigger Engine (Autonomous & Unpredictable)
+        let newNextSurpriseEventTime = state.nextSurpriseEventTime;
+        let newSurpriseAlert = state.surpriseEventAlert;
+
+        if (!currentSystemicEvent && state.level >= 2) {
+          if (!newNextSurpriseEventTime) {
+            // Unscheduled: schedule surprise event in 2 to 5 minutes
+            newNextSurpriseEventTime = now + 120_000 + Math.floor(Math.random() * 180_000);
+          } else if (now >= newNextSurpriseEventTime) {
+            // Surprise strike! Pick an eligible event matching farm level and cooldowns
+            const eligibleIds = getEligibleRandomEvents(state.level, updatedCooldowns, now);
+            const pickedId = eligibleIds[Math.floor(Math.random() * eligibleIds.length)];
+            const def = SYSTEMIC_EVENTS[pickedId];
+
+            currentSystemicEvent = {
+              id: pickedId,
+              phase: 'forecast',
+              forecastEndsAt: now + def.forecastDurationMs,
+              activeEndsAt: now + def.forecastDurationMs + def.activeDurationMs,
+              currentStage: 1,
+              progress: 0,
+              target: def.stages[0].targetCount,
+              claimedStages: [],
+              isCompleted: false,
+              activeFirePositions: [],
+              locustPlotIds: [],
+              fairPoints: 0,
+              smugglerContractsCompleted: 0,
+              donatedMaterials: 0,
+            };
+
+            newNextSurpriseEventTime = null;
+            newSurpriseAlert = { id: pickedId, timestamp: now };
+
+            state.addNotification(`⚡ SURPRISE EVENT: ${def.name} approaches!`, def.emoji, 'event');
+            sendLocalEventPushNotification(`⚡ Horizon Alert: ${def.name}`, def.premise);
+          }
+        }
+
         // Breeding completion
         const newActiveBreedings = state.activeBreedings.filter(b => {
           if (now - b.startedAt >= b.durationMs) {
@@ -2458,6 +2502,8 @@ export const useGameStore = create<GameState>()(
           currentEstateAura: updatedEstateAura,
           systemicEvent: currentSystemicEvent,
           systemicEventCooldowns: updatedCooldowns,
+          nextSurpriseEventTime: newNextSurpriseEventTime,
+          surpriseEventAlert: newSurpriseAlert,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -2973,8 +3019,14 @@ export const useGameStore = create<GameState>()(
             [def.id]: now + def.cooldownMs,
           },
           lastSystemicEventCompletedAt: now,
+          nextSurpriseEventTime: now + 120_000 + Math.floor(Math.random() * 240_000), // Random surprise in 2-6 min
+          surpriseEventAlert: null,
           isDirty: true,
         });
+      },
+
+      clearSurpriseEventAlert: () => {
+        set({ surpriseEventAlert: null });
       },
 
       claimCountyFairTrophy: () => {
@@ -3057,6 +3109,8 @@ export const useGameStore = create<GameState>()(
           systemicEvent: null,
           systemicEventCooldowns: DEFAULT_EVENT_COOLDOWNS,
           lastSystemicEventCompletedAt: null,
+          nextSurpriseEventTime: null,
+          surpriseEventAlert: null,
           relics: DEFAULT_RELICS,
           lastTick: Date.now(),
           isDirty: false,
@@ -3083,6 +3137,7 @@ export const useGameStore = create<GameState>()(
         systemicEvent: state.systemicEvent,
         systemicEventCooldowns: state.systemicEventCooldowns,
         lastSystemicEventCompletedAt: state.lastSystemicEventCompletedAt,
+        nextSurpriseEventTime: state.nextSurpriseEventTime,
         relics: state.relics,
         notifications: state.notifications,
         breedingSlots: state.breedingSlots,

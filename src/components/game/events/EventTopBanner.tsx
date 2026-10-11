@@ -14,7 +14,8 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
   const {
     systemicEvent,
     relics,
-    triggerSystemicEvent,
+    surpriseEventAlert,
+    clearSurpriseEventAlert,
   } = useGameStore();
 
   const [, setTick] = useState(0);
@@ -42,19 +43,22 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
     if (systemicEvent.phase === 'forecast') {
       return (
         <div
-          onClick={onOpenDetail}
-          className="mb-3 cursor-pointer group rounded-2xl overflow-hidden border-2 border-amber-400/80 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
+          onClick={() => {
+            clearSurpriseEventAlert();
+            onOpenDetail();
+          }}
+          className="mb-3 cursor-pointer group rounded-2xl overflow-hidden border-2 border-amber-400/80 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-amber-500/25 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] animate-in fade-in slide-in-from-top-2"
         >
           <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-2xl animate-pulse select-none flex-shrink-0">⚠️</span>
+              <span className="text-2xl animate-pulse select-none flex-shrink-0">⚡</span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider bg-black/25 px-2 py-0.5 rounded-full text-amber-100">
-                    Forecast Window
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-black/30 px-2 py-0.5 rounded-full text-amber-200 ring-1 ring-amber-300/40 animate-pulse">
+                    Surprise Event Approaching!
                   </span>
                   <span className="text-xs font-semibold text-amber-100 truncate">
-                    Approaching in {timeFormatted}
+                    Arrival in {timeFormatted}
                   </span>
                 </div>
                 <h4 className="font-black text-sm text-white truncate drop-shadow-sm flex items-center gap-1.5 mt-0.5">
@@ -65,11 +69,9 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
             </div>
 
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="hidden sm:inline-block text-[11px] font-bold bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg backdrop-blur-sm transition-colors">
-                Prepare Farm &rarr;
-              </span>
-              <span className="sm:hidden text-xs bg-white/20 px-2 py-1 rounded-lg">
-                View &rarr;
+              <span className="text-xs font-black bg-white/25 hover:bg-white/35 px-2.5 py-1 rounded-xl backdrop-blur-sm transition-colors flex items-center gap-1">
+                <span>Respond</span>
+                <span>&rarr;</span>
               </span>
             </div>
           </div>
@@ -96,7 +98,10 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
 
       return (
         <div
-          onClick={onOpenDetail}
+          onClick={() => {
+            clearSurpriseEventAlert();
+            onOpenDetail();
+          }}
           className="mb-3 cursor-pointer group rounded-2xl overflow-hidden border-2 border-rose-500/90 bg-gradient-to-r from-red-600 via-rose-600 to-amber-700 text-white shadow-xl shadow-rose-900/40 ring-2 ring-rose-400/30 animate-pulse-border transition-all duration-300 hover:scale-[1.01] active:scale-[0.99]"
         >
           <div className="px-3.5 py-2.5 flex items-center justify-between gap-3">
@@ -177,8 +182,7 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
     }
   }
 
-  // 4. IDLE / ROTATIONAL COOLDOWN MODE
-  // Show clean status bar with Relics Vault access and quick simulation selector
+  // 4. IDLE / RADAR SCANNING MODE (100% Unpredictable Random Surprises)
   const activeBuffsCount = [
     Boolean(relics.royalCrownCrestUntil && relics.royalCrownCrestUntil > now),
     Boolean(relics.mineralAshUntil && relics.mineralAshUntil > now),
@@ -193,11 +197,11 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
   ].filter(Boolean).length;
 
   return (
-    <div className="mb-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md rounded-2xl p-2.5 border border-stone-200/80 dark:border-gray-700/80 shadow-sm flex items-center justify-between gap-2">
+    <div className="mb-3 bg-white/80 dark:bg-stone-900/80 backdrop-blur-md rounded-2xl p-2.5 border border-stone-200/80 dark:border-stone-800 shadow-sm flex items-center justify-between gap-2">
       <div className="flex items-center gap-2 min-w-0">
         <button
           onClick={onOpenRelics}
-          className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100/80 dark:bg-amber-900/40 hover:bg-amber-200 dark:hover:bg-amber-800/50 text-amber-900 dark:text-amber-200 rounded-xl text-xs font-bold transition-all border border-amber-300/60 dark:border-amber-700/60"
+          className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-100/80 dark:bg-amber-950/50 hover:bg-amber-200 dark:hover:bg-amber-900/60 text-amber-900 dark:text-amber-200 rounded-xl text-xs font-bold transition-all border border-amber-300/60 dark:border-amber-700/60"
         >
           <span>🏛️</span>
           <span className="hidden sm:inline">Relics Vault</span>
@@ -209,33 +213,23 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
           )}
         </button>
 
-        <span className="text-[11px] text-stone-500 dark:text-gray-400 truncate">
-          Radar quiet. No active crises.
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping flex-shrink-0" />
+          <span className="text-[11px] text-stone-600 dark:text-stone-300 font-medium truncate">
+            Radar Scanning: Unpredictable crises strike as farm expands
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        {/* Quick Launch Dropdown for testing and live demonstration */}
-        <select
-          onChange={(e) => {
-            const val = e.target.value as SystemicEventId;
-            if (val) {
-              triggerSystemicEvent(val);
-              onOpenDetail();
-            }
-          }}
-          defaultValue=""
-          className="text-[11px] font-semibold bg-stone-100 dark:bg-gray-700 text-stone-700 dark:text-stone-200 px-2 py-1 rounded-xl border border-stone-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-400"
+        <button
+          onClick={onOpenDetail}
+          className="text-[11px] font-bold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 px-2.5 py-1 rounded-xl border border-stone-200 dark:border-stone-700 transition-colors flex items-center gap-1"
+          title="View Radar & Phenomena Codex"
         >
-          <option value="" disabled>
-            ⚡ Test Event...
-          </option>
-          {Object.values(SYSTEMIC_EVENTS).map((ev) => (
-            <option key={ev.id} value={ev.id}>
-              {ev.emoji} {ev.name}
-            </option>
-          ))}
-        </select>
+          <span>📡</span>
+          <span>Codex</span>
+        </button>
       </div>
     </div>
   );

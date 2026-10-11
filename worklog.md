@@ -97,3 +97,20 @@ Work Log:
 Stage Summary:
 - 100% local-first architecture with high-capacity IndexedDB persistence, manual backup JSON portability, zero email limits, and zero external backend dependencies
 
+---
+Task ID: 6
+Agent: Main Agent
+Task: Autonomous Random Surprise Event Engine (Removed Manual Event Selection)
+
+Work Log:
+- Implemented `getEligibleRandomEvents` in `src/game/eventsData.ts` to gate surprise events organically based on farm level (Levels 1-9) and active cooldowns
+- Implemented autonomous surprise event engine in `src/game/store.ts` tick loop: dynamically schedules and rolls unexpected crises/events every 2-6 minutes when no event is active (Level 2+)
+- Added `nextSurpriseEventTime` and `surpriseEventAlert` to GameState and zustand IndexedDB persistence
+- Added auto-open listener in `src/app/page.tsx` that immediately pops up the event arrival alert with sound/visual forecast when an event strikes
+- Removed the manual "⚡ Test Event..." dropdown from `src/components/game/events/EventTopBanner.tsx`
+- Replaced manual event trigger buttons in `src/components/game/events/EventDetailModal.tsx` with a read-only Regional Phenomena Field Guide and live radar scanner (moved simulation triggers to a discreet collapsed developer section)
+- Verified TypeScript checks and Next.js Turbopack production builds pass with 0 errors
+
+Stage Summary:
+- Events now occur purely as unpredictable random surprises matching natural farm progression, completely removing player-selected manual triggers from standard gameplay
+

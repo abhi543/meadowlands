@@ -28,6 +28,8 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
     claimSystemicGrandReward,
     dismissSystemicEvent,
     triggerSystemicEvent,
+    systemicEventCooldowns,
+    level,
   } = useGameStore();
 
   const [, setTick] = useState(0);
@@ -521,46 +523,102 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
               )}
             </>
           ) : (
-            /* No Active Event - Registry Showcase & Test Launcher */
+            /* No Active Event - Radar Station & Phenomena Codex (Surprise-driven) */
             <div className="space-y-4">
-              <div className="text-center py-4">
-                <span className="text-4xl block mb-2">📡</span>
-                <h4 className="font-black text-base text-stone-900 dark:text-white">
-                  Crisis Radar Clear
+              <div className="text-center py-4 bg-gradient-to-b from-stone-50 to-stone-100 dark:from-stone-800/50 dark:to-stone-800/20 rounded-2xl p-4 border border-stone-200/80 dark:border-stone-700/60">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold mb-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Horizon Radar: Active Scanning</span>
+                </div>
+                <h4 className="font-black text-lg text-stone-900 dark:text-white">
+                  Clear Skies on the Estate
                 </h4>
-                <p className="text-xs text-stone-500 max-w-sm mx-auto mt-1">
-                  Events trigger automatically via the background lifecycle loop. You can also select and trigger any of the 10 Systemic Events below:
+                <p className="text-xs text-stone-600 dark:text-stone-300 max-w-md mx-auto mt-1 leading-relaxed">
+                  Crises, royal expeditions, wandering smugglers, and seasonal festivals arrive as <b>unpredictable surprises</b> as your farm flourishes. Keep your silos stocked and crops watered to claim rare relics when they strike!
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {Object.values(SYSTEMIC_EVENTS).map((ev) => (
-                  <button
-                    key={ev.id}
-                    onClick={() => {
-                      triggerSystemicEvent(ev.id);
-                    }}
-                    className="p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-800/60 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50/50 dark:hover:bg-amber-950/20 text-left transition-all group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl group-hover:scale-110 transition-transform">
-                        {ev.emoji}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="font-black text-xs text-stone-900 dark:text-white truncate">
-                          {ev.name}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h5 className="font-extrabold text-xs uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                    Regional Phenomena Field Guide (10 Total)
+                  </h5>
+                  <span className="text-[11px] text-stone-400">Farm Level {level}</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {Object.values(SYSTEMIC_EVENTS).map((ev) => {
+                    const cooldownUntil = systemicEventCooldowns[ev.id] || 0;
+                    const isCooling = cooldownUntil > now;
+                    const hoursLeft = Math.ceil((cooldownUntil - now) / 3600000);
+
+                    return (
+                      <div
+                        key={ev.id}
+                        className="p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-800/60 text-left transition-all space-y-1.5"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-2xl select-none flex-shrink-0">
+                              {ev.emoji}
+                            </span>
+                            <div className="min-w-0">
+                              <div className="font-black text-xs text-stone-900 dark:text-white truncate">
+                                {ev.name}
+                              </div>
+                              <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold truncate">
+                                {ev.badge} • Active: {Math.round(ev.activeDurationMs / 60000)}m
+                              </div>
+                            </div>
+                          </div>
+                          <div>
+                            {isCooling ? (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400">
+                                ⏳ Cooldown ({hoursLeft}h)
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                ⚡ Watching
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                          Active: {Math.round(ev.activeDurationMs / 60000)}m | Cool: {Math.round(ev.cooldownMs / 3600000)}h
+
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 leading-relaxed">
+                          {ev.premise}
+                        </p>
+
+                        <div className="pt-1 border-t border-stone-100 dark:border-stone-800 text-[10px] text-stone-600 dark:text-stone-300 flex items-center justify-between">
+                          <span className="font-semibold text-amber-600 dark:text-amber-400">
+                            Relic: {ev.grandReward.relicName} {ev.grandReward.relicEmoji}
+                          </span>
+                          <span>
+                            +{ev.grandReward.gems} 💎
+                          </span>
                         </div>
                       </div>
-                    </div>
-                    <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 line-clamp-1">
-                      {ev.grandReward.coins.toLocaleString()} 🪙 • {ev.grandReward.gems} 💎 • {ev.grandReward.relicName}
-                    </div>
-                  </button>
-                ))}
+                    );
+                  })}
+                </div>
               </div>
+
+              {/* Developer Testing Override (Collapsed by default so normal players never see it) */}
+              <details className="text-[10px] text-stone-400 dark:text-stone-500 pt-3 border-t border-stone-200 dark:border-stone-800">
+                <summary className="cursor-pointer hover:underline font-mono">
+                  ⚙️ Developer Simulation Override (Force Trigger)
+                </summary>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-2">
+                  {Object.values(SYSTEMIC_EVENTS).map((ev) => (
+                    <button
+                      key={ev.id}
+                      onClick={() => triggerSystemicEvent(ev.id)}
+                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-medium truncate"
+                    >
+                      {ev.emoji} {ev.name}
+                    </button>
+                  ))}
+                </div>
+              </details>
             </div>
           )}
         </div>

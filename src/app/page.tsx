@@ -74,6 +74,17 @@ export default function Home() {
     requestPersistentStorage();
   }, []);
 
+  const surpriseEventAlert = useGameStore(s => s.surpriseEventAlert);
+  const clearSurpriseEventAlert = useGameStore(s => s.clearSurpriseEventAlert);
+
+  // When an autonomous surprise event triggers, dramatically pop open the event hub!
+  useEffect(() => {
+    if (surpriseEventAlert) {
+      setEventModalOpen(true);
+      clearSurpriseEventAlert();
+    }
+  }, [surpriseEventAlert, clearSurpriseEventAlert]);
+
   // Game tick loop
   useEffect(() => {
     if (!hydrated) return;
