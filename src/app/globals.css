@@ -138,6 +138,16 @@
   animation: farm-pop 0.3s ease-out;
 }
 
+@keyframes float-fade {
+  0% { transform: translateY(0px) scale(0.9); opacity: 1; }
+  50% { transform: translateY(-16px) scale(1.15); opacity: 0.9; }
+  100% { transform: translateY(-30px) scale(1); opacity: 0; }
+}
+
+.animate-float-fade {
+  animation: float-fade 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Custom scrollbar for game panels */
 .game-scroll::-webkit-scrollbar {
   width: 4px;

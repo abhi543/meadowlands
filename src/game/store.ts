@@ -110,6 +110,8 @@ export interface PlotState {
   crop: CropId | null;
   plantedAt: number | null;
   ready: boolean;
+  isWatered?: boolean;
+  wateredUntil?: number | null;
 }
 
 export interface AnimalInstance {
@@ -313,6 +315,12 @@ export interface GameState {
   suddenEventFlash: 'CRISIS' | 'GOLD_RUSH' | null;
   isSuddenEventModalOpen: boolean;
 
+  // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
+  waterLevel: number;
+  maxWaterLevel: number;
+  wellLevel: number;
+  lastWellAutoRefill: number | null;
+
   // Time
   lastTick: number;
 
@@ -424,6 +432,12 @@ export interface GameState {
   setSuddenEventModalOpen: (open: boolean) => void;
   adjustSuddenEventExpiry: (elapsedMs: number) => void;
 
+  // Water System Actions
+  pumpWell: () => void;
+  upgradeWell: () => boolean;
+  waterPlot: (plotId: number) => boolean;
+  waterAllPlots: () => void;
+
   tick: () => void;
   resetGame: () => void;
 }
@@ -453,6 +467,8 @@ const initialPlots: PlotState[] = Array.from({ length: 20 }, (_, i) => ({
   crop: null,
   plantedAt: null,
   ready: false,
+  isWatered: false,
+  wateredUntil: null,
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -643,6 +659,12 @@ export const useGameStore = create<GameState>()(
       suddenEventFlash: null,
       isSuddenEventModalOpen: false,
 
+      // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
+      waterLevel: 10,
+      maxWaterLevel: 10,
+      wellLevel: 1,
+      lastWellAutoRefill: null,
+
       lastTick: Date.now(),
 
       // Cloud Sync & Auth
@@ -663,7 +685,14 @@ export const useGameStore = create<GameState>()(
           set({ coins: state.coins - cropDef.seedCost });
         }
         const newPlots = [...state.plots];
-        newPlots[plotId] = { id: plotId, crop: cropId, plantedAt: Date.now(), ready: false };
+        newPlots[plotId] = {
+          id: plotId,
+          crop: cropId,
+          plantedAt: Date.now(),
+          ready: false,
+          isWatered: plot.isWatered || false,
+          wateredUntil: plot.wateredUntil || null,
+        };
         set({ plots: newPlots });
       },
 
@@ -674,7 +703,15 @@ export const useGameStore = create<GameState>()(
         const cropDef = CROPS[plot.crop];
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + cropDef.yieldCount };
         const newPlots = [...state.plots];
-        newPlots[plotId] = { id: plotId, crop: null, plantedAt: null, ready: false };
+        // Harvest resets soil hydration so next crops require fresh watering
+        newPlots[plotId] = {
+          id: plotId,
+          crop: null,
+          plantedAt: null,
+          ready: false,
+          isWatered: false,
+          wateredUntil: null,
+        };
 
         // Alchemical Bloom Event Integration
         let newSystemicEvent = state.systemicEvent;
@@ -724,7 +761,14 @@ export const useGameStore = create<GameState>()(
         // Deduct cost and plant all
         const newPlots = [...state.plots];
         for (const pid of emptyPlotIds) {
-          newPlots[pid] = { id: pid, crop: cropId, plantedAt: now, ready: false };
+          newPlots[pid] = {
+            id: pid,
+            crop: cropId,
+            plantedAt: now,
+            ready: false,
+            isWatered: state.plots[pid]?.isWatered || false,
+            wateredUntil: state.plots[pid]?.wateredUntil || null,
+          };
         }
         set({
           coins: state.coins - totalCost,
@@ -743,7 +787,14 @@ export const useGameStore = create<GameState>()(
           if (plot && plot.crop && plot.ready) {
             const cropDef = CROPS[plot.crop];
             newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount;
-            newPlots[i] = { id: i, crop: null, plantedAt: null, ready: false };
+            newPlots[i] = {
+              id: i,
+              crop: null,
+              plantedAt: null,
+              ready: false,
+              isWatered: false,
+              wateredUntil: null,
+            };
             harvestedCount++;
           }
         }
@@ -1895,7 +1946,8 @@ export const useGameStore = create<GameState>()(
               return p;
             }
             const elapsed = (now - p.plantedAt) / 1000;
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier;
+            const waterBoost = p.isWatered ? 2.0 : 1.0;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -2538,6 +2590,17 @@ export const useGameStore = create<GameState>()(
           updatedEstateAura = getEstateAura(parcelsClaimed);
         }
 
+        // Auto-refill well if wellLevel >= 5 (refills 1 water every 5 seconds)
+        let newWaterLevel = state.waterLevel;
+        let newLastWellAutoRefill = state.lastWellAutoRefill;
+        if (state.wellLevel >= 5 && state.waterLevel < state.maxWaterLevel) {
+          const lastRefill = state.lastWellAutoRefill || now;
+          if (now - lastRefill >= 5000) {
+            newWaterLevel = Math.min(state.maxWaterLevel, state.waterLevel + 1);
+            newLastWellAutoRefill = now;
+          }
+        }
+
         // Level up check
         const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
 
@@ -2571,6 +2634,8 @@ export const useGameStore = create<GameState>()(
           suddenEventFlash: newSuddenFlash,
           isSuddenEventModalOpen: newSuddenModalOpen,
           workersPausedUntil: updatedWorkersPaused,
+          waterLevel: newWaterLevel,
+          lastWellAutoRefill: newLastWellAutoRefill,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -3330,6 +3395,119 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // Water System & Farm Well Actions
+      pumpWell: () => {
+        const state = get();
+        if (state.waterLevel >= state.maxWaterLevel) return;
+        set({
+          waterLevel: Math.min(state.maxWaterLevel, state.waterLevel + 1),
+          isDirty: true,
+        });
+      },
+
+      upgradeWell: () => {
+        const state = get();
+        const cost = state.wellLevel * 150;
+        if (state.coins < cost) return false;
+
+        const newWellLevel = state.wellLevel + 1;
+        const newMaxWater = state.maxWaterLevel + 5;
+
+        set({
+          coins: state.coins - cost,
+          wellLevel: newWellLevel,
+          maxWaterLevel: newMaxWater,
+          waterLevel: newMaxWater,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          newWellLevel >= 5
+            ? `💧 Upgraded Well to Lv.${newWellLevel}! Auto-Refill unlocked (+1 water/5s)!`
+            : `💧 Upgraded Well to Lv.${newWellLevel}! Max capacity: ${newMaxWater} 💧`,
+          '⛲',
+          'info'
+        );
+
+        return true;
+      },
+
+      waterPlot: (plotId) => {
+        const state = get();
+        if (state.waterLevel <= 0) return false;
+        const plot = state.plots[plotId];
+        if (!plot || plot.isWatered) return false;
+
+        const newPlots = [...state.plots];
+        let newPlantedAt = plot.plantedAt;
+
+        // Halve remaining growth duration of the planted crop:
+        // readyAt = Date.now() + (readyAt - Date.now()) / 2
+        if (plot.crop && plot.plantedAt && !plot.ready) {
+          const cropDef = CROPS[plot.crop];
+          const totalMs = cropDef.growTimeSec * 1000;
+          const now = Date.now();
+          const elapsedMs = now - plot.plantedAt;
+          const remainingMs = Math.max(0, totalMs - elapsedMs);
+          const newRemainingMs = remainingMs / 2;
+          newPlantedAt = now - (totalMs - newRemainingMs);
+        }
+
+        newPlots[plotId] = {
+          ...plot,
+          isWatered: true,
+          wateredUntil: Date.now() + 60000,
+          plantedAt: newPlantedAt,
+        };
+
+        set({
+          waterLevel: state.waterLevel - 1,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        return true;
+      },
+
+      waterAllPlots: () => {
+        const state = get();
+        if (state.waterLevel <= 0) return;
+        let currentWater = state.waterLevel;
+        const newPlots = [...state.plots];
+        let wateredCount = 0;
+        const now = Date.now();
+
+        for (let i = 0; i < state.unlockedPlots && currentWater > 0; i++) {
+          const plot = newPlots[i];
+          if (plot && !plot.isWatered) {
+            let newPlantedAt = plot.plantedAt;
+            if (plot.crop && plot.plantedAt && !plot.ready) {
+              const cropDef = CROPS[plot.crop];
+              const totalMs = cropDef.growTimeSec * 1000;
+              const elapsedMs = now - plot.plantedAt;
+              const remainingMs = Math.max(0, totalMs - elapsedMs);
+              newPlantedAt = now - (totalMs - (remainingMs / 2));
+            }
+            newPlots[i] = {
+              ...plot,
+              isWatered: true,
+              wateredUntil: now + 60000,
+              plantedAt: newPlantedAt,
+            };
+            currentWater--;
+            wateredCount++;
+          }
+        }
+
+        if (wateredCount > 0) {
+          set({
+            waterLevel: currentWater,
+            plots: newPlots,
+            isDirty: true,
+          });
+        }
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -3376,6 +3554,11 @@ export const useGameStore = create<GameState>()(
           workersPausedUntil: null,
           suddenEventFlash: null,
           isSuddenEventModalOpen: false,
+          // Water System & Farm Well
+          waterLevel: 10,
+          maxWaterLevel: 10,
+          wellLevel: 1,
+          lastWellAutoRefill: null,
           lastTick: Date.now(),
           isDirty: false,
           isGuest: true,
@@ -3415,6 +3598,9 @@ export const useGameStore = create<GameState>()(
         activeFreightContract: state.activeFreightContract,
         freightContractRefreshAt: state.freightContractRefreshAt,
         currentEstateAura: state.currentEstateAura,
+        waterLevel: state.waterLevel,
+        maxWaterLevel: state.maxWaterLevel,
+        wellLevel: state.wellLevel,
         isGuest: state.isGuest,
         lastCloudSyncTimestamp: state.lastCloudSyncTimestamp,
       }),
@@ -3564,6 +3750,12 @@ export const useGameStore = create<GameState>()(
         if (merged.workersPausedUntil === undefined) merged.workersPausedUntil = null;
         if (merged.suddenEventFlash === undefined) merged.suddenEventFlash = null;
         if (merged.isSuddenEventModalOpen === undefined) merged.isSuddenEventModalOpen = false;
+
+        // Migration: water system & farm well
+        if (merged.waterLevel === undefined) merged.waterLevel = 10;
+        if (merged.maxWaterLevel === undefined) merged.maxWaterLevel = 10;
+        if (merged.wellLevel === undefined) merged.wellLevel = 1;
+        if (merged.lastWellAutoRefill === undefined) merged.lastWellAutoRefill = null;
 
         return merged as GameState;
       },

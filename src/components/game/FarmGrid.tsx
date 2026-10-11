@@ -3,6 +3,7 @@
 import { useGameStore } from '@/game/store';
 import { CROPS, type CropId } from '@/game/data';
 import { useState } from 'react';
+import { FarmWell } from './FarmWell';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -14,6 +15,8 @@ export function FarmGrid() {
     harvestPlot,
     plantAllCrops,
     harvestAllPlots,
+    waterPlot,
+    waterLevel,
     silo,
     coins,
     systemicEvent,
@@ -33,7 +36,10 @@ export function FarmGrid() {
   const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
+      {/* Interactive Farm Well HUD */}
+      <FarmWell />
+
       {/* Crop Selector Toolbar */}
       <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2 border border-amber-200 dark:border-amber-800">
         <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1.5 flex items-center gap-1">
@@ -125,6 +131,7 @@ export function FarmGrid() {
           const isReady = plot.ready;
           const isGrowing = plot.crop && !plot.ready;
           const isEmpty = !plot.crop;
+          const isWatered = Boolean(plot.isWatered);
 
           const isOnFire = systemicEvent?.id === 'barn_fire' &&
             systemicEvent?.phase === 'active' &&
@@ -138,31 +145,49 @@ export function FarmGrid() {
             ? Math.min(1, (Date.now() - plot.plantedAt) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
 
+          // Soil styling classes
+          let soilClasses = '';
+          if (isOnFire) {
+            soilClasses = 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 animate-pulse ring-2 ring-rose-400 shadow-lg shadow-rose-500/30 cursor-pointer';
+          } else if (hasLocust) {
+            soilClasses = 'bg-amber-100 dark:bg-amber-950/60 border-amber-600 animate-bounce ring-2 ring-amber-500 shadow-md cursor-pointer';
+          } else if (isReady) {
+            soilClasses = isWatered
+              ? 'bg-[#3d2817] dark:bg-[#2b1c10] border-emerald-400 ring-2 ring-cyan-400/50 hover:scale-105 shadow-lg shadow-emerald-500/20 cursor-pointer text-white'
+              : 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 hover:scale-105 shadow-green-200/50 shadow-lg cursor-pointer';
+          } else if (isWatered) {
+            // Watered soil: Dark, rich brown soil with blue sparkle badge
+            soilClasses = 'bg-[#3b2716] dark:bg-[#2c1d10] border-cyan-400/80 ring-2 ring-cyan-400/40 shadow-md shadow-cyan-950/40 text-stone-100 cursor-pointer';
+          } else if (isGrowing) {
+            // Dry growing soil: Standard light-tan soil texture
+            soilClasses = 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
+          } else {
+            // Dry empty plot: Standard light-tan soil texture
+            soilClasses = 'bg-[#f4e8d8]/80 dark:bg-stone-900/40 border-stone-300 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-100/40 cursor-pointer';
+          }
+
+          const handlePlotClick = () => {
+            if (isOnFire) {
+              extinguishBrushfire(plot.id);
+            } else if (hasLocust) {
+              captureLocust(plot.id);
+            } else if (isReady) {
+              harvestPlot(plot.id);
+            } else if (isEmpty) {
+              plantCrop(plot.id, selectedCrop);
+            } else if (isGrowing && !isWatered) {
+              // Tapping unwatered growing crop waters it to double speed!
+              if (waterLevel > 0) {
+                waterPlot(plot.id);
+              }
+            }
+          };
+
           return (
             <button
               key={plot.id}
-              onClick={() => {
-                if (isOnFire) {
-                  extinguishBrushfire(plot.id);
-                } else if (hasLocust) {
-                  captureLocust(plot.id);
-                } else if (isReady) {
-                  harvestPlot(plot.id);
-                } else if (isEmpty) {
-                  plantCrop(plot.id, selectedCrop);
-                }
-              }}
-              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden ${
-                isOnFire
-                  ? 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 animate-pulse ring-2 ring-rose-400 shadow-lg shadow-rose-500/30 cursor-pointer'
-                  : hasLocust
-                  ? 'bg-amber-100 dark:bg-amber-950/60 border-amber-600 animate-bounce ring-2 ring-amber-500 shadow-md cursor-pointer'
-                  : isReady
-                  ? 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 hover:scale-105 shadow-green-200/50 shadow-lg cursor-pointer'
-                  : isGrowing
-                  ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 cursor-default'
-                  : 'bg-stone-50 dark:bg-stone-900/30 border-stone-200 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 cursor-pointer'
-              }`}
+              onClick={handlePlotClick}
+              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden ${soilClasses}`}
             >
               {/* Crisis Overlay 1: Brushfire */}
               {isOnFire ? (
@@ -182,24 +207,53 @@ export function FarmGrid() {
                 </div>
               ) : (
                 <>
+                  {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
+                  {isWatered && (
+                    <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-cyan-600/90 text-white text-[8px] sm:text-[9px] font-black border border-cyan-300 shadow-sm animate-pulse z-10">
+                      <span>⚡</span>
+                      <span>2x Speed</span>
+                    </div>
+                  )}
+
+                  {/* Water Prompt Indicator for unwatered growing crops */}
+                  {isGrowing && !isWatered && waterLevel > 0 && (
+                    <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-blue-600/90 hover:bg-blue-500 text-white text-[8px] sm:text-[9px] font-bold border border-blue-300 shadow-sm animate-bounce z-10">
+                      <span>💧</span>
+                      <span>Water</span>
+                    </div>
+                  )}
+
                   {/* Progress bar for growing crops */}
                   {isGrowing && plot.crop && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-amber-100 dark:bg-amber-900">
+                    <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${isWatered ? 'bg-cyan-950/60' : 'bg-amber-100 dark:bg-amber-900'}`}>
                       <div
-                        className="h-full bg-amber-400 dark:bg-amber-500 rounded-r transition-all"
+                        className={`h-full rounded-r transition-all ${
+                          isWatered
+                            ? 'bg-gradient-to-r from-cyan-400 to-blue-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]'
+                            : 'bg-amber-400 dark:bg-amber-500'
+                        }`}
                         style={{ width: `${progress * 100}%` }}
                       />
                     </div>
                   )}
 
                   {isEmpty && (
-                    <span className="text-2xl opacity-30">{'🟫'}</span>
+                    <div className="flex flex-col items-center">
+                      <span className="text-2xl opacity-40">
+                        {isWatered ? '💧' : '🟫'}
+                      </span>
+                      <span className="text-[9px] text-stone-500 dark:text-stone-400 mt-0.5">
+                        {isWatered ? 'Moist Soil' : 'Dry Soil'}
+                      </span>
+                    </div>
                   )}
 
                   {isGrowing && plot.crop && (
                     <div className="flex flex-col items-center">
                       <span className="text-xl">{CROPS[plot.crop].emoji}</span>
-                      <span className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      <span className={`text-[10px] font-semibold mt-0.5 ${
+                        isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
+                      }`}>
                         {Math.round(progress * 100)}%
                       </span>
                     </div>
@@ -208,7 +262,9 @@ export function FarmGrid() {
                   {isReady && plot.crop && (
                     <div className="flex flex-col items-center animate-bounce">
                       <span className="text-2xl">{CROPS[plot.crop].emoji}</span>
-                      <span className="text-[10px] font-bold text-green-600 dark:text-green-400">{'✂️'} Harvest</span>
+                      <span className="text-[10px] font-bold text-green-600 dark:text-green-300">
+                        {'✂️'} Harvest
+                      </span>
                     </div>
                   )}
                 </>
