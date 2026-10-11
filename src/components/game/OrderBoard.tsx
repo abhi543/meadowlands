@@ -56,8 +56,31 @@ function getItemSourceHint(itemId: string): string {
   return 'Produce or gather';
 }
 
+import { useState, useEffect } from 'react';
+import { playClockTickSound } from '@/lib/soundEffects';
+
 export function OrderBoard() {
   const { orders, silo, barn, fulfillOrder, trashOrder } = useGameStore();
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick(t => t + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const now = Date.now();
+
+  // Play ticking sound if any rush order is under 15 seconds
+  useEffect(() => {
+    const urgentRush = orders.find(
+      o => o.isRushOrder && o.rushExpiresAt && (o.rushExpiresAt - now <= 15000) && (o.rushExpiresAt - now > 0)
+    );
+    if (urgentRush) {
+      playClockTickSound();
+    }
+  }, [orders, now]);
 
   const isCropItem = (itemId: string): boolean => {
     return itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
@@ -115,15 +138,38 @@ export function OrderBoard() {
             }
           }
 
+          const rushRemaining = Math.max(0, Math.ceil(((order.rushExpiresAt || 0) - now) / 1000));
+          const isRushUrgent = rushRemaining <= 15;
+
           return (
             <div
               key={order.id}
               className={`rounded-xl border-2 p-3 transition-all ${
-                fulfilled
+                order.isRushOrder
+                  ? isRushUrgent
+                    ? 'border-red-500 bg-red-950/20 shadow-md shadow-red-500/20'
+                    : 'border-amber-500 bg-amber-950/10 shadow-md shadow-amber-500/20'
+                  : fulfilled
                   ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 shadow-sm'
                   : 'bg-white dark:bg-gray-900 border-stone-200 dark:border-gray-700'
               }`}
             >
+              {/* VIP Rush Contract Header */}
+              {order.isRushOrder && (
+                <div className="flex items-center justify-between pb-1.5 mb-2.5 border-b border-amber-500/30">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-black uppercase text-amber-500 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/40 flex items-center gap-1">
+                      <span>⚡</span> VIP RUSH
+                    </span>
+                  </div>
+                  <span className={`text-[11px] font-mono font-black px-2 py-0.5 rounded-full ${
+                    isRushUrgent ? 'bg-red-500 text-white animate-pulse' : 'bg-black/30 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    ⏳ {rushRemaining}s
+                  </span>
+                </div>
+              )}
+
               {/* Items Requested */}
               <div className="space-y-1.5 mb-3">
                 {order.requested.map((item, i) => {
@@ -166,14 +212,32 @@ export function OrderBoard() {
               )}
 
               {/* Rewards */}
-              <div className="flex items-center gap-3 mb-3 text-xs">
+              <div className="flex items-center gap-3 mb-2 text-xs flex-wrap">
                 <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold">
                   {'\u{1F4B0}'} {order.coinReward}
+                  {order.isRushOrder && <span className="text-[9px] font-black bg-amber-500 text-stone-950 px-1 rounded ml-1">2X</span>}
                 </span>
                 <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold">
                   {'\u2B50'} {order.xpReward} XP
                 </span>
+                {order.bonusGems ? (
+                  <span className="flex items-center gap-1 text-cyan-600 dark:text-cyan-400 font-bold">
+                    💎 +{order.bonusGems}
+                  </span>
+                ) : null}
+                {order.relicFragmentReward ? (
+                  <span className="flex items-center gap-1 text-purple-600 dark:text-purple-400 font-bold">
+                    🏛️ +{order.relicFragmentReward} Frag
+                  </span>
+                ) : null}
               </div>
+
+              {/* Breach fee warning */}
+              {order.isRushOrder && (
+                <div className="mb-2 text-[10px] text-rose-500 dark:text-rose-400 font-semibold flex items-center gap-1">
+                  <span>⚠️</span> Breach Fee: -{order.breachFee || 20} 🪙 if expired
+                </div>
+              )}
 
               {/* Actions */}
               <div className="flex gap-2">

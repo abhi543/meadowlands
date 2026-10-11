@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useGameStore } from '@/game/store';
+import { RogueliteExpeditionMap } from './RogueliteExpeditionMap';
 import {
   ANIMALS, BIOMES, LURES, TIER_COLORS, TIER_LABELS,
   type BiomeId, type LureTypeId, type Tier,
@@ -22,6 +23,8 @@ export function WildernessPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Step 2: Roguelite Wild Expeditions (Push-Your-Luck Exploration) */}
+      <RogueliteExpeditionMap />
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-800 to-teal-700 dark:from-emerald-900 dark:to-teal-900 rounded-xl p-4 text-white">
         <div className="flex items-center gap-3">

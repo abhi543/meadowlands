@@ -111,8 +111,28 @@ function calcMaxCraftable(recipe: RecipeDef, silo: Record<string, number>, barn:
 }
 
 export function ProductionPanel() {
-  const { productionQueues, silo, barn, level, startProduction, collectProduction, startProductionAll, collectProductionAll } = useGameStore();
+  const {
+    productionQueues,
+    silo,
+    barn,
+    level,
+    coins,
+    startProduction,
+    collectProduction,
+    startProductionAll,
+    collectProductionAll,
+    buildingOverclocks,
+    toggleBuildingOverclock,
+    cureBuildingExhaustion,
+  } = useGameStore();
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('feed_mill');
+  const [, setTick] = useState(0);
+
+  // 1-second interval for overclock timers
+  useState(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  });
 
   const building = BUILDINGS[activeBuilding];
   const queue = productionQueues[activeBuilding] || [];
@@ -121,6 +141,17 @@ export function ProductionPanel() {
   const activeCount = queue.filter(s => !s.done).length;
   const theme = BUILDING_THEME[activeBuilding];
   const freeSlots = building.queueSlots - activeCount;
+
+  const overclockState = buildingOverclocks[activeBuilding] || {
+    isOverclocked: false,
+    expiresAt: null,
+    isExhausted: false,
+    exhaustedUntil: null,
+  };
+  const isOverclocked = Boolean(overclockState.isOverclocked && overclockState.expiresAt && overclockState.expiresAt > Date.now());
+  const isExhausted = Boolean(overclockState.isExhausted && overclockState.exhaustedUntil && overclockState.exhaustedUntil > Date.now());
+  const overclockRemaining = isOverclocked ? Math.max(0, Math.ceil(((overclockState.expiresAt || 0) - Date.now()) / 1000)) : 0;
+  const exhaustedRemaining = isExhausted ? Math.max(0, Math.ceil(((overclockState.exhaustedUntil || 0) - Date.now()) / 1000)) : 0;
 
   return (
     <div className="space-y-3">
@@ -134,16 +165,30 @@ export function ProductionPanel() {
           const done = q.filter(s => s.done).length;
           const locked = b.unlockLevel ? level < b.unlockLevel : false;
           const isActive = activeBuilding === bId;
+          const bOverclock = buildingOverclocks[bId];
+          const bIsOverclocked = Boolean(bOverclock?.isOverclocked && bOverclock?.expiresAt && bOverclock?.expiresAt > Date.now());
+          const bIsExhausted = Boolean(bOverclock?.isExhausted && bOverclock?.exhaustedUntil && bOverclock?.exhaustedUntil > Date.now());
+
           return (
             <button
               key={bId}
               onClick={() => setActiveBuilding(bId)}
-              className={`py-2 px-1.5 rounded-xl flex flex-col items-center gap-1 transition-all duration-200 border-2 ${
+              className={`py-2 px-1.5 rounded-xl flex flex-col items-center gap-1 transition-all duration-200 border-2 relative ${
                 isActive
                   ? `${t.bgActive} text-white ${t.borderActive} shadow-lg scale-105`
                   : `bg-white dark:bg-gray-800 ${t.color} border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600`
               } ${locked ? 'opacity-40' : ''}`}
             >
+              {bIsOverclocked && (
+                <span className="absolute -top-1 -right-1 text-[10px] bg-amber-500 rounded-full px-1 animate-pulse">
+                  ⚡
+                </span>
+              )}
+              {bIsExhausted && (
+                <span className="absolute -top-1 -right-1 text-[10px] bg-rose-500 rounded-full px-1">
+                  💤
+                </span>
+              )}
               <span className={`transition-transform duration-200 ${isActive ? 'text-2xl' : 'text-xl'}`}>{t.emoji}</span>
               <span className={`text-[10px] leading-tight ${isActive ? 'font-bold' : 'font-medium'}`}>{b.name}</span>
               {slots > 0 && <span className={`text-[9px] font-bold px-1.5 rounded-full ${isActive ? 'bg-white/30 text-white' : 'bg-orange-400 text-white'}`}>{slots}</span>}
@@ -157,21 +202,67 @@ export function ProductionPanel() {
       {/* Active Building Detail */}
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-stone-200 dark:border-gray-700 overflow-hidden">
         <div className={`bg-gradient-to-r ${theme.headerFrom} dark:from-gray-800 ${theme.headerTo} dark:to-gray-800 px-4 py-3 border-b border-stone-200 dark:border-gray-700`}>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
               <span className="text-3xl">{theme.emoji}</span>
               <div>
-                <h3 className={`font-bold text-lg ${theme.headerText}`}>{building.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className={`font-bold text-lg ${theme.headerText}`}>{building.name}</h3>
+                  {isOverclocked && (
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 animate-pulse">
+                      ⚡ 3x Speed
+                    </span>
+                  )}
+                </div>
                 <p className={`text-xs ${theme.headerSub}`}>
                   {isLocked ? '\u{1F512} Unlock at Level ' + building.unlockLevel : `Queue: ${activeCount}/${building.queueSlots} slots`}
                 </p>
               </div>
             </div>
-            {!isLocked && doneCount > 0 && (
-              <button onClick={() => collectProductionAll(activeBuilding)} className="px-4 py-2 text-sm font-bold rounded-xl bg-green-500 hover:bg-green-600 text-white transition-all shadow-lg shadow-green-200/50 active:scale-95 flex items-center gap-1.5">
-                <span>{'\u2705'}</span> Collect All <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">{doneCount}</span>
-              </button>
-            )}
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Overclock / Exhaustion Controls */}
+              {!isLocked && (
+                <>
+                  {isExhausted ? (
+                    <div className="flex items-center gap-1.5 bg-rose-950/60 p-1.5 rounded-xl border border-rose-500/50">
+                      <span className="text-[10px] font-bold text-rose-300">
+                        💤 Burnout ({exhaustedRemaining}s)
+                      </span>
+                      <button
+                        disabled={coins < 25}
+                        onClick={() => cureBuildingExhaustion(activeBuilding)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                          coins >= 25
+                            ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow active:scale-95'
+                            : 'bg-stone-700 text-stone-500 cursor-not-allowed'
+                        }`}
+                      >
+                        🔧 Service (25 🪙)
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => toggleBuildingOverclock(activeBuilding)}
+                      className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all shadow-sm ${
+                        isOverclocked
+                          ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 ring-2 ring-amber-300 animate-pulse active:scale-95'
+                          : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-600 active:scale-95'
+                      }`}
+                      title="3x Production Speed for 60s (25% burnout risk)"
+                    >
+                      {isOverclocked ? `🔥 Overclock Active (${overclockRemaining}s)` : '⚡ Adrenaline Overclock (3x)'}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {!isLocked && doneCount > 0 && (
+                <button onClick={() => collectProductionAll(activeBuilding)} className="px-4 py-2 text-sm font-bold rounded-xl bg-green-500 hover:bg-green-600 text-white transition-all shadow-lg shadow-green-200/50 active:scale-95 flex items-center gap-1.5">
+                  <span>{'\u2705'}</span> Collect All <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">{doneCount}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

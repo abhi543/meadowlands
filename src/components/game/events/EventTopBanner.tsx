@@ -16,6 +16,8 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
     relics,
     surpriseEventAlert,
     clearSurpriseEventAlert,
+    activeCrisis,
+    setCrisisModalOpen,
   } = useGameStore();
 
   const [, setTick] = useState(0);
@@ -182,7 +184,67 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
     }
   }
 
-  // 4. IDLE / RADAR SCANNING MODE (100% Unpredictable Random Surprises)
+  // 4. ACTIVE RADAR CRISIS MODE (Defense & Multitasking)
+  if (activeCrisis && activeCrisis.resolvedStatus === 'pending') {
+    const remainingSec = Math.max(0, Math.ceil((activeCrisis.expiresAt - now) / 1000));
+    const isCritical = remainingSec <= 10;
+
+    return (
+      <div
+        onClick={() => setCrisisModalOpen(true)}
+        className={`mb-3 cursor-pointer group rounded-2xl overflow-hidden border-2 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] shadow-lg ${
+          isCritical
+            ? 'border-red-500 bg-gradient-to-r from-red-600 via-rose-700 to-red-600 text-white shadow-red-500/30 animate-pulse'
+            : 'border-amber-400 bg-gradient-to-r from-amber-600 via-orange-600 to-amber-700 text-white shadow-amber-500/25'
+        }`}
+      >
+        <div className="px-3.5 py-2.5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="text-2xl animate-bounce select-none flex-shrink-0">
+              {activeCrisis.emoji}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                  isCritical ? 'bg-black/40 text-red-200 ring-1 ring-red-400' : 'bg-black/30 text-amber-200 ring-1 ring-amber-300'
+                }`}>
+                  {isCritical ? 'CRITICAL COUNTDOWN' : 'RADAR CRISIS ALERT'}
+                </span>
+                <span className="text-xs font-black truncate text-white">
+                  {activeCrisis.title}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-100 dark:text-amber-200 truncate mt-0.5">
+                {activeCrisis.description}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="text-right">
+              <span className={`text-sm font-black font-mono block px-2 py-0.5 rounded-lg bg-black/40 ${
+                isCritical ? 'text-red-300 animate-pulse' : 'text-amber-200'
+              }`}>
+                {remainingSec}s
+              </span>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setCrisisModalOpen(true);
+              }}
+              className="px-3 py-1 bg-white text-stone-900 hover:bg-amber-100 font-black rounded-xl text-xs transition-transform active:scale-95 shadow-md flex items-center gap-1"
+            >
+              <span>🛡️</span>
+              <span>DEFEND</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. IDLE / RADAR SCANNING MODE (100% Unpredictable Random Surprises)
   const activeBuffsCount = [
     Boolean(relics.royalCrownCrestUntil && relics.royalCrownCrestUntil > now),
     Boolean(relics.mineralAshUntil && relics.mineralAshUntil > now),

@@ -156,3 +156,105 @@ export function playDefeatSound(): void {
   osc.start(now);
   osc.stop(now + 0.5);
 }
+
+/**
+ * ⏱️ Distinct crisp mechanical ticking sound for rush orders and high-stakes countdowns
+ */
+export function playClockTickSound(isHigh = false): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'triangle';
+  const freq = isHigh ? 1200 : 900;
+  osc.frequency.setValueAtTime(freq, now);
+  osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.04);
+
+  gain.gain.setValueAtTime(0.12, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.05);
+}
+
+/**
+ * 🚨 High-urgency emergency siren sting when a predator raid or blight crisis begins
+ */
+export function playSirenSting(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  
+  // Two layered oscillators for dissonant emergency screech
+  [660, 880].forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.linearRampToValueAtTime(freq * 1.35, now + 0.18);
+    osc.frequency.linearRampToValueAtTime(freq * 0.9, now + 0.35);
+    osc.frequency.linearRampToValueAtTime(freq * 1.4, now + 0.55);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.005, now + 0.65);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.68);
+  });
+}
+
+/**
+ * 💰 Satisfying cash register / victory chime on successful crisis defense and wild extraction
+ */
+export function playCashRegisterSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+
+  // 1. Initial mechanical slide "ka"
+  const clickOsc = ctx.createOscillator();
+  const clickGain = ctx.createGain();
+  clickOsc.type = 'triangle';
+  clickOsc.frequency.setValueAtTime(1400, now);
+  clickOsc.frequency.exponentialRampToValueAtTime(400, now + 0.06);
+  clickGain.gain.setValueAtTime(0.18, now);
+  clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+  clickOsc.connect(clickGain);
+  clickGain.connect(ctx.destination);
+  clickOsc.start(now);
+  clickOsc.stop(now + 0.07);
+
+  // 2. High brassy bell chime "ching!"
+  const bellFrequencies = [1760, 2637, 3520]; // A6, E7, A7
+  bellFrequencies.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + 0.06);
+
+    gain.gain.setValueAtTime(0, now + 0.06);
+    gain.gain.linearRampToValueAtTime(0.2 / (i + 1), now + 0.075);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + 0.06);
+    osc.stop(now + 0.9);
+  });
+}
+

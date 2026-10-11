@@ -17,6 +17,7 @@ import { EventBanner } from '@/components/game/EventBanner';
 import { EventEmergencyBanner } from '@/components/events/EventEmergencyBanner';
 import { EventTickingClock } from '@/components/events/EventTickingClock';
 import { EventEmergencyModal } from '@/components/events/EventEmergencyModal';
+import { CrisisDefenseModal } from '@/components/events/CrisisDefenseModal';
 import { EventTopBanner } from '@/components/game/events/EventTopBanner';
 import { EventDetailModal } from '@/components/game/events/EventDetailModal';
 import { RelicMonumentsPanel } from '@/components/game/events/RelicMonumentsPanel';
@@ -184,6 +185,8 @@ export default function Home() {
       <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
       {/* High-Stakes Direct Action Minigame Modal */}
       <EventEmergencyModal />
+      {/* Active Radar Crisis Defense Modal (Step 1) */}
+      <CrisisDefenseModal />
       <EventDetailModal
         isOpen={eventModalOpen}
         onClose={() => setEventModalOpen(false)}

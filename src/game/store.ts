@@ -23,6 +23,9 @@ import {
   generateParcelDebris, generateFreightContract,
   type ParcelId, type ParcelState, type DebrisEntity, type FreightContract, type EstateAuraTier,
   FACILITY_FOOTPRINTS, FREIGHT_CONTRACT_TEMPLATES,
+  type CrisisType, type CrisisDef, CRISIS_DEFINITIONS,
+  MUTATION_VARIANTS, type MutationVariantDef,
+  MARKET_COMMODITIES, MARKET_NEWS_TEMPLATES, type MarketNewsTemplate,
 } from './data';
 import {
   SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, getEligibleRandomEvents,
@@ -40,6 +43,9 @@ import {
   playRapidTapSound,
   playVictoryChime,
   playDefeatSound,
+  playClockTickSound,
+  playSirenSting,
+  playCashRegisterSound,
 } from '@/lib/soundEffects';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
@@ -126,6 +132,15 @@ export interface AnimalInstance {
   maxCycles: number;
   cyclesRemaining: number;
   cyclesCompletedTotal: number;
+  // Overclocking & Exhaustion (Step 4)
+  isOverclocked?: boolean;
+  overclockExpiresAt?: number | null;
+  isExhausted?: boolean;
+  exhaustedUntil?: number | null;
+  // Mutation Breeding (Step 4)
+  isMutated?: boolean;
+  mutationVariant?: string;
+  mutationBonus?: number;
 }
 
 export interface ProductionSlot {
@@ -143,7 +158,92 @@ export interface OrderState {
   coinReward: number;
   xpReward: number;
   trashedAt: number | null;
+  // VIP Rush Contracts (Step 3)
+  isRushOrder?: boolean;
+  rushExpiresAt?: number | null;
+  rushDurationSec?: number;
+  breachFee?: number;
+  bonusGems?: number;
+  relicFragmentReward?: number;
 }
+
+// --- Active Radar Crisis System Types (Step 1) ---
+export interface CrisisEvent {
+  id: string;
+  type: CrisisType;
+  title: string;
+  emoji: string;
+  description: string;
+  timer: number;                  // Remaining duration in seconds
+  expiresAt: number;              // Millisecond expiry timestamp
+  targetIds: (string | number)[]; // Target animal IDs (predator) or plot IDs (blight)
+  resolvedStatus: 'pending' | 'resolved' | 'failed';
+  weatherType?: 'drought' | 'blizzard';
+  shieldActive?: boolean;         // Active shield prevents 50% slow penalty
+  infectionProgress?: number;     // 0-100% infection progress
+  alarmTaps?: number;             // Rapid tap alarm progress
+}
+
+// --- Roguelite Wild Expedition Types (Step 2) ---
+export interface RogueliteExpeditionState {
+  isActive: boolean;
+  currentDepth: number;           // 1 to 5
+  maxDepth: number;               // 5
+  partyStamina: number;           // 0 to 100
+  maxStamina: number;             // 100
+  rations: number;                // Provisions to restore stamina / pass checks
+  retreatTools: number;           // Smoke bombs / escape ropes to negate hazards
+  accumulatedLoot: {
+    coins: number;
+    gems: number;
+    seeds: Record<string, number>;
+    relicFragments: number;
+    geneTokens: number;
+    rareItems: Record<string, number>;
+  };
+  currentNodeStatus: 'ready' | 'exploring' | 'cleared' | 'hazard' | 'wipeout' | 'extracted';
+  currentEncounter: {
+    type: 'cache' | 'hazard' | 'sanctuary';
+    title: string;
+    emoji: string;
+    description: string;
+    hazardType?: 'ambush' | 'poison_mist' | 'cave_in';
+    hazardChance: number;         // Depth 1: 15%, +20% per depth
+    staminaCost: number;
+    lootReward: {
+      coins: number;
+      gems: number;
+      seeds?: string;
+      relicFragments?: number;
+      geneTokens?: number;
+    };
+  } | null;
+  history: string[];
+  workerCooldownUntil: number | null;
+}
+
+// --- Dynamic Commodity Market Types (Step 3) ---
+export interface MarketTrendItem {
+  multiplier: number;             // 0.6x to 2.2x
+  trend: 'up' | 'down' | 'neutral';
+  lastUpdated: number;
+}
+
+export interface MarketNewsTicker {
+  headline: string;
+  itemId: string;
+  multiplier: number;
+  expiresAt: number;
+}
+
+// --- Production Overclocking State (Step 4) ---
+export interface BuildingOverclockState {
+  isOverclocked: boolean;
+  expiresAt: number | null;
+  isExhausted: boolean;
+  exhaustedUntil: number | null;
+}
+
 
 export interface FarmhandInstance {
   id: string;
@@ -315,6 +415,22 @@ export interface GameState {
   suddenEventFlash: 'CRISIS' | 'GOLD_RUSH' | null;
   isSuddenEventModalOpen: boolean;
 
+  // Active Radar Crisis System (Step 1)
+  activeCrisis: CrisisEvent | null;
+  nextCrisisTime: number;
+  isCrisisModalOpen: boolean;
+
+  // Roguelite Wild Expeditions (Step 2)
+  wildExpedition: RogueliteExpeditionState;
+
+  // Dynamic Commodity Market (Step 3)
+  marketTrends: Record<string, MarketTrendItem>;
+  marketNextRefresh: number;
+  marketNewsTicker: MarketNewsTicker | null;
+
+  // Production Overclocking (Step 4)
+  buildingOverclocks: Record<BuildingId, BuildingOverclockState>;
+
   // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
   waterLevel: number;
   maxWaterLevel: number;
@@ -438,6 +554,31 @@ export interface GameState {
   waterPlot: (plotId: number) => boolean;
   waterAllPlots: () => void;
 
+  // Active Radar Crisis Actions (Step 1)
+  triggerCrisis: (type?: CrisisType) => void;
+  resolveCrisisDefense: (actionType: 'alarm' | 'dog' | 'quarantine' | 'shield', targetId?: string | number) => void;
+  resolveCrisisFailure: () => void;
+  clearCrisis: () => void;
+  setCrisisModalOpen: (open: boolean) => void;
+
+  // Roguelite Wild Expedition Actions (Step 2)
+  startRogueliteExpedition: () => void;
+  progressRogueliteNode: () => void;
+  resolveRogueliteHazard: (useTool?: boolean) => void;
+  extractRogueliteLoot: () => void;
+  abandonRogueliteExpedition: () => void;
+  craftRogueliteRations: () => void;
+  buyRogueliteRetreatTool: () => void;
+
+  // Dynamic Commodity Market Actions (Step 3)
+  refreshMarketPrices: () => void;
+
+  // Overclocking & Exhaustion Actions (Step 4)
+  toggleAnimalOverclock: (animalId: string) => void;
+  cureAnimalExhaustion: (animalId: string) => void;
+  toggleBuildingOverclock: (buildingId: BuildingId) => void;
+  cureBuildingExhaustion: (buildingId: BuildingId) => void;
+
   tick: () => void;
   resetGame: () => void;
 }
@@ -449,10 +590,18 @@ function generateOrders(count: number): OrderState[] {
   const pool = [...ORDER_TEMPLATES];
   for (let i = 0; i < count; i++) {
     const template = pool[Math.floor(Math.random() * pool.length)];
+    const isRush = i === 0 && Math.random() < 0.45;
     orders.push({
       id: `order_${Date.now()}_${i}`,
       ...template,
       trashedAt: null,
+      isRushOrder: isRush,
+      rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
+      rushDurationSec: isRush ? 75 : undefined,
+      coinReward: isRush ? template.coinReward * 2 : template.coinReward,
+      bonusGems: isRush ? 2 : 0,
+      relicFragmentReward: isRush ? 1 : 0,
+      breachFee: isRush ? 45 : 0,
     });
   }
   return orders;
@@ -522,6 +671,56 @@ function createInitialParcels(): Record<ParcelId, ParcelState> {
 
 const initialParcels = createInitialParcels();
 const initialEstateAura = getEstateAura(1);
+
+function createDefaultWildExpedition(): RogueliteExpeditionState {
+  return {
+    isActive: false,
+    currentDepth: 1,
+    maxDepth: 5,
+    partyStamina: 100,
+    maxStamina: 100,
+    rations: 3,
+    retreatTools: 1,
+    accumulatedLoot: {
+      coins: 0,
+      gems: 0,
+      seeds: {},
+      relicFragments: 0,
+      geneTokens: 0,
+      rareItems: {},
+    },
+    currentNodeStatus: 'ready',
+    currentEncounter: null,
+    history: ['Outpost ready. Assemble your exploration party.'],
+    workerCooldownUntil: null,
+  };
+}
+
+function createInitialMarketTrends(): Record<string, MarketTrendItem> {
+  const trends: Record<string, MarketTrendItem> = {};
+  for (const item of MARKET_COMMODITIES) {
+    const mult = Number((0.75 + Math.random() * 0.7).toFixed(2));
+    trends[item] = {
+      multiplier: mult,
+      trend: mult >= 1.05 ? 'up' : mult <= 0.95 ? 'down' : 'neutral',
+      lastUpdated: Date.now(),
+    };
+  }
+  return trends;
+}
+
+function createDefaultBuildingOverclocks(): Record<BuildingId, BuildingOverclockState> {
+  return {
+    feed_mill: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    bakery: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    dairy: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    loom: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    press: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    textiles: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    tailor_shop: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+  };
+}
+
 
 // Fish catch logic
 function rollFishCatch(zoneId: WaterZoneId, rodTier: RodTier, fishCodex: Record<string, boolean>): { speciesId: FishSpeciesId; isNew: boolean } | null {
@@ -658,6 +857,27 @@ export const useGameStore = create<GameState>()(
       workersPausedUntil: null,
       suddenEventFlash: null,
       isSuddenEventModalOpen: false,
+
+      // Active Radar Crisis System (Step 1)
+      activeCrisis: null,
+      nextCrisisTime: Date.now() + 45000,
+      isCrisisModalOpen: false,
+
+      // Roguelite Wild Expeditions (Step 2)
+      wildExpedition: createDefaultWildExpedition(),
+
+      // Dynamic Commodity Market (Step 3)
+      marketTrends: createInitialMarketTrends(),
+      marketNextRefresh: Date.now() + 180000,
+      marketNewsTicker: {
+        headline: 'East Port Egg Shortage: Eggs selling at 200% for the next 2 minutes!',
+        itemId: 'egg',
+        multiplier: 2.0,
+        expiresAt: Date.now() + 120000,
+      },
+
+      // Production Overclocking (Step 4)
+      buildingOverclocks: createDefaultBuildingOverclocks(),
 
       // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
       waterLevel: 10,
@@ -1272,16 +1492,35 @@ export const useGameStore = create<GameState>()(
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(order.xpReward * xpBonus), state.level);
 
         const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
+        const isRush = Math.random() < 0.25;
         const newOrders = state.orders.map(o =>
           o.id === orderId
-            ? { id: generateId(), ...newTemplate, trashedAt: null }
+            ? {
+                id: generateId(),
+                ...newTemplate,
+                trashedAt: null,
+                isRushOrder: isRush,
+                rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
+                rushDurationSec: isRush ? 75 : undefined,
+                coinReward: isRush ? newTemplate.coinReward * 2 : newTemplate.coinReward,
+                bonusGems: isRush ? 2 : 0,
+                relicFragmentReward: isRush ? 1 : 0,
+                breachFee: isRush ? 45 : 0,
+              }
             : o
         );
+
+        if (order.isRushOrder) {
+          playCashRegisterSound();
+          playVictoryChime();
+          state.addNotification(`🚚 VIP RUSH CONTRACT COMPLETE! +${coinsEarned} Coins, +${order.bonusGems || 2} Gems & Relic Fragment!`, '⚡', 'event');
+        }
 
         set({
           silo: newSilo,
           barn: newBarn,
           coins: state.coins + coinsEarned,
+          gems: state.gems + (order.bonusGems || 0),
           xp: newXp,
           level: newLevel,
           orders: newOrders,
@@ -1291,9 +1530,21 @@ export const useGameStore = create<GameState>()(
       trashOrder: (orderId) => {
         const state = get();
         const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
+        const isRush = Math.random() < 0.2;
         const newOrders = state.orders.map(o =>
           o.id === orderId
-            ? { id: generateId(), ...newTemplate, trashedAt: null }
+            ? {
+                id: generateId(),
+                ...newTemplate,
+                trashedAt: null,
+                isRushOrder: isRush,
+                rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
+                rushDurationSec: isRush ? 75 : undefined,
+                coinReward: isRush ? newTemplate.coinReward * 2 : newTemplate.coinReward,
+                bonusGems: isRush ? 2 : 0,
+                relicFragmentReward: isRush ? 1 : 0,
+                breachFee: isRush ? 45 : 0,
+              }
             : o
         );
         set({ orders: newOrders });
@@ -1305,15 +1556,20 @@ export const useGameStore = create<GameState>()(
         const storage = isCrop ? state.silo : state.barn;
         const available = storage[itemId] || 0;
         if (available < qty) return;
-        // Determine sell price
-        let sellPrice = 1;
+        // Determine sell price with dynamic market multiplier
+        let basePrice = 1;
         if (itemId in CROPS) {
           const cropDef = CROPS[itemId as CropId];
-          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+          basePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
         } else {
           const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
-          if (product) sellPrice = product.sellPrice;
+          if (product) basePrice = product.sellPrice;
         }
+        const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
+
+        playCashRegisterSound();
+
         if (isCrop) {
           set({ silo: { ...state.silo, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
         } else {
@@ -1327,14 +1583,19 @@ export const useGameStore = create<GameState>()(
         const storage = isCrop ? state.silo : state.barn;
         const qty = storage[itemId] || 0;
         if (qty <= 0) return;
-        let sellPrice = 1;
+        let basePrice = 1;
         if (itemId in CROPS) {
           const cropDef = CROPS[itemId as CropId];
-          sellPrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+          basePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
         } else {
           const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
-          if (product) sellPrice = product.sellPrice;
+          if (product) basePrice = product.sellPrice;
         }
+        const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
+
+        playCashRegisterSound();
+
         if (isCrop) {
           set({ silo: { ...state.silo, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
         } else {
@@ -1354,7 +1615,9 @@ export const useGameStore = create<GameState>()(
           if (SHOP_HIDDEN.has(id)) continue;
           const qty = newSilo[id] || 0;
           if (qty > 0) {
-            const sellPrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+            const basePrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+            const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
+            const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
             totalCoins += sellPrice * qty;
             newSilo[id] = 0;
           }
@@ -1365,7 +1628,9 @@ export const useGameStore = create<GameState>()(
           if (qty > 0) {
             const product = PRODUCTS[id as keyof typeof PRODUCTS];
             if (product) {
-              totalCoins += product.sellPrice * qty;
+              const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
+              const sellPrice = Math.max(1, Math.round(product.sellPrice * marketMult));
+              totalCoins += sellPrice * qty;
               newSilo[id] = 0;
             }
           }
@@ -1375,11 +1640,14 @@ export const useGameStore = create<GameState>()(
           if (SHOP_HIDDEN.has(id)) continue;
           const qty = newBarn[id] || 0;
           if (qty > 0) {
-            totalCoins += def.sellPrice * qty;
+            const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
+            const sellPrice = Math.max(1, Math.round(def.sellPrice * marketMult));
+            totalCoins += sellPrice * qty;
             newBarn[id] = 0;
           }
         }
         if (totalCoins === 0) return;
+        playCashRegisterSound();
         set({ silo: newSilo, barn: newBarn, coins: state.coins + totalCoins });
       },
 
@@ -1937,6 +2205,15 @@ export const useGameStore = create<GameState>()(
         const isAshSoilActive = Boolean(state.relics?.mineralAshUntil && state.relics.mineralAshUntil > now);
         const ashMultiplier = isAshSoilActive ? 3.0 : 1.0;
 
+        // Flash Weather hazard 50% slow-down penalty (Step 1)
+        const isFlashWeatherSlow = Boolean(
+          state.activeCrisis &&
+          state.activeCrisis.type === 'flash_weather' &&
+          state.activeCrisis.resolvedStatus === 'pending' &&
+          !state.activeCrisis.shieldActive
+        );
+        const weatherMultiplier = isFlashWeatherSlow ? 0.5 : 1.0;
+
         // Update plots
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
         const newPlots = state.plots.map(p => {
@@ -1947,7 +2224,7 @@ export const useGameStore = create<GameState>()(
             }
             const elapsed = (now - p.plantedAt) / 1000;
             const waterBoost = p.isWatered ? 2.0 : 1.0;
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -1958,28 +2235,52 @@ export const useGameStore = create<GameState>()(
           return p;
         });
 
-        // Update animal production
+        // Update animal production (with Overclocking 3x & Mutation 1.5x modifiers - Step 4)
         const newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
-            const elapsed = (now - a.fedAt) / 1000;
+            // Halt production during exhaustion
+            if (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil) {
+              return a;
+            }
+            const isOverclocked = Boolean(a.isOverclocked && a.overclockExpiresAt && now < a.overclockExpiresAt);
+            const overclockMultiplier = isOverclocked ? 3.0 : 1.0;
+            const mutationMultiplier = a.isMutated ? (a.mutationBonus || 1.5) : 1.0;
+            const elapsed = ((now - a.fedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier;
             // Use breed-specific production time from BREED_REGISTRY if available
             const breedDef = BREED_REGISTRY[a.breedId];
             const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
             if (elapsed >= prodTime) {
-              return { ...a, productReady: true };
+              // 25% burnout risk upon finishing an overclocked cycle
+              const burnOutRoll = isOverclocked && Math.random() < 0.25;
+              return {
+                ...a,
+                productReady: true,
+                isOverclocked: false,
+                overclockExpiresAt: null,
+                isExhausted: burnOutRoll ? true : a.isExhausted,
+                exhaustedUntil: burnOutRoll ? now + 180000 : a.exhaustedUntil,
+              };
             }
           }
           return a;
         });
 
-        // Update production queues (with Artisan Masterclass and Master Ledger modifiers)
+        // Update production queues (with Artisan Masterclass, Master Ledger, and Overclocking modifiers)
         const isArtisanMasterclass = state.systemicEvent?.id === 'artisan_masterclass' && state.systemicEvent.phase === 'active';
-        const masterLedgerMultiplier = state.relics?.masterArtisanLedger ? 1.0526 : 1.0; // -5% duration means ~1.0526x effective speed
+        const masterLedgerMultiplier = state.relics?.masterArtisanLedger ? 1.0526 : 1.0;
         const newQueues: Record<BuildingId, ProductionSlot[]> = { ...state.productionQueues };
         for (const buildingId of Object.keys(BUILDINGS) as BuildingId[]) {
           const queue = state.productionQueues[buildingId] || [];
+          const bOverclock = state.buildingOverclocks?.[buildingId];
+          const isBuildingOverclocked = Boolean(bOverclock?.isOverclocked && bOverclock?.expiresAt && now < bOverclock.expiresAt);
+          const isBuildingExhausted = Boolean(bOverclock?.isExhausted && bOverclock?.exhaustedUntil && now < bOverclock.exhaustedUntil);
+          if (isBuildingExhausted) {
+            newQueues[buildingId] = queue;
+            continue; // Halted while exhausted
+          }
+          const overclockMultiplier = isBuildingOverclocked ? 3.0 : 1.0;
           const isArtisanWorkshop = buildingId === 'bakery' || buildingId === 'loom' || buildingId === 'press';
-          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier;
+          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier * overclockMultiplier;
 
           newQueues[buildingId] = queue.map(slot => {
             if (!slot.done) {
@@ -2347,13 +2648,17 @@ export const useGameStore = create<GameState>()(
             // Fallback if parents not found
             offspringTier = Math.random() < 0.3 ? 'uncommon' : 'common';
           }
-          const offspringBreedId = `${b.species}_${offspringTier}`;
+          // 5% Mutation Chance for rare mutant tier variant (Step 4)
+          const isMutantRoll = Math.random() < 0.05;
+          const mutantDef = isMutantRoll ? MUTATION_VARIANTS[b.species] : null;
+
+          const offspringBreedId = mutantDef ? mutantDef.id : `${b.species}_${offspringTier}`;
           const breedDef = BREED_REGISTRY[offspringBreedId];
-          const offspringMaxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier);
+          const offspringMaxCycles = mutantDef ? 25 : (breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier));
           const newAnimal: AnimalInstance = {
             id: generateId(),
             species: b.species,
-            tier: offspringTier,
+            tier: mutantDef ? 'legendary' : offspringTier,
             breedId: offspringBreedId,
             fed: false,
             fedAt: null,
@@ -2362,7 +2667,16 @@ export const useGameStore = create<GameState>()(
             maxCycles: offspringMaxCycles,
             cyclesRemaining: offspringMaxCycles,
             cyclesCompletedTotal: 0,
+            isMutated: Boolean(mutantDef),
+            mutationVariant: mutantDef ? mutantDef.name : undefined,
+            mutationBonus: mutantDef ? mutantDef.speedBonus : undefined,
           };
+          if (mutantDef) {
+            newCodex[`mutant_${mutantDef.id}`] = true;
+            newGems += 5;
+            playGoldRushFanfare();
+            state.addNotification(`🧬 MUTATION DISCOVERED! Rare ${mutantDef.name} born with permanent 1.5x production speed!`, '✨', 'event');
+          }
           breedingAnimals.push(newAnimal);
           // Reset parents
           breedingAnimals = breedingAnimals.map(a => {
@@ -2601,6 +2915,76 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // Active Radar Crisis System Tick (Step 1)
+        let currentCrisis = state.activeCrisis;
+        let newCrisisTime = state.nextCrisisTime;
+        const baseInterval = 180;
+        const crisisFrequencySec = Math.max(45, baseInterval - (state.level * 3));
+
+        if (currentCrisis && currentCrisis.resolvedStatus === 'pending') {
+          const remainingSec = Math.max(0, Math.ceil((currentCrisis.expiresAt - now) / 1000));
+          if (now >= currentCrisis.expiresAt) {
+            state.resolveCrisisFailure();
+            currentCrisis = null;
+            newCrisisTime = now + crisisFrequencySec * 1000;
+          } else {
+            currentCrisis = {
+              ...currentCrisis,
+              timer: remainingSec,
+              infectionProgress: currentCrisis.type === 'crop_blight'
+                ? Math.min(100, Math.floor(((45 - remainingSec) / 45) * 100))
+                : undefined,
+            };
+          }
+        } else if (!currentCrisis) {
+          if (!newCrisisTime) {
+            newCrisisTime = now + crisisFrequencySec * 1000;
+          } else if (now >= newCrisisTime) {
+            state.triggerCrisis();
+            currentCrisis = get().activeCrisis;
+            newCrisisTime = now + crisisFrequencySec * 1000;
+          }
+        }
+
+        // Check VIP rush orders countdown (Step 3)
+        let ordersModified = false;
+        const updatedOrders = state.orders.map(order => {
+          if (order.isRushOrder && order.rushExpiresAt && now >= order.rushExpiresAt) {
+            ordersModified = true;
+            const fee = order.breachFee || 45;
+            newCoins = Math.max(0, newCoins - fee);
+            playDefeatSound();
+            state.addNotification(`⚠️ VIP Rush Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
+            const template = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
+            return {
+              id: generateId(),
+              ...template,
+              trashedAt: null,
+            };
+          }
+          return order;
+        });
+
+        // Dynamic Commodity Market refresh tick (Step 3 - every 3 min)
+        let updatedMarketTrends = state.marketTrends;
+        let updatedMarketRefresh = state.marketNextRefresh;
+        let updatedNewsTicker = state.marketNewsTicker;
+        if (!updatedMarketRefresh || now >= updatedMarketRefresh) {
+          state.refreshMarketPrices();
+          updatedMarketTrends = get().marketTrends;
+          updatedMarketRefresh = get().marketNextRefresh;
+          updatedNewsTicker = get().marketNewsTicker;
+        }
+
+        // Roguelite party stamina passive rest (Step 2)
+        let updatedExpedition = state.wildExpedition;
+        if (!updatedExpedition.isActive && updatedExpedition.partyStamina < 100) {
+          updatedExpedition = {
+            ...updatedExpedition,
+            partyStamina: Math.min(100, Number((updatedExpedition.partyStamina + 0.2).toFixed(1))),
+          };
+        }
+
         // Level up check
         const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
 
@@ -2636,6 +3020,13 @@ export const useGameStore = create<GameState>()(
           workersPausedUntil: updatedWorkersPaused,
           waterLevel: newWaterLevel,
           lastWellAutoRefill: newLastWellAutoRefill,
+          orders: ordersModified ? updatedOrders : state.orders,
+          activeCrisis: currentCrisis,
+          nextCrisisTime: newCrisisTime,
+          wildExpedition: updatedExpedition,
+          marketTrends: updatedMarketTrends,
+          marketNextRefresh: updatedMarketRefresh,
+          marketNewsTicker: updatedNewsTicker,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -3508,6 +3899,633 @@ export const useGameStore = create<GameState>()(
         }
       },
 
+      // Active Radar Crisis Actions (Step 1)
+      triggerCrisis: (overrideType) => {
+        const state = get();
+        if (state.activeCrisis && state.activeCrisis.resolvedStatus === 'pending') return;
+
+        const types: CrisisType[] = ['predator_raid', 'crop_blight', 'flash_weather'];
+        const chosenType = overrideType || types[Math.floor(Math.random() * types.length)];
+        const def = CRISIS_DEFINITIONS[chosenType];
+
+        let targetIds: (string | number)[] = [];
+        let weatherType: 'drought' | 'blizzard' | undefined = undefined;
+
+        if (chosenType === 'predator_raid') {
+          const animalIds = state.animals.map(a => a.id);
+          targetIds = [...animalIds].sort(() => Math.random() - 0.5).slice(0, Math.min(2, animalIds.length));
+        } else if (chosenType === 'crop_blight') {
+          const cropPlotIds = state.plots.slice(0, state.unlockedPlots).filter(p => p.crop !== null).map(p => p.id);
+          const pool = cropPlotIds.length > 0 ? cropPlotIds : state.plots.slice(0, state.unlockedPlots).map(p => p.id);
+          targetIds = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(2, pool.length));
+        } else if (chosenType === 'flash_weather') {
+          weatherType = Math.random() < 0.5 ? 'drought' : 'blizzard';
+        }
+
+        const newCrisis: CrisisEvent = {
+          id: `crisis_${Date.now()}`,
+          type: chosenType,
+          title: chosenType === 'flash_weather' ? `Flash ${weatherType === 'drought' ? 'Drought' : 'Blizzard'}` : def.title,
+          emoji: chosenType === 'flash_weather' ? (weatherType === 'drought' ? '☀️' : '❄️') : def.emoji,
+          description: def.description,
+          timer: def.durationSec,
+          expiresAt: Date.now() + def.durationSec * 1000,
+          targetIds,
+          resolvedStatus: 'pending',
+          weatherType,
+          shieldActive: false,
+          infectionProgress: 0,
+          alarmTaps: 0,
+        };
+
+        playSirenSting();
+        state.addNotification(`🚨 RADAR ALERT: ${newCrisis.title}! 45s countdown active!`, newCrisis.emoji, 'event');
+
+        set({
+          activeCrisis: newCrisis,
+          isCrisisModalOpen: true,
+          suddenEventFlash: 'CRISIS',
+          isDirty: true,
+        });
+      },
+
+      resolveCrisisDefense: (actionType, targetId) => {
+        const state = get();
+        if (!state.activeCrisis || state.activeCrisis.resolvedStatus !== 'pending') return;
+
+        const crisis = state.activeCrisis;
+
+        if (crisis.type === 'predator_raid') {
+          if (actionType === 'alarm') {
+            const currentTaps = (crisis.alarmTaps || 0) + 1;
+            playRapidTapSound(currentTaps);
+            if (currentTaps >= 4) {
+              playCashRegisterSound();
+              playVictoryChime();
+              state.addNotification('🦊 Alarm scared away the predators! Farm animals safe and sound!', '🎉', 'event');
+              set({
+                activeCrisis: { ...crisis, resolvedStatus: 'resolved', alarmTaps: currentTaps },
+                coins: state.coins + 30,
+                xp: state.xp + 45,
+                isCrisisModalOpen: false,
+                isDirty: true,
+              });
+            } else {
+              set({
+                activeCrisis: { ...crisis, alarmTaps: currentTaps },
+                isDirty: true,
+              });
+            }
+          } else if (actionType === 'dog') {
+            const cost = 20;
+            if (state.coins < cost) {
+              state.addNotification('Need 20 coins to deploy guard dog!', '⚠️', 'event');
+              return;
+            }
+            playCashRegisterSound();
+            playVictoryChime();
+            state.addNotification('🐕 Guard dog deployed! Predator raid repelled instantly!', '🛡️', 'event');
+            set({
+              coins: state.coins - cost,
+              xp: state.xp + 60,
+              activeCrisis: { ...crisis, resolvedStatus: 'resolved' },
+              isCrisisModalOpen: false,
+              isDirty: true,
+            });
+          }
+        } else if (crisis.type === 'crop_blight') {
+          if (actionType === 'quarantine') {
+            const cost = 20;
+            if (state.coins < cost) {
+              state.addNotification('Need 20 coins to quarantine blight!', '⚠️', 'event');
+              return;
+            }
+            const remainingTargetIds = targetId !== undefined
+              ? crisis.targetIds.filter(id => id !== targetId)
+              : crisis.targetIds.slice(1);
+
+            playRapidTapSound(2);
+            if (remainingTargetIds.length === 0) {
+              playCashRegisterSound();
+              playVictoryChime();
+              state.addNotification('🌾 All infected plots quarantined and cured!', '✨', 'event');
+              set({
+                coins: state.coins - cost,
+                xp: state.xp + 50,
+                activeCrisis: { ...crisis, targetIds: [], resolvedStatus: 'resolved' },
+                isCrisisModalOpen: false,
+                isDirty: true,
+              });
+            } else {
+              state.addNotification('Plot quarantined! 1 remaining.', '🛡️', 'event');
+              set({
+                coins: state.coins - cost,
+                activeCrisis: { ...crisis, targetIds: remainingTargetIds },
+                isDirty: true,
+              });
+            }
+          }
+        } else if (crisis.type === 'flash_weather') {
+          if (actionType === 'shield') {
+            const cost = 25;
+            if (state.coins < cost) {
+              state.addNotification('Need 25 coins for Emergency Shield booster!', '⚠️', 'event');
+              return;
+            }
+            playCashRegisterSound();
+            playVictoryChime();
+            state.addNotification('🛡️ Emergency Shield activated! Weather slowdown neutralized!', '⚡', 'event');
+            set({
+              coins: state.coins - cost,
+              xp: state.xp + 50,
+              activeCrisis: { ...crisis, shieldActive: true },
+              isDirty: true,
+            });
+          }
+        }
+      },
+
+      resolveCrisisFailure: () => {
+        const state = get();
+        if (!state.activeCrisis || state.activeCrisis.resolvedStatus !== 'pending') return;
+
+        const crisis = state.activeCrisis;
+        playDefeatSound();
+
+        if (crisis.type === 'predator_raid') {
+          const newAnimals = state.animals.map(a => {
+            if (crisis.targetIds.includes(a.id)) {
+              return { ...a, fed: false, fedAt: null, productReady: false };
+            }
+            return a;
+          });
+          const newBarn = { ...state.barn };
+          let stolenCount = 0;
+          for (const [k, v] of Object.entries(newBarn)) {
+            if (v > 0) {
+              const loss = Math.ceil(v * 0.2);
+              newBarn[k] = Math.max(0, v - loss);
+              stolenCount += loss;
+            }
+          }
+          state.addNotification(`🦊 Predator raid breached defenses! Stole ${stolenCount} goods & disrupted animal cycles!`, '💔', 'event');
+          set({
+            animals: newAnimals,
+            barn: newBarn,
+            activeCrisis: { ...crisis, resolvedStatus: 'failed' },
+            isCrisisModalOpen: false,
+            isDirty: true,
+          });
+        } else if (crisis.type === 'crop_blight') {
+          const newPlots = [...state.plots];
+          for (const pid of crisis.targetIds) {
+            const plotIdNum = Number(pid);
+            if (newPlots[plotIdNum]) {
+              newPlots[plotIdNum] = { ...newPlots[plotIdNum], crop: null, plantedAt: null, ready: false };
+            }
+          }
+          state.addNotification('🌾 Crop blight ruined infected plots!', '💥', 'event');
+          set({
+            plots: newPlots,
+            activeCrisis: { ...crisis, resolvedStatus: 'failed' },
+            isCrisisModalOpen: false,
+            isDirty: true,
+          });
+        } else if (crisis.type === 'flash_weather') {
+          state.addNotification('⛈️ Severe weather event concluded.', '⛅', 'event');
+          set({
+            activeCrisis: { ...crisis, resolvedStatus: 'failed' },
+            isCrisisModalOpen: false,
+            isDirty: true,
+          });
+        }
+      },
+
+      clearCrisis: () => {
+        const state = get();
+        const baseInterval = 180;
+        const crisisFreqSec = Math.max(45, baseInterval - (state.level * 3));
+        set({
+          activeCrisis: null,
+          isCrisisModalOpen: false,
+          nextCrisisTime: Date.now() + crisisFreqSec * 1000,
+          isDirty: true,
+        });
+      },
+
+      setCrisisModalOpen: (open) => set({ isCrisisModalOpen: open }),
+
+      // Roguelite Wild Expedition Actions (Step 2)
+      startRogueliteExpedition: () => {
+        const state = get();
+        if (state.wildExpedition.isActive) return;
+        if (state.wildExpedition.workerCooldownUntil && Date.now() < state.wildExpedition.workerCooldownUntil) {
+          state.addNotification('Party resting from wipeout exhaustion!', '⏳', 'info');
+          return;
+        }
+
+        let newStamina = state.wildExpedition.partyStamina;
+        let newRations = state.wildExpedition.rations;
+        if (newStamina < 20) {
+          if (newRations > 0) {
+            newRations -= 1;
+            newStamina = 100;
+          } else {
+            state.addNotification('Not enough Stamina! Craft rations to proceed.', '⚠️', 'info');
+            return;
+          }
+        } else {
+          newStamina -= 15;
+        }
+
+        set({
+          wildExpedition: {
+            ...state.wildExpedition,
+            isActive: true,
+            currentDepth: 1,
+            partyStamina: newStamina,
+            rations: newRations,
+            accumulatedLoot: {
+              coins: 0,
+              gems: 0,
+              seeds: {},
+              relicFragments: 0,
+              geneTokens: 0,
+              rareItems: {},
+            },
+            currentNodeStatus: 'ready',
+            currentEncounter: null,
+            history: ['Party dispatched to Depth 1: Whispering Outpost.'],
+          },
+          isDirty: true,
+        });
+      },
+
+      progressRogueliteNode: () => {
+        const state = get();
+        const exp = state.wildExpedition;
+        if (!exp.isActive) return;
+
+        const depth = exp.currentDepth;
+        const hazardRate = 0.15 + (depth - 1) * 0.20;
+        const multiplier = Math.pow(2, depth - 1);
+
+        const isHazardRoll = Math.random() < hazardRate;
+        const encounterType = isHazardRoll ? 'hazard' : 'cache';
+
+        const hazards: ('ambush' | 'poison_mist' | 'cave_in')[] = ['ambush', 'poison_mist', 'cave_in'];
+        const chosenHazard = hazards[Math.floor(Math.random() * hazards.length)];
+
+        const hazardNames = {
+          ambush: 'Predator Ambush',
+          poison_mist: 'Toxic Spore Mist',
+          cave_in: 'Crag Cave-In Tremor',
+        };
+
+        const hazardDescriptions = {
+          ambush: 'Wild beasts ambush your vanguard! High hazard threat.',
+          poison_mist: 'Choking poison spores drain stamina rapidly.',
+          cave_in: 'Falling rocks and boulders block the subterranean tunnel.',
+        };
+
+        const encounter = {
+          type: encounterType as 'hazard' | 'cache',
+          title: encounterType === 'hazard' ? hazardNames[chosenHazard] : `Hidden Cache (Depth ${depth})`,
+          emoji: encounterType === 'hazard' ? (chosenHazard === 'ambush' ? '🐺' : chosenHazard === 'poison_mist' ? '🍄' : '🪨') : '🎁',
+          description: encounterType === 'hazard' ? hazardDescriptions[chosenHazard] : 'Loot cache discovered amidst the thickets!',
+          hazardType: encounterType === 'hazard' ? chosenHazard : undefined,
+          hazardChance: Math.round(hazardRate * 100),
+          staminaCost: 15 + depth * 3,
+          lootReward: {
+            coins: 60 * multiplier,
+            gems: depth >= 2 ? 1 * (depth - 1) : 0,
+            seeds: 'ancient_sunflower',
+            relicFragments: depth >= 3 ? 1 * (depth - 2) : 0,
+            geneTokens: 1 * multiplier,
+          },
+        };
+
+        playRapidTapSound(1);
+
+        set({
+          wildExpedition: {
+            ...exp,
+            currentNodeStatus: encounterType === 'hazard' ? 'hazard' : 'cleared',
+            currentEncounter: encounter,
+            partyStamina: Math.max(0, exp.partyStamina - (encounterType === 'cache' ? 8 : 4)),
+            accumulatedLoot: encounterType === 'cache' ? {
+              ...exp.accumulatedLoot,
+              coins: exp.accumulatedLoot.coins + encounter.lootReward.coins,
+              gems: exp.accumulatedLoot.gems + encounter.lootReward.gems,
+              geneTokens: exp.accumulatedLoot.geneTokens + (encounter.lootReward.geneTokens || 0),
+              relicFragments: exp.accumulatedLoot.relicFragments + (encounter.lootReward.relicFragments || 0),
+            } : exp.accumulatedLoot,
+            history: [
+              `Depth ${depth}: ${encounter.title} (${Math.round(hazardRate * 100)}% hazard risk)`,
+              ...exp.history,
+            ].slice(0, 10),
+          },
+          isDirty: true,
+        });
+      },
+
+      resolveRogueliteHazard: (useTool) => {
+        const state = get();
+        const exp = state.wildExpedition;
+        if (!exp.isActive || !exp.currentEncounter || exp.currentNodeStatus !== 'hazard') return;
+
+        const encounter = exp.currentEncounter;
+        const depth = exp.currentDepth;
+
+        if (useTool && (exp.retreatTools > 0 || exp.rations > 0)) {
+          const newTools = exp.retreatTools > 0 ? exp.retreatTools - 1 : exp.retreatTools;
+          const newRations = exp.retreatTools > 0 ? exp.rations : exp.rations - 1;
+          playCashRegisterSound();
+          state.addNotification('Used Retreat Tool! Safely bypassed hazard and took the loot!', '🛡️', 'info');
+
+          set({
+            wildExpedition: {
+              ...exp,
+              retreatTools: newTools,
+              rations: newRations,
+              currentNodeStatus: 'cleared',
+              accumulatedLoot: {
+                ...exp.accumulatedLoot,
+                coins: exp.accumulatedLoot.coins + encounter.lootReward.coins,
+                gems: exp.accumulatedLoot.gems + encounter.lootReward.gems,
+                geneTokens: exp.accumulatedLoot.geneTokens + (encounter.lootReward.geneTokens || 0),
+                relicFragments: exp.accumulatedLoot.relicFragments + (encounter.lootReward.relicFragments || 0),
+              },
+              history: [`Tool bypassed ${encounter.title}! Loot secured!`, ...exp.history].slice(0, 10),
+            },
+            isDirty: true,
+          });
+          return;
+        }
+
+        const staminaDmg = 25 + depth * 5;
+        const newStamina = Math.max(0, exp.partyStamina - staminaDmg);
+
+        if (newStamina <= 0) {
+          playDefeatSound();
+          const salvagedCoins = Math.floor(exp.accumulatedLoot.coins * 0.25);
+          const forfeitedCoins = exp.accumulatedLoot.coins - salvagedCoins;
+          state.addNotification(`💀 EXPEDITION WIPEOUT! Lost 75% unextracted loot (-${forfeitedCoins} coins). Workers on cooldown!`, '💥', 'event');
+
+          set({
+            coins: state.coins + salvagedCoins,
+            wildExpedition: {
+              ...exp,
+              isActive: false,
+              partyStamina: 0,
+              currentNodeStatus: 'wipeout',
+              workerCooldownUntil: Date.now() + 180000,
+              accumulatedLoot: { coins: 0, gems: 0, seeds: {}, relicFragments: 0, geneTokens: 0, rareItems: {} },
+              history: [`WIPEOUT at Depth ${depth}! 75% loot forfeited.`, ...exp.history].slice(0, 10),
+            },
+            isDirty: true,
+          });
+        } else {
+          playRapidTapSound(2);
+          state.addNotification(`Endured hazard (-${staminaDmg} stamina)! Loot claimed!`, '⚡', 'info');
+          set({
+            wildExpedition: {
+              ...exp,
+              partyStamina: newStamina,
+              currentNodeStatus: 'cleared',
+              accumulatedLoot: {
+                ...exp.accumulatedLoot,
+                coins: exp.accumulatedLoot.coins + encounter.lootReward.coins,
+                gems: exp.accumulatedLoot.gems + encounter.lootReward.gems,
+                geneTokens: exp.accumulatedLoot.geneTokens + (encounter.lootReward.geneTokens || 0),
+                relicFragments: exp.accumulatedLoot.relicFragments + (encounter.lootReward.relicFragments || 0),
+              },
+              history: [`Survived ${encounter.title} (-${staminaDmg} stamina).`, ...exp.history].slice(0, 10),
+            },
+            isDirty: true,
+          });
+        }
+      },
+
+      extractRogueliteLoot: () => {
+        const state = get();
+        const exp = state.wildExpedition;
+        if (!exp.isActive) return;
+
+        const loot = exp.accumulatedLoot;
+        playCashRegisterSound();
+        playVictoryChime();
+
+        state.addNotification(
+          `🏕️ EXPEDITION EXTRACTED SAFELY! Banked 100% loot: +${loot.coins} Coins, +${loot.gems} Gems, +${loot.geneTokens} Gene Tokens!`,
+          '🏆',
+          'event'
+        );
+
+        set({
+          coins: state.coins + loot.coins,
+          gems: state.gems + loot.gems,
+          xp: state.xp + Math.max(50, Math.floor(loot.coins * 0.5)),
+          wildExpedition: {
+            ...exp,
+            isActive: false,
+            currentNodeStatus: 'extracted',
+            accumulatedLoot: { coins: 0, gems: 0, seeds: {}, relicFragments: 0, geneTokens: 0, rareItems: {} },
+            history: [`Safe extraction at Depth ${exp.currentDepth}. Banked 100% loot!`, ...exp.history].slice(0, 10),
+          },
+          isDirty: true,
+        });
+      },
+
+      abandonRogueliteExpedition: () => {
+        const state = get();
+        set({
+          wildExpedition: {
+            ...state.wildExpedition,
+            isActive: false,
+            currentNodeStatus: 'ready',
+            accumulatedLoot: { coins: 0, gems: 0, seeds: {}, relicFragments: 0, geneTokens: 0, rareItems: {} },
+          },
+          isDirty: true,
+        });
+      },
+
+      craftRogueliteRations: () => {
+        const state = get();
+        if (state.coins < 20) {
+          state.addNotification('Need 20 coins for rations!', '⚠️', 'info');
+          return;
+        }
+        playCashRegisterSound();
+        set({
+          coins: state.coins - 20,
+          wildExpedition: {
+            ...state.wildExpedition,
+            rations: state.wildExpedition.rations + 2,
+            partyStamina: Math.min(100, state.wildExpedition.partyStamina + 40),
+          },
+          isDirty: true,
+        });
+        state.addNotification('Prepared +2 Rations and restored +40 Stamina!', '🥖', 'info');
+      },
+
+      buyRogueliteRetreatTool: () => {
+        const state = get();
+        if (state.coins < 30) {
+          state.addNotification('Need 30 coins for Retreat Tool!', '⚠️', 'info');
+          return;
+        }
+        playCashRegisterSound();
+        set({
+          coins: state.coins - 30,
+          wildExpedition: {
+            ...state.wildExpedition,
+            retreatTools: state.wildExpedition.retreatTools + 1,
+          },
+          isDirty: true,
+        });
+        state.addNotification('Acquired +1 Retreat Tool (Smoke Bomb)!', '💣', 'info');
+      },
+
+      // Dynamic Commodity Market Actions (Step 3)
+      refreshMarketPrices: () => {
+        const trends: Record<string, MarketTrendItem> = {};
+        for (const item of MARKET_COMMODITIES) {
+          const mult = Number((0.6 + Math.random() * 1.6).toFixed(2));
+          trends[item] = {
+            multiplier: mult,
+            trend: mult >= 1.05 ? 'up' : mult <= 0.95 ? 'down' : 'neutral',
+            lastUpdated: Date.now(),
+          };
+        }
+
+        const news = MARKET_NEWS_TEMPLATES[Math.floor(Math.random() * MARKET_NEWS_TEMPLATES.length)];
+        const featuredMult = Number((news.minMult + Math.random() * (news.maxMult - news.minMult)).toFixed(2));
+        trends[news.itemId] = {
+          multiplier: featuredMult,
+          trend: featuredMult >= 1.05 ? 'up' : 'down',
+          lastUpdated: Date.now(),
+        };
+
+        const ticker: MarketNewsTicker = {
+          headline: news.headline,
+          itemId: news.itemId,
+          multiplier: featuredMult,
+          expiresAt: Date.now() + 180000,
+        };
+
+        set({
+          marketTrends: trends,
+          marketNextRefresh: Date.now() + 180000,
+          marketNewsTicker: ticker,
+          isDirty: true,
+        });
+      },
+
+      // Overclocking & Mutation Actions (Step 4)
+      toggleAnimalOverclock: (animalId) => {
+        const state = get();
+        const animal = state.animals.find(a => a.id === animalId);
+        if (!animal) return;
+        if (animal.isExhausted && animal.exhaustedUntil && Date.now() < animal.exhaustedUntil) {
+          state.addNotification('Animal is exhausted! Cure with medicine first.', '💤', 'info');
+          return;
+        }
+
+        const willOverclock = !animal.isOverclocked;
+        playRapidTapSound(willOverclock ? 3 : 1);
+
+        const newAnimals = state.animals.map(a => {
+          if (a.id === animalId) {
+            return {
+              ...a,
+              isOverclocked: willOverclock,
+              overclockExpiresAt: willOverclock ? Date.now() + 60000 : null,
+            };
+          }
+          return a;
+        });
+
+        set({ animals: newAnimals, isDirty: true });
+        if (willOverclock) {
+          state.addNotification('⚡ Adrenaline Feed activated! 3x speed for 60s (25% burnout risk).', '⚡', 'info');
+        }
+      },
+
+      cureAnimalExhaustion: (animalId) => {
+        const state = get();
+        const cost = 15;
+        if (state.coins < cost) {
+          state.addNotification('Need 15 coins for medicine!', '⚠️', 'info');
+          return;
+        }
+        playCashRegisterSound();
+        const newAnimals = state.animals.map(a => {
+          if (a.id === animalId) {
+            return {
+              ...a,
+              isExhausted: false,
+              exhaustedUntil: null,
+            };
+          }
+          return a;
+        });
+        set({ coins: state.coins - cost, animals: newAnimals, isDirty: true });
+        state.addNotification('💊 Animal cured with medicine! Ready for production.', '✨', 'info');
+      },
+
+      toggleBuildingOverclock: (buildingId) => {
+        const state = get();
+        const current = state.buildingOverclocks[buildingId] || { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null };
+        if (current.isExhausted && current.exhaustedUntil && Date.now() < current.exhaustedUntil) {
+          state.addNotification('Machine is overheated/exhausted! Service first.', '⚠️', 'info');
+          return;
+        }
+
+        const willOverclock = !current.isOverclocked;
+        playRapidTapSound(willOverclock ? 4 : 1);
+
+        set({
+          buildingOverclocks: {
+            ...state.buildingOverclocks,
+            [buildingId]: {
+              ...current,
+              isOverclocked: willOverclock,
+              expiresAt: willOverclock ? Date.now() + 60000 : null,
+            },
+          },
+          isDirty: true,
+        });
+
+        if (willOverclock) {
+          state.addNotification('⚙️ Machine Overclocked! 3x crafting speed for 60s (25% burnout risk).', '🔥', 'info');
+        }
+      },
+
+      cureBuildingExhaustion: (buildingId) => {
+        const state = get();
+        const cost = 25;
+        if (state.coins < cost) {
+          state.addNotification('Need 25 coins for machine service!', '⚠️', 'info');
+          return;
+        }
+        playCashRegisterSound();
+        set({
+          coins: state.coins - cost,
+          buildingOverclocks: {
+            ...state.buildingOverclocks,
+            [buildingId]: {
+              isOverclocked: false,
+              expiresAt: null,
+              isExhausted: false,
+              exhaustedUntil: null,
+            },
+          },
+          isDirty: true,
+        });
+        state.addNotification('🔧 Machine tuned up and cool! Ready for production.', '✨', 'info');
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -3554,6 +4572,23 @@ export const useGameStore = create<GameState>()(
           workersPausedUntil: null,
           suddenEventFlash: null,
           isSuddenEventModalOpen: false,
+          // Active Radar Crisis System (Step 1)
+          activeCrisis: null,
+          nextCrisisTime: Date.now() + 60000,
+          isCrisisModalOpen: false,
+          // Roguelite Wild Expeditions (Step 2)
+          wildExpedition: createDefaultWildExpedition(),
+          // Dynamic Commodity Market (Step 3)
+          marketTrends: createInitialMarketTrends(),
+          marketNextRefresh: Date.now() + 180000,
+          marketNewsTicker: {
+            headline: 'East Port Egg Shortage: Eggs selling at 200% for the next 2 minutes!',
+            itemId: 'egg',
+            multiplier: 2.0,
+            expiresAt: Date.now() + 120000,
+          },
+          // Production Overclocking (Step 4)
+          buildingOverclocks: createDefaultBuildingOverclocks(),
           // Water System & Farm Well
           waterLevel: 10,
           maxWaterLevel: 10,
@@ -3603,6 +4638,14 @@ export const useGameStore = create<GameState>()(
         wellLevel: state.wellLevel,
         isGuest: state.isGuest,
         lastCloudSyncTimestamp: state.lastCloudSyncTimestamp,
+        // Thrill & Crisis systems
+        activeCrisis: state.activeCrisis,
+        nextCrisisTime: state.nextCrisisTime,
+        wildExpedition: state.wildExpedition,
+        marketTrends: state.marketTrends,
+        marketNextRefresh: state.marketNextRefresh,
+        marketNewsTicker: state.marketNewsTicker,
+        buildingOverclocks: state.buildingOverclocks,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
@@ -3756,6 +4799,16 @@ export const useGameStore = create<GameState>()(
         if (merged.maxWaterLevel === undefined) merged.maxWaterLevel = 10;
         if (merged.wellLevel === undefined) merged.wellLevel = 1;
         if (merged.lastWellAutoRefill === undefined) merged.lastWellAutoRefill = null;
+
+        // Migration: Step 1-4 Thrill & Crisis System
+        if (merged.activeCrisis === undefined) merged.activeCrisis = null;
+        if (merged.nextCrisisTime === undefined) merged.nextCrisisTime = Date.now() + 180000;
+        if (merged.isCrisisModalOpen === undefined) merged.isCrisisModalOpen = false;
+        if (!merged.wildExpedition) merged.wildExpedition = createDefaultWildExpedition();
+        if (!merged.marketTrends) merged.marketTrends = createInitialMarketTrends();
+        if (!merged.marketNextRefresh) merged.marketNextRefresh = Date.now() + 180000;
+        if (!merged.marketNewsTicker) merged.marketNewsTicker = null;
+        if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
 
         return merged as GameState;
       },

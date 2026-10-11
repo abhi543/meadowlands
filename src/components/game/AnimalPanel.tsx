@@ -14,8 +14,33 @@ const TIER_CARD_STYLES: Record<Tier, string> = {
   legendary: 'border-amber-400 dark:border-amber-300 bg-amber-950/60 shadow-amber-500/30 ring-1 ring-amber-300',
 };
 
+import { useState, useEffect } from 'react';
+
 export function AnimalPanel() {
-  const { animals, silo, barn, coins, level, feedAnimal, collectProduct, feedAllAnimals, collectAllProducts, buyAnimal, animalCapacity, habitatUpgradeSteps, upgradeHabitat } = useGameStore();
+  const {
+    animals,
+    silo,
+    barn,
+    coins,
+    level,
+    feedAnimal,
+    collectProduct,
+    feedAllAnimals,
+    collectAllProducts,
+    buyAnimal,
+    animalCapacity,
+    habitatUpgradeSteps,
+    upgradeHabitat,
+    toggleAnimalOverclock,
+    cureAnimalExhaustion,
+  } = useGameStore();
+
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Compute batch action counts
   const feedableAnimals = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder');
@@ -148,11 +173,23 @@ export function AnimalPanel() {
                     ? `${breedDef.baseYieldAmount}x ${breedDef.primaryProductKey.replace(/_/g, ' ')}`
                     : `${def.productYield}x ${def.product}`;
 
+                  const isMutated = Boolean(animal.isMutated);
+                  const isOverclocked = Boolean(animal.isOverclocked && animal.overclockExpiresAt && animal.overclockExpiresAt > Date.now());
+                  const isExhausted = Boolean(animal.isExhausted && animal.exhaustedUntil && animal.exhaustedUntil > Date.now());
+                  const overclockRemaining = isOverclocked ? Math.max(0, Math.ceil(((animal.overclockExpiresAt || 0) - Date.now()) / 1000)) : 0;
+                  const exhaustedRemaining = isExhausted ? Math.max(0, Math.ceil(((animal.exhaustedUntil || 0) - Date.now()) / 1000)) : 0;
+
                   return (
                     <div
                       key={animal.id}
                       className={`rounded-lg border-2 p-2 text-center transition-all ${
-                        animal.age === 'elder'
+                        isMutated
+                          ? 'border-purple-400 dark:border-purple-300 bg-purple-950/60 shadow-[0_0_15px_rgba(168,85,247,0.4)] ring-2 ring-purple-400'
+                          : isOverclocked
+                          ? 'border-amber-400 bg-amber-950/60 shadow-[0_0_12px_rgba(245,158,11,0.5)] ring-1 ring-amber-300 animate-pulse'
+                          : isExhausted
+                          ? 'border-stone-600 bg-stone-900/90 opacity-80'
+                          : animal.age === 'elder'
                           ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-500'
                           : canCollect
                           ? `bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 dark:border-yellow-600 shadow-sm ${animal.tier === 'legendary' ? 'animate-pulse' : ''}`
@@ -169,6 +206,14 @@ export function AnimalPanel() {
                       <div className="text-[9px] font-medium text-stone-700 dark:text-stone-300 mt-0.5 leading-tight truncate" title={breedName}>
                         {breedName}
                       </div>
+
+                      {/* Mutant Tag */}
+                      {isMutated && (
+                        <div className="text-[8px] font-black text-purple-200 bg-purple-900/80 px-1 py-0.5 rounded mt-0.5 border border-purple-400/50 truncate">
+                          🧬 {animal.mutationVariant || 'Apex Mutant'} (+50%)
+                        </div>
+                      )}
+
                       {visualTheme && (
                         <div className="text-[8px] text-stone-400 dark:text-stone-500 italic truncate" title={visualTheme}>
                           {visualTheme}
@@ -199,7 +244,7 @@ export function AnimalPanel() {
                       )}
 
                       {/* Action Buttons */}
-                      <div className="mt-1.5">
+                      <div className="mt-1.5 space-y-1">
                         {canCollect && (
                           <button
                             onClick={() => collectProduct(animal.id)}
@@ -212,7 +257,7 @@ export function AnimalPanel() {
                             {def.productEmoji} Collect
                           </button>
                         )}
-                        {!canCollect && canFeed && animal.age !== 'elder' && (
+                        {!canCollect && canFeed && animal.age !== 'elder' && !isExhausted && (
                           <button
                             onClick={() => feedAnimal(animal.id)}
                             className="w-full py-1 text-xs font-medium rounded-md bg-blue-500 hover:bg-blue-600 text-white transition-colors"
@@ -220,14 +265,44 @@ export function AnimalPanel() {
                             {'🫗'} Feed ({def.feedPerCycle})
                           </button>
                         )}
-                        {!canCollect && !canFeed && !animal.fed && animal.age !== 'elder' && (
+                        {!canCollect && !canFeed && !animal.fed && animal.age !== 'elder' && !isExhausted && (
                           <div className="text-[10px] text-stone-400 dark:text-gray-500">Need feed {'🫗'}</div>
                         )}
-                        {animal.fed && !animal.productReady && (
+                        {animal.fed && !animal.productReady && !isExhausted && (
                           <div className="text-[10px] text-blue-500 dark:text-blue-400">Producing...</div>
                         )}
                         {animal.age === 'elder' && (
                           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium italic">Ready for Livestock Market</div>
+                        )}
+
+                        {/* Exhaustion State & Cure Button */}
+                        {isExhausted && (
+                          <div className="space-y-1">
+                            <div className="text-[9px] font-bold text-rose-400 bg-rose-950/60 px-1 py-0.5 rounded">
+                              💤 Exhausted ({exhaustedRemaining}s)
+                            </div>
+                            <button
+                              onClick={() => cureAnimalExhaustion(animal.id)}
+                              className="w-full py-0.5 text-[9px] font-black rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                            >
+                              💊 Cure (15 🪙)
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Overclock Toggle */}
+                        {!isExhausted && animal.age !== 'elder' && (
+                          <button
+                            onClick={() => toggleAnimalOverclock(animal.id)}
+                            className={`w-full py-0.5 text-[9px] font-black rounded transition-all ${
+                              isOverclocked
+                                ? 'bg-amber-500 text-stone-950 ring-1 ring-amber-300 animate-pulse'
+                                : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700'
+                            }`}
+                            title="3x Production Speed for 60s (25% burnout risk)"
+                          >
+                            {isOverclocked ? `⚡ 3x (${overclockRemaining}s)` : '⚡ Overclock (3x)'}
+                          </button>
                         )}
                       </div>
                     </div>

@@ -1,21 +1,68 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { CROPS, PRODUCTS, type CropId } from '@/game/data';
-import { useState } from 'react';
+import { CROPS, PRODUCTS } from '@/game/data';
+import { useState, useEffect } from 'react';
 
 export function ShopPanel() {
-  const { silo, barn, coins, sellItem, sellAllOfItem, sellAllItems } = useGameStore();
-  const [qtyOverride, setQtyOverride] = useState<Record<string, number>>({});
+  const {
+    silo,
+    barn,
+    sellItem,
+    sellAllOfItem,
+    sellAllItems,
+    marketTrends,
+    marketNewsTicker,
+    marketNextRefresh,
+  } = useGameStore();
 
-  const allItems: { id: string; name: string; emoji: string; qty: number; sellPrice: number; isCrop: boolean }[] = [];
+  const [qtyOverride, setQtyOverride] = useState<Record<string, number>>({});
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getDynamicPrice = (itemId: string, basePrice: number) => {
+    const trend = marketTrends[itemId];
+    const mult = trend ? trend.multiplier : 1.0;
+    const effective = Math.max(1, Math.floor(basePrice * mult));
+    return { effective, mult, trendType: trend ? trend.trend : ('neutral' as const) };
+  };
+
+  const allItems: {
+    id: string;
+    name: string;
+    emoji: string;
+    qty: number;
+    basePrice: number;
+    sellPrice: number;
+    multiplier: number;
+    trend: 'up' | 'down' | 'neutral';
+    isCrop: boolean;
+  }[] = [];
 
   // Crops from silo (exclude wheat, corn)
   const SHOP_HIDDEN_CROPS = new Set(['wheat', 'corn']);
   for (const [id, def] of Object.entries(CROPS)) {
     if (SHOP_HIDDEN_CROPS.has(id)) continue;
     const qty = silo[id] || 0;
-    if (qty > 0) allItems.push({ id, name: def.name, emoji: def.emoji, qty, sellPrice: Math.max(1, Math.floor(def.seedCost / 2) + 1), isCrop: true });
+    if (qty > 0) {
+      const base = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+      const { effective, mult, trendType } = getDynamicPrice(id, base);
+      allItems.push({
+        id,
+        name: def.name,
+        emoji: def.emoji,
+        qty,
+        basePrice: base,
+        sellPrice: effective,
+        multiplier: mult,
+        trend: trendType,
+        isCrop: true,
+      });
+    }
   }
 
   // Other silo items (exclude feed)
@@ -27,7 +74,20 @@ export function ShopPanel() {
   ];
   for (const extra of siloExtras) {
     const qty = silo[extra.id] || 0;
-    if (qty > 0) allItems.push({ id: extra.id, name: extra.name, emoji: extra.emoji, qty, sellPrice: extra.sellPrice, isCrop: true });
+    if (qty > 0) {
+      const { effective, mult, trendType } = getDynamicPrice(extra.id, extra.sellPrice);
+      allItems.push({
+        id: extra.id,
+        name: extra.name,
+        emoji: extra.emoji,
+        qty,
+        basePrice: extra.sellPrice,
+        sellPrice: effective,
+        multiplier: mult,
+        trend: trendType,
+        isCrop: true,
+      });
+    }
   }
 
   // Products from barn (exclude feed)
@@ -35,13 +95,53 @@ export function ShopPanel() {
   for (const [id, def] of Object.entries(PRODUCTS)) {
     if (SHOP_HIDDEN_PRODUCTS.has(id)) continue;
     const qty = barn[id] || 0;
-    if (qty > 0) allItems.push({ id, name: def.name, emoji: def.emoji, qty, sellPrice: def.sellPrice, isCrop: false });
+    if (qty > 0) {
+      const { effective, mult, trendType } = getDynamicPrice(id, def.sellPrice);
+      allItems.push({
+        id,
+        name: def.name,
+        emoji: def.emoji,
+        qty,
+        basePrice: def.sellPrice,
+        sellPrice: effective,
+        multiplier: mult,
+        trend: trendType,
+        isCrop: false,
+      });
+    }
   }
 
   const totalValue = allItems.reduce((sum, item) => sum + item.sellPrice * item.qty, 0);
+  const now = Date.now();
+  const refreshCountdownSec = Math.max(0, Math.ceil((marketNextRefresh - now) / 1000));
 
   return (
     <div className="space-y-3">
+      {/* Dynamic Commodity Exchange Ticker */}
+      <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-stone-100 shadow-sm space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
+            <span>📈</span>
+            <span className="uppercase tracking-wider">Commodity Exchange</span>
+          </div>
+          <div className="text-[10px] text-stone-400 font-mono">
+            Next fluctuation: {Math.floor(refreshCountdownSec / 60)}m {refreshCountdownSec % 60}s
+          </div>
+        </div>
+
+        {marketNewsTicker && (
+          <div className="flex items-center gap-2 bg-stone-950/70 px-2.5 py-1.5 rounded-lg border border-amber-500/30 text-xs">
+            <span className="text-sm animate-pulse">📢</span>
+            <span className="text-amber-200 font-medium truncate flex-1">
+              {marketNewsTicker.headline}
+            </span>
+            <span className="text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {marketNewsTicker.multiplier}x
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Header with Sell All */}
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
@@ -81,7 +181,19 @@ export function ShopPanel() {
                   <div className="flex items-center gap-2">
                     <span className="text-2xl">{item.emoji}</span>
                     <div>
-                      <div className="text-sm font-medium text-stone-800 dark:text-gray-200">{item.name}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-medium text-stone-800 dark:text-gray-200">{item.name}</span>
+                        {item.trend === 'up' && (
+                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                            📈 {item.multiplier}x
+                          </span>
+                        )}
+                        {item.trend === 'down' && (
+                          <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30">
+                            📉 {item.multiplier}x
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-stone-500 dark:text-gray-400">
                         Have: {item.qty} • {'💰'}{item.sellPrice}/ea
                       </div>

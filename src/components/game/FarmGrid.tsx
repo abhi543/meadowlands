@@ -23,6 +23,8 @@ export function FarmGrid() {
     extinguishBrushfire,
     captureLocust,
     relics,
+    activeCrisis,
+    resolveCrisisDefense,
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
 
@@ -133,6 +135,10 @@ export function FarmGrid() {
           const isEmpty = !plot.crop;
           const isWatered = Boolean(plot.isWatered);
 
+          const hasBlight = activeCrisis?.type === 'crop_blight' &&
+            activeCrisis?.resolvedStatus === 'pending' &&
+            (activeCrisis?.targetIds.includes(plot.id) || activeCrisis?.targetIds.includes(String(plot.id)));
+
           const isOnFire = systemicEvent?.id === 'barn_fire' &&
             systemicEvent?.phase === 'active' &&
             systemicEvent?.activeFirePositions?.includes(plot.id);
@@ -147,7 +153,9 @@ export function FarmGrid() {
 
           // Soil styling classes
           let soilClasses = '';
-          if (isOnFire) {
+          if (hasBlight) {
+            soilClasses = 'bg-purple-950/70 border-purple-500 animate-pulse ring-2 ring-purple-400 shadow-lg shadow-purple-500/40 cursor-pointer text-white';
+          } else if (isOnFire) {
             soilClasses = 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 animate-pulse ring-2 ring-rose-400 shadow-lg shadow-rose-500/30 cursor-pointer';
           } else if (hasLocust) {
             soilClasses = 'bg-amber-100 dark:bg-amber-950/60 border-amber-600 animate-bounce ring-2 ring-amber-500 shadow-md cursor-pointer';
@@ -167,7 +175,9 @@ export function FarmGrid() {
           }
 
           const handlePlotClick = () => {
-            if (isOnFire) {
+            if (hasBlight) {
+              resolveCrisisDefense('quarantine', plot.id);
+            } else if (isOnFire) {
               extinguishBrushfire(plot.id);
             } else if (hasLocust) {
               captureLocust(plot.id);
@@ -189,8 +199,16 @@ export function FarmGrid() {
               onClick={handlePlotClick}
               className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden ${soilClasses}`}
             >
-              {/* Crisis Overlay 1: Brushfire */}
-              {isOnFire ? (
+              {/* Crisis Overlay 0: Crop Blight */}
+              {hasBlight ? (
+                <div className="flex flex-col items-center justify-center p-1">
+                  <span className="text-2xl animate-bounce">☣️</span>
+                  <span className="text-[9px] font-black uppercase text-purple-200 bg-purple-900/90 px-1.5 py-0.5 rounded mt-0.5 border border-purple-400">
+                    Quarantine!
+                  </span>
+                </div>
+              ) : isOnFire ? (
+                /* Crisis Overlay 1: Brushfire */
                 <div className="flex flex-col items-center justify-center p-1">
                   <span className="text-2xl animate-bounce">🔥</span>
                   <span className="text-[9px] font-black uppercase text-rose-700 dark:text-rose-300 bg-white/80 dark:bg-black/60 px-1 rounded mt-0.5">

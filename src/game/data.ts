@@ -1545,3 +1545,131 @@ export function generateFreightContract(): FreightContract {
     entryDeposit,
   };
 }
+
+// ============================================================
+// THRILL & CRISIS GAMEPLAY OVERHAUL SYSTEM DEFINITIONS
+// ============================================================
+
+export type CrisisType = 'predator_raid' | 'crop_blight' | 'flash_weather';
+
+export interface CrisisDef {
+  type: CrisisType;
+  title: string;
+  emoji: string;
+  description: string;
+  durationSec: number;
+}
+
+export const CRISIS_DEFINITIONS: Record<CrisisType, CrisisDef> = {
+  predator_raid: {
+    type: 'predator_raid',
+    title: 'Predator Raid',
+    emoji: '🦊',
+    description: 'Fierce forest predators are circling the coops and pastures! Sound the alarm or deploy a guard dog before they steal your animal yields!',
+    durationSec: 45,
+  },
+  crop_blight: {
+    type: 'crop_blight',
+    title: 'Crop Blight Outbreak',
+    emoji: '🌾',
+    description: 'A virulent blight is infecting farm plots! Quarantine the infection before it ravages adjacent crops!',
+    durationSec: 45,
+  },
+  flash_weather: {
+    type: 'flash_weather',
+    title: 'Flash Weather Hazard',
+    emoji: '⛈️',
+    description: 'Extreme weather (Drought or Blizzard) is slowing down all crop and animal cycles by 50%! Activate the Emergency Shield/Sprinkler to protect production!',
+    durationSec: 45,
+  },
+};
+
+// --- Mutation Breeding Variants ---
+export interface MutationVariantDef {
+  id: string;
+  species: AnimalSpecies;
+  name: string;
+  emoji: string;
+  badge: string;
+  speedBonus: number; // e.g. 1.5x (50% faster permanent)
+  auraGlow: string;
+  tintClass: string;
+  description: string;
+}
+
+export const MUTATION_VARIANTS: Record<AnimalSpecies, MutationVariantDef> = {
+  chicken: {
+    id: 'chicken_golden_hen',
+    species: 'chicken',
+    name: 'Golden Hen',
+    emoji: '✨🐔',
+    badge: 'MUTANT: GOLDEN',
+    speedBonus: 1.5,
+    auraGlow: 'shadow-[0_0_15px_rgba(245,158,11,0.6)] ring-2 ring-amber-400 bg-amber-500/20',
+    tintClass: 'text-amber-500 dark:text-amber-300 font-black',
+    description: 'Radiant golden mutation! Permanent +50% production speed and sparkling feathers.',
+  },
+  cow: {
+    id: 'cow_spectral',
+    species: 'cow',
+    name: 'Spectral Cow',
+    emoji: '🌌🐄',
+    badge: 'MUTANT: SPECTRAL',
+    speedBonus: 1.5,
+    auraGlow: 'shadow-[0_0_15px_rgba(99,102,241,0.6)] ring-2 ring-indigo-400 bg-indigo-500/20',
+    tintClass: 'text-indigo-500 dark:text-indigo-300 font-black',
+    description: 'Ethereal cosmic mutation! Produces rich astral milk with permanent +50% speed.',
+  },
+  sheep: {
+    id: 'sheep_prismatic',
+    species: 'sheep',
+    name: 'Prismatic Sheep',
+    emoji: '🌈🐑',
+    badge: 'MUTANT: PRISMATIC',
+    speedBonus: 1.5,
+    auraGlow: 'shadow-[0_0_15px_rgba(236,72,153,0.6)] ring-2 ring-pink-400 bg-pink-500/20',
+    tintClass: 'text-pink-500 dark:text-pink-300 font-black',
+    description: 'Iridescent glowing fleece! Permanent +50% production speed across all wool cycles.',
+  },
+  pig: {
+    id: 'pig_shadow',
+    species: 'pig',
+    name: 'Shadow Hog',
+    emoji: '🌑🐖',
+    badge: 'MUTANT: SHADOW',
+    speedBonus: 1.5,
+    auraGlow: 'shadow-[0_0_15px_rgba(168,85,247,0.6)] ring-2 ring-purple-500 bg-purple-500/20',
+    tintClass: 'text-purple-500 dark:text-purple-300 font-black',
+    description: 'Mystic midnight truffle hunter! Digs up treasures with permanent +50% speed.',
+  },
+};
+
+// --- Dynamic Commodity Market Constants ---
+export const MARKET_COMMODITIES: string[] = [
+  'wheat', 'corn', 'carrot', 'strawberry', 'cotton',
+  'egg', 'milk', 'wool', 'truffle',
+  'bread', 'cheese', 'pie', 'sweater', 'truffle_oil',
+  'fish', 'honey_comb', 'gold_nugget',
+];
+
+export interface MarketNewsTemplate {
+  itemId: string;
+  headline: string;
+  minMult: number;
+  maxMult: number;
+}
+
+export const MARKET_NEWS_TEMPLATES: MarketNewsTemplate[] = [
+  { itemId: 'egg', headline: 'East Port Egg Shortage: Eggs selling at premium rates!', minMult: 1.7, maxMult: 2.2 },
+  { itemId: 'milk', headline: 'Dairy Festival Boom: Fresh Milk in extreme high demand!', minMult: 1.6, maxMult: 2.1 },
+  { itemId: 'wheat', headline: 'Continental Grain Surplus: Wheat prices soften across markets.', minMult: 0.6, maxMult: 0.8 },
+  { itemId: 'corn', headline: 'Livestock Ranchers Stockpiling Corn: Feed grain surging!', minMult: 1.5, maxMult: 1.9 },
+  { itemId: 'cheese', headline: 'High-Society Banquet: Artisan Cheese values skyrocket!', minMult: 1.8, maxMult: 2.2 },
+  { itemId: 'bread', headline: 'Local Bakeries Overstocked: Bread prices experiencing a dip.', minMult: 0.65, maxMult: 0.85 },
+  { itemId: 'wool', headline: 'Northern Freeze Alert: Raw Wool selling at peak prices!', minMult: 1.7, maxMult: 2.2 },
+  { itemId: 'sweater', headline: 'Winter Fashion Craze: Knit Sweaters fetching record sums!', minMult: 1.8, maxMult: 2.2 },
+  { itemId: 'fish', headline: 'Seafood Trade Flotilla Arrives: Prime fish rates soaring!', minMult: 1.7, maxMult: 2.1 },
+  { itemId: 'truffle', headline: 'Gourmet Culinary Tour: Rare Truffles commanding top dollar!', minMult: 1.8, maxMult: 2.2 },
+  { itemId: 'strawberry', headline: 'Sweet Strawberry Craze: Confectioners bidding up berry prices!', minMult: 1.6, maxMult: 2.0 },
+  { itemId: 'cotton', headline: 'Weaving Guild Bulk Contract: Raw Cotton in high demand!', minMult: 1.5, maxMult: 1.9 },
+];

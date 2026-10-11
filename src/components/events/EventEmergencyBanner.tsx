@@ -9,8 +9,15 @@ import { useGameStore } from '@/game/store';
  * when a Sudden Crisis or Gold Rush strikes!
  */
 export function EventEmergencyBanner() {
-  const { suddenEventFlash, clearSuddenEventFlash, activeSuddenEvent } = useGameStore();
+  const { suddenEventFlash, clearSuddenEventFlash, activeSuddenEvent, activeCrisis } = useGameStore();
   const [isShaking, setIsShaking] = useState(false);
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!activeCrisis || activeCrisis.resolvedStatus !== 'pending') return;
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [activeCrisis]);
 
   useEffect(() => {
     if (suddenEventFlash) {
@@ -30,9 +37,21 @@ export function EventEmergencyBanner() {
     }
   }, [suddenEventFlash, clearSuddenEventFlash]);
 
-  if (!suddenEventFlash && !isShaking) return null;
+  // Screen Edge Pulse calculation for Step 5
+  let crisisEdgePulse: 'red' | 'amber' | null = null;
+  if (activeCrisis && activeCrisis.resolvedStatus === 'pending') {
+    const remainingSec = Math.max(0, Math.ceil((activeCrisis.expiresAt - Date.now()) / 1000));
+    if (remainingSec <= 10) {
+      crisisEdgePulse = 'red';
+    } else if (remainingSec < 30) {
+      crisisEdgePulse = 'amber';
+    }
+  }
 
-  const isCrisis = suddenEventFlash === 'CRISIS' || activeSuddenEvent?.type === 'CRISIS';
+  const isSuddenFlash = Boolean(suddenEventFlash);
+  if (!isSuddenFlash && !isShaking && !crisisEdgePulse) return null;
+
+  const isCrisis = suddenEventFlash === 'CRISIS' || activeSuddenEvent?.type === 'CRISIS' || crisisEdgePulse === 'red';
 
   return (
     <>
@@ -52,12 +71,12 @@ export function EventEmergencyBanner() {
       `}</style>
 
       {/* Screen Border Flash Edge Pulse */}
-      {suddenEventFlash && (
+      {(isSuddenFlash || crisisEdgePulse) && (
         <div
-          className={`pointer-events-none fixed inset-0 z-[100] transition-opacity duration-500 ${
-            isCrisis
-              ? 'border-[8px] sm:border-[12px] border-red-500 shadow-[inset_0_0_80px_rgba(239,68,68,0.6)] animate-pulse'
-              : 'border-[8px] sm:border-[12px] border-amber-400 shadow-[inset_0_0_80px_rgba(245,158,11,0.6)] animate-pulse'
+          className={`pointer-events-none fixed inset-0 z-[100] transition-opacity duration-300 ${
+            crisisEdgePulse === 'red' || isCrisis
+              ? 'border-[8px] sm:border-[12px] border-red-600 shadow-[inset_0_0_90px_rgba(220,38,38,0.7)] animate-pulse'
+              : 'border-[6px] sm:border-[10px] border-amber-500 shadow-[inset_0_0_60px_rgba(245,158,11,0.5)] animate-pulse'
           }`}
         />
       )}
