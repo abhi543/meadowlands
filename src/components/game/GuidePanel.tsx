@@ -43,7 +43,7 @@ const GUIDE_TABS: TabItem[] = [
   { id: 'fishery',    label: 'Fishery & Waters',emoji: '🎣' },
   { id: 'wilderness', label: 'Wilderness',      emoji: '🏕️' },
   { id: 'territory',  label: 'Territory & Map', emoji: '🧭' },
-  { id: 'market',     label: 'Market & Elders', emoji: '💰' },
+  { id: 'market',     label: 'Livestock Page',  emoji: '🐄' },
   { id: 'tips',       label: 'Pro Strategies',  emoji: '💡' },
 ];
 
@@ -718,7 +718,7 @@ function MarketGuide() {
     <div className="space-y-3">
       <div>
         <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          💰 Livestock Market &amp; Elder Animals
+          🐄 Livestock Page &amp; Elder Animals
         </h4>
         <p className="text-xs text-stone-500 dark:text-gray-400">
           Trade live animals and understand life cycle depreciation.

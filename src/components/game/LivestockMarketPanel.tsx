@@ -18,7 +18,7 @@ export function LivestockMarketPanel() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          {'🏪'} Livestock Market
+          {'🐄'} Livestock Page
         </h3>
       </div>
 
