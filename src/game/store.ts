@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { idbStorage, SAVE_KEY } from '@/lib/idbStorage';
 import {
   CROPS, ANIMALS, PRODUCTS, BUILDINGS, FARMHANDS, WORKERS,
   WATER_ZONES, FISH_SPECIES, ROD_TIERS, ROD_TIER_ORDER, OUTFITS,
@@ -371,6 +372,7 @@ export interface GameState {
   markDirty: () => void;
   markClean: () => void;
   claimAccountLinkReward: () => void;
+  loadBackupSave: (payload: Partial<GameState>) => void;
   loadCloudSave: (payload: Partial<GameState>) => void;
   fastForwardOfflineTime: (elapsedMs: number) => void;
 
@@ -2482,16 +2484,19 @@ export const useGameStore = create<GameState>()(
         state.addNotification('Homestead Protected! Claimed +50 Gems bonus.', '💎', 'info');
       },
 
-      loadCloudSave: (payload) => {
+      loadBackupSave: (payload) => {
         const state = get();
         set({
           ...state,
           ...payload,
           isDirty: false,
-          lastCloudSyncTimestamp: Date.now(),
           lastTick: Date.now(),
         });
-        get().addNotification('Cloud save synchronized successfully.', '☁️', 'info');
+        get().addNotification('Local backup loaded successfully! Farm restored.', '💾', 'info');
+      },
+
+      loadCloudSave: (payload) => {
+        get().loadBackupSave(payload);
       },
 
       fastForwardOfflineTime: (elapsedMs) => {
@@ -3061,7 +3066,8 @@ export const useGameStore = create<GameState>()(
       },
     }),
     {
-      name: 'meadowlands-save',
+      name: SAVE_KEY,
+      storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({
         coins: state.coins, gems: state.gems, xp: state.xp, level: state.level,
         silo: state.silo, barn: state.barn,

@@ -78,3 +78,22 @@ Work Log:
 Stage Summary:
 - Frictionless guest onboarding and reliable account-linking reward pipeline
 
+---
+Task ID: 5
+Agent: Main Agent
+Task: Strip Auth/Supabase & Switch to 100% Local-First IndexedDB Storage
+
+Work Log:
+- Installed `idb-keyval` for persistent browser IndexedDB state storage adapter
+- Implemented `src/lib/idbStorage.ts` with transparent migration from `localStorage`, browser storage lock (`navigator.storage.persist()`), and JSON export/import helpers
+- Configured Zustand store (`src/game/store.ts`) to use `idbStorage` via `createJSONStorage()`, bypassing 5MB localStorage limits
+- Implemented `loadBackupSave` action in `src/game/store.ts` for instant state restoration
+- Created `src/components/game/BackupModal.tsx` for manual JSON backup downloads, file imports, and clipboard transfers
+- Updated `src/components/game/HUD.tsx` to provide a direct "💾 Backup" button instead of cloud account modals
+- Updated `src/app/page.tsx` to mount `BackupModal` and request storage persistence on boot
+- Completely stripped all Supabase and Auth files: `useAuthStore.ts`, `syncManager.ts`, `supabaseClient.ts`, `SaveProgressModal.tsx`, `SaveConflictModal.tsx`, and uninstalled `@supabase/supabase-js`
+- Verified strict TypeScript type checks and Next.js Turbopack production builds pass with 0 errors
+
+Stage Summary:
+- 100% local-first architecture with high-capacity IndexedDB persistence, manual backup JSON portability, zero email limits, and zero external backend dependencies
+

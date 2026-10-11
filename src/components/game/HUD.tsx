@@ -3,15 +3,12 @@
 import { useGameStore } from '@/game/store';
 import { xpForLevel } from '@/game/data';
 
-import { useAuthStore } from '@/store/useAuthStore';
-
 interface HUDProps {
-  onOpenAuthModal?: () => void;
+  onOpenBackupModal?: () => void;
 }
 
-export function HUD({ onOpenAuthModal }: HUDProps) {
-  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame, isDirty } = useGameStore();
-  const { user, isGuest } = useAuthStore();
+export function HUD({ onOpenBackupModal }: HUDProps) {
+  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame } = useGameStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
@@ -23,7 +20,7 @@ export function HUD({ onOpenAuthModal }: HUDProps) {
   const barnMax = 30 + level * 3;
 
   const auraTitle = currentEstateAura?.title || 'Homestead';
-  const auraEmoji = currentEstateAura?.emoji || '\u{1F3E1}';
+  const auraEmoji = currentEstateAura?.emoji || '🏡';
 
   return (
     <div className="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 dark:from-amber-800 dark:via-orange-800 dark:to-red-800 rounded-2xl p-3 shadow-lg text-white">
@@ -50,23 +47,15 @@ export function HUD({ onOpenAuthModal }: HUDProps) {
           </div>
         )}
 
-        {/* Cloud Sync & Account Button */}
-        {onOpenAuthModal && (
+        {/* Local Storage & Backup Button */}
+        {onOpenBackupModal && (
           <button
-            onClick={onOpenAuthModal}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm ${
-              !user || isGuest
-                ? 'bg-amber-300 hover:bg-amber-200 text-stone-900 ring-2 ring-amber-400/50 animate-pulse'
-                : isDirty
-                ? 'bg-sky-400 hover:bg-sky-300 text-stone-950'
-                : 'bg-white/20 hover:bg-white/30 text-white'
-            }`}
-            title={!user || isGuest ? 'Link account to get 50 Gems!' : 'Cloud save active'}
+            onClick={onOpenBackupModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition-all shadow-sm border border-white/20 backdrop-blur-sm"
+            title="Local-first IndexedDB save & Backup Manager"
           >
-            <span>☁️</span>
-            <span>
-              {!user || isGuest ? 'Save (+50💎)' : isDirty ? 'Syncing...' : 'Synced'}
-            </span>
+            <span>💾</span>
+            <span>Backup</span>
           </button>
         )}
 
