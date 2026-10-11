@@ -36,7 +36,10 @@ export function FarmWell() {
   const canWaterAll = waterLevel > 0 && unwateredCount > 0;
 
   const handlePump = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (isFull) return;
+    if (isFull) {
+      useGameStore.getState().addNotification(`Well is already full (${waterLevel}/${maxWaterLevel} 💧)! Water crops to use water.`, '💧', 'info');
+      return;
+    }
 
     // Get click position for floating drop
     const rect = e.currentTarget.getBoundingClientRect();
@@ -81,16 +84,18 @@ export function FarmWell() {
           {/* Interactive Tap-to-Pump Button */}
           <button
             onClick={handlePump}
-            disabled={isFull}
-            title={isFull ? 'Well is full!' : 'Click to pump fresh water (+1 💧)'}
-            className={`relative group flex h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0 items-center justify-center rounded-2xl border-2 transition-all duration-150 select-none ${
+            title={isFull ? 'Well is full! Tap to inspect.' : 'Click to pump fresh water (+1 💧)'}
+            className={`relative group flex flex-col h-16 w-16 sm:h-18 sm:w-18 flex-shrink-0 items-center justify-center rounded-2xl border-2 transition-all duration-150 select-none ${
               isFull
-                ? 'bg-cyan-800/40 border-cyan-500/40 opacity-90 cursor-default'
-                : 'bg-gradient-to-b from-cyan-500/30 to-blue-600/40 border-cyan-400 hover:border-cyan-300 hover:scale-105 active:scale-95 shadow-lg shadow-cyan-500/20 cursor-pointer'
+                ? 'bg-cyan-800/50 border-cyan-400/60 hover:bg-cyan-800/70 cursor-pointer shadow-md'
+                : 'bg-gradient-to-b from-cyan-500/40 to-blue-600/50 border-cyan-300 hover:border-cyan-200 hover:scale-105 active:scale-95 shadow-lg shadow-cyan-500/30 cursor-pointer animate-pulse'
             } ${isPumping ? 'scale-90 rotate-[-6deg]' : ''}`}
           >
-            <span className="text-3xl sm:text-4xl filter drop-shadow-md transition-transform group-hover:scale-110">
+            <span className="text-2xl sm:text-3xl filter drop-shadow-md transition-transform group-hover:scale-110">
               ⛲
+            </span>
+            <span className="text-[9px] font-black uppercase text-cyan-200 mt-0.5">
+              {isFull ? 'Well Full' : 'Pump +1💧'}
             </span>
 
             {/* Ripple Wave ring on pump */}
@@ -157,19 +162,41 @@ export function FarmWell() {
 
         {/* Right Side: Quick Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
+          {/* Explicit Pump Button */}
+          <button
+            onClick={handlePump}
+            className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 border transition-all active:scale-95 ${
+              isFull
+                ? 'bg-cyan-950/50 text-cyan-300 border-cyan-500/40 hover:bg-cyan-900/40'
+                : 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-stone-950 border-cyan-200 shadow-md shadow-cyan-500/20 animate-pulse'
+            }`}
+          >
+            <span>⛲</span>
+            <span>{isFull ? 'Well Full' : 'Pump (+1 💧)'}</span>
+          </button>
+
           {/* Quick Water All Plots */}
           <button
-            onClick={() => waterAllPlots()}
-            disabled={!canWaterAll}
-            className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 border transition-all ${
+            onClick={() => {
+              if (waterLevel <= 0) {
+                useGameStore.getState().addNotification('No water in well! Pump fresh water first.', '⛲', 'info');
+                return;
+              }
+              if (unwateredCount === 0) {
+                useGameStore.getState().addNotification('All crops are already watered!', '💧', 'info');
+                return;
+              }
+              waterAllPlots();
+            }}
+            className={`flex-1 sm:flex-initial px-3 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 border transition-all active:scale-95 ${
               canWaterAll
-                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white border-cyan-300 shadow-md shadow-cyan-900/40 active:scale-95'
-                : 'bg-slate-800/40 text-slate-500 border-slate-700/50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white border-cyan-300 shadow-md shadow-cyan-900/40'
+                : 'bg-slate-800/60 text-slate-300 border-slate-700/60 hover:bg-slate-800'
             }`}
           >
             <span>⚡</span>
             <span>Water All</span>
-            {unwateredCount > 0 && waterLevel > 0 && (
+            {unwateredCount > 0 && (
               <span className="bg-white/20 px-1.5 py-0.2 rounded text-[11px]">
                 {Math.min(waterLevel, unwateredCount)}
               </span>

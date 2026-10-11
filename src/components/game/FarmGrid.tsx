@@ -17,6 +17,9 @@ export function FarmGrid() {
     harvestAllPlots,
     waterPlot,
     waterLevel,
+    maxWaterLevel,
+    pumpWell,
+    waterAllPlots,
     silo,
     coins,
     systemicEvent,
@@ -30,9 +33,14 @@ export function FarmGrid() {
 
   const visiblePlots = plots.slice(0, unlockedPlots);
 
-  // Count ready and empty plots for batch actions
+  // Count ready, empty, and unwatered plots for batch actions
   const readyCount = visiblePlots.filter(p => p.crop && p.ready).length;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
+  const unwateredCount = visiblePlots.filter(p => !p.isWatered).length;
+  const effectiveMaxWater = maxWaterLevel || 10;
+  const isWellFull = waterLevel >= effectiveMaxWater;
+  const canWaterAll = waterLevel > 0 && unwateredCount > 0;
+  const waterableCount = Math.min(waterLevel, unwateredCount);
   const selectedCropDef = CROPS[selectedCrop];
   const totalPlantCost = emptyCount * selectedCropDef.seedCost;
   const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
@@ -84,21 +92,21 @@ export function FarmGrid() {
       )}
 
       {/* Batch Action Buttons */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {/* Harvest All */}
         <button
           onClick={() => harvestAllPlots()}
           disabled={readyCount === 0}
-          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 ${
             readyCount > 0
-              ? 'bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-lg shadow-green-200/50 active:scale-95'
+              ? 'bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-md shadow-green-200/50 active:scale-95'
               : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
         >
-          <span className="text-lg">{'🌾'}</span>
+          <span className="text-base sm:text-lg">{'🌾'}</span>
           Harvest All
           {readyCount > 0 && (
-            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
               {readyCount}
             </span>
           )}
@@ -108,22 +116,76 @@ export function FarmGrid() {
         <button
           onClick={() => plantAllCrops(selectedCrop)}
           disabled={emptyCount === 0 || !canAffordPlantAll}
-          className={`flex-1 min-w-[140px] px-4 py-2.5 rounded-xl font-semibold text-sm transition-all border-2 flex items-center justify-center gap-2 ${
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 ${
             emptyCount > 0 && canAffordPlantAll
-              ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-200/50 active:scale-95'
+              ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-200/50 active:scale-95'
               : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
         >
-          <span className="text-lg">{'🌱'}</span>
-          Plant All {selectedCropDef.emoji}
+          <span className="text-base sm:text-lg">{'🌱'}</span>
+          Plant All
           {emptyCount > 0 && (
-            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-xs font-bold">
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
               {emptyCount}
             </span>
           )}
           {totalPlantCost > 0 && (
-            <span className="text-xs opacity-80">{'💰'}{totalPlantCost}</span>
+            <span className="text-[10px] sm:text-xs opacity-80">{'💰'}{totalPlantCost}</span>
           )}
+        </button>
+
+        {/* Water All */}
+        <button
+          onClick={() => {
+            if (waterLevel <= 0) {
+              useGameStore.getState().addNotification('Well is dry (0 💧)! Tap Pump Well to draw water.', '💧', 'info');
+              return;
+            }
+            if (unwateredCount === 0) {
+              useGameStore.getState().addNotification('All plots are already hydrated! 💧', '💧', 'info');
+              return;
+            }
+            waterAllPlots();
+          }}
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
+            canWaterAll
+              ? 'bg-cyan-500 hover:bg-cyan-600 text-white border-cyan-600 shadow-md shadow-cyan-200/50'
+              : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
+          }`}
+        >
+          <span className="text-base sm:text-lg">{'💧'}</span>
+          Water All
+          {canWaterAll ? (
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
+              {waterableCount}
+            </span>
+          ) : (
+            <span className="text-[10px] sm:text-xs opacity-80">
+              ({unwateredCount === 0 ? 'Full' : '0💧'})
+            </span>
+          )}
+        </button>
+
+        {/* Pump Well */}
+        <button
+          onClick={() => {
+            if (isWellFull) {
+              useGameStore.getState().addNotification(`Well is already full (${waterLevel}/${effectiveMaxWater} 💧)! Water crops to use water.`, '⛲', 'info');
+              return;
+            }
+            pumpWell();
+          }}
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
+            !isWellFull
+              ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-700 shadow-md shadow-blue-200/50'
+              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'
+          }`}
+        >
+          <span className="text-base sm:text-lg">{'⛲'}</span>
+          Pump Well
+          <span className="bg-black/15 dark:bg-white/20 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
+            {waterLevel}/{effectiveMaxWater}💧
+          </span>
         </button>
       </div>
 
