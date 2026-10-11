@@ -601,24 +601,6 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                   })}
                 </div>
               </div>
-
-              {/* Developer Testing Override (Collapsed by default so normal players never see it) */}
-              <details className="text-[10px] text-stone-400 dark:text-stone-500 pt-3 border-t border-stone-200 dark:border-stone-800">
-                <summary className="cursor-pointer hover:underline font-mono">
-                  ⚙️ Developer Simulation Override (Force Trigger)
-                </summary>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 pt-2">
-                  {Object.values(SYSTEMIC_EVENTS).map((ev) => (
-                    <button
-                      key={ev.id}
-                      onClick={() => triggerSystemicEvent(ev.id)}
-                      className="px-2 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-[10px] text-stone-700 dark:text-stone-300 font-medium truncate"
-                    >
-                      {ev.emoji} {ev.name}
-                    </button>
-                  ))}
-                </div>
-              </details>
             </div>
           )}
         </div>

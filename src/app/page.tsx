@@ -14,6 +14,9 @@ import { FisheryPanel } from '@/components/game/FisheryPanel';
 import { AutonomousWorkerPanel } from '@/components/game/AutonomousWorkerPanel';
 import { WorkersHubPanel } from '@/components/game/WorkersHubPanel';
 import { EventBanner } from '@/components/game/EventBanner';
+import { EventEmergencyBanner } from '@/components/events/EventEmergencyBanner';
+import { EventTickingClock } from '@/components/events/EventTickingClock';
+import { EventEmergencyModal } from '@/components/events/EventEmergencyModal';
 import { EventTopBanner } from '@/components/game/events/EventTopBanner';
 import { EventDetailModal } from '@/components/game/events/EventDetailModal';
 import { RelicMonumentsPanel } from '@/components/game/events/RelicMonumentsPanel';
@@ -76,6 +79,29 @@ export default function Home() {
 
   const surpriseEventAlert = useGameStore(s => s.surpriseEventAlert);
   const clearSurpriseEventAlert = useGameStore(s => s.clearSurpriseEventAlert);
+  const adjustSuddenEventExpiry = useGameStore(s => s.adjustSuddenEventExpiry);
+
+  // Tab Sleep / Inactive Safety:
+  // Pause/extend event countdown while tab is unfocused so players are not wiped out while away.
+  useEffect(() => {
+    let hiddenAt: number | null = null;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+      } else if (document.visibilityState === 'visible' && hiddenAt !== null) {
+        const elapsed = Date.now() - hiddenAt;
+        hiddenAt = null;
+        if (elapsed > 0) {
+          adjustSuddenEventExpiry(elapsed);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [adjustSuddenEventExpiry]);
 
   // When an autonomous surprise event triggers, dramatically pop open the event hub!
   useEffect(() => {
@@ -115,12 +141,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      {/* Sensory Alert Trigger (Visual Screen Edge Pulse & Micro-Shake) */}
+      <EventEmergencyBanner />
+
       {/* Header */}
       <header className="sticky top-0 z-50 p-3 pb-0">
         <HUD onOpenBackupModal={() => setBackupModalOpen(true)} />
       </header>
 
       <main className="max-w-2xl mx-auto p-3 pt-2 pb-28">
+        {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
+        <EventTickingClock />
+
         {/* Dynamic Long-Form Systemic Event Engine Banner */}
         <EventTopBanner
           onOpenDetail={() => setEventModalOpen(true)}
@@ -150,6 +182,8 @@ export default function Home() {
 
       {/** Modals & Overlays **/}
       <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
+      {/* High-Stakes Direct Action Minigame Modal */}
+      <EventEmergencyModal />
       <EventDetailModal
         isOpen={eventModalOpen}
         onClose={() => setEventModalOpen(false)}

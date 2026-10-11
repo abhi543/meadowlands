@@ -29,6 +29,18 @@ import {
   type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
 } from './eventsData';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
+import {
+  type ActiveEventInstance,
+  createSuddenEventInstance,
+  getNextSuddenEventDelay,
+} from '@/lib/eventDirector';
+import {
+  playCrisisAlarm,
+  playGoldRushFanfare,
+  playRapidTapSound,
+  playVictoryChime,
+  playDefeatSound,
+} from '@/lib/soundEffects';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -294,6 +306,13 @@ export interface GameState {
   surpriseEventAlert: { id: SystemicEventId; timestamp: number } | null;
   relics: RelicsState;
 
+  // High-Stakes "Adrenaline Rush" Sudden Event Engine
+  activeSuddenEvent: ActiveEventInstance | null;
+  nextSuddenEventTime: number | null;
+  workersPausedUntil: number | null;
+  suddenEventFlash: 'CRISIS' | 'GOLD_RUSH' | null;
+  isSuddenEventModalOpen: boolean;
+
   // Time
   lastTick: number;
 
@@ -394,6 +413,16 @@ export interface GameState {
   claimCountyFairTrophy: () => boolean;
   useGlowingSpore: (buildingId: BuildingId, slotIndex: number) => boolean;
   clearSurpriseEventAlert: () => void;
+
+  // High-Stakes Sudden Event Engine Actions
+  triggerSuddenEvent: (eventId?: string) => void;
+  progressSuddenEventTap: () => void;
+  paySuddenEventResource: () => boolean;
+  resolveSuddenEventSuccess: () => void;
+  resolveSuddenEventFailure: () => void;
+  clearSuddenEventFlash: () => void;
+  setSuddenEventModalOpen: (open: boolean) => void;
+  adjustSuddenEventExpiry: (elapsedMs: number) => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -606,6 +635,13 @@ export const useGameStore = create<GameState>()(
       nextSurpriseEventTime: null,
       surpriseEventAlert: null,
       relics: DEFAULT_RELICS,
+
+      // High-Stakes Sudden Event Engine
+      activeSuddenEvent: null,
+      nextSuddenEventTime: null,
+      workersPausedUntil: null,
+      suddenEventFlash: null,
+      isSuddenEventModalOpen: false,
 
       lastTick: Date.now(),
 
@@ -1948,9 +1984,12 @@ export const useGameStore = create<GameState>()(
         }
         } // end if (hasFisherman)
 
+        // Check if workers are paused due to sudden crisis penalty
+        const areWorkersPaused = Boolean(state.workersPausedUntil && now < state.workersPausedUntil);
+
         // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
         let newCoins = state.coins;
-        const newWorkers = state.autonomousWorkers.map(w => {
+        const newWorkers = areWorkersPaused ? state.autonomousWorkers : state.autonomousWorkers.map(w => {
           const def = WORKERS[w.type];
           const gear = def.gearTiers[w.gearTier - 1] || def.gearTiers[0];
           const interval = def.baseIntervalMs * gear.speedMultiplier;
@@ -1994,9 +2033,10 @@ export const useGameStore = create<GameState>()(
         // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
         let unifiedWorkersModified = false;
         const updatedUnifiedWorkers = { ...state.unifiedWorkers };
-        for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
-          const worker = updatedUnifiedWorkers[role];
-          if (!worker || !worker.isHired) continue;
+        if (!areWorkersPaused) {
+          for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
+            const worker = updatedUnifiedWorkers[role];
+            if (!worker || !worker.isHired) continue;
 
           const cfg = WORKER_REGISTRY[role];
           const effectiveInterval = workerEffectiveInterval(role, worker.level);
@@ -2070,6 +2110,7 @@ export const useGameStore = create<GameState>()(
             };
           }
         }
+        } // end if (!areWorkersPaused)
 
         // Hourly events: trigger every 60 min
         let newActiveEvent = state.activeEvent;
@@ -2164,42 +2205,65 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Surprise Random Event Trigger Engine (Autonomous & Unpredictable)
-        let newNextSurpriseEventTime = state.nextSurpriseEventTime;
-        let newSurpriseAlert = state.surpriseEventAlert;
+        // High-Stakes Sudden Event Engine Tick Logic (8-15 min window, high-urgency alarms)
+        let currentSuddenEvent = state.activeSuddenEvent;
+        let newSuddenEventTime = state.nextSuddenEventTime;
+        let newSuddenFlash = state.suddenEventFlash;
+        let newSuddenModalOpen = state.isSuddenEventModalOpen;
+        let updatedWorkersPaused = state.workersPausedUntil;
 
-        if (!currentSystemicEvent && state.level >= 2) {
-          if (!newNextSurpriseEventTime) {
-            // Unscheduled: schedule surprise event in 2 to 5 minutes
-            newNextSurpriseEventTime = now + 120_000 + Math.floor(Math.random() * 180_000);
-          } else if (now >= newNextSurpriseEventTime) {
-            // Surprise strike! Pick an eligible event matching farm level and cooldowns
-            const eligibleIds = getEligibleRandomEvents(state.level, updatedCooldowns, now);
-            const pickedId = eligibleIds[Math.floor(Math.random() * eligibleIds.length)];
-            const def = SYSTEMIC_EVENTS[pickedId];
+        // 1. Check expiration of active event (Consequence Resolution)
+        if (currentSuddenEvent && !currentSuddenEvent.resolved && now >= currentSuddenEvent.expiresAt) {
+          const penalty = currentSuddenEvent.penaltyOnFail;
+          if (penalty.lossType === 'CROPS') {
+            const cropPlots = newPlots.filter(p => p.crop !== null);
+            const countToRemove = Math.max(1, Math.floor(cropPlots.length * (penalty.amountPercentage / 100)));
+            let removed = 0;
+            for (let i = 0; i < newPlots.length && removed < countToRemove; i++) {
+              if (newPlots[i].crop !== null) {
+                newPlots[i] = { ...newPlots[i], crop: null, plantedAt: null, ready: false };
+                removed++;
+              }
+            }
+          } else if (penalty.lossType === 'COINS') {
+            const loss = Math.floor(newCoins * (penalty.amountPercentage / 100));
+            newCoins = Math.max(0, newCoins - loss);
+          } else if (penalty.lossType === 'WORKER_PAUSE') {
+            updatedWorkersPaused = now + 180_000; // 3 min pause
+          }
 
-            currentSystemicEvent = {
-              id: pickedId,
-              phase: 'forecast',
-              forecastEndsAt: now + def.forecastDurationMs,
-              activeEndsAt: now + def.forecastDurationMs + def.activeDurationMs,
-              currentStage: 1,
-              progress: 0,
-              target: def.stages[0].targetCount,
-              claimedStages: [],
-              isCompleted: false,
-              activeFirePositions: [],
-              locustPlotIds: [],
-              fairPoints: 0,
-              smugglerContractsCompleted: 0,
-              donatedMaterials: 0,
-            };
+          playDefeatSound();
+          state.addNotification(`💥 Time Expired! ${penalty.description}`, '⚠️', 'event');
 
-            newNextSurpriseEventTime = null;
-            newSurpriseAlert = { id: pickedId, timestamp: now };
+          currentSuddenEvent = null;
+          newSuddenModalOpen = false;
+          newSuddenFlash = null;
+          newSuddenEventTime = now + getNextSuddenEventDelay();
+        }
+        // 2. Schedule or trigger sudden events within 8-15 min active playtime window
+        else if (!currentSuddenEvent) {
+          if (!newSuddenEventTime) {
+            newSuddenEventTime = now + getNextSuddenEventDelay();
+          } else if (now >= newSuddenEventTime) {
+            const instance = createSuddenEventInstance(undefined, state.level);
+            currentSuddenEvent = instance;
+            newSuddenFlash = instance.type;
+            newSuddenModalOpen = true;
+            newSuddenEventTime = now + instance.durationSeconds * 1000 + getNextSuddenEventDelay();
 
-            state.addNotification(`⚡ SURPRISE EVENT: ${def.name} approaches!`, def.emoji, 'event');
-            sendLocalEventPushNotification(`⚡ Horizon Alert: ${def.name}`, def.premise);
+            if (instance.type === 'CRISIS') {
+              playCrisisAlarm();
+            } else {
+              playGoldRushFanfare();
+            }
+
+            state.addNotification(
+              instance.type === 'CRISIS'
+                ? `🚨 CRISIS: ${instance.title} - ${instance.durationSeconds}s remaining!`
+                : `⚡ GOLD RUSH: ${instance.title} - ${instance.durationSeconds}s bounty!`,
+              instance.emoji,
+              'event'
+            );
           }
         }
 
@@ -2502,8 +2566,11 @@ export const useGameStore = create<GameState>()(
           currentEstateAura: updatedEstateAura,
           systemicEvent: currentSystemicEvent,
           systemicEventCooldowns: updatedCooldowns,
-          nextSurpriseEventTime: newNextSurpriseEventTime,
-          surpriseEventAlert: newSurpriseAlert,
+          activeSuddenEvent: currentSuddenEvent,
+          nextSuddenEventTime: newSuddenEventTime,
+          suddenEventFlash: newSuddenFlash,
+          isSuddenEventModalOpen: newSuddenModalOpen,
+          workersPausedUntil: updatedWorkersPaused,
           xp: finalXp,
           level: finalLevel,
           lastTick: now,
@@ -3072,6 +3139,197 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
+      // High-Stakes Sudden Event Engine Actions
+      triggerSuddenEvent: (eventId) => {
+        const state = get();
+        if (state.activeSuddenEvent) return;
+        const instance = createSuddenEventInstance(eventId, state.level);
+        if (instance.type === 'CRISIS') {
+          playCrisisAlarm();
+        } else {
+          playGoldRushFanfare();
+        }
+        state.addNotification(
+          instance.type === 'CRISIS'
+            ? `🚨 CRISIS: ${instance.title} - ${instance.durationSeconds}s remaining!`
+            : `⚡ GOLD RUSH: ${instance.title} - ${instance.durationSeconds}s bounty!`,
+          instance.emoji,
+          'event'
+        );
+        set({
+          activeSuddenEvent: instance,
+          suddenEventFlash: instance.type,
+          isSuddenEventModalOpen: true,
+          nextSuddenEventTime: Date.now() + instance.durationSeconds * 1000 + getNextSuddenEventDelay(),
+          isDirty: true,
+        });
+      },
+
+      progressSuddenEventTap: () => {
+        const state = get();
+        if (!state.activeSuddenEvent || state.activeSuddenEvent.resolved) return;
+        if (state.activeSuddenEvent.requiredAction.type !== 'RAPID_TAP') return;
+
+        const target = state.activeSuddenEvent.requiredAction.targetCount || 10;
+        const newProgress = state.activeSuddenEvent.requiredAction.currentProgress + 1;
+        playRapidTapSound(newProgress);
+
+        if (newProgress >= target) {
+          get().resolveSuddenEventSuccess();
+        } else {
+          set({
+            activeSuddenEvent: {
+              ...state.activeSuddenEvent,
+              requiredAction: {
+                ...state.activeSuddenEvent.requiredAction,
+                currentProgress: newProgress,
+              },
+            },
+            isDirty: true,
+          });
+        }
+      },
+
+      paySuddenEventResource: () => {
+        const state = get();
+        if (!state.activeSuddenEvent || state.activeSuddenEvent.resolved) return false;
+        const cost = state.activeSuddenEvent.requiredAction.resourceCost;
+        if (!cost) return false;
+
+        if (cost.type === 'coins') {
+          if (state.coins < cost.amount) return false;
+          set({ coins: state.coins - cost.amount, isDirty: true });
+        } else if (cost.type === 'crops') {
+          const available = state.silo.wheat || 0;
+          if (available < cost.amount) return false;
+          set({
+            silo: { ...state.silo, wheat: available - cost.amount },
+            isDirty: true,
+          });
+        }
+
+        get().resolveSuddenEventSuccess();
+        return true;
+      },
+
+      resolveSuddenEventSuccess: () => {
+        const state = get();
+        if (!state.activeSuddenEvent || state.activeSuddenEvent.resolved) return;
+        const reward = state.activeSuddenEvent.rewardOnSuccess;
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + reward.xp, state.level);
+
+        playVictoryChime();
+        state.addNotification(
+          `🎉 EVENT CLEARED! Claimed +${reward.coins.toLocaleString()} Coins, +${reward.gems} Gems, +${reward.xp} XP!`,
+          '🏆',
+          'event'
+        );
+
+        // Relic activation if applicable
+        let newRelics = { ...state.relics };
+        const eId = state.activeSuddenEvent.eventId;
+        if (eId === 'barn_fire') {
+          newRelics.mineralAshUntil = Date.now() + 60 * 60 * 1000;
+        } else if (eId === 'royal_fleet') {
+          newRelics.royalCrownCrestUntil = Date.now() + 24 * 60 * 60 * 1000;
+        } else if (eId === 'midnight_smuggler') {
+          newRelics.smugglersCompass = true;
+        } else if (eId === 'county_fair') {
+          newRelics.countyFairTrophy = true;
+        } else if (eId === 'carnival_circus') {
+          newRelics.circusCub = true;
+        } else if (eId === 'alchemical_bloom') {
+          newRelics.glowingSpores += 3;
+        } else if (eId === 'artisan_masterclass') {
+          newRelics.masterArtisanLedger = true;
+        } else if (eId === 'ancient_ruins') {
+          newRelics.ancientSunRelic = true;
+        }
+
+        set({
+          coins: state.coins + reward.coins,
+          gems: state.gems + reward.gems,
+          xp: newXp,
+          level: newLevel,
+          relics: newRelics,
+          activeSuddenEvent: null,
+          isSuddenEventModalOpen: false,
+          suddenEventFlash: null,
+          nextSuddenEventTime: Date.now() + getNextSuddenEventDelay(),
+          isDirty: true,
+        });
+      },
+
+      resolveSuddenEventFailure: () => {
+        const state = get();
+        if (!state.activeSuddenEvent || state.activeSuddenEvent.resolved) return;
+        playDefeatSound();
+
+        const penalty = state.activeSuddenEvent.penaltyOnFail;
+        let newCoins = state.coins;
+        let newPlots = [...state.plots];
+        let newWorkersPausedUntil = state.workersPausedUntil;
+
+        if (penalty.lossType === 'CROPS') {
+          const cropPlots = newPlots.filter(p => p.crop !== null);
+          const countToRemove = Math.max(1, Math.floor(cropPlots.length * (penalty.amountPercentage / 100)));
+          let removed = 0;
+          for (let i = 0; i < newPlots.length && removed < countToRemove; i++) {
+            if (newPlots[i].crop !== null) {
+              newPlots[i] = { ...newPlots[i], crop: null, plantedAt: null, ready: false };
+              removed++;
+            }
+          }
+        } else if (penalty.lossType === 'COINS') {
+          const loss = Math.floor(newCoins * (penalty.amountPercentage / 100));
+          newCoins = Math.max(0, newCoins - loss);
+        } else if (penalty.lossType === 'WORKER_PAUSE') {
+          newWorkersPausedUntil = Date.now() + 180_000;
+        }
+
+        state.addNotification(`💥 Time Expired! ${penalty.description}`, '⚠️', 'event');
+
+        set({
+          coins: newCoins,
+          plots: newPlots,
+          workersPausedUntil: newWorkersPausedUntil,
+          activeSuddenEvent: null,
+          isSuddenEventModalOpen: false,
+          suddenEventFlash: null,
+          nextSuddenEventTime: Date.now() + getNextSuddenEventDelay(),
+          isDirty: true,
+        });
+      },
+
+      clearSuddenEventFlash: () => set({ suddenEventFlash: null }),
+      setSuddenEventModalOpen: (open) => set({ isSuddenEventModalOpen: open }),
+
+      adjustSuddenEventExpiry: (elapsedMs) => {
+        if (elapsedMs <= 0) return;
+        const state = get();
+        let updatedActive = state.activeSuddenEvent;
+        let updatedNext = state.nextSuddenEventTime;
+        let updatedWorkers = state.workersPausedUntil;
+
+        if (updatedActive && !updatedActive.resolved) {
+          updatedActive = {
+            ...updatedActive,
+            expiresAt: updatedActive.expiresAt + elapsedMs,
+          };
+        }
+        if (updatedNext) {
+          updatedNext = updatedNext + elapsedMs;
+        }
+        if (updatedWorkers && updatedWorkers > Date.now()) {
+          updatedWorkers = updatedWorkers + elapsedMs;
+        }
+        set({
+          activeSuddenEvent: updatedActive,
+          nextSuddenEventTime: updatedNext,
+          workersPausedUntil: updatedWorkers,
+        });
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -3112,6 +3370,12 @@ export const useGameStore = create<GameState>()(
           nextSurpriseEventTime: null,
           surpriseEventAlert: null,
           relics: DEFAULT_RELICS,
+          // High-Stakes Sudden Event Engine
+          activeSuddenEvent: null,
+          nextSuddenEventTime: null,
+          workersPausedUntil: null,
+          suddenEventFlash: null,
+          isSuddenEventModalOpen: false,
           lastTick: Date.now(),
           isDirty: false,
           isGuest: true,
@@ -3138,6 +3402,9 @@ export const useGameStore = create<GameState>()(
         systemicEventCooldowns: state.systemicEventCooldowns,
         lastSystemicEventCompletedAt: state.lastSystemicEventCompletedAt,
         nextSurpriseEventTime: state.nextSurpriseEventTime,
+        activeSuddenEvent: state.activeSuddenEvent,
+        nextSuddenEventTimeState: state.nextSuddenEventTime,
+        workersPausedUntil: state.workersPausedUntil,
         relics: state.relics,
         notifications: state.notifications,
         breedingSlots: state.breedingSlots,
@@ -3290,6 +3557,13 @@ export const useGameStore = create<GameState>()(
         if (!merged.systemicEventCooldowns) merged.systemicEventCooldowns = DEFAULT_EVENT_COOLDOWNS;
         if (merged.lastSystemicEventCompletedAt === undefined) merged.lastSystemicEventCompletedAt = null;
         if (!merged.relics) merged.relics = DEFAULT_RELICS;
+
+        // Migration: high-stakes sudden event engine
+        if (merged.activeSuddenEvent === undefined) merged.activeSuddenEvent = null;
+        if (merged.nextSuddenEventTime === undefined) merged.nextSuddenEventTime = null;
+        if (merged.workersPausedUntil === undefined) merged.workersPausedUntil = null;
+        if (merged.suddenEventFlash === undefined) merged.suddenEventFlash = null;
+        if (merged.isSuddenEventModalOpen === undefined) merged.isSuddenEventModalOpen = false;
 
         return merged as GameState;
       },
