@@ -31,3 +31,50 @@ Stage Summary:
 - Freight contract system with 5 industrial-scale templates, 8h delivery windows, entry deposits, and gem refresh
 - Full save migration for backward compatibility
 - All code compiles and builds successfully
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Supabase Cloud Saves, Authentication, Conflict Resolution, and Offline Sync
+
+Work Log:
+- Integrated Supabase auth & database backend (`@supabase/supabase-js`, `src/lib/supabaseClient.ts`)
+- Added database schema migration `supabase/migrations/001_auth_and_saves.sql` with RLS policies
+- Created `src/store/useAuthStore.ts` with OTP magic link email auth, Google OAuth, session listeners, and zero-friction guest fallback
+- Created `src/lib/syncManager.ts` managing offline saves, auto-cloud syncing, dirty state debounce, and timestamp conflict resolution
+- Created UI components `SaveProgressModal.tsx` and `SaveConflictModal.tsx` for seamless account linking and conflict picking
+- Integrated sync indicator and cloud link button into `src/components/game/HUD.tsx`
+
+Stage Summary:
+- Secure, persistent cloud saves with conflict management and guest progression protection
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Implement Dynamic Long-Form Event & Crisis Engine (v2.3)
+
+Work Log:
+- Created `src/game/eventsData.ts` with 10 systemic multi-day weather/crisis events, choices, relics, and rewards
+- Integrated event simulation, modifiers, and progression tickers into `src/game/store.ts`
+- Built interactive UI components: `EventTopBanner.tsx`, `EventDetailModal.tsx`, `RelicMonumentsPanel.tsx`
+- Added dynamic tile overlays and environmental visual effects in `src/components/game/FarmGrid.tsx`
+- Implemented desktop/in-game audio and visual notification helper in `src/lib/eventNotifications.ts`
+
+Stage Summary:
+- Dynamic long-form crisis system with 10 events, choices, crisis resolution, and collectible permanent relic monuments
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Auth UX & Guest Account Link Flow Refinement
+
+Work Log:
+- Refactored `useAuthStore.ts` to avoid creating ghost anonymous users on initial guest visits
+- Added OTP resend action and direct email link verification tip in `SaveProgressModal.tsx`
+- Added redirect URL configuration for magic links and OAuth flows
+- Synchronized game store guest state on login and sign out, correctly awarding the 50 💎 link reward upon linking
+- Verified TypeScript type checks and Next.js production builds pass without errors
+
+Stage Summary:
+- Frictionless guest onboarding and reliable account-linking reward pipeline
+
