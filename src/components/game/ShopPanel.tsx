@@ -27,7 +27,7 @@ export function ShopPanel() {
   const getDynamicPrice = (itemId: string, basePrice: number) => {
     const trend = marketTrends[itemId];
     const mult = trend ? trend.multiplier : 1.0;
-    const effective = Math.max(1, Math.floor(basePrice * mult));
+    const effective = Math.max(1, Math.round(basePrice * mult * 0.60));
     return { effective, mult, trendType: trend ? trend.trend : ('neutral' as const) };
   };
 
@@ -140,6 +140,16 @@ export function ShopPanel() {
             </span>
           </div>
         )}
+      </div>
+
+      {/* Liquidation Dump Notice */}
+      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl p-2.5 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-base flex-shrink-0">📦</span>
+          <span className="leading-snug text-[11px]">
+            <b>Instant Dump Liquidation (60% Value):</b> Quick-dump items to clear silo/barn capacity. For <b>140% to 220% premium payouts</b> + Client Reputation perks, deliver via the <b>Delivery Board</b>!
+          </span>
+        </div>
       </div>
 
       {/* Header with Sell All */}

@@ -31,6 +31,11 @@ import {
   SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, getEligibleRandomEvents,
   type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
 } from './eventsData';
+import {
+  type OrderType, type ClientProfile, type DeliveryOrder,
+  CLIENT_DEFINITIONS, REPUTATION_THRESHOLDS, getReputationInfo,
+  generateDeliveryOrder, getItemBaseValue,
+} from './deliveryData';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
   type ActiveEventInstance,
@@ -152,20 +157,7 @@ export interface ProductionSlot {
   done: boolean;
 }
 
-export interface OrderState {
-  id: string;
-  requested: { itemId: string; qty: number; emoji: string; name: string }[];
-  coinReward: number;
-  xpReward: number;
-  trashedAt: number | null;
-  // VIP Rush Contracts (Step 3)
-  isRushOrder?: boolean;
-  rushExpiresAt?: number | null;
-  rushDurationSec?: number;
-  breachFee?: number;
-  bonusGems?: number;
-  relicFragmentReward?: number;
-}
+export type OrderState = DeliveryOrder;
 
 // --- Active Radar Crisis System Types (Step 1) ---
 export interface CrisisEvent {
@@ -356,8 +348,9 @@ export interface GameState {
   // Production
   productionQueues: Record<BuildingId, ProductionSlot[]>;
 
-  // Orders
-  orders: OrderState[];
+  // Orders & Client Personas (Logistics Overhaul)
+  orders: DeliveryOrder[];
+  clientReputation: Record<string, { level: number; xp: number }>;
 
   // Farmhands
   farmhands: FarmhandInstance[];
@@ -457,6 +450,7 @@ export interface GameState {
   startProductionAll: (buildingId: BuildingId, recipe: RecipeDef) => void;
   collectProductionAll: (buildingId: BuildingId) => void;
   fulfillOrder: (orderId: string) => void;
+  fulfillDeliveryOrder: (orderId: string, route?: 'safe' | 'wild') => { success: boolean; hazardEncountered?: boolean; message?: string };
   trashOrder: (orderId: string) => void;
   sellItem: (itemId: string, qty: number) => void;
   sellAllOfItem: (itemId: string) => void;
@@ -585,24 +579,24 @@ export interface GameState {
 
 const GRID_SIZE = 12;
 
-function generateOrders(count: number): OrderState[] {
-  const orders: OrderState[] = [];
-  const pool = [...ORDER_TEMPLATES];
+export function isCropItem(itemId: string): boolean {
+  return itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+}
+
+export const DEFAULT_CLIENT_REPUTATION: Record<string, { level: number; xp: number }> = {
+  mayor_barnaby: { level: 1, xp: 0 },
+  chef_antoine: { level: 1, xp: 0 },
+  captain_sterling: { level: 1, xp: 0 },
+  lady_guinevere: { level: 1, xp: 0 },
+  old_man_jed: { level: 1, xp: 0 },
+};
+
+function generateOrders(count: number, playerLevel = 1): DeliveryOrder[] {
+  const orders: DeliveryOrder[] = [];
+  const clientKeys = Object.keys(CLIENT_DEFINITIONS);
   for (let i = 0; i < count; i++) {
-    const template = pool[Math.floor(Math.random() * pool.length)];
-    const isRush = i === 0 && Math.random() < 0.45;
-    orders.push({
-      id: `order_${Date.now()}_${i}`,
-      ...template,
-      trashedAt: null,
-      isRushOrder: isRush,
-      rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
-      rushDurationSec: isRush ? 75 : undefined,
-      coinReward: isRush ? template.coinReward * 2 : template.coinReward,
-      bonusGems: isRush ? 2 : 0,
-      relicFragmentReward: isRush ? 1 : 0,
-      breachFee: isRush ? 45 : 0,
-    });
+    const clientKey = clientKeys[i % clientKeys.length];
+    orders.push(generateDeliveryOrder(playerLevel, undefined, clientKey));
   }
   return orders;
 }
@@ -805,6 +799,7 @@ export const useGameStore = create<GameState>()(
       },
 
       orders: initialOrders,
+      clientReputation: DEFAULT_CLIENT_REPUTATION,
       farmhands: [],
       codex: { 'chicken_common': true, 'cow_common': true },
 
@@ -1471,92 +1466,152 @@ export const useGameStore = create<GameState>()(
         });
       },
 
-      fulfillOrder: (orderId) => {
+      fulfillDeliveryOrder: (orderId: string, route: 'safe' | 'wild' = 'safe') => {
         const state = get();
         const order = state.orders.find(o => o.id === orderId);
-        if (!order) return;
+        if (!order) return { success: false, message: 'Order not found' };
 
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
-        for (const item of order.requested) {
-          const isCrop = item.itemId in CROPS || item.itemId === 'feed' || item.itemId === 'cotton' || item.itemId === 'honey_comb' || item.itemId === 'wild_berries' || item.itemId === 'gold_nugget';
+        const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty, name: r.name, icon: r.emoji })) || []);
+
+        for (const item of required) {
+          const isCrop = isCropItem(item.itemId);
           const storage = isCrop ? newSilo : newBarn;
-          if ((storage[item.itemId] || 0) < item.qty) return;
-          storage[item.itemId] = (storage[item.itemId] || 0) - item.qty;
+          if ((storage[item.itemId] || 0) < item.quantity) {
+            return { success: false, message: `Need ${item.quantity} ${item.name}` };
+          }
+          storage[item.itemId] = (storage[item.itemId] || 0) - item.quantity;
         }
+
+        const baseCoins = order.rewards?.coins || order.coinReward || 20;
+        let baseGems = order.rewards?.gems || order.bonusGems || 0;
+        const repGain = order.rewards?.reputationPoints || 15;
+        let specialItemWon = order.rewards?.specialItem || (order.relicFragmentReward ? 'Relic Fragment' : undefined);
+
+        // Client Perks multipliers:
+        const clientRep = state.clientReputation || DEFAULT_CLIENT_REPUTATION;
+        const mayorLevel = clientRep.mayor_barnaby?.level || 1;
+        const mayorMult = mayorLevel >= 5 ? 1.15 : (mayorLevel >= 2 ? 1.05 : 1.0);
+
+        const chefLevel = clientRep.chef_antoine?.level || 1;
+        const chefMult = (chefLevel >= 4 && order.clientId === 'chef_antoine') ? 1.20 : 1.0;
+
+        const ladyLevel = clientRep.lady_guinevere?.level || 1;
+        const ladyMult = (ladyLevel >= 4 && order.clientId === 'lady_guinevere') ? 1.25 : 1.0;
 
         const crownBonus = (state.relics.royalCrownCrestUntil && state.relics.royalCrownCrestUntil > Date.now()) ? 1.15 : 1.0;
-        const coinsEarned = Math.round(order.coinReward * crownBonus);
+        let finalCoins = Math.round(baseCoins * crownBonus * mayorMult * chefMult * ladyMult);
+
+        // Route Logistics Check
+        let hazardEncountered = false;
+        let routeNotice = '';
+        if (route === 'wild') {
+          const captainLevel = clientRep.captain_sterling?.level || 1;
+          const captainReduc = captainLevel >= 3 ? 0.12 : 0;
+          const riskRate = Math.max(0.08, 0.25 - captainReduc);
+
+          if (Math.random() < riskRate) {
+            hazardEncountered = true;
+            const jedLevel = clientRep.old_man_jed?.level || 1;
+            const tollPercent = jedLevel >= 3 ? 0.08 : 0.15;
+            const lossCoins = Math.floor(finalCoins * tollPercent);
+            finalCoins = Math.max(1, finalCoins - lossCoins);
+            routeNotice = `⚠️ Road Ambush: Convoy surrendered ${lossCoins} coins in transit toll.`;
+            playDefeatSound();
+          } else {
+            const wildBounty = Math.round(finalCoins * 0.25);
+            finalCoins += wildBounty;
+            if (Math.random() < 0.40 && !specialItemWon) {
+              specialItemWon = 'Plank';
+            }
+            routeNotice = `🌲 Wild Shortcut Conquered! +${wildBounty} Hazard Bonus Coins secured!`;
+            playGoldRushFanfare();
+          }
+        }
+
+        // Reputation progression
+        const cKey = order.clientId || 'mayor_barnaby';
+        const cDef = CLIENT_DEFINITIONS[cKey] || CLIENT_DEFINITIONS.mayor_barnaby;
+        const cState = clientRep[cKey] || { level: 1, xp: 0 };
+        const newXpTotal = cState.xp + repGain;
+        const repInfo = getReputationInfo(newXpTotal, cDef);
+
+        const updatedClientRep = {
+          ...clientRep,
+          [cKey]: {
+            level: repInfo.level,
+            xp: newXpTotal,
+          },
+        };
+
+        if (repInfo.level > cState.level) {
+          playVictoryChime();
+          state.addNotification(
+            `⭐ CLIENT PROMOTION! ${cDef.name} reached Reputation Level ${repInfo.level}! Perk Unlocked: ${repInfo.currentPerk.perkName}!`,
+            cDef.avatar,
+            'event'
+          );
+        }
+
+        // Naval charter perk from Captain Sterling Lv 5
+        const sterlingLevel = clientRep.captain_sterling?.level || 1;
+        if (sterlingLevel >= 5 && Math.random() < 0.25 && !specialItemWon) {
+          specialItemWon = Math.random() < 0.5 ? 'Expansion Deed' : 'Nail';
+        }
 
         const xpBonus = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(order.xpReward * xpBonus), state.level);
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round((order.rewards?.xp || order.xpReward || 15) * xpBonus), state.level);
 
-        const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
-        const isRush = Math.random() < 0.25;
-        const newOrders = state.orders.map(o =>
-          o.id === orderId
-            ? {
-                id: generateId(),
-                ...newTemplate,
-                trashedAt: null,
-                isRushOrder: isRush,
-                rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
-                rushDurationSec: isRush ? 75 : undefined,
-                coinReward: isRush ? newTemplate.coinReward * 2 : newTemplate.coinReward,
-                bonusGems: isRush ? 2 : 0,
-                relicFragmentReward: isRush ? 1 : 0,
-                breachFee: isRush ? 45 : 0,
-              }
-            : o
+        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level) : o);
+
+        playCashRegisterSound();
+        state.addNotification(
+          `🚚 Delivery Complete: +${finalCoins} Coins, +${repGain} ${cDef.name} Rep! ${routeNotice}${specialItemWon ? ` Found ${specialItemWon}!` : ''}`,
+          '📦',
+          'event'
         );
-
-        if (order.isRushOrder) {
-          playCashRegisterSound();
-          playVictoryChime();
-          state.addNotification(`🚚 VIP RUSH CONTRACT COMPLETE! +${coinsEarned} Coins, +${order.bonusGems || 2} Gems & Relic Fragment!`, '⚡', 'event');
-        }
 
         set({
           silo: newSilo,
           barn: newBarn,
-          coins: state.coins + coinsEarned,
-          gems: state.gems + (order.bonusGems || 0),
+          coins: state.coins + finalCoins,
+          gems: state.gems + baseGems,
           xp: newXp,
           level: newLevel,
+          clientReputation: updatedClientRep,
           orders: newOrders,
+          isDirty: true,
         });
+
+        return { success: true, hazardEncountered, message: routeNotice };
+      },
+
+      fulfillOrder: (orderId) => {
+        get().fulfillDeliveryOrder(orderId, 'safe');
       },
 
       trashOrder: (orderId) => {
         const state = get();
-        const newTemplate = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
-        const isRush = Math.random() < 0.2;
-        const newOrders = state.orders.map(o =>
-          o.id === orderId
-            ? {
-                id: generateId(),
-                ...newTemplate,
-                trashedAt: null,
-                isRushOrder: isRush,
-                rushExpiresAt: isRush ? Date.now() + (60 + Math.floor(Math.random() * 30)) * 1000 : null,
-                rushDurationSec: isRush ? 75 : undefined,
-                coinReward: isRush ? newTemplate.coinReward * 2 : newTemplate.coinReward,
-                bonusGems: isRush ? 2 : 0,
-                relicFragmentReward: isRush ? 1 : 0,
-                breachFee: isRush ? 45 : 0,
-              }
-            : o
-        );
-        set({ orders: newOrders });
+        const order = state.orders.find(o => o.id === orderId);
+        let newCoins = state.coins;
+        if (order && (order.type === 'rush' || order.type === 'futures' || order.isRushOrder)) {
+          const fee = order.penaltyCoins || order.breachFee || Math.max(15, Math.round((order.rewards?.coins || order.coinReward || 50) * 0.10));
+          newCoins = Math.max(0, newCoins - fee);
+          playDefeatSound();
+          state.addNotification(`⚠️ Contract Cancelled: Paid breach cancellation fee of ${fee} coins.`, '📉', 'event');
+        }
+        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level) : o);
+        set({ coins: newCoins, orders: newOrders, isDirty: true });
       },
 
       sellItem: (itemId, qty) => {
         const state = get();
-        const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+        const isCrop = isCropItem(itemId);
         const storage = isCrop ? state.silo : state.barn;
         const available = storage[itemId] || 0;
         if (available < qty) return;
-        // Determine sell price with dynamic market multiplier
+        // Determine sell price with dynamic market multiplier & 60% liquidation rate
         let basePrice = 1;
         if (itemId in CROPS) {
           const cropDef = CROPS[itemId as CropId];
@@ -1566,20 +1621,20 @@ export const useGameStore = create<GameState>()(
           if (product) basePrice = product.sellPrice;
         }
         const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
-        const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
 
         playCashRegisterSound();
 
         if (isCrop) {
-          set({ silo: { ...state.silo, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+          set({ silo: { ...state.silo, [itemId]: available - qty }, coins: state.coins + sellPrice * qty, isDirty: true });
         } else {
-          set({ barn: { ...state.barn, [itemId]: available - qty }, coins: state.coins + sellPrice * qty });
+          set({ barn: { ...state.barn, [itemId]: available - qty }, coins: state.coins + sellPrice * qty, isDirty: true });
         }
       },
 
       sellAllOfItem: (itemId) => {
         const state = get();
-        const isCrop = itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+        const isCrop = isCropItem(itemId);
         const storage = isCrop ? state.silo : state.barn;
         const qty = storage[itemId] || 0;
         if (qty <= 0) return;
@@ -1592,14 +1647,14 @@ export const useGameStore = create<GameState>()(
           if (product) basePrice = product.sellPrice;
         }
         const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
-        const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
 
         playCashRegisterSound();
 
         if (isCrop) {
-          set({ silo: { ...state.silo, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+          set({ silo: { ...state.silo, [itemId]: 0 }, coins: state.coins + sellPrice * qty, isDirty: true });
         } else {
-          set({ barn: { ...state.barn, [itemId]: 0 }, coins: state.coins + sellPrice * qty });
+          set({ barn: { ...state.barn, [itemId]: 0 }, coins: state.coins + sellPrice * qty, isDirty: true });
         }
       },
 
@@ -1610,14 +1665,14 @@ export const useGameStore = create<GameState>()(
         let totalCoins = 0;
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
-        // Sell all silo items (crops + extras), skip hidden
+        // Sell all silo items (crops + extras), skip hidden, 60% liquidation rate
         for (const [id, def] of Object.entries(CROPS)) {
           if (SHOP_HIDDEN.has(id)) continue;
           const qty = newSilo[id] || 0;
           if (qty > 0) {
             const basePrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
             const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-            const sellPrice = Math.max(1, Math.round(basePrice * marketMult));
+            const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
             totalCoins += sellPrice * qty;
             newSilo[id] = 0;
           }
@@ -1629,26 +1684,26 @@ export const useGameStore = create<GameState>()(
             const product = PRODUCTS[id as keyof typeof PRODUCTS];
             if (product) {
               const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-              const sellPrice = Math.max(1, Math.round(product.sellPrice * marketMult));
+              const sellPrice = Math.max(1, Math.round(product.sellPrice * marketMult * 0.60));
               totalCoins += sellPrice * qty;
               newSilo[id] = 0;
             }
           }
         }
-        // Sell all barn items, skip hidden
+        // Sell all barn items, skip hidden, 60% liquidation rate
         for (const [id, def] of Object.entries(PRODUCTS)) {
           if (SHOP_HIDDEN.has(id)) continue;
           const qty = newBarn[id] || 0;
           if (qty > 0) {
             const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-            const sellPrice = Math.max(1, Math.round(def.sellPrice * marketMult));
+            const sellPrice = Math.max(1, Math.round(def.sellPrice * marketMult * 0.60));
             totalCoins += sellPrice * qty;
             newBarn[id] = 0;
           }
         }
         if (totalCoins === 0) return;
         playCashRegisterSound();
-        set({ silo: newSilo, barn: newBarn, coins: state.coins + totalCoins });
+        set({ silo: newSilo, barn: newBarn, coins: state.coins + totalCoins, isDirty: true });
       },
 
       buyFarmhand: (role) => {
@@ -2986,20 +3041,18 @@ export const useGameStore = create<GameState>()(
         }
 
         // Check VIP rush orders countdown (Step 3)
+        // Check VIP rush & advance futures orders countdown (Step 3)
         let ordersModified = false;
         const updatedOrders = state.orders.map(order => {
-          if (order.isRushOrder && order.rushExpiresAt && now >= order.rushExpiresAt) {
+          const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder;
+          const expiryTime = order.expiresAt || order.rushExpiresAt;
+          if (isTimed && expiryTime && now >= expiryTime) {
             ordersModified = true;
-            const fee = order.breachFee || 45;
+            const fee = order.penaltyCoins || order.breachFee || Math.max(15, Math.round((order.rewards?.coins || order.coinReward || 50) * 0.10));
             newCoins = Math.max(0, newCoins - fee);
             playDefeatSound();
-            state.addNotification(`⚠️ VIP Rush Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
-            const template = ORDER_TEMPLATES[Math.floor(Math.random() * ORDER_TEMPLATES.length)];
-            return {
-              id: generateId(),
-              ...template,
-              trashedAt: null,
-            };
+            state.addNotification(`⚠️ ${order.type === 'futures' ? 'Advance Futures' : 'VIP Rush'} Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
+            return generateDeliveryOrder(state.level);
           }
           return order;
         });
@@ -4577,6 +4630,7 @@ export const useGameStore = create<GameState>()(
           animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6),
+          clientReputation: DEFAULT_CLIENT_REPUTATION,
           farmhands: [], codex: { 'chicken_common': true, 'cow_common': true },
           fishery: {
             unlockedZones: ['zone_pond' as WaterZoneId],
@@ -4651,7 +4705,7 @@ export const useGameStore = create<GameState>()(
         plots: state.plots, unlockedPlots: state.unlockedPlots,
         animals: state.animals, animalCapacity: state.animalCapacity,
         productionQueues: state.productionQueues,
-        orders: state.orders, farmhands: state.farmhands, codex: state.codex,
+        orders: state.orders, clientReputation: state.clientReputation, farmhands: state.farmhands, codex: state.codex,
         fishery: state.fishery,
         autonomousWorkers: state.autonomousWorkers,
         unifiedWorkers: state.unifiedWorkers,
@@ -4850,6 +4904,10 @@ export const useGameStore = create<GameState>()(
         if (!merged.marketNextRefresh) merged.marketNextRefresh = Date.now() + 180000;
         if (!merged.marketNewsTicker) merged.marketNewsTicker = null;
         if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
+        if (!merged.clientReputation) merged.clientReputation = DEFAULT_CLIENT_REPUTATION;
+        if (!merged.orders || merged.orders.length === 0 || !(merged.orders[0] as DeliveryOrder).type) {
+          merged.orders = generateOrders(6, merged.level || 1);
+        }
 
         return merged as GameState;
       },
