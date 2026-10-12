@@ -371,6 +371,19 @@ export const FAIR_ITEM_SCORES: Record<string, { points: number; rarity: 'common'
   ancient_coin: { points: 25, rarity: 'legendary' },
 };
 
+export const EVENT_LEVEL_GATES: Record<SystemicEventId, number> = {
+  alchemical_bloom: 1,
+  locust_swarm: 2,
+  barn_fire: 2,
+  salmon_run: 3,
+  carnival_circus: 4,
+  county_fair: 5,
+  midnight_smuggler: 6,
+  artisan_masterclass: 7,
+  royal_fleet: 8,
+  ancient_ruins: 9,
+};
+
 /**
  * Returns eligible random surprise events filtered by player farm level and active cooldowns.
  */
@@ -379,21 +392,8 @@ export function getEligibleRandomEvents(
   cooldowns: Record<SystemicEventId, number>,
   now: number
 ): SystemicEventId[] {
-  const levelGates: Record<SystemicEventId, number> = {
-    alchemical_bloom: 1,
-    locust_swarm: 2,
-    barn_fire: 2,
-    salmon_run: 3,
-    carnival_circus: 4,
-    county_fair: 5,
-    midnight_smuggler: 6,
-    artisan_masterclass: 7,
-    royal_fleet: 8,
-    ancient_ruins: 9,
-  };
-
   const allIds = Object.keys(SYSTEMIC_EVENTS) as SystemicEventId[];
-  const levelEligible = allIds.filter(id => playerLevel >= (levelGates[id] || 1));
+  const levelEligible = allIds.filter(id => playerLevel >= (EVENT_LEVEL_GATES[id] || 1));
   const pool = levelEligible.length > 0 ? levelEligible : allIds;
 
   const ready = pool.filter(id => (cooldowns[id] || 0) <= now);

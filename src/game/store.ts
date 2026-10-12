@@ -2558,6 +2558,45 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // Surprise Random Event Trigger Engine (Autonomous & Unpredictable)
+        let newNextSurpriseEventTime = state.nextSurpriseEventTime;
+        let newSurpriseAlert = state.surpriseEventAlert;
+
+        if (!currentSystemicEvent) {
+          if (!newNextSurpriseEventTime) {
+            // Unscheduled: schedule surprise event in 2 to 5 minutes
+            newNextSurpriseEventTime = now + 120_000 + Math.floor(Math.random() * 180_000);
+          } else if (now >= newNextSurpriseEventTime) {
+            // Surprise strike! Pick an eligible event matching farm level and cooldowns
+            const eligibleIds = getEligibleRandomEvents(state.level, updatedCooldowns, now);
+            const pickedId = eligibleIds[Math.floor(Math.random() * eligibleIds.length)];
+            const def = SYSTEMIC_EVENTS[pickedId];
+
+            currentSystemicEvent = {
+              id: pickedId,
+              phase: 'forecast',
+              forecastEndsAt: now + def.forecastDurationMs,
+              activeEndsAt: now + def.forecastDurationMs + def.activeDurationMs,
+              currentStage: 1,
+              progress: 0,
+              target: def.stages[0].targetCount,
+              claimedStages: [],
+              isCompleted: false,
+              activeFirePositions: [],
+              locustPlotIds: [],
+              fairPoints: 0,
+              smugglerContractsCompleted: 0,
+              donatedMaterials: 0,
+            };
+
+            newNextSurpriseEventTime = null;
+            newSurpriseAlert = { id: pickedId, timestamp: now };
+
+            state.addNotification(`⚡ SURPRISE EVENT: ${def.name} approaches!`, def.emoji, 'event');
+            sendLocalEventPushNotification(`⚡ Horizon Alert: ${def.name}`, def.premise);
+          }
+        }
+
         // High-Stakes Sudden Event Engine Tick Logic (8-15 min window, high-urgency alarms)
         let currentSuddenEvent = state.activeSuddenEvent;
         let newSuddenEventTime = state.nextSuddenEventTime;
@@ -3013,6 +3052,8 @@ export const useGameStore = create<GameState>()(
           currentEstateAura: updatedEstateAura,
           systemicEvent: currentSystemicEvent,
           systemicEventCooldowns: updatedCooldowns,
+          nextSurpriseEventTime: newNextSurpriseEventTime,
+          surpriseEventAlert: newSurpriseAlert,
           activeSuddenEvent: currentSuddenEvent,
           nextSuddenEventTime: newSuddenEventTime,
           suddenEventFlash: newSuddenFlash,

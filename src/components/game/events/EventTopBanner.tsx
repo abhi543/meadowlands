@@ -18,6 +18,7 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
     clearSurpriseEventAlert,
     activeCrisis,
     setCrisisModalOpen,
+    nextSurpriseEventTime,
   } = useGameStore();
 
   const [, setTick] = useState(0);
@@ -278,7 +279,9 @@ export function EventTopBanner({ onOpenDetail, onOpenRelics }: EventTopBannerPro
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping flex-shrink-0" />
           <span className="text-[11px] text-stone-600 dark:text-stone-300 font-medium truncate">
-            Radar Scanning: Unpredictable crises strike as farm expands
+            {nextSurpriseEventTime && nextSurpriseEventTime > now
+              ? `Radar Sweep: Anomaly in ~${Math.max(1, Math.ceil((nextSurpriseEventTime - now) / 60000))}m`
+              : 'Radar Scanning: Monitoring regional phenomena...'}
           </span>
         </div>
       </div>

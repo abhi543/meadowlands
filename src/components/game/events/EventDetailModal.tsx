@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/game/store';
-import { SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, type SystemicEventId } from '@/game/eventsData';
+import { SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, EVENT_LEVEL_GATES, type SystemicEventId } from '@/game/eventsData';
 import { formatEventTimeLeft } from '@/lib/eventNotifications';
 
 interface EventDetailModalProps {
@@ -29,6 +29,7 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
     dismissSystemicEvent,
     triggerSystemicEvent,
     systemicEventCooldowns,
+    nextSurpriseEventTime,
     level,
   } = useGameStore();
 
@@ -533,9 +534,18 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                 <h4 className="font-black text-lg text-stone-900 dark:text-white">
                   Clear Skies on the Estate
                 </h4>
-                <p className="text-xs text-stone-600 dark:text-stone-300 max-w-md mx-auto mt-1 leading-relaxed">
-                  Crises, royal expeditions, wandering smugglers, and seasonal festivals arrive as <b>unpredictable surprises</b> as your farm flourishes. Keep your silos stocked and crops watered to claim rare relics when they strike!
-                </p>
+                {nextSurpriseEventTime && nextSurpriseEventTime > now ? (
+                  <div className="my-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/90 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-bold">
+                    <span>⚡ Atmospheric Anomaly Detected:</span>
+                    <span className="font-mono font-black">
+                      in ~{Math.max(1, Math.ceil((nextSurpriseEventTime - now) / 60000))} min
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-600 dark:text-stone-300 max-w-md mx-auto mt-1 leading-relaxed">
+                    Crises, royal expeditions, wandering smugglers, and seasonal festivals arrive as <b>unpredictable surprises</b> as your farm flourishes. Keep your silos stocked and crops watered to claim rare relics when they strike!
+                  </p>
+                )}
               </div>
 
               <div>
@@ -548,6 +558,8 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {Object.values(SYSTEMIC_EVENTS).map((ev) => {
+                    const minLevel = EVENT_LEVEL_GATES[ev.id] || 1;
+                    const isLevelLocked = level < minLevel;
                     const cooldownUntil = systemicEventCooldowns[ev.id] || 0;
                     const isCooling = cooldownUntil > now;
                     const hoursLeft = Math.ceil((cooldownUntil - now) / 3600000);
@@ -555,9 +567,13 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                     return (
                       <div
                         key={ev.id}
-                        className="p-3 rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-800/60 text-left transition-all space-y-1.5"
+                        className={`p-3 rounded-2xl border text-left transition-all space-y-1.5 ${
+                          isLevelLocked
+                            ? 'border-stone-200/60 dark:border-stone-800/40 bg-stone-50/50 dark:bg-stone-900/40 opacity-75'
+                            : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-800/60'
+                        }`}
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="text-2xl select-none flex-shrink-0">
                               {ev.emoji}
@@ -571,15 +587,28 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                               </div>
                             </div>
                           </div>
-                          <div>
-                            {isCooling ? (
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {isLevelLocked ? (
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-700 text-stone-400 dark:text-stone-500">
+                                🔒 Lv. {minLevel}
+                              </span>
+                            ) : isCooling ? (
                               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400">
                                 ⏳ Cooldown ({hoursLeft}h)
                               </span>
                             ) : (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                                ⚡ Watching
-                              </span>
+                              <>
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                  ⚡ Ready
+                                </span>
+                                <button
+                                  onClick={() => triggerSystemicEvent(ev.id)}
+                                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-white shadow-sm transition-all"
+                                  title="Trigger this event immediately"
+                                >
+                                  Trigger
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>
