@@ -56,8 +56,8 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'fabric') return 'Weave at Loom';
   if (itemId === 'yarn') return 'Spin at Loom';
   if (itemId === 'truffle_oil') return 'Press at Press';
-  if (itemId === 'honey') return 'Collect from Beekeeper';
-  if (itemId === 'honey_comb') return 'Beekeeper (Hoard mode)';
+  if (itemId === 'honey') return 'Press at Press building (requires 2x Honey Comb)';
+  if (itemId === 'honey_comb') return 'Beekeeper / Apiary Tender (Workers tab, Hoard mode)';
   if (itemId === 'wild_berries') return 'Forager (Hoard mode) or grow';
   if (itemId === 'gold_nugget') return 'Prospector (Hoard mode)';
   if (itemId === 'cotton') return 'Grow Cotton on Farm';
