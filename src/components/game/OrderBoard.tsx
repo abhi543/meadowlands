@@ -32,10 +32,10 @@ function getItemSourceHint(itemId: string): string {
   if (itemId === 'cotton') return 'Grow Cotton on Farm';
   if (itemId === 'silk') return 'Weave at Textiles facility';
   if (itemId === 'sweater') return 'Craft at Tailor Shop';
-  if (itemId === 'pie') return 'Bake at Bakery';
+  if (itemId === 'pie') return 'Bake at Bakery (1x Bread + 2x Strawberries)';
   if (itemId === 'quilted_blanket') return 'Craft at Tailor Shop';
   if (itemId === 'savory_fish_pie') return 'Bake at Bakery';
-  if (itemId === 'crab_bisque') return 'Craft at Dairy';
+  if (itemId === 'crab_bisque') return 'Bake at Bakery';
   for (const [, bDef] of Object.entries(BUILDINGS)) {
     for (const recipe of bDef.recipes) {
       if (recipe.output.productId === itemId) {

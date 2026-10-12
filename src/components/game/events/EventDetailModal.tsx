@@ -256,9 +256,9 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                     </p>
                     <div className="space-y-1.5">
                       {[
-                        { id: 1, label: 'Contract #1: 3x Fresh Milk', item: 'milk', qty: 3 },
-                        { id: 2, label: 'Contract #2: 2x Apple Pie', item: 'pie', qty: 2 },
-                        { id: 3, label: 'Contract #3: 2x Wool Sweater', item: 'sweater', qty: 2 },
+                        { id: 1, label: 'Contract #1: 3x Fresh Milk', hint: 'Feed Cows in Barn', item: 'milk', qty: 3 },
+                        { id: 2, label: 'Contract #2: 2x Bakery Pie (🥧)', hint: 'Bakery: 1x Bread + 2x Strawberries', item: 'pie', qty: 2 },
+                        { id: 3, label: 'Contract #3: 2x Wool Sweater', hint: 'Weave at Loom: 3x Wool', item: 'sweater', qty: 2 },
                       ].map((contract) => {
                         const completedCount = activeEventState.smugglerContractsCompleted || 0;
                         const isDone = completedCount >= contract.id;
@@ -269,9 +269,16 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                             key={contract.id}
                             className="flex items-center justify-between p-2.5 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs"
                           >
-                            <span className="font-bold text-purple-700 dark:text-purple-300">
-                              📜 {contract.label} (Stock: {getStock(contract.item)})
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-purple-700 dark:text-purple-300">
+                                📜 {contract.label} (Stock: {getStock(contract.item)})
+                              </span>
+                              {contract.hint && (
+                                <span className="text-[10px] text-stone-500 dark:text-gray-400 mt-0.5">
+                                  💡 {contract.hint}
+                                </span>
+                              )}
+                            </div>
                             <button
                               onClick={() => deliverSmugglerContract([{ itemId: contract.item, qty: contract.qty }])}
                               disabled={isDone || !hasStock}
