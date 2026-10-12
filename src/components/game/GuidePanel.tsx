@@ -778,6 +778,89 @@ function OrdersGuide() {
           </div>
         </div>
       </div>
+
+      {/* Town Favor Shop & Dual-Track Progression */}
+      <div className="border border-amber-300 dark:border-amber-800/60 rounded-xl p-3.5 bg-gradient-to-r from-amber-950/20 via-stone-900/40 to-amber-950/20 text-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <h5 className="font-bold text-amber-800 dark:text-amber-200 flex items-center gap-1.5 text-sm">
+            <span>🏛️</span> Town Favor Shop &amp; Dual-Track Reputation System
+          </h5>
+          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-black px-2 py-0.5 rounded-full border border-amber-500/40 font-mono">
+            NEW FEATURE
+          </span>
+        </div>
+        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+          In Meadowlands, fulfilling delivery orders rewards a <strong>dual-track progression model</strong> that pairs permanent estate growth with flexible emergency utility:
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+          <div className="bg-white/80 dark:bg-stone-900/80 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800/40 space-y-1">
+            <span className="font-black text-amber-700 dark:text-amber-300 flex items-center gap-1">
+              <span>⭐</span> Track 1: Lifetime Reputation (Passive Perks)
+            </span>
+            <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+              Every point of reputation accumulated raises client trust tiers (Levels 1 to 5). Once reached, perks are <strong>permanently active farm-wide</strong>—such as coin bonuses, crafting speedups, and extra animal yields.
+            </p>
+          </div>
+
+          <div className="bg-white/80 dark:bg-stone-900/80 p-2.5 rounded-lg border border-amber-200 dark:border-amber-800/40 space-y-1">
+            <span className="font-black text-amber-700 dark:text-amber-300 flex items-center gap-1">
+              <span>🎖️</span> Track 2: Spendable Favor Tokens (VIP Utility Shop)
+            </span>
+            <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+              In addition to raising lifetime levels, earned points act as <strong>liquid Favor Tokens</strong>. Spend Favor in the Town Favor Shop tab on high-impact VIP items!
+            </p>
+          </div>
+        </div>
+
+        {/* 4 Favor Shop Items */}
+        <div className="space-y-1.5 pt-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 dark:text-stone-400">
+            Favor Shop Catalog &amp; Effects:
+          </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-stone-200 dark:border-stone-800 flex items-start gap-2">
+              <span className="text-xl">🛡️</span>
+              <div>
+                <span className="font-bold text-stone-800 dark:text-white">Emergency Crisis Shield (40 Favor)</span>
+                <p className="text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                  Automatically intercepts and neutralizes the next incoming radar disaster (Predator Raids, Blight, Flash Drought) with 0 losses!
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-stone-200 dark:border-stone-800 flex items-start gap-2">
+              <span className="text-xl">⚡</span>
+              <div>
+                <span className="font-bold text-stone-800 dark:text-white">Instant Overclock Voucher (30 Favor)</span>
+                <p className="text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                  Grants 1 Free Tier 3 Overdrive (4.0x Speed + 1 Yield) with 0 coin cost and 0% burnout risk on any plot, animal, machine, or worker!
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-stone-200 dark:border-stone-800 flex items-start gap-2">
+              <span className="text-xl">🎲</span>
+              <div>
+                <span className="font-bold text-stone-800 dark:text-white">VIP Contract Reroll (15 Favor)</span>
+                <p className="text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                  Instantly replaces all delivery board contracts with 6 fresh, high-value assignments without breach fees.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-stone-200 dark:border-stone-800 flex items-start gap-2">
+              <span className="text-xl">📜</span>
+              <div>
+                <span className="font-bold text-stone-800 dark:text-white">Municipal Granary Permit (80 Favor)</span>
+                <p className="text-stone-500 dark:text-stone-400 mt-0.5 leading-relaxed">
+                  Permanently expands both Silo and Barn storage capacity by +25 slots each across the entire homestead!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

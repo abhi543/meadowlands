@@ -8,16 +8,17 @@ interface HUDProps {
 }
 
 export function HUD({ onOpenBackupModal }: HUDProps) {
-  const { coins, gems, xp, level, silo, barn, currentEstateAura, resetGame } = useGameStore();
+  const { coins, gems, xp, level, silo, barn, currentEstateAura, bonusStorageCapacity, resetGame } = useGameStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
 
   // Total silo items
+  const storageBonus = bonusStorageCapacity || 0;
   const siloUsed = Object.values(silo).reduce((a, b) => a + b, 0);
-  const siloMax = 50 + level * 5;
+  const siloMax = 50 + level * 5 + storageBonus;
   const barnUsed = Object.values(barn).reduce((a, b) => a + b, 0);
-  const barnMax = 30 + level * 3;
+  const barnMax = 30 + level * 3 + storageBonus;
 
   const auraTitle = currentEstateAura?.title || 'Homestead';
   const auraEmoji = currentEstateAura?.emoji || '🏡';

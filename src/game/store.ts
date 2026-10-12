@@ -63,6 +63,17 @@ import {
   getTierConfig,
   createDefaultEntityOverclock,
 } from '@/types/overclock';
+import {
+  type ReputationTier,
+  type ClientData,
+  type FavorShopItem,
+  type GlobalReputationState,
+  FAVOR_SHOP_CATALOG,
+  createInitialGlobalReputation,
+  createInitialClientData,
+  getClientLevelFromXp,
+  computeUnlockedPerks,
+} from '@/types/reputation';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -362,6 +373,10 @@ export interface GameState {
   // Orders & Client Personas (Logistics Overhaul)
   orders: DeliveryOrder[];
   clientReputation: Record<string, { level: number; xp: number }>;
+  globalReputation: GlobalReputationState;
+  crisisShields: number;
+  freeOverclocks: number;
+  bonusStorageCapacity: number;
 
   // Farmhands
   farmhands: FarmhandInstance[];
@@ -587,6 +602,11 @@ export interface GameState {
   overclockEntity: (entityId: string, entityType: OverclockEntityType, tier: OverclockTier, customBaseCost?: number) => boolean;
   cureEntityExhaustion: (entityId: string, entityType: OverclockEntityType) => boolean;
   clearEntityOverclock: (entityId: string) => void;
+
+  // Town Favor Shop & VIP Utilities
+  purchaseFavorItem: (itemId: string) => boolean;
+  useOrderReroll: () => boolean;
+  useInstantOverclock: (entityId: string, entityType: OverclockEntityType) => boolean;
 
   tick: () => void;
   resetGame: () => void;
@@ -819,6 +839,10 @@ export const useGameStore = create<GameState>()(
 
       orders: initialOrders,
       clientReputation: DEFAULT_CLIENT_REPUTATION,
+      globalReputation: createInitialGlobalReputation(),
+      crisisShields: 0,
+      freeOverclocks: 0,
+      bonusStorageCapacity: 0,
       farmhands: [],
       codex: { 'chicken_common': true, 'cow_common': true },
 
@@ -1787,7 +1811,7 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Reputation progression
+        // Reputation progression (Dual-Track Progression: Lifetime XP + Spendable Favor)
         const cKey = order.clientId || 'mayor_barnaby';
         const cDef = CLIENT_DEFINITIONS[cKey] || CLIENT_DEFINITIONS.mayor_barnaby;
         const cState = clientRep[cKey] || { level: 1, xp: 0 };
@@ -1802,10 +1826,30 @@ export const useGameStore = create<GameState>()(
           },
         };
 
-        if (repInfo.level > cState.level) {
+        const currentGlobalRep = state.globalReputation || createInitialGlobalReputation();
+        const existingClientData = currentGlobalRep.clients[cKey] || createInitialClientData(cKey, cDef.name, cDef.title, cDef.avatar);
+        const updatedGlobalClientXp = existingClientData.currentXp + repGain;
+        const clientLvlInfo = getClientLevelFromXp(updatedGlobalClientXp, existingClientData.tiers);
+
+        const updatedClients = {
+          ...currentGlobalRep.clients,
+          [cKey]: {
+            ...existingClientData,
+            currentXp: updatedGlobalClientXp,
+            currentLevel: clientLvlInfo.level,
+          },
+        };
+        const updatedUnlockedPerks = computeUnlockedPerks(updatedClients);
+        const updatedGlobalRep: GlobalReputationState = {
+          spendableFavor: (currentGlobalRep.spendableFavor || 0) + repGain,
+          clients: updatedClients,
+          unlockedPerks: updatedUnlockedPerks,
+        };
+
+        if (clientLvlInfo.level > existingClientData.currentLevel || repInfo.level > cState.level) {
           playVictoryChime();
           state.addNotification(
-            `⭐ CLIENT PROMOTION! ${cDef.name} reached Reputation Level ${repInfo.level}! Perk Unlocked: ${repInfo.currentPerk.perkName}!`,
+            `⭐ CLIENT PROMOTION! ${cDef.name} reached Reputation Level ${clientLvlInfo.level}! Perk Unlocked: ${clientLvlInfo.currentTier.perkTitle}!`,
             cDef.avatar,
             'event'
           );
@@ -1824,7 +1868,7 @@ export const useGameStore = create<GameState>()(
 
         playCashRegisterSound();
         state.addNotification(
-          `🚚 Delivery Complete: +${finalCoins} Coins, +${repGain} ${cDef.name} Rep! ${routeNotice}${specialItemWon ? ` Found ${specialItemWon}!` : ''}`,
+          `🚚 Delivery Complete: +${finalCoins} Coins, +${repGain} Rep & Favor! ${routeNotice}${specialItemWon ? ` Found ${specialItemWon}!` : ''}`,
           '📦',
           'event'
         );
@@ -1837,6 +1881,7 @@ export const useGameStore = create<GameState>()(
           xp: newXp,
           level: newLevel,
           clientReputation: updatedClientRep,
+          globalReputation: updatedGlobalRep,
           orders: newOrders,
           isDirty: true,
         });
@@ -4330,6 +4375,23 @@ export const useGameStore = create<GameState>()(
         const chosenType = overrideType || types[Math.floor(Math.random() * types.length)];
         const def = CRISIS_DEFINITIONS[chosenType];
 
+        // Emergency Crisis Shield Intercept Check
+        if ((state.crisisShields || 0) > 0) {
+          const remainingShields = state.crisisShields - 1;
+          set({
+            crisisShields: remainingShields,
+            nextCrisisTime: Date.now() + 180000,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(
+            `🛡️ Emergency Crisis Shield activated! Incoming ${def.title} was intercepted and repelled! (${remainingShields} shield${remainingShields === 1 ? '' : 's'} remaining)`,
+            '🛡️',
+            'event'
+          );
+          return;
+        }
+
         let targetIds: (string | number)[] = [];
         let weatherType: 'drought' | 'blizzard' | undefined = undefined;
 
@@ -5046,6 +5108,153 @@ export const useGameStore = create<GameState>()(
         state.cureEntityExhaustion(`building_${buildingId}`, 'building');
       },
 
+      // Town Favor Shop & VIP Utility Actions
+      purchaseFavorItem: (itemId: string) => {
+        const state = get();
+        const item = FAVOR_SHOP_CATALOG.find(i => i.id === itemId);
+        if (!item) return false;
+
+        const favor = state.globalReputation?.spendableFavor || 0;
+        if (favor < item.costFavor) {
+          state.addNotification(`Need ${item.costFavor} Favor Tokens! Fulfill delivery contracts to earn more.`, '⚠️', 'info');
+          return false;
+        }
+
+        const remainingFavor = favor - item.costFavor;
+        const updatedGlobalRep: GlobalReputationState = {
+          ...state.globalReputation,
+          spendableFavor: remainingFavor,
+        };
+
+        if (item.type === 'crisis_shield') {
+          const newShields = (state.crisisShields || 0) + 1;
+          set({
+            globalReputation: updatedGlobalRep,
+            crisisShields: newShields,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`🛡️ Purchased Emergency Crisis Shield! Absorbs the next incoming disaster automatically. Total shields: ${newShields}`, '🛡️', 'event');
+          return true;
+        }
+
+        if (item.type === 'instant_overclock') {
+          const newVouchers = (state.freeOverclocks || 0) + 1;
+          set({
+            globalReputation: updatedGlobalRep,
+            freeOverclocks: newVouchers,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`⚡ Purchased Instant Overclock Voucher! Free Tier 3 Overdrive with 0% burnout risk. Total vouchers: ${newVouchers}`, '⚡', 'event');
+          return true;
+        }
+
+        if (item.type === 'order_reroll') {
+          const newOrders = generateOrders(6, state.level);
+          set({
+            globalReputation: updatedGlobalRep,
+            orders: newOrders,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`🎲 Purchased VIP Contract Reroll! Refreshed delivery board with 6 fresh contracts!`, '🎲', 'event');
+          return true;
+        }
+
+        if (item.type === 'barn_permit') {
+          const newBonus = (state.bonusStorageCapacity || 0) + 25;
+          set({
+            globalReputation: updatedGlobalRep,
+            bonusStorageCapacity: newBonus,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`📜 Municipal Granary Permit activated! Silo & Barn capacity permanently increased by +25 slots! (Total bonus: +${newBonus})`, '📜', 'event');
+          return true;
+        }
+
+        return false;
+      },
+
+      useOrderReroll: () => {
+        const state = get();
+        return state.purchaseFavorItem('favor_order_reroll');
+      },
+
+      useInstantOverclock: (entityId, entityType) => {
+        const state = get();
+        if ((state.freeOverclocks || 0) <= 0) {
+          state.addNotification('No Instant Overclock Vouchers remaining! Purchase from the Favor Shop.', '⚡', 'info');
+          return false;
+        }
+
+        const current = state.entityOverclocks[entityId] || createDefaultEntityOverclock();
+        const now = Date.now();
+        playRapidTapSound(4);
+        playGoldRushFanfare();
+
+        // Tier 3 overdrive benefits with 0 cost, 0 burnout risk
+        const durationMs = (entityType === 'building' || entityType === 'fishery' || entityType === 'worker') ? 60000 : null;
+        const expiresAt = durationMs ? now + durationMs : null;
+
+        const updatedOverclocks = {
+          ...state.entityOverclocks,
+          [entityId]: {
+            ...current,
+            isOverclocked: true,
+            activeTier: 3 as OverclockTier,
+            speedMultiplier: 4.0,
+            bonusYield: 1,
+            burnoutChance: 0,
+            expiresAt,
+            isExhausted: false,
+            exhaustedUntil: null,
+            streakCount: current.streakCount + 1,
+            lastOverclockAt: now,
+          },
+        };
+
+        let updatedBuildingOverclocks = state.buildingOverclocks;
+        if (entityType === 'building') {
+          const bId = entityId.replace('building_', '') as BuildingId;
+          updatedBuildingOverclocks = {
+            ...state.buildingOverclocks,
+            [bId]: {
+              isOverclocked: true,
+              expiresAt,
+              isExhausted: false,
+              exhaustedUntil: null,
+              speedMultiplier: 4.0,
+            },
+          };
+        }
+
+        let updatedAnimals = state.animals;
+        if (entityType === 'animal') {
+          const aId = entityId.replace('animal_', '');
+          updatedAnimals = state.animals.map(a => a.id === aId ? {
+            ...a,
+            isOverclocked: true,
+            overclockExpiresAt: expiresAt,
+            isExhausted: false,
+            exhaustedUntil: null,
+          } : a);
+        }
+
+        const newVoucherCount = state.freeOverclocks - 1;
+        set({
+          freeOverclocks: newVoucherCount,
+          entityOverclocks: updatedOverclocks,
+          buildingOverclocks: updatedBuildingOverclocks,
+          animals: updatedAnimals,
+          isDirty: true,
+        });
+
+        state.addNotification(`⚡ Free VIP Overdrive applied! 4.0x Speed + 1 Yield with 0% Burnout! (${newVoucherCount} voucher${newVoucherCount === 1 ? '' : 's'} remaining)`, '⚡', 'event');
+        return true;
+      },
+
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
@@ -5057,6 +5266,10 @@ export const useGameStore = create<GameState>()(
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
+          globalReputation: createInitialGlobalReputation(),
+          crisisShields: 0,
+          freeOverclocks: 0,
+          bonusStorageCapacity: 0,
           farmhands: [], codex: { 'chicken_common': true, 'cow_common': true },
           fishery: {
             unlockedZones: ['zone_pond' as WaterZoneId],
@@ -5168,6 +5381,10 @@ export const useGameStore = create<GameState>()(
         marketNextRefresh: state.marketNextRefresh,
         marketNewsTicker: state.marketNewsTicker,
         buildingOverclocks: state.buildingOverclocks,
+        globalReputation: state.globalReputation,
+        crisisShields: state.crisisShields,
+        freeOverclocks: state.freeOverclocks,
+        bonusStorageCapacity: state.bonusStorageCapacity,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
@@ -5333,6 +5550,24 @@ export const useGameStore = create<GameState>()(
         if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
         if (!merged.entityOverclocks) merged.entityOverclocks = {};
         if (!merged.clientReputation) merged.clientReputation = DEFAULT_CLIENT_REPUTATION;
+
+        // Migration: Global Reputation & Favor Shop
+        if (!merged.globalReputation) {
+          merged.globalReputation = createInitialGlobalReputation();
+          if (merged.clientReputation) {
+            for (const [cId, cRep] of Object.entries(merged.clientReputation)) {
+              if (merged.globalReputation.clients[cId]) {
+                merged.globalReputation.clients[cId].currentXp = cRep.xp || 0;
+                merged.globalReputation.clients[cId].currentLevel = cRep.level || 1;
+              }
+            }
+            merged.globalReputation.unlockedPerks = computeUnlockedPerks(merged.globalReputation.clients);
+          }
+        }
+        if (merged.crisisShields === undefined) merged.crisisShields = 0;
+        if (merged.freeOverclocks === undefined) merged.freeOverclocks = 0;
+        if (merged.bonusStorageCapacity === undefined) merged.bonusStorageCapacity = 0;
+
         const currentLvl = merged.level || 1;
         if (!merged.orders || merged.orders.length === 0 || !(merged.orders[0] as DeliveryOrder).type) {
           merged.orders = generateOrders(6, currentLvl);

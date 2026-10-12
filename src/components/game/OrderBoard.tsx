@@ -10,6 +10,12 @@ import {
   type DeliveryOrder,
   type OrderType,
 } from '@/game/deliveryData';
+import {
+  type FavorShopItem,
+  FAVOR_SHOP_CATALOG,
+  CLIENT_TIERS_CONFIG,
+  getClientLevelFromXp,
+} from '@/types/reputation';
 import { playClockTickSound, playCashRegisterSound, playDefeatSound } from '@/lib/soundEffects';
 
 /** Source hint helper for missing items */
@@ -52,12 +58,18 @@ export function OrderBoard() {
     silo,
     barn,
     clientReputation,
+    globalReputation,
+    crisisShields,
+    freeOverclocks,
+    bonusStorageCapacity,
+    purchaseFavorItem,
+    useOrderReroll,
     fulfillDeliveryOrder,
     trashOrder,
     level,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'timed' | 'reputation'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'timed' | 'favor_shop' | 'reputation'>('all');
   const [selectedOrderForRoute, setSelectedOrderForRoute] = useState<DeliveryOrder | null>(null);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [dispatchResult, setDispatchResult] = useState<{ id: string; message: string; hazard: boolean } | null>(null);
@@ -135,7 +147,7 @@ export function OrderBoard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
             <button
               onClick={() => setActiveTab('all')}
               className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all ${
@@ -162,7 +174,20 @@ export function OrderBoard() {
               )}
             </button>
             <button
-              onClick={() => setActiveTab(activeTab === 'reputation' ? 'all' : 'reputation')}
+              onClick={() => setActiveTab('favor_shop')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                activeTab === 'favor_shop'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-stone-950 shadow-sm'
+                  : 'bg-amber-950/40 text-amber-300 border border-amber-500/40 hover:bg-amber-900/40'
+              }`}
+            >
+              <span>🏛️ Favor Shop</span>
+              <span className="text-[10px] font-mono font-black px-1.5 py-0.2 rounded-full bg-black/40 text-amber-200">
+                {globalReputation?.spendableFavor || 0}🎖️
+              </span>
+            </button>
+            <button
+              onClick={() => setActiveTab('reputation')}
               className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
                 activeTab === 'reputation'
                   ? 'bg-amber-500 text-stone-950 shadow-sm'
@@ -193,6 +218,47 @@ export function OrderBoard() {
             <span className="font-bold text-amber-400 font-mono">220% Coins</span>
           </div>
         </div>
+
+        {/* VIP Favor & Utilities Ribbon */}
+        <div className="mt-2 pt-2 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="font-mono font-bold text-amber-300 flex items-center gap-1">
+              <span>🎖️</span>
+              <span>{globalReputation?.spendableFavor || 0} Favor</span>
+            </span>
+            <span className="text-stone-300 font-mono text-[11px] flex items-center gap-1 bg-stone-950/50 px-2 py-0.5 rounded-lg border border-stone-800">
+              <span>🛡️</span>
+              <span>{crisisShields || 0} Shields</span>
+            </span>
+            <span className="text-stone-300 font-mono text-[11px] flex items-center gap-1 bg-stone-950/50 px-2 py-0.5 rounded-lg border border-stone-800">
+              <span>⚡</span>
+              <span>{freeOverclocks || 0} Overdrives</span>
+            </span>
+            {(bonusStorageCapacity || 0) > 0 && (
+              <span className="text-emerald-300 font-mono text-[11px] flex items-center gap-1 bg-stone-950/50 px-2 py-0.5 rounded-lg border border-stone-800">
+                <span>📜</span>
+                <span>+{bonusStorageCapacity} Storage</span>
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setActiveTab('favor_shop')}
+              className="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all flex items-center gap-1"
+            >
+              <span>🏛️ VIP Shop</span>
+            </button>
+            <button
+              onClick={() => useOrderReroll()}
+              disabled={(globalReputation?.spendableFavor || 0) < 15}
+              className="px-2 py-1 rounded-lg text-[10px] font-black bg-stone-800 hover:bg-stone-700 disabled:opacity-40 text-stone-300 border border-stone-700 transition-all flex items-center gap-1"
+              title="Reroll all contracts for 15 Favor"
+            >
+              <span>🎲 Reroll Board (15🎖️)</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Dispatch result alert */}
@@ -209,38 +275,164 @@ export function OrderBoard() {
         </div>
       )}
 
+      {/* Town Favor Shop Panel */}
+      {activeTab === 'favor_shop' && (
+        <div className="space-y-3 animate-in fade-in">
+          {/* VIP Treasury Header */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/80 via-stone-900 to-amber-950/80 border border-amber-500/40 text-left shadow-md">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🏛️</span>
+                  <h4 className="font-black text-sm text-amber-200">
+                    Town Favor Shop &amp; VIP Utility Exchange
+                  </h4>
+                </div>
+                <p className="text-[11px] text-stone-300 mt-1 leading-relaxed">
+                  Fulfill delivery contracts to earn spendable Favor Tokens. Purchase emergency crisis defense shields, instant production overdrive vouchers, VIP contract rerolls, and permanent granary expansion permits.
+                </p>
+              </div>
+              <div className="bg-black/60 border border-amber-500/50 rounded-xl px-3 py-2 text-right shrink-0">
+                <div className="text-[10px] uppercase tracking-wider text-amber-400 font-bold">Liquid Balance</div>
+                <div className="text-xl font-black text-amber-300 font-mono flex items-center justify-end gap-1">
+                  <span>🎖️</span>
+                  <span>{globalReputation?.spendableFavor || 0}</span>
+                  <span className="text-xs text-amber-400 font-sans font-medium">Favor</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Inventory / Benefits Active Strip */}
+            <div className="mt-3 pt-2.5 border-t border-amber-500/20 grid grid-cols-3 gap-2 text-center">
+              <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
+                <div className="text-[10px] text-stone-400">Active Shields</div>
+                <div className="text-xs font-black text-sky-300 font-mono">🛡️ {crisisShields || 0} Ready</div>
+              </div>
+              <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
+                <div className="text-[10px] text-stone-400">Overdrive Vouchers</div>
+                <div className="text-xs font-black text-amber-300 font-mono">⚡ {freeOverclocks || 0} Free</div>
+              </div>
+              <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
+                <div className="text-[10px] text-stone-400">Granary Expansion</div>
+                <div className="text-xs font-black text-emerald-300 font-mono">📜 +{bonusStorageCapacity || 0} Slots</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Catalog Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {FAVOR_SHOP_CATALOG.map((item) => {
+              const canAfford = (globalReputation?.spendableFavor || 0) >= item.costFavor;
+              return (
+                <div
+                  key={item.id}
+                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between text-left space-y-3"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center text-xl shrink-0">
+                          {item.icon}
+                        </div>
+                        <div>
+                          <h5 className="font-black text-xs text-stone-900 dark:text-white">
+                            {item.title}
+                          </h5>
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                            {item.type.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-amber-100 dark:bg-amber-950/60 border border-amber-300/60 dark:border-amber-700/60 px-2 py-0.5 rounded-lg text-right shrink-0">
+                        <span className="font-black text-xs font-mono text-amber-900 dark:text-amber-200">
+                          {item.costFavor} 🎖️
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-2 leading-relaxed">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800/60 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-stone-400 font-mono">
+                      {item.type === 'crisis_shield' && `In Inventory: ${crisisShields || 0}`}
+                      {item.type === 'instant_overclock' && `Vouchers: ${freeOverclocks || 0}`}
+                      {item.type === 'order_reroll' && `Refreshes all 6 orders`}
+                      {item.type === 'barn_permit' && `Permit Bonus: +${bonusStorageCapacity || 0}`}
+                    </span>
+
+                    <button
+                      type="button"
+                      disabled={!canAfford}
+                      onClick={() => purchaseFavorItem(item.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all shadow-sm flex items-center gap-1 ${
+                        canAfford
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-stone-950 active:scale-95'
+                          : 'bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <span>{item.icon}</span>
+                      <span>{canAfford ? 'Purchase' : `Need ${item.costFavor - (globalReputation?.spendableFavor || 0)} More`}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Client Reputation Dossier Panel */}
       {activeTab === 'reputation' && (
-        <div className="space-y-2.5 animate-in fade-in">
-          <div className="flex items-center justify-between">
-            <h4 className="font-black text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300">
-              Recurring Client Personas &amp; Passive Farm Perks (5 Total)
-            </h4>
-            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
-              Fulfill orders to level up reputation (Levels 1–5)
+        <div className="space-y-3 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-left">
+            <div>
+              <h4 className="font-black text-xs uppercase tracking-wider text-stone-600 dark:text-stone-300 flex items-center gap-1.5">
+                <span>👥</span>
+                <span>Client Trust Milestones &amp; Permanent Perks</span>
+              </h4>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                Fulfilling orders builds Lifetime Reputation XP. Each tier unlocked permanently enhances your farm operations.
+              </p>
+            </div>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold self-start sm:self-auto font-mono">
+              🎖️ {globalReputation?.spendableFavor || 0} Spendable Favor
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {Object.values(CLIENT_DEFINITIONS).map(client => {
-              const rep = clientReputation?.[client.id] || { level: 1, xp: 0 };
-              const repInfo = getReputationInfo(rep.xp, client);
+              const clientData = globalReputation?.clients?.[client.id] || {
+                id: client.id,
+                name: client.name,
+                title: client.title,
+                avatar: client.avatar,
+                currentXp: clientReputation?.[client.id]?.xp || 0,
+                currentLevel: clientReputation?.[client.id]?.level || 1,
+                tiers: CLIENT_TIERS_CONFIG[client.id] || CLIENT_TIERS_CONFIG.mayor_barnaby,
+              };
+
+              const tiers = CLIENT_TIERS_CONFIG[client.id] || CLIENT_TIERS_CONFIG.mayor_barnaby;
+              const lvlInfo = getClientLevelFromXp(clientData.currentXp, tiers);
 
               return (
                 <div
                   key={client.id}
-                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-3 shadow-sm space-y-2 text-left"
+                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-2xl p-3.5 shadow-sm space-y-3 text-left"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-2xl bg-stone-100 dark:bg-stone-800 flex items-center justify-center text-2xl shadow-inner border border-stone-200/60 dark:border-stone-700/60 select-none">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-stone-800 flex items-center justify-center text-2xl shadow-inner border border-amber-200/60 dark:border-stone-700/60 select-none">
                         {client.avatar}
                       </div>
                       <div>
                         <div className="font-black text-sm text-stone-900 dark:text-white flex items-center gap-1.5">
                           {client.name}
-                          <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300/60 dark:border-amber-700/60">
-                            ⭐ Lv. {repInfo.level}
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300/60 dark:border-amber-700/60">
+                            ⭐ Tier {lvlInfo.level}/5
                           </span>
                         </div>
                         <div className="text-[11px] font-medium text-stone-500 dark:text-stone-400">
@@ -250,9 +442,12 @@ export function OrderBoard() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-[10px] font-mono font-bold text-stone-500 dark:text-stone-400">
-                        {rep.xp} Rep XP
-                      </span>
+                      <div className="text-xs font-mono font-black text-amber-600 dark:text-amber-400">
+                        {clientData.currentXp} XP
+                      </div>
+                      <div className="text-[10px] text-stone-400 font-mono">
+                        Lifetime Rep
+                      </div>
                     </div>
                   </div>
 
@@ -265,38 +460,63 @@ export function OrderBoard() {
                   <div className="space-y-1">
                     <div className="flex justify-between text-[10px] text-stone-500 font-mono">
                       <span>
-                        {repInfo.isMaxLevel ? 'MAX MASTERY' : `Progress to Lv. ${repInfo.level + 1}`}
+                        {lvlInfo.isMaxLevel ? 'MAX MASTERY (TRUSTED ALLY)' : `Progress to Tier ${lvlInfo.level + 1}`}
                       </span>
                       <span>
-                        {repInfo.isMaxLevel ? '100%' : `${repInfo.currentLevelXp} / ${repInfo.neededForNext} XP`}
+                        {lvlInfo.isMaxLevel ? '1,000+ XP' : `${lvlInfo.currentLevelXp} / ${lvlInfo.neededForNext} XP`}
                       </span>
                     </div>
-                    <div className="h-1.5 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
+                    <div className="h-2 bg-stone-100 dark:bg-stone-800 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-500 rounded-full"
-                        style={{ width: `${repInfo.progressPercent}%` }}
+                        className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500 transition-all duration-500 rounded-full"
+                        style={{ width: `${lvlInfo.progressPercent}%` }}
                       />
                     </div>
                   </div>
 
-                  {/* Active perk card */}
-                  <div className="p-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40 text-xs">
-                    <div className="font-bold text-[11px] text-amber-900 dark:text-amber-300 flex items-center gap-1">
-                      <span>✨ Active Perk:</span>
-                      <span>{repInfo.currentPerk.perkName}</span>
+                  {/* 5-Tier Roadmap Cards */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400 flex items-center justify-between">
+                      <span>Perk Roadmap (Tiers 1–5)</span>
+                      <span>{tiers.filter(t => lvlInfo.level >= t.level).length} / 5 Active</span>
                     </div>
-                    <div className="text-[10px] text-stone-600 dark:text-stone-300 mt-0.5 leading-relaxed">
-                      {repInfo.currentPerk.description}
+                    <div className="space-y-1">
+                      {tiers.map((tier) => {
+                        const isUnlocked = lvlInfo.level >= tier.level;
+                        return (
+                          <div
+                            key={tier.level}
+                            className={`p-2 rounded-xl border text-xs transition-all ${
+                              isUnlocked
+                                ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-300/70 dark:border-amber-800/50'
+                                : 'bg-stone-50/50 dark:bg-stone-900/40 border-stone-200/60 dark:border-stone-800/40 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 font-bold text-[11px]">
+                                <span className={isUnlocked ? 'text-amber-500' : 'text-stone-400'}>
+                                  {isUnlocked ? '✨' : '🔒'}
+                                </span>
+                                <span className={isUnlocked ? 'text-stone-900 dark:text-amber-200' : 'text-stone-500 dark:text-stone-400'}>
+                                  Tier {tier.level}: {tier.perkTitle}
+                                </span>
+                              </div>
+                              <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full ${
+                                isUnlocked
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                  : 'bg-stone-200 dark:bg-stone-800 text-stone-500'
+                              }`}>
+                                {isUnlocked ? 'ACTIVE' : `${tier.requiredXp} XP`}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed pl-4">
+                              {tier.perkDescription}
+                            </p>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-
-                  {/* Next perk preview */}
-                  {!repInfo.isMaxLevel && repInfo.nextPerk && (
-                    <div className="text-[10px] text-stone-400 flex items-center gap-1">
-                      <span className="font-bold">Next (Lv. {repInfo.level + 1}):</span>
-                      <span className="truncate">{repInfo.nextPerk.perkName} — {repInfo.nextPerk.description}</span>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -305,7 +525,8 @@ export function OrderBoard() {
       )}
 
       {/* Main Delivery Contracts Board */}
-      <div className="space-y-2">
+      {(activeTab === 'all' || activeTab === 'timed') && (
+        <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h4 className="font-black text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400">
             Active Delivery Contracts
@@ -546,6 +767,7 @@ export function OrderBoard() {
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }

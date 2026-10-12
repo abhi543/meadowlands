@@ -40,6 +40,8 @@ export function OverclockActionMenu({
     entityOverclocks,
     overclockEntity,
     cureEntityExhaustion,
+    freeOverclocks,
+    useInstantOverclock,
   } = useGameStore();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -168,6 +170,11 @@ export function OverclockActionMenu({
       >
         <span className="text-amber-400">⚡</span>
         <span>Boost</span>
+        {(freeOverclocks || 0) > 0 && (
+          <span className="bg-amber-400 text-stone-950 text-[9px] px-1 py-0.2 rounded-full font-black">
+            {freeOverclocks}★
+          </span>
+        )}
       </button>
 
       {/* Dropdown Menu */}
@@ -210,6 +217,39 @@ export function OverclockActionMenu({
                 <span>🔥 Streak x{streak} (+{Math.round(streak * 25)}% cost)</span>
                 <span className="font-mono text-stone-400">{Math.floor(streakDecaySeconds / 60)}m left</span>
               </div>
+            )}
+
+            {/* Favor Shop Free Overdrive Voucher */}
+            {(freeOverclocks || 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const success = useInstantOverclock(entityId, entityType);
+                  if (success) {
+                    setIsOpen(false);
+                    onOverclockActivated?.(3);
+                  }
+                }}
+                className="w-full mb-2 text-left p-2 rounded-xl border border-amber-400/80 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 hover:from-amber-500/40 hover:to-yellow-500/40 transition-all flex items-center justify-between gap-2 shadow-sm animate-pulse"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">⚡</span>
+                    <span className="font-black text-[11px] text-amber-200">
+                      VIP Overdrive Voucher
+                    </span>
+                    <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-400 text-stone-950">
+                      FREE TIER 3
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-amber-300/90 mt-0.5">
+                    4.0x Speed + 1 Yield • 0% Burnout • {freeOverclocks} voucher{freeOverclocks > 1 ? 's' : ''} left
+                  </div>
+                </div>
+                <span className="text-xs font-black text-amber-300 font-mono flex-shrink-0">
+                  USE 🎫
+                </span>
+              </button>
             )}
 
             {/* 3 Operational Tiers */}
