@@ -52,6 +52,17 @@ import {
   playSirenSting,
   playCashRegisterSound,
 } from '@/lib/soundEffects';
+import {
+  type OverclockTier,
+  type OverclockEntityType,
+  type EntityOverclockState,
+  BASE_OVERCLOCK_COSTS,
+  CURE_EXHAUSTION_FEES,
+  getDecayedStreak,
+  calculateOverclockCost,
+  getTierConfig,
+  createDefaultEntityOverclock,
+} from '@/types/overclock';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -421,8 +432,9 @@ export interface GameState {
   marketNextRefresh: number;
   marketNewsTicker: MarketNewsTicker | null;
 
-  // Production Overclocking (Step 4)
+  // Production Overclocking (Step 4 & Global System)
   buildingOverclocks: Record<BuildingId, BuildingOverclockState>;
+  entityOverclocks: Record<string, EntityOverclockState>;
 
   // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
   waterLevel: number;
@@ -567,11 +579,14 @@ export interface GameState {
   // Dynamic Commodity Market Actions (Step 3)
   refreshMarketPrices: () => void;
 
-  // Overclocking & Exhaustion Actions (Step 4)
+  // Overclocking & Exhaustion Actions (Step 4 & Global System)
   toggleAnimalOverclock: (animalId: string) => void;
   cureAnimalExhaustion: (animalId: string) => void;
   toggleBuildingOverclock: (buildingId: BuildingId) => void;
   cureBuildingExhaustion: (buildingId: BuildingId) => void;
+  overclockEntity: (entityId: string, entityType: OverclockEntityType, tier: OverclockTier, customBaseCost?: number) => boolean;
+  cureEntityExhaustion: (entityId: string, entityType: OverclockEntityType) => boolean;
+  clearEntityOverclock: (entityId: string) => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -875,8 +890,9 @@ export const useGameStore = create<GameState>()(
         expiresAt: Date.now() + 120000,
       },
 
-      // Production Overclocking (Step 4)
+      // Production Overclocking (Step 4 & Global System)
       buildingOverclocks: createDefaultBuildingOverclocks(),
+      entityOverclocks: {},
 
       // Water System & Farm Well (Soil Hydration & 2x Growth Boost)
       waterLevel: 10,
@@ -898,6 +914,13 @@ export const useGameStore = create<GameState>()(
         const plot = state.plots[plotId];
         if (!plot || plot.crop !== null) return;
         if (plotId >= state.unlockedPlots) return;
+
+        const plotOverclock = state.entityOverclocks?.[`plot_${plotId}`];
+        if (plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && Date.now() < plotOverclock.exhaustedUntil) {
+          state.addNotification(`Plot #${plotId + 1} soil is exhausted! Revitalize soil or wait for recovery.`, '⚠️', 'info');
+          return;
+        }
+
         const cropDef = CROPS[cropId];
         if (cropDef.seedCost > 0 && state.coins < cropDef.seedCost) return;
         if (cropDef.seedCost > 0) {
@@ -920,7 +943,11 @@ export const useGameStore = create<GameState>()(
         const plot = state.plots[plotId];
         if (!plot || !plot.crop || !plot.ready) return;
         const cropDef = CROPS[plot.crop];
-        const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + cropDef.yieldCount };
+
+        const plotOverclock = state.entityOverclocks?.[`plot_${plotId}`];
+        const bonusYield = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
+        const totalYield = cropDef.yieldCount + bonusYield;
+        const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
         const newPlots = [...state.plots];
         // Harvest resets soil hydration so next crops require fresh watering
         newPlots[plotId] = {
@@ -931,6 +958,30 @@ export const useGameStore = create<GameState>()(
           isWatered: false,
           wateredUntil: null,
         };
+
+        let updatedOverclocks = state.entityOverclocks;
+        if (plotOverclock?.isOverclocked) {
+          const rollBurnout = Math.random() < plotOverclock.burnoutChance;
+          const now = Date.now();
+          updatedOverclocks = {
+            ...state.entityOverclocks,
+            [`plot_${plotId}`]: {
+              ...plotOverclock,
+              isOverclocked: false,
+              activeTier: null,
+              speedMultiplier: 1.0,
+              bonusYield: 0,
+              isExhausted: rollBurnout,
+              exhaustedUntil: rollBurnout ? now + 180000 : null,
+            },
+          };
+          if (rollBurnout) {
+            playDefeatSound();
+            state.addNotification(`⚠️ Soil Exhaustion: Plot #${plotId + 1} burned out & exhausted for 180s! Apply Soil Revitalizer or rest.`, '🛑', 'event');
+          } else if (bonusYield > 0) {
+            state.addNotification(`💥 Overdrive Harvest! +${bonusYield} Bonus ${cropDef.name} Yield!`, '⭐', 'info');
+          }
+        }
 
         // Alchemical Bloom Event Integration
         let newSystemicEvent = state.systemicEvent;
@@ -955,6 +1006,7 @@ export const useGameStore = create<GameState>()(
         set({
           silo: newSilo,
           plots: newPlots,
+          entityOverclocks: updatedOverclocks,
           xp: newXp,
           level: newLevel,
           systemicEvent: newSystemicEvent,
@@ -966,10 +1018,12 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const cropDef = CROPS[cropId];
         const now = Date.now();
-        // Find all empty unlocked plots
+        // Find all empty unlocked plots that are NOT exhausted
         const emptyPlotIds: number[] = [];
         for (let i = 0; i < state.unlockedPlots; i++) {
-          if (state.plots[i] && state.plots[i].crop === null) {
+          const pOverclock = state.entityOverclocks?.[`plot_${i}`];
+          const isExhausted = Boolean(pOverclock?.isExhausted && pOverclock?.exhaustedUntil && now < pOverclock.exhaustedUntil);
+          if (state.plots[i] && state.plots[i].crop === null && !isExhausted) {
             emptyPlotIds.push(i);
           }
         }
@@ -1000,12 +1054,19 @@ export const useGameStore = create<GameState>()(
         const now = Date.now();
         const newSilo = { ...state.silo };
         const newPlots = [...state.plots];
+        let updatedOverclocks = { ...state.entityOverclocks };
         let harvestedCount = 0;
+        let anyBurnout = false;
+        let totalBonusYield = 0;
+
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
           if (plot && plot.crop && plot.ready) {
             const cropDef = CROPS[plot.crop];
-            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount;
+            const plotOverclock = updatedOverclocks[`plot_${i}`];
+            const bonus = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
+            totalBonusYield += bonus;
+            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount + bonus;
             newPlots[i] = {
               id: i,
               crop: null,
@@ -1014,10 +1075,29 @@ export const useGameStore = create<GameState>()(
               isWatered: false,
               wateredUntil: null,
             };
+            if (plotOverclock?.isOverclocked) {
+              const rollBurnout = Math.random() < plotOverclock.burnoutChance;
+              if (rollBurnout) anyBurnout = true;
+              updatedOverclocks[`plot_${i}`] = {
+                ...plotOverclock,
+                isOverclocked: false,
+                activeTier: null,
+                speedMultiplier: 1.0,
+                bonusYield: 0,
+                isExhausted: rollBurnout,
+                exhaustedUntil: rollBurnout ? now + 180000 : null,
+              };
+            }
             harvestedCount++;
           }
         }
         if (harvestedCount === 0) return;
+        if (anyBurnout) {
+          playDefeatSound();
+          state.addNotification('⚠️ Soil Exhaustion: One or more plots burned out from overdrive! Revitalize soil or rest.', '🛑', 'event');
+        } else if (totalBonusYield > 0) {
+          state.addNotification(`💥 Overdrive Harvest! +${totalBonusYield} Bonus Harvest Yields Collected!`, '⭐', 'info');
+        }
 
         // Alchemical Bloom Event Integration
         let newSystemicEvent = state.systemicEvent;
@@ -1057,6 +1137,17 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const animal = state.animals.find(a => a.id === animalId);
         if (!animal || animal.fed || animal.productReady) return;
+
+        const aOverclock = state.entityOverclocks?.[`animal_${animalId}`];
+        const isExhausted = Boolean(
+          (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && Date.now() < aOverclock.exhaustedUntil) ||
+          (animal.isExhausted && animal.exhaustedUntil && Date.now() < animal.exhaustedUntil)
+        );
+        if (isExhausted) {
+          state.addNotification('Animal is exhausted! Call Vet or wait for recovery.', '⚠️', 'info');
+          return;
+        }
+
         const feedNeeded = ANIMALS[animal.species].feedPerCycle;
         if ((state.silo.feed || 0) < feedNeeded) return;
         const newSilo = { ...state.silo, feed: state.silo.feed - feedNeeded };
@@ -1081,12 +1172,15 @@ export const useGameStore = create<GameState>()(
         let additionalXp = 5;
         const newCodex = { ...state.codex };
 
-        // 1. Primary Product Yield
+        // 1. Primary Product Yield + Overclock Bonus
+        const aOverclock = state.entityOverclocks?.[`animal_${animalId}`];
+        const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
+
         if (breedDef) {
-          newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount;
+          newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
         } else {
           // Fallback to species default
-          newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield;
+          newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
         }
 
         // 2. Secondary Bonus Drop Procs
@@ -1115,22 +1209,76 @@ export const useGameStore = create<GameState>()(
         // 5. Tier-based XP
         additionalXp = animal.tier === 'legendary' ? 25 : animal.tier === 'rare' ? 15 : animal.tier === 'uncommon' ? 8 : 5;
 
+        // Overclock Burnout Roll & Reset
+        let updatedOverclocks = state.entityOverclocks;
+        let rolledBurnout = false;
+        if (aOverclock?.isOverclocked) {
+          rolledBurnout = Math.random() < aOverclock.burnoutChance;
+          const now = Date.now();
+          updatedOverclocks = {
+            ...state.entityOverclocks,
+            [`animal_${animalId}`]: {
+              ...aOverclock,
+              isOverclocked: false,
+              activeTier: null,
+              speedMultiplier: 1.0,
+              bonusYield: 0,
+              isExhausted: rolledBurnout,
+              exhaustedUntil: rolledBurnout ? now + 180000 : null,
+            },
+          };
+          if (rolledBurnout) {
+            playDefeatSound();
+            state.addNotification(`⚠️ Animal Burnout: ${breedDef?.name || speciesDef.name} is exhausted for 180s! Call Vet or rest.`, '🛑', 'event');
+          } else if (bonusYield > 0) {
+            state.addNotification(`💥 Overdrive Yield! +${bonusYield} Bonus Product Collected!`, '⭐', 'info');
+          }
+        }
+
         const newCyclesRemaining = animal.cyclesRemaining - 1;
         const isElder = newCyclesRemaining <= 0;
+        const nowTime = Date.now();
         const newAnimals = state.animals.map(a =>
-          a.id === animalId ? { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, cyclesCompletedTotal: totalCompleted, age: isElder ? 'elder' : a.age } : a
+          a.id === animalId ? {
+            ...a,
+            fed: false,
+            fedAt: null,
+            productReady: false,
+            cyclesRemaining: newCyclesRemaining,
+            cyclesCompletedTotal: totalCompleted,
+            age: isElder ? 'elder' : a.age,
+            isOverclocked: false,
+            overclockExpiresAt: null,
+            isExhausted: rolledBurnout ? true : a.isExhausted,
+            exhaustedUntil: rolledBurnout ? nowTime + 180000 : a.exhaustedUntil,
+          } : a
         );
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
-        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel, coins: state.coins + additionalCoins, gems: state.gems + additionalGems, codex: newCodex });
+        set({
+          barn: newBarn,
+          animals: newAnimals,
+          entityOverclocks: updatedOverclocks,
+          xp: newXp,
+          level: newLevel,
+          coins: state.coins + additionalCoins,
+          gems: state.gems + additionalGems,
+          codex: newCodex,
+        });
       },
 
       feedAllAnimals: () => {
         const state = get();
         let feedAvailable = state.silo.feed || 0;
         if (feedAvailable <= 0) return;
+        const now = Date.now();
         const newAnimals = state.animals.map(a => {
-          // Skip if already fed, producing, or elder
-          if (a.fed || a.productReady || a.age === 'elder') return a;
+          // Skip if already fed, producing, elder, or exhausted
+          const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+          const isExhausted = Boolean(
+            (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
+            (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
+          );
+          if (a.fed || a.productReady || a.age === 'elder' || isExhausted) return a;
           const feedNeeded = ANIMALS[a.species].feedPerCycle;
           if (feedAvailable < feedNeeded) return a;
           feedAvailable -= feedNeeded;
@@ -1152,18 +1300,25 @@ export const useGameStore = create<GameState>()(
         let additionalGems = 0;
         let additionalXp = 0;
         const newCodex = { ...state.codex };
+        let updatedOverclocks = { ...state.entityOverclocks };
+        let anyBurnout = false;
+        let totalBonusYield = 0;
+        const now = Date.now();
 
         const newAnimals = state.animals.map(a => {
           if (!a.productReady || a.cyclesRemaining <= 0) return a;
 
           const breedDef = BREED_REGISTRY[a.breedId];
           const speciesDef = ANIMALS[a.species];
+          const aOverclock = updatedOverclocks[`animal_${a.id}`];
+          const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
+          totalBonusYield += bonusYield;
 
-          // 1. Primary Product Yield
+          // 1. Primary Product Yield + Overclock Bonus
           if (breedDef) {
-            newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount;
+            newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
           } else {
-            newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield;
+            newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
           }
 
           // 2. Secondary Bonus Drop Procs
@@ -1192,14 +1347,57 @@ export const useGameStore = create<GameState>()(
           // 5. Tier-based XP
           additionalXp += a.tier === 'legendary' ? 25 : a.tier === 'rare' ? 15 : a.tier === 'uncommon' ? 8 : 5;
 
+          // Burnout roll
+          let rolledBurnout = false;
+          if (aOverclock?.isOverclocked) {
+            rolledBurnout = Math.random() < aOverclock.burnoutChance;
+            if (rolledBurnout) anyBurnout = true;
+            updatedOverclocks[`animal_${a.id}`] = {
+              ...aOverclock,
+              isOverclocked: false,
+              activeTier: null,
+              speedMultiplier: 1.0,
+              bonusYield: 0,
+              isExhausted: rolledBurnout,
+              exhaustedUntil: rolledBurnout ? now + 180000 : null,
+            };
+          }
+
           const newCyclesRemaining = a.cyclesRemaining - 1;
           const isElder = newCyclesRemaining <= 0;
           collectedCount++;
-          return { ...a, fed: false, fedAt: null, productReady: false, cyclesRemaining: newCyclesRemaining, cyclesCompletedTotal: totalCompleted, age: isElder ? 'elder' : a.age };
+          return {
+            ...a,
+            fed: false,
+            fedAt: null,
+            productReady: false,
+            cyclesRemaining: newCyclesRemaining,
+            cyclesCompletedTotal: totalCompleted,
+            age: isElder ? 'elder' : a.age,
+            isOverclocked: false,
+            overclockExpiresAt: null,
+            isExhausted: rolledBurnout ? true : a.isExhausted,
+            exhaustedUntil: rolledBurnout ? now + 180000 : a.exhaustedUntil,
+          };
         });
         if (collectedCount === 0) return;
+        if (anyBurnout) {
+          playDefeatSound();
+          state.addNotification('⚠️ Animal Burnout: One or more animals exhausted from overdrive! Call Vet or rest.', '🛑', 'event');
+        } else if (totalBonusYield > 0) {
+          state.addNotification(`💥 Overdrive Yield! +${totalBonusYield} Bonus Livestock Products Collected!`, '⭐', 'info');
+        }
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
-        set({ barn: newBarn, animals: newAnimals, xp: newXp, level: newLevel, coins: state.coins + additionalCoins, gems: state.gems + additionalGems, codex: newCodex });
+        set({
+          barn: newBarn,
+          animals: newAnimals,
+          entityOverclocks: updatedOverclocks,
+          xp: newXp,
+          level: newLevel,
+          coins: state.coins + additionalCoins,
+          gems: state.gems + additionalGems,
+          codex: newCodex,
+        });
       },
 
       buyAnimal: (species, tier = 'common' as Tier) => {
@@ -1290,6 +1488,13 @@ export const useGameStore = create<GameState>()(
         const building = BUILDINGS[buildingId];
         if (!building) return;
         if (building.unlockLevel && state.level < building.unlockLevel) return;
+
+        const bOverclock = state.entityOverclocks?.[`building_${buildingId}`] || state.buildingOverclocks?.[buildingId];
+        if (bOverclock?.isExhausted && bOverclock?.exhaustedUntil && Date.now() < bOverclock.exhaustedUntil) {
+          state.addNotification(`${building.name} is exhausted/overheated! Service machine or wait.`, '⚠️', 'info');
+          return;
+        }
+
         const queue = state.productionQueues[buildingId] || [];
         if (queue.filter(s => !s.done).length >= building.queueSlots) return;
 
@@ -1339,13 +1544,52 @@ export const useGameStore = create<GameState>()(
         }
         if (!outputItem) return;
 
+        const bOverclock = state.entityOverclocks?.[`building_${buildingId}`] || state.buildingOverclocks?.[buildingId];
+        const isOverclocked = Boolean(bOverclock?.isOverclocked && (!bOverclock.expiresAt || Date.now() < bOverclock.expiresAt));
+        const bonusYield = isOverclocked && bOverclock?.bonusYield ? bOverclock.bonusYield : 0;
+        const totalOutput = outputQty + bonusYield;
+
         const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
         if (isCropOutput) {
-          newSilo[outputItem] = (newSilo[outputItem] || 0) + outputQty;
+          newSilo[outputItem] = (newSilo[outputItem] || 0) + totalOutput;
         } else {
-          newBarn[outputItem] = (newBarn[outputItem] || 0) + outputQty;
+          newBarn[outputItem] = (newBarn[outputItem] || 0) + totalOutput;
+        }
+
+        let updatedOverclocks = state.entityOverclocks;
+        let updatedBuildingOverclocks = state.buildingOverclocks;
+        if (isOverclocked && bOverclock) {
+          const rollBurnout = Math.random() < bOverclock.burnoutChance;
+          const now = Date.now();
+          if (rollBurnout) {
+            playDefeatSound();
+            state.addNotification(`⚠️ Machine Burnout: ${building.name} overheated & exhausted for 180s! Call Mechanic or rest.`, '🛑', 'event');
+            updatedOverclocks = {
+              ...state.entityOverclocks,
+              [`building_${buildingId}`]: {
+                ...bOverclock,
+                isOverclocked: false,
+                activeTier: null,
+                speedMultiplier: 1.0,
+                bonusYield: 0,
+                isExhausted: true,
+                exhaustedUntil: now + 180000,
+              },
+            };
+            updatedBuildingOverclocks = {
+              ...state.buildingOverclocks,
+              [buildingId]: {
+                isOverclocked: false,
+                expiresAt: null,
+                isExhausted: true,
+                exhaustedUntil: now + 180000,
+              },
+            };
+          } else if (bonusYield > 0) {
+            state.addNotification(`💥 Overdrive Craft! +${bonusYield} Bonus ${outputItem} produced!`, '⭐', 'info');
+          }
         }
 
         const newQueue = queue.filter((_, i) => i !== slotIndex);
@@ -1357,6 +1601,8 @@ export const useGameStore = create<GameState>()(
             ...state.productionQueues,
             [buildingId]: newQueue,
           },
+          entityOverclocks: updatedOverclocks,
+          buildingOverclocks: updatedBuildingOverclocks,
           xp: newXp,
           level: newLevel,
         });
@@ -1367,6 +1613,13 @@ export const useGameStore = create<GameState>()(
         const building = BUILDINGS[buildingId];
         if (!building) return;
         if (building.unlockLevel && state.level < building.unlockLevel) return;
+
+        const bOverclock = state.entityOverclocks?.[`building_${buildingId}`] || state.buildingOverclocks?.[buildingId];
+        if (bOverclock?.isExhausted && bOverclock?.exhaustedUntil && Date.now() < bOverclock.exhaustedUntil) {
+          state.addNotification(`${building.name} is exhausted/overheated! Service machine or wait.`, '⚠️', 'info');
+          return;
+        }
+
         const queue = state.productionQueues[buildingId] || [];
         const freeSlots = building.queueSlots - queue.filter(s => !s.done).length;
         if (freeSlots <= 0) return;
@@ -2281,9 +2534,15 @@ export const useGameStore = create<GameState>()(
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
               return p;
             }
+            const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
+            const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
+            if (isPlotExhausted) {
+              return p; // Growth halted during soil exhaustion
+            }
+            const plotMultiplier = (plotOverclock?.isOverclocked && !p.ready) ? plotOverclock.speedMultiplier : 1.0;
             const elapsed = (now - p.plantedAt) / 1000;
             const waterBoost = p.isWatered ? 2.0 : 1.0;
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -2294,30 +2553,31 @@ export const useGameStore = create<GameState>()(
           return p;
         });
 
-        // Update animal production (with Overclocking 3x & Mutation 1.5x modifiers - Step 4)
+        // Update animal production (with Overclocking & Mutation modifiers)
         const newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
-            // Halt production during exhaustion
-            if (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil) {
-              return a;
+            const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+            const isAnimalExhausted = Boolean(
+              (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
+              (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
+            );
+            if (isAnimalExhausted) {
+              return a; // Production halted during exhaustion
             }
-            const isOverclocked = Boolean(a.isOverclocked && a.overclockExpiresAt && now < a.overclockExpiresAt);
-            const overclockMultiplier = isOverclocked ? 3.0 : 1.0;
+            const isOverclocked = Boolean(
+              (aOverclock?.isOverclocked && (!aOverclock.expiresAt || now < aOverclock.expiresAt)) ||
+              (a.isOverclocked && a.overclockExpiresAt && now < a.overclockExpiresAt)
+            );
+            const overclockMultiplier = aOverclock?.isOverclocked ? aOverclock.speedMultiplier : (isOverclocked ? 3.0 : 1.0);
             const mutationMultiplier = a.isMutated ? (a.mutationBonus || 1.5) : 1.0;
             const elapsed = ((now - a.fedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier;
             // Use breed-specific production time from BREED_REGISTRY if available
             const breedDef = BREED_REGISTRY[a.breedId];
             const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
             if (elapsed >= prodTime) {
-              // 25% burnout risk upon finishing an overclocked cycle
-              const burnOutRoll = isOverclocked && Math.random() < 0.25;
               return {
                 ...a,
                 productReady: true,
-                isOverclocked: false,
-                overclockExpiresAt: null,
-                isExhausted: burnOutRoll ? true : a.isExhausted,
-                exhaustedUntil: burnOutRoll ? now + 180000 : a.exhaustedUntil,
               };
             }
           }
@@ -2369,7 +2629,16 @@ export const useGameStore = create<GameState>()(
           const zone = WATER_ZONES[zoneId];
           const lastCatch = state.fishery.lastCatchTimestamps[zoneId] || 0;
           if (lastCatch === 0) continue;
-          const interval = zone.baseIntervalMs * rod.speedMultiplier;
+
+          const fOverclock = state.entityOverclocks?.[`fishery_${zoneId}`];
+          const isFisheryExhausted = Boolean(fOverclock?.isExhausted && fOverclock?.exhaustedUntil && now < fOverclock.exhaustedUntil);
+          if (isFisheryExhausted) {
+            continue; // Halted while reel is jammed/exhausted
+          }
+          const isFisheryOverclocked = Boolean(fOverclock?.isOverclocked && (!fOverclock.expiresAt || now < fOverclock.expiresAt));
+          const fMultiplier = isFisheryOverclocked ? fOverclock.speedMultiplier : 1.0;
+
+          const interval = (zone.baseIntervalMs * rod.speedMultiplier) / fMultiplier;
           // Outfit bonus
           const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
           const effectiveInterval = hasSlicker ? interval * 0.67 : interval;
@@ -2378,8 +2647,10 @@ export const useGameStore = create<GameState>()(
             const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
             if (catchResult) {
               const fishDef = FISH_SPECIES[catchResult.speciesId];
-              newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + 1;
-              newBarn.fish = (newBarn.fish || 0) + 1;
+              const bonusQty = (isFisheryOverclocked && fOverclock?.bonusYield) ? fOverclock.bonusYield : 0;
+              const catchQty = 1 + bonusQty;
+              newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + catchQty;
+              newBarn.fish = (newBarn.fish || 0) + catchQty;
               const codexKey = `fish_${catchResult.speciesId}`;
               newFishCodex[codexKey] = true;
               newCodex[codexKey] = true;
@@ -2389,6 +2660,23 @@ export const useGameStore = create<GameState>()(
               // Lanternfish gem bonus
               if (catchResult.speciesId === 'lanternfish') {
                 newGems += 1;
+              }
+
+              // Roll burnout on catch cycle completion
+              if (isFisheryOverclocked && Math.random() < fOverclock.burnoutChance) {
+                playDefeatSound();
+                state.addNotification(`⚠️ Reel Jam: ${zone.name} fishing gear overheated & exhausted for 180s! Service reel or rest.`, '⚙️', 'event');
+                if (state.entityOverclocks[`fishery_${zoneId}`]) {
+                  state.entityOverclocks[`fishery_${zoneId}`] = {
+                    ...fOverclock,
+                    isOverclocked: false,
+                    activeTier: null,
+                    speedMultiplier: 1.0,
+                    bonusYield: 0,
+                    isExhausted: true,
+                    exhaustedUntil: now + 180000,
+                  };
+                }
               }
             }
             newCatchTimestamps[zoneId] = now;
@@ -2445,83 +2733,113 @@ export const useGameStore = create<GameState>()(
         // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
         let unifiedWorkersModified = false;
         const updatedUnifiedWorkers = { ...state.unifiedWorkers };
+        let updatedWorkerOverclocks = state.entityOverclocks;
         if (!areWorkersPaused) {
           for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
             const worker = updatedUnifiedWorkers[role];
             if (!worker || !worker.isHired) continue;
 
-          const cfg = WORKER_REGISTRY[role];
-          const effectiveInterval = workerEffectiveInterval(role, worker.level);
-          const elapsed = now - worker.lastActionTimestamp;
-
-          if (elapsed >= effectiveInterval) {
-            const cycles = Math.min(
-              Math.floor(elapsed / effectiveInterval),
-              1 + workerHopperBuffer(worker.level) // cap cycles by hopper buffer
-            );
-            unifiedWorkersModified = true;
-
-            // Update timestamp (keep remainder)
-            const newTimestamp = now - (elapsed % effectiveInterval);
-
-            for (let c = 0; c < cycles; c++) {
-              // ---- Double/Triple Proc ----
-              let multiplier = 1;
-              const doubleChance = workerDoubleProcChance(worker.level);
-              if (Math.random() < doubleChance) {
-                if (workerTripleProcUnlocked(worker.level) && Math.random() < 0.15) {
-                  multiplier = 3; // Triple yield!
-                } else {
-                  multiplier = 2; // Double yield
-                }
-              }
-
-              // ---- Level 60+ Gem Drop (5% per cycle) ----
-              if (workerGemProcUnlocked(worker.level) && Math.random() < 0.05) {
-                newGems += 1;
-                worker.stats.totalGemsEarned += 1;
-              }
-
-              // ---- Dual-Channel Mode Routing ----
-              if (worker.autoSell) {
-                // AUTO-SELL MODE: Direct coin liquidation
-                const payout = workerAutoSellPayout(role, worker.level);
-                const earned = payout * multiplier;
-                newCoins += earned;
-                worker.stats.totalCoinsEarned += earned;
-              } else {
-                // HOARD MODE: Deposit items to storage
-                if (role === 'merchant') {
-                  // Merchant in hoard mode: sells silo crops at premium, keeps items
-                  // Does nothing in hoard mode — items stay in storage for VIP orders
-                } else if (role === 'barn_overseer') {
-                  // Barn Overseer in hoard: auto-fills animal troughs
-                  const feedNeeded = state.animals.filter(a => !a.fed && !a.productReady).length;
-                  if (feedNeeded > 0 && (newSilo.feed || 0) > 0) {
-                    const feedToUse = Math.min(feedNeeded, newSilo.feed);
-                    newSilo.feed = (newSilo.feed || 0) - feedToUse;
-                  }
-                } else if (cfg.hoardItem) {
-                  // Deposit hoard item to barn or silo
-                  const qty = multiplier;
-                  if (cfg.hoardIsSilo) {
-                    newSilo[cfg.hoardItem] = (newSilo[cfg.hoardItem] || 0) + qty;
-                  } else {
-                    newBarn[cfg.hoardItem] = (newBarn[cfg.hoardItem] || 0) + qty;
-                  }
-                  worker.stats.totalItemsProduced += qty;
-                }
-              }
+            const wOverclock = state.entityOverclocks?.[`worker_${role}`];
+            const isWorkerExhausted = Boolean(wOverclock?.isExhausted && wOverclock?.exhaustedUntil && now < wOverclock.exhaustedUntil);
+            if (isWorkerExhausted) {
+              continue; // Worker resting during fatigue exhaustion
             }
+            const isWorkerOverclocked = Boolean(wOverclock?.isOverclocked && (!wOverclock.expiresAt || now < wOverclock.expiresAt));
+            const wMultiplier = isWorkerOverclocked ? wOverclock.speedMultiplier : 1.0;
 
-            // Update the worker instance
-            updatedUnifiedWorkers[role] = {
-              ...worker,
-              lastActionTimestamp: newTimestamp,
-              stats: { ...worker.stats },
-            };
+            const cfg = WORKER_REGISTRY[role];
+            const effectiveInterval = workerEffectiveInterval(role, worker.level) / wMultiplier;
+            const elapsed = now - worker.lastActionTimestamp;
+
+            if (elapsed >= effectiveInterval) {
+              const cycles = Math.min(
+                Math.floor(elapsed / effectiveInterval),
+                1 + workerHopperBuffer(worker.level) // cap cycles by hopper buffer
+              );
+              unifiedWorkersModified = true;
+
+              // Update timestamp (keep remainder)
+              const newTimestamp = now - (elapsed % effectiveInterval);
+
+              for (let c = 0; c < cycles; c++) {
+                // ---- Double/Triple Proc + Overclock Bonus ----
+                let multiplier = 1;
+                const doubleChance = workerDoubleProcChance(worker.level);
+                if (Math.random() < doubleChance) {
+                  if (workerTripleProcUnlocked(worker.level) && Math.random() < 0.15) {
+                    multiplier = 3; // Triple yield!
+                  } else {
+                    multiplier = 2; // Double yield
+                  }
+                }
+                if (isWorkerOverclocked && wOverclock?.bonusYield) {
+                  multiplier += wOverclock.bonusYield;
+                }
+
+                // ---- Level 60+ Gem Drop (5% per cycle) ----
+                if (workerGemProcUnlocked(worker.level) && Math.random() < 0.05) {
+                  newGems += 1;
+                  worker.stats.totalGemsEarned += 1;
+                }
+
+                // ---- Dual-Channel Mode Routing ----
+                if (worker.autoSell) {
+                  // AUTO-SELL MODE: Direct coin liquidation
+                  const payout = workerAutoSellPayout(role, worker.level);
+                  const earned = payout * multiplier;
+                  newCoins += earned;
+                  worker.stats.totalCoinsEarned += earned;
+                } else {
+                  // HOARD MODE: Deposit items to storage
+                  if (role === 'merchant') {
+                    // Merchant in hoard mode: sells silo crops at premium, keeps items
+                    // Does nothing in hoard mode — items stay in storage for VIP orders
+                  } else if (role === 'barn_overseer') {
+                    // Barn Overseer in hoard: auto-fills animal troughs
+                    const feedNeeded = state.animals.filter(a => !a.fed && !a.productReady).length;
+                    if (feedNeeded > 0 && (newSilo.feed || 0) > 0) {
+                      const feedToUse = Math.min(feedNeeded, newSilo.feed);
+                      newSilo.feed = (newSilo.feed || 0) - feedToUse;
+                    }
+                  } else if (cfg.hoardItem) {
+                    // Deposit hoard item to barn or silo
+                    const qty = multiplier;
+                    if (cfg.hoardIsSilo) {
+                      newSilo[cfg.hoardItem] = (newSilo[cfg.hoardItem] || 0) + qty;
+                    } else {
+                      newBarn[cfg.hoardItem] = (newBarn[cfg.hoardItem] || 0) + qty;
+                    }
+                    worker.stats.totalItemsProduced += qty;
+                  }
+                }
+              }
+
+              // Roll burnout on cycle finish
+              if (isWorkerOverclocked && Math.random() < wOverclock.burnoutChance) {
+                playDefeatSound();
+                state.addNotification(`⚠️ Worker Fatigue: ${cfg.name} worked to exhaustion for 180s! Administer Energy Restorative or rest.`, '⚡', 'event');
+                updatedWorkerOverclocks = {
+                  ...updatedWorkerOverclocks,
+                  [`worker_${role}`]: {
+                    ...wOverclock,
+                    isOverclocked: false,
+                    activeTier: null,
+                    speedMultiplier: 1.0,
+                    bonusYield: 0,
+                    isExhausted: true,
+                    exhaustedUntil: now + 180000,
+                  },
+                };
+              }
+
+              // Update the worker instance
+              updatedUnifiedWorkers[role] = {
+                ...worker,
+                lastActionTimestamp: newTimestamp,
+                stats: { ...worker.stats },
+              };
+            }
           }
-        }
         } // end if (!areWorkersPaused)
 
         // Hourly events: trigger every 60 min
@@ -3127,6 +3445,7 @@ export const useGameStore = create<GameState>()(
           marketNewsTicker: updatedNewsTicker,
           xp: finalXp,
           level: finalLevel,
+          entityOverclocks: updatedWorkerOverclocks,
           lastTick: now,
         });
       },
@@ -4521,107 +4840,205 @@ export const useGameStore = create<GameState>()(
       },
 
       // Overclocking & Mutation Actions (Step 4)
-      toggleAnimalOverclock: (animalId) => {
+      overclockEntity: (entityId, entityType, tier, customBaseCost) => {
         const state = get();
-        const animal = state.animals.find(a => a.id === animalId);
-        if (!animal) return;
-        if (animal.isExhausted && animal.exhaustedUntil && Date.now() < animal.exhaustedUntil) {
-          state.addNotification('Animal is exhausted! Cure with medicine first.', '💤', 'info');
-          return;
+        const baseCost = customBaseCost ?? BASE_OVERCLOCK_COSTS[entityType] ?? 30;
+        const current = state.entityOverclocks[entityId] || createDefaultEntityOverclock();
+        const now = Date.now();
+
+        if (current.isExhausted && current.exhaustedUntil && now < current.exhaustedUntil) {
+          state.addNotification('Entity is exhausted/overheated! Pay service fee or wait.', '⚠️', 'info');
+          return false;
         }
 
-        const willOverclock = !animal.isOverclocked;
-        playRapidTapSound(willOverclock ? 3 : 1);
+        const streak = getDecayedStreak(current.lastOverclockAt, current.streakCount, now);
+        const cost = calculateOverclockCost(baseCost, tier, streak);
 
-        const newAnimals = state.animals.map(a => {
-          if (a.id === animalId) {
-            return {
-              ...a,
-              isOverclocked: willOverclock,
-              overclockExpiresAt: willOverclock ? Date.now() + 60000 : null,
-            };
-          }
-          return a;
-        });
-
-        set({ animals: newAnimals, isDirty: true });
-        if (willOverclock) {
-          state.addNotification('⚡ Adrenaline Feed activated! 3x speed for 60s (25% burnout risk).', '⚡', 'info');
-        }
-      },
-
-      cureAnimalExhaustion: (animalId) => {
-        const state = get();
-        const cost = 15;
         if (state.coins < cost) {
-          state.addNotification('Need 15 coins for medicine!', '⚠️', 'info');
-          return;
+          state.addNotification(`Need ${cost} 🪙 for Overclock!`, '⚠️', 'info');
+          return false;
         }
-        playCashRegisterSound();
-        const newAnimals = state.animals.map(a => {
-          if (a.id === animalId) {
-            return {
-              ...a,
+
+        const tierConfig = getTierConfig(tier, baseCost, streak);
+        playRapidTapSound(tier === 3 ? 4 : tier === 2 ? 3 : 2);
+
+        // Timed entities (building, fishery, worker) run for 60 seconds of boosted rate
+        // Plots & animals run until harvested / collected
+        const durationMs = (entityType === 'building' || entityType === 'fishery' || entityType === 'worker') ? 60000 : null;
+        const expiresAt = durationMs ? now + durationMs : null;
+
+        const updatedOverclocks = {
+          ...state.entityOverclocks,
+          [entityId]: {
+            ...current,
+            isOverclocked: true,
+            activeTier: tier,
+            speedMultiplier: tierConfig.speedMultiplier,
+            bonusYield: tierConfig.bonusYield,
+            burnoutChance: tierConfig.burnoutChance,
+            expiresAt,
+            isExhausted: false,
+            exhaustedUntil: null,
+            streakCount: streak + 1,
+            lastOverclockAt: now,
+          },
+        };
+
+        let updatedBuildingOverclocks = state.buildingOverclocks;
+        if (entityType === 'building') {
+          const bId = entityId.replace('building_', '') as BuildingId;
+          updatedBuildingOverclocks = {
+            ...state.buildingOverclocks,
+            [bId]: {
+              isOverclocked: true,
+              expiresAt,
               isExhausted: false,
               exhaustedUntil: null,
-            };
-          }
-          return a;
-        });
-        set({ coins: state.coins - cost, animals: newAnimals, isDirty: true });
-        state.addNotification('💊 Animal cured with medicine! Ready for production.', '✨', 'info');
-      },
-
-      toggleBuildingOverclock: (buildingId) => {
-        const state = get();
-        const current = state.buildingOverclocks[buildingId] || { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null };
-        if (current.isExhausted && current.exhaustedUntil && Date.now() < current.exhaustedUntil) {
-          state.addNotification('Machine is overheated/exhausted! Service first.', '⚠️', 'info');
-          return;
+              speedMultiplier: tierConfig.speedMultiplier,
+            },
+          };
         }
 
-        const willOverclock = !current.isOverclocked;
-        playRapidTapSound(willOverclock ? 4 : 1);
+        let updatedAnimals = state.animals;
+        if (entityType === 'animal') {
+          const aId = entityId.replace('animal_', '');
+          updatedAnimals = state.animals.map(a => a.id === aId ? {
+            ...a,
+            isOverclocked: true,
+            overclockExpiresAt: expiresAt,
+            isExhausted: false,
+            exhaustedUntil: null,
+          } : a);
+        }
 
         set({
-          buildingOverclocks: {
-            ...state.buildingOverclocks,
-            [buildingId]: {
-              ...current,
-              isOverclocked: willOverclock,
-              expiresAt: willOverclock ? Date.now() + 60000 : null,
-            },
-          },
+          coins: state.coins - cost,
+          entityOverclocks: updatedOverclocks,
+          buildingOverclocks: updatedBuildingOverclocks,
+          animals: updatedAnimals,
           isDirty: true,
         });
 
-        if (willOverclock) {
-          state.addNotification('⚙️ Machine Overclocked! 3x crafting speed for 60s (25% burnout risk).', '🔥', 'info');
-        }
+        const bonusMsg = tierConfig.bonusYield > 0 ? ` (+${tierConfig.bonusYield} yield!)` : '';
+        const riskMsg = tierConfig.burnoutChance > 0 ? ` (${Math.round(tierConfig.burnoutChance * 100)}% burnout risk)` : ' (0% risk)';
+        state.addNotification(`⚡ ${tierConfig.label} Activated! ${tierConfig.speedMultiplier}x speed${bonusMsg}${riskMsg}.`, '🔥', 'info');
+        return true;
       },
 
-      cureBuildingExhaustion: (buildingId) => {
+      cureEntityExhaustion: (entityId, entityType) => {
         const state = get();
-        const cost = 25;
-        if (state.coins < cost) {
-          state.addNotification('Need 25 coins for machine service!', '⚠️', 'info');
-          return;
+        const feeInfo = CURE_EXHAUSTION_FEES[entityType] || { cost: 25, title: 'Service', emoji: '🔧' };
+        if (state.coins < feeInfo.cost) {
+          state.addNotification(`Need ${feeInfo.cost} 🪙 for ${feeInfo.title}!`, '⚠️', 'info');
+          return false;
         }
+
         playCashRegisterSound();
-        set({
-          coins: state.coins - cost,
-          buildingOverclocks: {
+        const current = state.entityOverclocks[entityId] || createDefaultEntityOverclock();
+        const updatedOverclocks = {
+          ...state.entityOverclocks,
+          [entityId]: {
+            ...current,
+            isOverclocked: false,
+            activeTier: null,
+            speedMultiplier: 1.0,
+            bonusYield: 0,
+            burnoutChance: 0.0,
+            expiresAt: null,
+            isExhausted: false,
+            exhaustedUntil: null,
+          },
+        };
+
+        let updatedBuildingOverclocks = state.buildingOverclocks;
+        if (entityType === 'building') {
+          const bId = entityId.replace('building_', '') as BuildingId;
+          updatedBuildingOverclocks = {
             ...state.buildingOverclocks,
-            [buildingId]: {
+            [bId]: {
               isOverclocked: false,
               expiresAt: null,
               isExhausted: false,
               exhaustedUntil: null,
             },
+          };
+        }
+
+        let updatedAnimals = state.animals;
+        if (entityType === 'animal') {
+          const aId = entityId.replace('animal_', '');
+          updatedAnimals = state.animals.map(a => a.id === aId ? {
+            ...a,
+            isOverclocked: false,
+            overclockExpiresAt: null,
+            isExhausted: false,
+            exhaustedUntil: null,
+          } : a);
+        }
+
+        set({
+          coins: state.coins - feeInfo.cost,
+          entityOverclocks: updatedOverclocks,
+          buildingOverclocks: updatedBuildingOverclocks,
+          animals: updatedAnimals,
+          isDirty: true,
+        });
+
+        state.addNotification(`${feeInfo.emoji} ${feeInfo.title} complete! Ready for production.`, '✨', 'info');
+        return true;
+      },
+
+      clearEntityOverclock: (entityId) => {
+        const state = get();
+        if (!state.entityOverclocks[entityId]) return;
+        const current = state.entityOverclocks[entityId];
+        set({
+          entityOverclocks: {
+            ...state.entityOverclocks,
+            [entityId]: {
+              ...current,
+              isOverclocked: false,
+              activeTier: null,
+              speedMultiplier: 1.0,
+              bonusYield: 0,
+              burnoutChance: 0.0,
+              expiresAt: null,
+            },
           },
           isDirty: true,
         });
-        state.addNotification('🔧 Machine tuned up and cool! Ready for production.', '✨', 'info');
+      },
+
+      toggleAnimalOverclock: (animalId) => {
+        const state = get();
+        const key = `animal_${animalId}`;
+        const current = state.entityOverclocks[key];
+        if (current?.isOverclocked) {
+          state.clearEntityOverclock(key);
+        } else {
+          state.overclockEntity(key, 'animal', 2);
+        }
+      },
+
+      cureAnimalExhaustion: (animalId) => {
+        const state = get();
+        state.cureEntityExhaustion(`animal_${animalId}`, 'animal');
+      },
+
+      toggleBuildingOverclock: (buildingId) => {
+        const state = get();
+        const key = `building_${buildingId}`;
+        const current = state.entityOverclocks[key];
+        if (current?.isOverclocked) {
+          state.clearEntityOverclock(key);
+        } else {
+          state.overclockEntity(key, 'building', 2);
+        }
+      },
+
+      cureBuildingExhaustion: (buildingId) => {
+        const state = get();
+        state.cureEntityExhaustion(`building_${buildingId}`, 'building');
       },
 
       resetGame: () => {
@@ -4686,8 +5103,9 @@ export const useGameStore = create<GameState>()(
             multiplier: 2.0,
             expiresAt: Date.now() + 120000,
           },
-          // Production Overclocking (Step 4)
+          // Production Overclocking (Step 4 & Global System)
           buildingOverclocks: createDefaultBuildingOverclocks(),
+          entityOverclocks: {},
           // Water System & Farm Well
           waterLevel: 10,
           maxWaterLevel: 10,
@@ -4908,6 +5326,7 @@ export const useGameStore = create<GameState>()(
         if (!merged.marketNextRefresh) merged.marketNextRefresh = Date.now() + 180000;
         if (!merged.marketNewsTicker) merged.marketNewsTicker = null;
         if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
+        if (!merged.entityOverclocks) merged.entityOverclocks = {};
         if (!merged.clientReputation) merged.clientReputation = DEFAULT_CLIENT_REPUTATION;
         const currentLvl = merged.level || 1;
         if (!merged.orders || merged.orders.length === 0 || !(merged.orders[0] as DeliveryOrder).type) {

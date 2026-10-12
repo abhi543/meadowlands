@@ -15,6 +15,7 @@ const TIER_CARD_STYLES: Record<Tier, string> = {
 };
 
 import { useState, useEffect } from 'react';
+import { OverclockActionMenu } from './OverclockActionMenu';
 
 export function AnimalPanel() {
   const {
@@ -275,34 +276,17 @@ export function AnimalPanel() {
                           <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium italic">Ready for Livestock Market</div>
                         )}
 
-                        {/* Exhaustion State & Cure Button */}
-                        {isExhausted && (
-                          <div className="space-y-1">
-                            <div className="text-[9px] font-bold text-rose-400 bg-rose-950/60 px-1 py-0.5 rounded">
-                              💤 Exhausted ({exhaustedRemaining}s)
-                            </div>
-                            <button
-                              onClick={() => cureAnimalExhaustion(animal.id)}
-                              className="w-full py-0.5 text-[9px] font-black rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
-                            >
-                              💊 Cure (15 🪙)
-                            </button>
+                        {/* Unified Overclock & Exhaustion Action Menu */}
+                        {animal.age !== 'elder' && (
+                          <div className="pt-1">
+                            <OverclockActionMenu
+                              entityId={`animal_${animal.id}`}
+                              entityType="animal"
+                              name={breedDef?.name || def.name}
+                              compact={true}
+                              className="w-full flex justify-center"
+                            />
                           </div>
-                        )}
-
-                        {/* Overclock Toggle */}
-                        {!isExhausted && animal.age !== 'elder' && (
-                          <button
-                            onClick={() => toggleAnimalOverclock(animal.id)}
-                            className={`w-full py-0.5 text-[9px] font-black rounded transition-all ${
-                              isOverclocked
-                                ? 'bg-amber-500 text-stone-950 ring-1 ring-amber-300 animate-pulse'
-                                : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700'
-                            }`}
-                            title="3x Production Speed for 60s (25% burnout risk)"
-                          >
-                            {isOverclocked ? `⚡ 3x (${overclockRemaining}s)` : '⚡ Overclock (3x)'}
-                          </button>
                         )}
                       </div>
                     </div>

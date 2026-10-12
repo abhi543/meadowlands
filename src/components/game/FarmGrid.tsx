@@ -4,6 +4,7 @@ import { useGameStore } from '@/game/store';
 import { CROPS, type CropId } from '@/game/data';
 import { useState } from 'react';
 import { FarmWell } from './FarmWell';
+import { OverclockActionMenu } from './OverclockActionMenu';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -28,6 +29,8 @@ export function FarmGrid() {
     relics,
     activeCrisis,
     resolveCrisisDefense,
+    entityOverclocks,
+    cureEntityExhaustion,
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
 
@@ -209,6 +212,12 @@ export function FarmGrid() {
             systemicEvent?.phase === 'active' &&
             systemicEvent?.locustPlotIds?.includes(plot.id);
 
+          const plotOverclock = entityOverclocks?.[`plot_${plot.id}`];
+          const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock.exhaustedUntil && Date.now() < plotOverclock.exhaustedUntil);
+          const exhaustionRemainingSec = isPlotExhausted && plotOverclock?.exhaustedUntil
+            ? Math.max(0, Math.ceil((plotOverclock.exhaustedUntil - Date.now()) / 1000))
+            : 0;
+
           const progress = plot.crop && plot.plantedAt && !plot.ready
             ? Math.min(1, (Date.now() - plot.plantedAt) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
@@ -221,6 +230,9 @@ export function FarmGrid() {
             soilClasses = 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 animate-pulse ring-2 ring-rose-400 shadow-lg shadow-rose-500/30 cursor-pointer';
           } else if (hasLocust) {
             soilClasses = 'bg-amber-100 dark:bg-amber-950/60 border-amber-600 animate-bounce ring-2 ring-amber-500 shadow-md cursor-pointer';
+          } else if (isPlotExhausted) {
+            // Burnout / exhausted soil
+            soilClasses = 'bg-stone-900 border-rose-600/80 ring-2 ring-rose-500/40 shadow-rose-950/50 shadow-md cursor-pointer text-rose-200';
           } else if (isReady) {
             soilClasses = isWatered
               ? 'bg-[#3d2817] dark:bg-[#2b1c10] border-emerald-400 ring-2 ring-cyan-400/50 hover:scale-105 shadow-lg shadow-emerald-500/20 cursor-pointer text-white'
@@ -243,6 +255,8 @@ export function FarmGrid() {
               extinguishBrushfire(plot.id);
             } else if (hasLocust) {
               captureLocust(plot.id);
+            } else if (isPlotExhausted) {
+              cureEntityExhaustion(`plot_${plot.id}`, 'plot');
             } else if (isReady) {
               harvestPlot(plot.id);
             } else if (isEmpty) {
@@ -256,10 +270,18 @@ export function FarmGrid() {
           };
 
           return (
-            <button
+            <div
               key={plot.id}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handlePlotClick();
+                }
+              }}
               onClick={handlePlotClick}
-              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden ${soilClasses}`}
+              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses}`}
             >
               {/* Crisis Overlay 0: Crop Blight */}
               {hasBlight ? (
@@ -285,6 +307,26 @@ export function FarmGrid() {
                     Catch!
                   </span>
                 </div>
+              ) : isPlotExhausted ? (
+                /* Burnout Overlay: Exhausted Soil */
+                <div className="flex flex-col items-center justify-center p-1" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-2xl animate-pulse">🪨</span>
+                  <span className="text-[9px] font-black uppercase text-rose-300 bg-rose-950/90 px-1.5 py-0.5 rounded mt-0.5 border border-rose-500/50">
+                    Exhausted ({exhaustionRemainingSec}s)
+                  </span>
+                  <button
+                    type="button"
+                    disabled={coins < 20}
+                    onClick={() => cureEntityExhaustion(`plot_${plot.id}`, 'plot')}
+                    className={`mt-1 px-2 py-0.5 text-[9px] font-black rounded-md transition-all shadow-sm ${
+                      coins >= 20
+                        ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 active:scale-95'
+                        : 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                    }`}
+                  >
+                    🌱 Revitalize (20🪙)
+                  </button>
+                </div>
               ) : (
                 <>
                   {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
@@ -300,6 +342,21 @@ export function FarmGrid() {
                     <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-blue-600/90 hover:bg-blue-500 text-white text-[8px] sm:text-[9px] font-bold border border-blue-300 shadow-sm animate-bounce z-10">
                       <span>💧</span>
                       <span>Water</span>
+                    </div>
+                  )}
+
+                  {/* Overclock Action Menu for Growing Plots */}
+                  {isGrowing && (
+                    <div
+                      className="absolute top-1 left-1 z-20"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <OverclockActionMenu
+                        entityId={`plot_${plot.id}`}
+                        entityType="plot"
+                        name={`Plot #${plot.id + 1}`}
+                        compact={true}
+                      />
                     </div>
                   )}
 
@@ -349,7 +406,7 @@ export function FarmGrid() {
                   )}
                 </>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

@@ -3,6 +3,7 @@
 import { useGameStore } from '@/game/store';
 import { BUILDINGS, PRODUCTS, CROPS, type BuildingId, type RecipeDef } from '@/game/data';
 import { useState } from 'react';
+import { OverclockActionMenu } from './OverclockActionMenu';
 
 const BUILDING_LIST: BuildingId[] = ['feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
 
@@ -208,11 +209,6 @@ export function ProductionPanel() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className={`font-bold text-lg ${theme.headerText}`}>{building.name}</h3>
-                  {isOverclocked && (
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 animate-pulse">
-                      ⚡ 3x Speed
-                    </span>
-                  )}
                 </div>
                 <p className={`text-xs ${theme.headerSub}`}>
                   {isLocked ? '\u{1F512} Unlock at Level ' + building.unlockLevel : `Queue: ${activeCount}/${building.queueSlots} slots`}
@@ -223,38 +219,11 @@ export function ProductionPanel() {
             <div className="flex items-center gap-2 flex-wrap">
               {/* Overclock / Exhaustion Controls */}
               {!isLocked && (
-                <>
-                  {isExhausted ? (
-                    <div className="flex items-center gap-1.5 bg-rose-950/60 p-1.5 rounded-xl border border-rose-500/50">
-                      <span className="text-[10px] font-bold text-rose-300">
-                        💤 Burnout ({exhaustedRemaining}s)
-                      </span>
-                      <button
-                        disabled={coins < 25}
-                        onClick={() => cureBuildingExhaustion(activeBuilding)}
-                        className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                          coins >= 25
-                            ? 'bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow active:scale-95'
-                            : 'bg-stone-700 text-stone-500 cursor-not-allowed'
-                        }`}
-                      >
-                        🔧 Service (25 🪙)
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => toggleBuildingOverclock(activeBuilding)}
-                      className={`px-3 py-1.5 text-xs font-black rounded-xl transition-all shadow-sm ${
-                        isOverclocked
-                          ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 ring-2 ring-amber-300 animate-pulse active:scale-95'
-                          : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-600 active:scale-95'
-                      }`}
-                      title="3x Production Speed for 60s (25% burnout risk)"
-                    >
-                      {isOverclocked ? `🔥 Overclock Active (${overclockRemaining}s)` : '⚡ Adrenaline Overclock (3x)'}
-                    </button>
-                  )}
-                </>
+                <OverclockActionMenu
+                  entityId={`building_${activeBuilding}`}
+                  entityType="building"
+                  name={building.name}
+                />
               )}
 
               {!isLocked && doneCount > 0 && (

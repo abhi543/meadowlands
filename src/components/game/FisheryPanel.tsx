@@ -7,6 +7,7 @@ import {
   TIER_COLORS, TIER_LABELS,
   type WaterZoneId, type Tier,
 } from '@/game/data';
+import { OverclockActionMenu } from './OverclockActionMenu';
 
 const ZONE_ORDER: WaterZoneId[] = ['zone_pond', 'zone_river', 'zone_estuary', 'zone_lake', 'zone_ocean'];
 
@@ -237,7 +238,7 @@ export function FisheryPanel() {
                   : 'bg-stone-50 dark:bg-stone-900/30 border-stone-200 dark:border-gray-700 opacity-80'
               }`}
             >
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{zone.emoji}</span>
                   <div>
@@ -254,6 +255,14 @@ export function FisheryPanel() {
                     </p>
                   </div>
                 </div>
+                {isUnlocked && (
+                  <OverclockActionMenu
+                    entityId={`fishery_${zoneId}`}
+                    entityType="fishery"
+                    name={zone.name}
+                    compact={true}
+                  />
+                )}
               </div>
 
               {isUnlocked ? (

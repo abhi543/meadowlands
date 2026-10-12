@@ -10,6 +10,7 @@ import {
   calculateBulkUpgrade, getMilestoneRank, MILESTONE_RANKS,
   type WorkerRole, type WorkerDivision, type BulkMode,
 } from '@/game/data';
+import { OverclockActionMenu } from './OverclockActionMenu';
 
 /** Generate contextual help hint for why a worker can't be hired/upgraded */
 function getBlockHint(args: {
@@ -374,7 +375,7 @@ export function WorkersHubPanel() {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="mt-2 flex items-center gap-2">
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
                     {!worker.isHired && isUnlocked && (
                       <button
                         onClick={() => hireUnifiedWorker(role)}
@@ -395,6 +396,14 @@ export function WorkersHubPanel() {
                           {' '}({'\u{1F4B0}'}{upgradeResult.totalCost.toLocaleString()})
                         </button>
                       </>
+                    )}
+                    {worker.isHired && (
+                      <OverclockActionMenu
+                        entityId={`worker_${role}`}
+                        entityType="worker"
+                        name={cfg.name}
+                        compact={true}
+                      />
                     )}
                     {worker.isHired && worker.level >= WORKER_MAX_LEVEL && (
                       <span className="text-[10px] font-bold text-fuchsia-600 dark:text-fuchsia-400">{'\u{1F52E}'} MAX LEVEL</span>

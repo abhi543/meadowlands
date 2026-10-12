@@ -403,20 +403,38 @@ function AnimalsGuide() {
         <p>4. When finished, tap <strong>Collect</strong> to gather their yield into your Barn!</p>
       </div>
 
-      {/* Overclocking & Burnout System */}
-      <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 rounded-lg p-3 text-xs text-red-900 dark:text-red-200 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">⚡</span>
-          <h5 className="font-bold text-sm">Animal Overclocking &amp; Burnout Risk</h5>
+      {/* Unified 3-Tier Overclocking & Burnout System */}
+      <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-3 text-xs text-amber-200 space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚡</span>
+            <h5 className="font-bold text-sm text-amber-300">Global Coin-Based Overclock System</h5>
+          </div>
+          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+            3 Operational Tiers
+          </span>
         </div>
-        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
-          Need products immediately for a Timed Rush delivery? Tap the <strong>Overclock (⚡)</strong> toggle on any eating animal.
+        <p className="text-stone-300 leading-relaxed">
+          Need products immediately for a Timed Rush or Cargo Freight order? Tap <strong>⚡ Boost</strong> on any active animal, farm plot, building, fishery zone, or hired worker.
         </p>
-        <ul className="list-disc ml-4 space-y-1 text-stone-700 dark:text-stone-300">
-          <li><strong>3.0x Production Speed:</strong> The animal feeds and produces goods at triple velocity for 60 seconds.</li>
-          <li><strong>25% Burnout Risk:</strong> Pushing livestock beyond natural limits carries a 25% chance upon completion that the animal suffers brief exhaustion before eating again.</li>
-          <li><strong>Genetic Traits:</strong> Bred livestock carrying mutations naturally gain a permanent <strong>1.5x speed/yield bonus</strong> that stacks with overclocks!</li>
-        </ul>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+          <div className="bg-stone-900/80 p-2 rounded-lg border border-amber-500/30">
+            <span className="font-bold text-amber-400">⚡ Tier 1: Shift Overtime</span>
+            <p className="text-stone-400 mt-0.5">1.5x Speed • Base Cost • 0% Burnout Risk</p>
+          </div>
+          <div className="bg-stone-900/80 p-2 rounded-lg border border-orange-500/40">
+            <span className="font-bold text-orange-400">🔥 Tier 2: Double Shift</span>
+            <p className="text-stone-400 mt-0.5">2.5x Speed • 2.2x Cost • 15% Burnout Risk</p>
+          </div>
+          <div className="bg-stone-900/80 p-2 rounded-lg border border-rose-500/40">
+            <span className="font-bold text-rose-400">💥 Tier 3: Adrenaline Overdrive</span>
+            <p className="text-stone-400 mt-0.5">4.0x Speed + 1★ Yield • 4.5x Cost • 35% Risk</p>
+          </div>
+        </div>
+        <div className="pt-1 border-t border-amber-900/40 text-[10px] text-stone-400 space-y-0.5">
+          <p>🛑 <strong>Burnout State:</strong> If an entity burns out upon harvest/production completion, it enters an <strong>Exhausted</strong> state for 180s. Wait out the timer or pay a coin Vet/Mechanic fee to restore immediately.</p>
+          <p>📈 <strong>Anti-Spam Decay:</strong> Each subsequent overclock within 10 minutes increases coin cost by +25%. Costs decay back to baseline after 10 minutes of normal operation.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -519,7 +537,8 @@ function ProductionChainGuide() {
           Workshops can be temporarily pushed into overdrive to clear stacked recipe queues rapidly:
         </p>
         <ul className="list-disc ml-4 space-y-1 text-stone-700 dark:text-stone-300">
-          <li><strong>3.0x Machine Overclock:</strong> Tap <strong>Overclock (⚡)</strong> on any building header to craft items at triple speed for 60 seconds (subject to cooling cooldown).</li>
+          <li><strong>3-Tier Overdrive Menu:</strong> Choose between Tier 1 (1.5x speed, 0% risk), Tier 2 (2.5x speed, 15% burnout risk), or Tier 3 (4.0x speed + 1 bonus craft, 35% risk).</li>
+          <li><strong>Burnout &amp; Mechanic Service:</strong> Overclock burnout halts machinery for 180 seconds. Instantly restore operation by paying a Mechanic Tune-Up fee (25🪙) or wait out the clock.</li>
           <li><strong>Artisan Masterclass Event:</strong> During this regional event, the Bakery, Loom, and Cheese Press operate at <strong>4.0x speed with 0% ingredient waste</strong>!</li>
           <li><strong>Master Artisan's Ledger Relic:</strong> Winning this event relic permanently cuts machine crafting duration across the estate by a flat <strong>5%</strong>.</li>
         </ul>
@@ -984,6 +1003,7 @@ function WorkersGuide() {
       <div className="bg-stone-50 dark:bg-stone-900/40 rounded-lg p-3 text-xs space-y-1.5 text-stone-600 dark:text-stone-300">
         <h5 className="font-bold text-stone-800 dark:text-gray-200">Worker Perks &amp; Milestones:</h5>
         <ul className="list-disc ml-4 space-y-1">
+          <li><strong>Overclocking Workers:</strong> Tap <strong>⚡ Boost</strong> on any hired worker to push them into Overdrive (Tier 1: 1.5x, Tier 2: 2.5x, Tier 3: 4.0x speed + bonus item procs).</li>
           <li><strong>Auto-Sell vs Hoard Mode:</strong> Toggle workers to either directly sell their yields for instant coins or hoard items into your storage for complex recipes.</li>
           <li><strong>Level Upgrades:</strong> Upgrade workers up to Level 120 using x1, x10, or MAX bulk upgrade modes.</li>
           <li><strong>Hopper Buffer (Lv.40):</strong> Workers buffer overflow cycles so no production is wasted while offline!</li>
@@ -1012,6 +1032,7 @@ function FisheryGuide() {
       <div className="bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800/40 rounded-lg p-3 text-xs text-cyan-800 dark:text-cyan-200 space-y-1.5">
         <h5 className="font-bold">Fishery Essentials:</h5>
         <ul className="list-disc ml-4 space-y-1">
+          <li><strong>Zone Overclocking:</strong> Need fish immediately? Tap <strong>⚡ Boost</strong> on active water zones to trigger 1.5x–4.0x catch velocity + bonus fish yields!</li>
           <li><strong>Hiring Fishermen:</strong> All unlocked water zones require an active fisherman to cast lines. You can hire a Dock Fisherman directly in the Fishery tab for 🪙100!</li>
           <li><strong>Parallel Catching:</strong> Once hired, every unlocked zone runs its own timer simultaneously.</li>
           <li><strong>Rod Tiers:</strong> Upgrade your fishing rod from Bamboo → Ash → Carbon → Golden → Mythic Net to speed up catches by up to +250% and dramatically boost Rare and Legendary catches.</li>
