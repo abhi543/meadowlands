@@ -606,6 +606,34 @@ function OrdersGuide() {
         </div>
       </div>
 
+      {/* Farm Level Calibration & Unlock Progression */}
+      <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl space-y-2">
+        <h5 className="font-bold text-xs uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+          <span>🎯</span> Farm Level Order Calibration
+        </h5>
+        <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+          Delivery board contracts are <strong>strictly gated by your Farm Level</strong>. Clients will never request items you haven&apos;t unlocked yet, and contract complexity scales with your progress:
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+          <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
+            <span className="font-bold text-amber-700 dark:text-amber-400">🌱 Level 1 (Starter):</span>
+            <p className="text-stone-600 dark:text-stone-300 mt-0.5">Standard contracts only. Requests 1–3 starter items: Wheat, Feed, Eggs, Fish.</p>
+          </div>
+          <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
+            <span className="font-bold text-amber-700 dark:text-amber-400">🌽 Levels 2–3 (Apprentice):</span>
+            <p className="text-stone-600 dark:text-stone-300 mt-0.5">Unlocks Corn, Milk, Bread, Carrots. Timed Rush contracts become available.</p>
+          </div>
+          <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
+            <span className="font-bold text-amber-700 dark:text-amber-400">🧀 Levels 4–5 (Artisan):</span>
+            <p className="text-stone-600 dark:text-stone-300 mt-0.5">Strawberries, Wool, Cheese, Pies, Sweaters. Advance Futures contracts unlock.</p>
+          </div>
+          <div className="bg-white/60 dark:bg-stone-900/60 p-2 rounded-lg border border-amber-100 dark:border-amber-900/30">
+            <span className="font-bold text-amber-700 dark:text-amber-400">👑 Level 6+ (Master Estate):</span>
+            <p className="text-stone-600 dark:text-stone-300 mt-0.5">Town Projects unlock. High-tier Truffles, Honey, Crab Bisque, Luxury Goods.</p>
+          </div>
+        </div>
+      </div>
+
       {/* 5 Recurring Client Personas */}
       <div className="space-y-2">
         <h5 className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-gray-400">

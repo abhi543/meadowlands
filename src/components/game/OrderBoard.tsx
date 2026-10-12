@@ -54,6 +54,7 @@ export function OrderBoard() {
     clientReputation,
     fulfillDeliveryOrder,
     trashOrder,
+    level,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<'all' | 'timed' | 'reputation'>('all');
@@ -125,7 +126,7 @@ export function OrderBoard() {
               <h3 className="font-black text-sm tracking-wide text-white flex items-center gap-2">
                 Meadowlands Logistics Engine
                 <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Phase 1 Live
+                  Lv. {level} Contracts
                 </span>
               </h3>
               <p className="text-[11px] text-stone-400">

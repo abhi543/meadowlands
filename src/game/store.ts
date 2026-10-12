@@ -34,7 +34,7 @@ import {
 import {
   type OrderType, type ClientProfile, type DeliveryOrder,
   CLIENT_DEFINITIONS, REPUTATION_THRESHOLDS, getReputationInfo,
-  generateDeliveryOrder, getItemBaseValue,
+  generateDeliveryOrder, getItemBaseValue, ITEM_UNLOCK_LEVELS,
 } from './deliveryData';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
@@ -620,7 +620,7 @@ const initialAnimals: AnimalInstance[] = [
   { id: 'a3', species: 'cow', tier: 'common', breedId: 'cow_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 12, cyclesRemaining: 12, cyclesCompletedTotal: 0 },
 ];
 
-const initialOrders = generateOrders(6);
+const initialOrders = generateOrders(6, 1);
 
 // Create default unified worker instances for all 13 roles
 function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance> {
@@ -756,8 +756,12 @@ function rollSmugglerLoot(): { itemId: string; qty: number } {
 }
 
 // Chef order generator
-function generateChefOrder() {
-  const template = CHEF_ORDER_TEMPLATES[Math.floor(Math.random() * CHEF_ORDER_TEMPLATES.length)];
+function generateChefOrder(playerLevel = 1) {
+  const eligibleTemplates = CHEF_ORDER_TEMPLATES.filter(t =>
+    t.requested.every(it => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) <= playerLevel)
+  );
+  const pool = eligibleTemplates.length > 0 ? eligibleTemplates : CHEF_ORDER_TEMPLATES;
+  const template = pool[Math.floor(Math.random() * pool.length)];
   return { ...template };
 }
 
@@ -1563,7 +1567,7 @@ export const useGameStore = create<GameState>()(
         const xpBonus = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round((order.rewards?.xp || order.xpReward || 15) * xpBonus), state.level);
 
-        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level) : o);
+        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(newLevel) : o);
 
         playCashRegisterSound();
         state.addNotification(
@@ -2534,7 +2538,7 @@ export const useGameStore = create<GameState>()(
           };
 
           if (eventType === 'vip_chef') {
-            newEvent.chefOrder = generateChefOrder();
+            newEvent.chefOrder = generateChefOrder(state.level);
           } else if (eventType === 'crow_attack') {
             // Select 2-3 random growing plots
             const growingPlots = state.plots.filter(p => p.crop && !p.ready);
@@ -4629,7 +4633,7 @@ export const useGameStore = create<GameState>()(
           animals: initialAnimals,
           animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
-          orders: generateOrders(6),
+          orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
           farmhands: [], codex: { 'chicken_common': true, 'cow_common': true },
           fishery: {
@@ -4905,8 +4909,20 @@ export const useGameStore = create<GameState>()(
         if (!merged.marketNewsTicker) merged.marketNewsTicker = null;
         if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
         if (!merged.clientReputation) merged.clientReputation = DEFAULT_CLIENT_REPUTATION;
+        const currentLvl = merged.level || 1;
         if (!merged.orders || merged.orders.length === 0 || !(merged.orders[0] as DeliveryOrder).type) {
-          merged.orders = generateOrders(6, merged.level || 1);
+          merged.orders = generateOrders(6, currentLvl);
+        } else {
+          // Sanitize any existing orders that contain items higher than player's level
+          merged.orders = merged.orders.map((order: DeliveryOrder) => {
+            const reqItems = order.requiredItems || (order.requested?.map((r: any) => ({ itemId: r.itemId })) || []);
+            const hasOverlevelItem = reqItems.some((it: any) => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) > currentLvl);
+            const invalidContractType = currentLvl < 2 && order.type !== 'standard';
+            if (hasOverlevelItem || invalidContractType) {
+              return generateDeliveryOrder(currentLvl, undefined, order.clientId);
+            }
+            return order;
+          });
         }
 
         return merged as GameState;

@@ -231,37 +231,202 @@ export function getItemMeta(itemId: string): { name: string; icon: string; baseV
   return { ...extra, baseValue: getItemBaseValue(itemId) };
 }
 
-// --- Order Generator Matching Phase 1 Requirements ---
-export function generateDeliveryOrder(playerLevel: number, forcedType?: OrderType, clientKey?: string): DeliveryOrder {
+// --- Item Unlock Level Registry ---
+export const ITEM_UNLOCK_LEVELS: Record<string, number> = {
+  // Level 1: Starter Crops, Animal Feed, Starter Chickens (Egg), Starter Pond (Fish)
+  wheat: 1,
+  feed: 1,
+  egg: 1,
+  fish: 1,
+
+  // Level 2: Corn, Cows (Milk), Bakery (Bread)
+  corn: 2,
+  milk: 2,
+  bread: 2,
+
+  // Level 3: Carrots
+  carrot: 3,
+
+  // Level 4: Strawberries, Sheep (Wool), Dairy (Cheese), Bakery (Pie)
+  strawberry: 4,
+  wool: 4,
+  cheese: 4,
+  pie: 4,
+
+  // Level 5: Soybeans, Loom (Yarn, Sweater), Bakery (Savory Fish Pie)
+  soybean: 5,
+  yarn: 5,
+  sweater: 5,
+  savory_fish_pie: 5,
+
+  // Level 6: Pigs (Truffle), Beehive (Honey Comb), Press (Honey), Forager (Wild Berries)
+  truffle: 6,
+  honey_comb: 6,
+  honey: 6,
+  wild_berries: 6,
+
+  // Level 7: Pumpkins, Bakery (Crab Bisque)
+  pumpkin: 7,
+  crab_bisque: 7,
+
+  // Level 8: Cotton, Press (Truffle Oil), Prospector (Gold Nugget)
+  cotton: 8,
+  truffle_oil: 8,
+  gold_nugget: 8,
+
+  // Level 10: High-End Luxury Goods (Silk, Quilted Blanket, Fabric)
+  silk: 10,
+  quilted_blanket: 10,
+  fabric: 10,
+};
+
+// --- Client Themed Progression Pools by Unlock Level ---
+export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: number }[]> = {
+  mayor_barnaby: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'feed', minLevel: 1 },
+    { itemId: 'corn', minLevel: 2 },
+    { itemId: 'bread', minLevel: 2 },
+    { itemId: 'carrot', minLevel: 3 },
+    { itemId: 'cheese', minLevel: 4 },
+    { itemId: 'pie', minLevel: 4 },
+    { itemId: 'wool', minLevel: 4 },
+    { itemId: 'sweater', minLevel: 5 },
+    { itemId: 'fabric', minLevel: 10 },
+  ],
+  chef_antoine: [
+    { itemId: 'egg', minLevel: 1 },
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'milk', minLevel: 2 },
+    { itemId: 'bread', minLevel: 2 },
+    { itemId: 'carrot', minLevel: 3 },
+    { itemId: 'strawberry', minLevel: 4 },
+    { itemId: 'cheese', minLevel: 4 },
+    { itemId: 'pie', minLevel: 4 },
+    { itemId: 'savory_fish_pie', minLevel: 5 },
+    { itemId: 'honey', minLevel: 6 },
+  ],
+  captain_sterling: [
+    { itemId: 'fish', minLevel: 1 },
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'feed', minLevel: 1 },
+    { itemId: 'corn', minLevel: 2 },
+    { itemId: 'bread', minLevel: 2 },
+    { itemId: 'yarn', minLevel: 5 },
+    { itemId: 'savory_fish_pie', minLevel: 5 },
+    { itemId: 'crab_bisque', minLevel: 7 },
+    { itemId: 'cotton', minLevel: 8 },
+  ],
+  lady_guinevere: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'egg', minLevel: 1 },
+    { itemId: 'milk', minLevel: 2 },
+    { itemId: 'wool', minLevel: 4 },
+    { itemId: 'yarn', minLevel: 5 },
+    { itemId: 'sweater', minLevel: 5 },
+    { itemId: 'honey_comb', minLevel: 6 },
+    { itemId: 'cotton', minLevel: 8 },
+    { itemId: 'silk', minLevel: 10 },
+    { itemId: 'quilted_blanket', minLevel: 10 },
+  ],
+  old_man_jed: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'feed', minLevel: 1 },
+    { itemId: 'corn', minLevel: 2 },
+    { itemId: 'carrot', minLevel: 3 },
+    { itemId: 'truffle', minLevel: 6 },
+    { itemId: 'wild_berries', minLevel: 6 },
+    { itemId: 'honey_comb', minLevel: 6 },
+    { itemId: 'gold_nugget', minLevel: 8 },
+    { itemId: 'truffle_oil', minLevel: 8 },
+  ],
+};
+
+// --- Order Generator Matching Player Level & Progression Requirements ---
+export function generateDeliveryOrder(
+  playerLevel = 1,
+  forcedType?: OrderType,
+  clientKey?: string
+): DeliveryOrder {
+  const safeLevel = Math.max(1, playerLevel);
   const clientKeys = Object.keys(CLIENT_DEFINITIONS);
   const selectedClientId = clientKey || clientKeys[Math.floor(Math.random() * clientKeys.length)];
   const client = CLIENT_DEFINITIONS[selectedClientId];
 
-  // Roll order type
+  // Roll order type gated by player level for a smooth onboarding curve
   let type: OrderType = forcedType || 'standard';
   if (!forcedType) {
-    const roll = Math.random();
-    if (roll < 0.55) type = 'standard';
-    else if (roll < 0.75) type = 'rush';
-    else if (roll < 0.88) type = 'futures';
-    else type = 'town_project';
+    if (safeLevel < 2) {
+      // Level 1: strictly standard contracts to allow relaxed onboarding
+      type = 'standard';
+    } else if (safeLevel < 4) {
+      // Level 2-3: standard (75%) or rush (25%)
+      type = Math.random() < 0.75 ? 'standard' : 'rush';
+    } else if (safeLevel < 6) {
+      // Level 4-5: standard (55%), rush (25%), futures (20%)
+      const roll = Math.random();
+      if (roll < 0.55) type = 'standard';
+      else if (roll < 0.80) type = 'rush';
+      else type = 'futures';
+    } else {
+      // Level 6+: full spectrum including town projects
+      const roll = Math.random();
+      if (roll < 0.50) type = 'standard';
+      else if (roll < 0.72) type = 'rush';
+      else if (roll < 0.86) type = 'futures';
+      else type = 'town_project';
+    }
   }
 
-  // Choose 1 to 3 items from preferred list
-  const itemCount = type === 'town_project' ? 3 : (type === 'futures' ? 2 : (Math.random() < 0.6 ? 1 : 2));
-  const shuffledItems = [...client.preferredItems].sort(() => Math.random() - 0.5);
+  // Filter client's preferred items strictly to those unlocked at playerLevel
+  const clientPool = CLIENT_LEVEL_POOLS[selectedClientId] || [];
+  const eligibleItems = clientPool
+    .filter(item => item.minLevel <= safeLevel)
+    .map(item => item.itemId);
+
+  // Fallback safety if pool is somehow empty
+  const itemPool = eligibleItems.length > 0 ? eligibleItems : ['wheat', 'feed', 'egg'];
+
+  // Item count based on contract type & player level
+  let itemCount = 1;
+  if (type === 'town_project') {
+    itemCount = Math.min(itemPool.length, 3);
+  } else if (type === 'futures') {
+    itemCount = Math.min(itemPool.length, safeLevel >= 4 ? 2 : 1);
+  } else if (type === 'rush') {
+    itemCount = Math.min(itemPool.length, safeLevel >= 3 && Math.random() < 0.4 ? 2 : 1);
+  } else {
+    // Standard orders: 1 item for beginners; 1-2 items for experienced farmers
+    itemCount = Math.min(itemPool.length, safeLevel >= 3 && Math.random() < 0.35 ? 2 : 1);
+  }
+
+  const shuffledItems = [...itemPool].sort(() => Math.random() - 0.5);
   const pickedItemIds = shuffledItems.slice(0, itemCount);
 
+  // Scaled quantities matching player level capacity
   const requiredItems = pickedItemIds.map(id => {
     const meta = getItemMeta(id);
     let qty = 1;
     if (id === 'wheat' || id === 'corn' || id === 'feed') {
-      qty = type === 'town_project' ? 8 + Math.floor(Math.random() * 6) : 3 + Math.floor(Math.random() * 4);
+      if (safeLevel <= 2) {
+        qty = 2 + Math.floor(Math.random() * 2); // 2-3 items for beginners
+      } else {
+        qty = type === 'town_project' ? 8 + Math.floor(Math.random() * 6) : 3 + Math.floor(Math.random() * 4);
+      }
     } else if (id === 'carrot' || id === 'strawberry' || id === 'cotton' || id === 'fish') {
-      qty = type === 'town_project' ? 6 + Math.floor(Math.random() * 4) : 2 + Math.floor(Math.random() * 3);
+      if (safeLevel <= 3) {
+        qty = 1 + Math.floor(Math.random() * 2); // 1-2 items
+      } else {
+        qty = type === 'town_project' ? 5 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3);
+      }
     } else if (id === 'egg' || id === 'milk' || id === 'wool') {
-      qty = type === 'town_project' ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+      if (safeLevel <= 3) {
+        qty = 1 + Math.floor(Math.random() * 2); // 1-2 items
+      } else {
+        qty = type === 'town_project' ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+      }
     } else {
+      // Manufactured/artisan products (bread, cheese, pie, sweater, etc.)
       qty = type === 'town_project' ? 2 : 1;
     }
     return {
