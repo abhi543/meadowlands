@@ -3,6 +3,7 @@
 import { useGameStore } from '@/game/store';
 import { CROPS, PRODUCTS } from '@/game/data';
 import { useState, useEffect } from 'react';
+import { FavorShopView } from '@/components/game/FavorShopView';
 
 export function ShopPanel() {
   const {
@@ -14,8 +15,10 @@ export function ShopPanel() {
     marketTrends,
     marketNewsTicker,
     marketNextRefresh,
+    globalReputation,
   } = useGameStore();
 
+  const [shopMode, setShopMode] = useState<'sell' | 'favor'>('sell');
   const [qtyOverride, setQtyOverride] = useState<Record<string, number>>({});
   const [, setTick] = useState(0);
 
@@ -117,8 +120,43 @@ export function ShopPanel() {
 
   return (
     <div className="space-y-3">
-      {/* Dynamic Commodity Exchange Ticker */}
-      <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-stone-100 shadow-sm space-y-2">
+      {/* Top Navigation Mode Switcher */}
+      <div className="flex items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-800 pb-2">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            onClick={() => setShopMode('sell')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              shopMode === 'sell'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
+            }`}
+          >
+            <span>🏪</span>
+            <span>Commodity Liquidation (Sell)</span>
+          </button>
+          <button
+            onClick={() => setShopMode('favor')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              shopMode === 'favor'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-stone-950 shadow-sm'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-300/60 dark:border-amber-800/60 hover:bg-amber-100'
+            }`}
+          >
+            <span>🏛️</span>
+            <span>Town Favor Shop</span>
+            <span className="text-[10px] font-mono font-black px-1.5 py-0.2 rounded-full bg-black/30 text-amber-200">
+              {globalReputation?.spendableFavor || 0}🎖️
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {shopMode === 'favor' ? (
+        <FavorShopView />
+      ) : (
+        <>
+          {/* Dynamic Commodity Exchange Ticker */}
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-3 text-stone-100 shadow-sm space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400">
             <span>📈</span>
@@ -274,6 +312,8 @@ export function ShopPanel() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );
