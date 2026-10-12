@@ -82,7 +82,7 @@ export const CLIENT_DEFINITIONS: Record<string, ClientDefinition> = {
     avatar: '🎩',
     quote: 'A well-fed township is a peaceful township. Meadowlands depends on your enterprise!',
     themeColor: 'from-amber-600 to-yellow-500',
-    preferredItems: ['wheat', 'corn', 'bread', 'cheese', 'pie', 'fabric', 'wool', 'carrot', 'sweater'],
+    preferredItems: ['wheat', 'corn', 'bread', 'cheese', 'pie', 'cotton', 'wool', 'carrot', 'sweater'],
     perks: [
       { level: 1, perkName: 'Town Hall Trust', description: 'Civic recognition across Meadowlands.' },
       { level: 2, perkName: 'Commercial Subsidy', description: '+5% Order Board coin payouts farm-wide.' },
@@ -259,25 +259,30 @@ export const ITEM_UNLOCK_LEVELS: Record<string, number> = {
   sweater: 5,
   savory_fish_pie: 5,
 
-  // Level 6: Pigs (Truffle), Beehive (Honey Comb), Press (Honey), Forager (Wild Berries)
+  // Level 6: Pigs (Truffle), Press (Truffle Oil)
   truffle: 6,
-  honey_comb: 6,
-  honey: 6,
-  wild_berries: 6,
+  truffle_oil: 6,
 
   // Level 7: Pumpkins, Bakery (Crab Bisque)
   pumpkin: 7,
   crab_bisque: 7,
 
-  // Level 8: Cotton, Press (Truffle Oil), Prospector (Gold Nugget)
+  // Level 8: Cotton
   cotton: 8,
-  truffle_oil: 8,
-  gold_nugget: 8,
 
-  // Level 10: High-End Luxury Goods (Silk, Quilted Blanket, Fabric)
-  silk: 10,
-  quilted_blanket: 10,
-  fabric: 10,
+  // Level 12: Apiary Tender (Honey Comb), Press (Honey), Textiles (Silk)
+  honey_comb: 12,
+  honey: 12,
+  silk: 12,
+
+  // Level 16: Wilderness Scout (Wild Berries)
+  wild_berries: 16,
+
+  // Level 18: Tailor Shop (Quilted Blanket)
+  quilted_blanket: 18,
+
+  // Level 28: Quarry Miner (Gold Nugget)
+  gold_nugget: 28,
 };
 
 // --- Client Themed Progression Pools by Unlock Level ---
@@ -292,7 +297,8 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'pie', minLevel: 4 },
     { itemId: 'wool', minLevel: 4 },
     { itemId: 'sweater', minLevel: 5 },
-    { itemId: 'fabric', minLevel: 10 },
+    { itemId: 'cotton', minLevel: 8 },
+    { itemId: 'silk', minLevel: 12 },
   ],
   chef_antoine: [
     { itemId: 'egg', minLevel: 1 },
@@ -304,7 +310,8 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'cheese', minLevel: 4 },
     { itemId: 'pie', minLevel: 4 },
     { itemId: 'savory_fish_pie', minLevel: 5 },
-    { itemId: 'honey', minLevel: 6 },
+    { itemId: 'crab_bisque', minLevel: 7 },
+    { itemId: 'honey', minLevel: 12 },
   ],
   captain_sterling: [
     { itemId: 'fish', minLevel: 1 },
@@ -316,6 +323,7 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'savory_fish_pie', minLevel: 5 },
     { itemId: 'crab_bisque', minLevel: 7 },
     { itemId: 'cotton', minLevel: 8 },
+    { itemId: 'silk', minLevel: 12 },
   ],
   lady_guinevere: [
     { itemId: 'wheat', minLevel: 1 },
@@ -324,10 +332,10 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'wool', minLevel: 4 },
     { itemId: 'yarn', minLevel: 5 },
     { itemId: 'sweater', minLevel: 5 },
-    { itemId: 'honey_comb', minLevel: 6 },
     { itemId: 'cotton', minLevel: 8 },
-    { itemId: 'silk', minLevel: 10 },
-    { itemId: 'quilted_blanket', minLevel: 10 },
+    { itemId: 'honey_comb', minLevel: 12 },
+    { itemId: 'silk', minLevel: 12 },
+    { itemId: 'quilted_blanket', minLevel: 18 },
   ],
   old_man_jed: [
     { itemId: 'wheat', minLevel: 1 },
@@ -335,10 +343,10 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'corn', minLevel: 2 },
     { itemId: 'carrot', minLevel: 3 },
     { itemId: 'truffle', minLevel: 6 },
-    { itemId: 'wild_berries', minLevel: 6 },
-    { itemId: 'honey_comb', minLevel: 6 },
-    { itemId: 'gold_nugget', minLevel: 8 },
-    { itemId: 'truffle_oil', minLevel: 8 },
+    { itemId: 'truffle_oil', minLevel: 6 },
+    { itemId: 'honey_comb', minLevel: 12 },
+    { itemId: 'wild_berries', minLevel: 16 },
+    { itemId: 'gold_nugget', minLevel: 28 },
   ],
 };
 

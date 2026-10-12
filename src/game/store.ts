@@ -3362,10 +3362,15 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Check VIP rush orders countdown (Step 3)
-        // Check VIP rush & advance futures orders countdown (Step 3)
+        // Check VIP rush & advance futures orders countdown and sanitize any overlevel orders
         let ordersModified = false;
         const updatedOrders = state.orders.map(order => {
+          const reqItems = order.requiredItems || (order.requested?.map((r: any) => ({ itemId: r.itemId })) || []);
+          const hasOverlevelItem = reqItems.some((it: any) => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) > state.level);
+          if (hasOverlevelItem) {
+            ordersModified = true;
+            return generateDeliveryOrder(state.level, undefined, order.clientId);
+          }
           const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder;
           const expiryTime = order.expiresAt || order.rushExpiresAt;
           if (isTimed && expiryTime && now >= expiryTime) {
@@ -3374,7 +3379,7 @@ export const useGameStore = create<GameState>()(
             newCoins = Math.max(0, newCoins - fee);
             playDefeatSound();
             state.addNotification(`⚠️ ${order.type === 'futures' ? 'Advance Futures' : 'VIP Rush'} Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
-            return generateDeliveryOrder(state.level);
+            return generateDeliveryOrder(state.level, undefined, order.clientId);
           }
           return order;
         });
