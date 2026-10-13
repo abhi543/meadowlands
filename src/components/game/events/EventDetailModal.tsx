@@ -334,31 +334,55 @@ export function EventDetailModal({ isOpen, onClose, onOpenRelics }: EventDetailM
                         Tiers: 100 / 300 / 600 pts
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2">
                       <select
                         value={selectedFairItem}
                         onChange={(e) => setSelectedFairItem(e.target.value)}
-                        className="flex-1 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs rounded-xl p-2 font-medium"
+                        className="w-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs rounded-xl p-2 font-medium"
                       >
                         {Object.entries(FAIR_ITEM_SCORES).map(([itemId, itemScore]) => {
                           const stock = getStock(itemId);
                           return (
                             <option key={itemId} value={itemId}>
-                              {itemId} ({itemScore.points} pts) — Stock: {stock}
+                              {itemId} ({itemScore.points} pts each) — In Stock: {stock}
                             </option>
                           );
                         })}
                       </select>
-                      <button
-                        onClick={() => {
-                          const sendQty = Math.min(5, getStock(selectedFairItem)) || 1;
-                          submitCountyFairProduce([{ itemId: selectedFairItem, qty: sendQty }]);
-                        }}
-                        disabled={getStock(selectedFairItem) < 1}
-                        className="py-2 px-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition-all shadow-md active:scale-95"
-                      >
-                        Submit Produce
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
+                        <button
+                          onClick={() => {
+                            const sendQty = Math.min(5, getStock(selectedFairItem)) || 1;
+                            submitCountyFairProduce([{ itemId: selectedFairItem, qty: sendQty }]);
+                          }}
+                          disabled={getStock(selectedFairItem) < 1}
+                          className="flex-1 py-2 px-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white font-bold text-[11px] rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                        >
+                          Submit 5 (+{((FAIR_ITEM_SCORES[selectedFairItem]?.points || 1) * Math.min(5, getStock(selectedFairItem)))} pts)
+                        </button>
+                        <button
+                          onClick={() => {
+                            const sendQty = Math.min(25, getStock(selectedFairItem)) || 1;
+                            submitCountyFairProduce([{ itemId: selectedFairItem, qty: sendQty }]);
+                          }}
+                          disabled={getStock(selectedFairItem) < 1}
+                          className="flex-1 py-2 px-2 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white font-bold text-[11px] rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                        >
+                          Submit 25 (+{((FAIR_ITEM_SCORES[selectedFairItem]?.points || 1) * Math.min(25, getStock(selectedFairItem)))} pts)
+                        </button>
+                        <button
+                          onClick={() => {
+                            const sendQty = getStock(selectedFairItem);
+                            if (sendQty > 0) {
+                              submitCountyFairProduce([{ itemId: selectedFairItem, qty: sendQty }]);
+                            }
+                          }}
+                          disabled={getStock(selectedFairItem) < 1}
+                          className="flex-1 py-2 px-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white font-black text-[11px] rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap"
+                        >
+                          Submit All ({getStock(selectedFairItem)})
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
