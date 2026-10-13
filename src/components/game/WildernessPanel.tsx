@@ -42,6 +42,7 @@ export function WildernessPanel() {
           <h3 className="font-semibold text-sm text-stone-700 dark:text-gray-300 flex items-center gap-2">
             ⏳ Active Expeditions ({activeExpeditions.length})
           </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {activeExpeditions.map(exp => {
             const biome = BIOMES[exp.biomeId];
             const lure = LURES[exp.lureId];
@@ -112,12 +113,14 @@ export function WildernessPanel() {
               </div>
             );
           })}
+          </div>
         </div>
       )}
 
       {/* Biome Destinations */}
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-stone-700 dark:text-gray-300">🗺️ Destinations</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
         {BIOME_ORDER.map(biomeId => {
           const biome = BIOMES[biomeId];
           const isUnlocked = level >= biome.unlockLevel;
@@ -184,12 +187,13 @@ export function WildernessPanel() {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* Lure Crafting Reference */}
       <div className="space-y-2">
         <h3 className="font-semibold text-sm text-stone-700 dark:text-gray-300">🪤 Lure Guide</h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {LURE_ORDER.map(lureId => {
             const lure = LURES[lureId];
             const owned = barn[lure.productId] || 0;

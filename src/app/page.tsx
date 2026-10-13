@@ -150,10 +150,12 @@ export default function Home() {
 
       {/* Header */}
       <header className="sticky top-0 z-50 p-3 pb-0">
-        <HUD onOpenBackupModal={() => setBackupModalOpen(true)} />
+        <div className="w-full max-w-[1600px] mx-auto">
+          <HUD onOpenBackupModal={() => setBackupModalOpen(true)} />
+        </div>
       </header>
 
-      <main className={`mx-auto ${activeTab === 'animals' ? 'max-w-6xl p-2 pt-1 pb-16' : 'max-w-2xl p-3 pt-2 pb-28'}`}>
+      <main className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-6 min-h-[calc(100vh-80px)] flex flex-col transition-all">
         {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
         <EventTickingClock />
 
@@ -167,7 +169,7 @@ export default function Home() {
         {activeTab !== 'animals' && <EventBanner />}
 
         {/* Tab Content */}
-        <div className={activeTab === 'animals' ? 'h-full' : 'min-h-[400px]'}>
+        <div className={activeTab === 'animals' ? 'flex-1 min-h-0' : 'min-h-[400px]'}>
           {activeTab === 'farm' && <FarmGrid />}
           {activeTab === 'animals' && <AnimalsTab />}
           {activeTab === 'production' && <ProductionPanel />}
@@ -206,16 +208,16 @@ export default function Home() {
       {/** Floating Notifications */}
       <FloatingNumbers />
 
-      {/* Bottom Tab Bar - Compact 2-row grid (6+5) so all 11 tabs are visible */}
+      {/* Bottom Tab Bar - Compact 2-row grid on mobile, sleek full row on desktop */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
-        <div className="max-w-2xl mx-auto grid grid-cols-6 gap-0.5 px-1 pt-1 pb-1.5">
+        <div className="w-full max-w-[1600px] mx-auto grid grid-cols-6 md:grid-cols-11 gap-1 px-2 sm:px-6 lg:px-8 pt-1 pb-1.5 md:py-2">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-1.5 px-0.5 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 ${
+                className={`py-1.5 md:py-2 px-1 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 ${
                   isActive
                     ? `${tab.bgActive} ${tab.color} shadow-sm`
                     : `text-stone-400 dark:text-gray-500 ${tab.bgInactive}`
@@ -224,7 +226,7 @@ export default function Home() {
                 <span className={`transition-transform duration-200 leading-none ${isActive ? 'text-xl' : 'text-lg'}`}>
                   {tab.emoji}
                 </span>
-                <span className={`text-[9px] leading-tight truncate w-full text-center ${isActive ? 'font-bold' : 'font-medium'}`}>
+                <span className={`text-[9px] md:text-[11px] leading-tight truncate w-full text-center ${isActive ? 'font-bold' : 'font-medium'}`}>
                   {tab.label}
                 </span>
               </button>

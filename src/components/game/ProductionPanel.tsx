@@ -255,6 +255,7 @@ export function ProductionPanel() {
             {/* Recipes */}
             <div className="p-3 space-y-2">
               <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">Recipes</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {building.recipes.map(recipe => {
                 const canCraft = canCraftRecipe(recipe, silo, barn);
                 const maxCraftable = calcMaxCraftable(recipe, silo, barn);
@@ -313,13 +314,14 @@ export function ProductionPanel() {
                   </div>
                 );
               })}
+              </div>
             </div>
 
             {/* Production Queue */}
             {queue.length > 0 && (
               <div className="p-3 pt-0 space-y-2">
                 <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">In Progress ({activeCount} active, {doneCount} done)</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                   {queue.map((slot, idx) => {
                     const progress = slot.done ? 1 : Math.min(1, (Date.now() - slot.startedAt) / (slot.durationSec * 1000));
                     const recipe = building.recipes.find(r => r.id === slot.recipeId);

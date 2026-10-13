@@ -193,7 +193,7 @@ export function FarmGrid() {
       </div>
 
       {/* Farm Grid */}
-      <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+      <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 sm:gap-2.5">
         {visiblePlots.map(plot => {
           const isReady = plot.ready;
           const isGrowing = plot.crop && !plot.ready;

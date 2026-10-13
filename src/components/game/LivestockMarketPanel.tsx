@@ -25,7 +25,7 @@ export function LivestockMarketPanel() {
       {/* Buy Section */}
       <div className="space-y-2">
         <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">Buy Animals</h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {SPECIES_LIST.map(species => {
             const def = ANIMALS[species];
             const currentCount = animals.filter(a => a.species === species).length;
@@ -91,7 +91,7 @@ export function LivestockMarketPanel() {
           return elders.length === 0 ? (
             <div className="text-center py-4 text-sm text-stone-400 dark:text-gray-500 italic">No elder animals to sell</div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">
               {elders.map(animal => {
                 const def = ANIMALS[animal.species];
                 const breedDef = BREED_REGISTRY[animal.breedId];
@@ -162,7 +162,7 @@ function HabitatUpgradeSection() {
   const { animalCapacity, habitatUpgradeSteps, coins, upgradeHabitat } = useGameStore();
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {SPECIES_LIST.map(species => {
         const def = ANIMALS[species];
         const currentStep = habitatUpgradeSteps[species] || 0;

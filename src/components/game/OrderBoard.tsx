@@ -297,7 +297,7 @@ export function OrderBoard() {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5">
             {Object.values(CLIENT_DEFINITIONS).map(client => {
               const clientData = globalReputation?.clients?.[client.id] || {
                 id: client.id,
@@ -444,7 +444,7 @@ export function OrderBoard() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {displayedOrders.map(order => {
             const clientDef = CLIENT_DEFINITIONS[order.clientId] || CLIENT_DEFINITIONS.mayor_barnaby;
             const clientRep = clientReputation?.[order.clientId] || { level: 1, xp: 0 };

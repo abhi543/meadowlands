@@ -211,7 +211,7 @@ export function TerritoryMapView() {
               {isUnlocked && parcel.debris.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider mb-2">{'\u{1F9F9}'} Debris Clearing</h4>
-                  <div className="space-y-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                     {parcel.debris.map(debris => {
                       const isClearing = debris.clearingStartedAt !== null && !debris.cleared;
                       const progress = isClearing
@@ -273,7 +273,7 @@ export function TerritoryMapView() {
               {/* Facility Footprints applicable to this parcel */}
               <div>
                 <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider mb-2">{'\u{1F3D7}'} Facilities</h4>
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                   {FACILITY_FOOTPRINTS.map(facility => {
                     const isApplicable = facility.requiredZone === parcelId || (facility.requiredZone === 'any_cleared' && isUnlocked);
                     if (!isApplicable) return null;

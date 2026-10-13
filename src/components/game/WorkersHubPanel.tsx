@@ -156,7 +156,7 @@ export function WorkersHubPanel() {
       </div>
 
       {/* Worker Cards */}
-      <div className="space-y-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         {division.roles.map(role => {
           const cfg = WORKER_REGISTRY[role];
           const worker = unifiedWorkers[role];

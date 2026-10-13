@@ -215,6 +215,7 @@ export function FisheryPanel() {
         <h4 className="text-xs font-semibold text-stone-500 dark:text-gray-400 uppercase tracking-wider">
           Water Zones
         </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {ZONE_ORDER.map(zoneId => {
           const zone = WATER_ZONES[zoneId];
           const isUnlocked = fishery.unlockedZones.includes(zoneId);
@@ -319,6 +320,7 @@ export function FisheryPanel() {
             </div>
           );
         })}
+        </div>
       </div>
 
       {/* Aquatic Codex */}
@@ -327,7 +329,7 @@ export function FisheryPanel() {
           Aquatic Codex
         </h4>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-stone-200 dark:border-gray-700 overflow-hidden">
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 p-3">
+          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2 p-3">
             {(Object.values(FISH_SPECIES)).map(sp => {
               const codexKey = `fish_${sp.id}`;
               const discovered = fishery.fishCodex[codexKey];
