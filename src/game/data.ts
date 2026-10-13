@@ -433,7 +433,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
 };
 
 // --- Farmhands ---
-export type FarmhandRole = 'lumberjack' | 'fisherman' | 'farmer' | 'artisan';
+export type FarmhandRole = 'lumberjack' | 'fisherman' | 'farmer' | 'artisan' | 'herder';
 
 export interface FarmhandDef {
   role: FarmhandRole;
@@ -444,9 +444,10 @@ export interface FarmhandDef {
 }
 
 export const FARMHANDS: Record<FarmhandRole, FarmhandDef> = {
+  farmer:     { role: 'farmer',     name: 'Farmer',     emoji: '\u{1F468}\u200D\u{1F33E}', description: 'Decreases field growth timers on adjacent plots.', perk: '-20% crop grow time' },
+  herder:     { role: 'herder',     name: 'Herder',     emoji: '\u{1F920}', description: 'Feeds pasture animals and gathers fresh animal products.', perk: 'Auto-feeds & harvests livestock' },
   lumberjack: { role: 'lumberjack', name: 'Lumberjack', emoji: '\u{1FA93}', description: 'Clears wood hazards; boosts lumber mill yield.', perk: '+15% production speed' },
   fisherman:  { role: 'fisherman',  name: 'Fisherman',  emoji: '\u{1F3A3}', description: 'Passive fish gathering at riverside docks.', perk: 'Free fish every 5 min' },
-  farmer:     { role: 'farmer',     name: 'Farmer',     emoji: '\u{1F468}\u200D\u{1F33E}', description: 'Decreases field growth timers on adjacent plots.', perk: '-20% crop grow time' },
   artisan:    { role: 'artisan',    name: 'Artisan',    emoji: '\u{1F9D1}\u200D\u{1F3A8}', description: 'Speeds up production processing inside factories.', perk: '-25% production time' },
 };
 
@@ -549,7 +550,7 @@ export const ROD_TIERS: Record<RodTier, RodTierDef> = {
 export const ROD_TIER_ORDER: RodTier[] = ['bamboo', 'fiberglass', 'carbon', 'titanium'];
 
 // --- Outfits ---
-export type OutfitId = 'fisherman_slicker' | 'farmers_hat' | 'artisan_apron' | 'lumberjack_vest';
+export type OutfitId = 'fisherman_slicker' | 'farmers_hat' | 'artisan_apron' | 'lumberjack_vest' | 'herders_chaps';
 
 export interface OutfitDef {
   id: OutfitId;
@@ -564,6 +565,7 @@ export const OUTFITS: Record<OutfitId, OutfitDef> = {
   farmers_hat:       { id: 'farmers_hat',       name: "Farmer's Hat",      emoji: '\u{1F9E5}', compatibleRole: 'farmer',     buff: '-20% crop grow time' },
   artisan_apron:     { id: 'artisan_apron',     name: 'Artisan Apron',     emoji: '\u{1F9E5}', compatibleRole: 'artisan',    buff: '-25% production time' },
   lumberjack_vest:   { id: 'lumberjack_vest',   name: 'Lumberjack Vest',   emoji: '\u{1F9E5}', compatibleRole: 'lumberjack', buff: '+15% lumber yield' },
+  herders_chaps:     { id: 'herders_chaps',     name: "Rancher's Chaps",   emoji: '\u{1F9E5}', compatibleRole: 'herder',     buff: '-30% action interval' },
 };
 
 // --- Autonomous Workers ---
@@ -924,7 +926,7 @@ export type WorkerDivision = 'farmhand' | 'autonomous' | 'utility';
 
 export type WorkerRole =
   // Division A: Farmhands (Site Buffers)
-  | 'farmer' | 'lumberjack' | 'fisherman' | 'artisan'
+  | 'farmer' | 'herder' | 'lumberjack' | 'fisherman' | 'artisan'
   // Division B: Autonomous Specialists (Passive Harvesters)
   | 'auto_fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector'
   // Division C: Utility Specialists (Converters)
@@ -934,7 +936,7 @@ export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: st
   farmhand: {
     label: 'Field Crew',
     emoji: '\u{1F33E}',
-    roles: ['farmer', 'lumberjack', 'fisherman', 'artisan'],
+    roles: ['farmer', 'herder', 'lumberjack', 'fisherman', 'artisan'],
   },
   autonomous: {
     label: 'Harvesters',
@@ -977,6 +979,13 @@ export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
     description: 'Accelerates crop timers and auto-replants', division: 'farmhand',
     baseCost: 50, baseIntervalMs: 30000, exponent: 1.068, unlockLevel: 1,
     autoSellPayout: 5, hoardItem: 'wheat', hoardItemEmoji: '\u{1F33E}', hoardIsSilo: true,
+  },
+  herder: {
+    role: 'herder', name: 'Livestock Rancher', emoji: '\u{1F920}',
+    description: 'Auto-feeds hungry pasture animals & collects eggs, milk, wool, and truffles', division: 'farmhand',
+    baseCost: 100, baseIntervalMs: 12000, exponent: 1.068, unlockLevel: 2,
+    autoSellPayout: 12, hoardItem: 'egg', hoardItemEmoji: '\u{1F95A}', hoardIsSilo: false,
+    rareItem: 'truffle', rareItemEmoji: '\u{1F344}', rareItemSellPrice: 50,
   },
   lumberjack: {
     role: 'lumberjack', name: 'Timberjack', emoji: '\u{1FA93}',

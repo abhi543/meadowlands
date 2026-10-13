@@ -37,6 +37,7 @@ export function AnimalsTab() {
     animals,
     silo,
     coins,
+    level,
     feedAnimal,
     collectProduct,
     feedAllAnimals,
@@ -46,6 +47,9 @@ export function AnimalsTab() {
     moveToPasture,
     moveToReserve,
     sellReserveAnimal,
+    unifiedWorkers,
+    hireUnifiedWorker,
+    toggleUnifiedWorkerMode,
   } = useGameStore();
 
   const [showAdoptModal, setShowAdoptModal] = useState(false);
@@ -72,6 +76,7 @@ export function AnimalsTab() {
   }
 
   const commonAnimalsCount = animals.filter(a => a.tier === 'common').length;
+  const herderWorker = unifiedWorkers?.herder;
 
   return (
     <div className="w-full h-[calc(100vh-140px)] flex flex-col p-2 sm:p-3 box-border overflow-hidden select-none">
@@ -105,7 +110,7 @@ export function AnimalsTab() {
           </div>
         </div>
 
-        {/* Center: Compact Batch Actions */}
+        {/* Center: Compact Batch Actions & Automation Worker */}
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => collectAllProducts()}
@@ -117,7 +122,8 @@ export function AnimalsTab() {
             }`}
           >
             <span>🧺</span>
-            <span>Collect All</span>
+            <span className="hidden sm:inline">Collect All</span>
+            <span className="sm:hidden">Collect</span>
             {collectibleAnimals.length > 0 && (
               <span className="bg-stone-900/10 dark:bg-stone-950/20 px-1 rounded text-[10px] font-black">
                 {collectibleAnimals.length}
@@ -135,13 +141,47 @@ export function AnimalsTab() {
             }`}
           >
             <span>🫗</span>
-            <span>Feed All</span>
+            <span className="hidden sm:inline">Feed All</span>
+            <span className="sm:hidden">Feed</span>
             {canFeedCount > 0 && (
               <span className="bg-white/20 px-1 rounded text-[10px] font-black">
                 {canFeedCount}
               </span>
             )}
           </button>
+
+          {/* Livestock Rancher / Herder Worker Status */}
+          {herderWorker?.isHired ? (
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/15 dark:bg-amber-500/25 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-600/50 shadow-xs"
+              title={`Livestock Rancher Lv.${herderWorker.level}: Automatically feeding & collecting animal products (Mode: ${herderWorker.autoSell ? 'Auto-Sell' : 'Hoard to Barn'})`}
+            >
+              <span className="text-sm">🤠</span>
+              <span className="hidden md:inline font-bold">Rancher Lv.{herderWorker.level}</span>
+              <span className="flex h-2 w-2 relative" title="Worker actively feeding and gathering">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <button
+                onClick={() => toggleUnifiedWorkerMode('herder')}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-stone-800 hover:bg-white text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 cursor-pointer font-mono font-semibold"
+                title="Toggle Mode (Barn = Deposit into Barn, Sell = Auto-Sell for coins)"
+              >
+                {herderWorker.autoSell ? '💰 Sell' : '📦 Barn'}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => hireUnifiedWorker('herder')}
+              disabled={level < 2 || coins < 100}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 text-stone-950 shadow-xs shadow-amber-300/30 transition-all active:scale-95 cursor-pointer"
+              title={level < 2 ? 'Unlocks at Farm Level 2' : 'Hire Livestock Rancher (100 coins) to auto-feed animals and auto-collect products!'}
+            >
+              <span>🤠</span>
+              <span className="hidden sm:inline">Hire Rancher</span>
+              <span className="text-[10px] font-black opacity-80">{level < 2 ? 'Lv2' : '100🪙'}</span>
+            </button>
+          )}
         </div>
 
         {/* Right: Quick Adopt & Incubator Actions */}
@@ -162,7 +202,7 @@ export function AnimalsTab() {
 
           <button
             onClick={() => setShowAdoptModal(true)}
-            disabled={commonAnimalsCount >= 4}
+            disabled={commonAnimalsCount >= TIER_SECTORS.common.maxCapacity}
             className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white shadow-xs shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-1 active:scale-95"
             title="Adopt starter livestock into Common Pasture"
           >

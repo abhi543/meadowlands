@@ -701,7 +701,7 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
   const now = Date.now();
   const workers: Partial<Record<WorkerRole, UnifiedWorkerInstance>> = {};
   const allRoles: WorkerRole[] = [
-    'farmer', 'lumberjack', 'fisherman', 'artisan',
+    'farmer', 'herder', 'lumberjack', 'fisherman', 'artisan',
     'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
     'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
   ];
@@ -2069,8 +2069,32 @@ export const useGameStore = create<GameState>()(
           }
           newFishery = { ...state.fishery, lastCatchTimestamps: newTimestamps };
         }
-        set({ coins: state.coins - cost, farmhands: [...state.farmhands, fh], fishery: newFishery });
-        state.addNotification('Fisherman hired! Automatically catching fish in unlocked waters.', '🎣', 'info');
+        let newUnifiedWorkers = state.unifiedWorkers;
+        if (role === 'herder') {
+          if (!state.unifiedWorkers?.herder?.isHired) {
+            newUnifiedWorkers = {
+              ...state.unifiedWorkers,
+              herder: {
+                ...state.unifiedWorkers.herder,
+                isHired: true,
+                lastActionTimestamp: Date.now(),
+              },
+            };
+          }
+        }
+        set({
+          coins: state.coins - cost,
+          farmhands: [...state.farmhands, fh],
+          fishery: newFishery,
+          unifiedWorkers: newUnifiedWorkers,
+        });
+        if (role === 'herder') {
+          state.addNotification('Livestock Herder hired! Auto-feeding animals and collecting yields.', '🤠', 'info');
+        } else if (role === 'fisherman') {
+          state.addNotification('Fisherman hired! Automatically catching fish in unlocked waters.', '🎣', 'info');
+        } else {
+          state.addNotification(`${FARMHANDS[role]?.name || role} hired!`, FARMHANDS[role]?.emoji || '👷', 'info');
+        }
       },
 
       addSilo: (itemId, qty) => {
@@ -2899,7 +2923,7 @@ export const useGameStore = create<GameState>()(
         });
 
         // Update animal production (with Overclocking & Mutation modifiers)
-        const newAnimals = state.animals.map(a => {
+        let newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
             const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
             const isAnimalExhausted = Boolean(
@@ -3034,6 +3058,7 @@ export const useGameStore = create<GameState>()(
 
         // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
         let newCoins = state.coins;
+        let newXp = state.xp;
         const newWorkers = areWorkersPaused ? state.autonomousWorkers : state.autonomousWorkers.map(w => {
           const def = WORKERS[w.type];
           const gear = def.gearTiers[w.gearTier - 1] || def.gearTiers[0];
@@ -3082,7 +3107,11 @@ export const useGameStore = create<GameState>()(
         if (!areWorkersPaused) {
           for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
             const worker = updatedUnifiedWorkers[role];
-            if (!worker || !worker.isHired) continue;
+            const hasLegacyFarmhand = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder');
+            if (!worker || (!worker.isHired && !hasLegacyFarmhand)) continue;
+            if (hasLegacyFarmhand && !worker.isHired) {
+              worker.isHired = true;
+            }
 
             const wOverclock = state.entityOverclocks?.[`worker_${role}`];
             const isWorkerExhausted = Boolean(wOverclock?.isExhausted && wOverclock?.exhaustedUntil && now < wOverclock.exhaustedUntil);
@@ -3093,7 +3122,10 @@ export const useGameStore = create<GameState>()(
             const wMultiplier = isWorkerOverclocked ? wOverclock.speedMultiplier : 1.0;
 
             const cfg = WORKER_REGISTRY[role];
-            const effectiveInterval = workerEffectiveInterval(role, worker.level) / wMultiplier;
+            // Outfit bonus for herder
+            const hasHerderOutfit = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder' && fh.equippedOutfit === 'herders_chaps');
+            const outfitSpeed = hasHerderOutfit ? 0.7 : 1.0;
+            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / wMultiplier;
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -3128,7 +3160,97 @@ export const useGameStore = create<GameState>()(
                 }
 
                 // ---- Dual-Channel Mode Routing ----
-                if (worker.autoSell) {
+                if (role === 'herder') {
+                  // Herder: Auto-feed hungry animals using silo feed & auto-collect animal products!
+                  // 1. Auto-feed pass
+                  let feedAvail = newSilo.feed || 0;
+                  if (feedAvail > 0) {
+                    newAnimals = newAnimals.map(a => {
+                      const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+                      const isAnimalExhausted = Boolean(
+                        (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
+                        (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
+                      );
+                      if (a.fed || a.productReady || a.age === 'elder' || isAnimalExhausted) return a;
+                      const feedNeeded = ANIMALS[a.species].feedPerCycle;
+                      if (feedAvail < feedNeeded) return a;
+                      feedAvail -= feedNeeded;
+                      worker.stats.totalItemsProduced += 1;
+                      return { ...a, fed: true, fedAt: now };
+                    });
+                    newSilo.feed = feedAvail;
+                  }
+
+                  // 2. Auto-collect pass
+                  newAnimals = newAnimals.map(a => {
+                    if (!a.productReady || a.cyclesRemaining <= 0) return a;
+
+                    const breedDef = BREED_REGISTRY[a.breedId];
+                    const speciesDef = ANIMALS[a.species];
+                    const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+                    const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
+                    const prodKey = breedDef ? breedDef.primaryProductKey : speciesDef.product;
+                    const baseAmt = (breedDef ? breedDef.baseYieldAmount : speciesDef.productYield) + bonusYield;
+                    const totalYield = baseAmt * multiplier;
+
+                    if (worker.autoSell) {
+                      const prodDef = PRODUCTS[prodKey as keyof typeof PRODUCTS];
+                      const price = prodDef?.sellPrice || 10;
+                      const earned = price * totalYield;
+                      newCoins += earned;
+                      worker.stats.totalCoinsEarned += earned;
+                    } else {
+                      newBarn[prodKey] = (newBarn[prodKey] || 0) + totalYield;
+                      worker.stats.totalItemsProduced += totalYield;
+                    }
+
+                    // Secondary bonus drops
+                    if (breedDef?.bonusDrop && Math.random() < breedDef.bonusDrop.chance) {
+                      if (breedDef.bonusDrop.itemKey) {
+                        newBarn[breedDef.bonusDrop.itemKey] = (newBarn[breedDef.bonusDrop.itemKey] || 0) + 1;
+                      }
+                      if (breedDef.bonusDrop.directCoins) {
+                        newCoins += breedDef.bonusDrop.directCoins;
+                      }
+                    }
+
+                    // Gem milestones
+                    const totalCompleted = a.cyclesCompletedTotal + 1;
+                    if (breedDef?.gemMilestoneEveryN && totalCompleted % breedDef.gemMilestoneEveryN === 0) {
+                      const gemAmt = a.species === 'pig' ? 2 : 1;
+                      newGems += gemAmt;
+                      worker.stats.totalGemsEarned += gemAmt;
+                    }
+
+                    // Codex discovery
+                    if (!newCodex[a.breedId]) {
+                      newCodex[a.breedId] = true;
+                      if (breedDef) newGems += breedDef.codexGemReward;
+                    }
+
+                    // Tier-based XP
+                    newXp += a.tier === 'legendary' ? 25 : a.tier === 'rare' ? 15 : a.tier === 'uncommon' ? 8 : 5;
+
+                    const newCyclesRemaining = a.cyclesRemaining - 1;
+                    const isElder = newCyclesRemaining <= 0;
+
+                    return {
+                      ...a,
+                      fed: false,
+                      fedAt: null,
+                      productReady: false,
+                      cyclesRemaining: newCyclesRemaining,
+                      cyclesCompletedTotal: totalCompleted,
+                      age: isElder ? 'elder' : a.age,
+                    };
+                  });
+
+                  if (worker.autoSell) {
+                    const payout = workerAutoSellPayout(role, worker.level) * multiplier;
+                    newCoins += payout;
+                    worker.stats.totalCoinsEarned += payout;
+                  }
+                } else if (worker.autoSell) {
                   // AUTO-SELL MODE: Direct coin liquidation
                   const payout = workerAutoSellPayout(role, worker.level);
                   const earned = payout * multiplier;
@@ -3140,11 +3262,22 @@ export const useGameStore = create<GameState>()(
                     // Merchant in hoard mode: sells silo crops at premium, keeps items
                     // Does nothing in hoard mode — items stay in storage for VIP orders
                   } else if (role === 'barn_overseer') {
-                    // Barn Overseer in hoard: auto-fills animal troughs
-                    const feedNeeded = state.animals.filter(a => !a.fed && !a.productReady).length;
-                    if (feedNeeded > 0 && (newSilo.feed || 0) > 0) {
-                      const feedToUse = Math.min(feedNeeded, newSilo.feed);
-                      newSilo.feed = (newSilo.feed || 0) - feedToUse;
+                    // Barn Overseer in hoard: auto-fills animal troughs & feeds hungry livestock
+                    let feedAvail = newSilo.feed || 0;
+                    if (feedAvail > 0) {
+                      newAnimals = newAnimals.map(a => {
+                        const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+                        const isAnimalExhausted = Boolean(
+                          (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
+                          (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
+                        );
+                        if (a.fed || a.productReady || a.age === 'elder' || isAnimalExhausted) return a;
+                        const feedNeeded = ANIMALS[a.species].feedPerCycle;
+                        if (feedAvail < feedNeeded) return a;
+                        feedAvail -= feedNeeded;
+                        return { ...a, fed: true, fedAt: now };
+                      });
+                      newSilo.feed = feedAvail;
                     }
                   } else if (cfg.hoardItem) {
                     // Deposit hoard item to barn or silo
@@ -3695,7 +3828,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // Level up check
-        const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp, state.level);
+        const { xp: finalXp, level: finalLevel } = levelUpCheck(newXp, state.level);
 
         set({
           plots: newPlots,
@@ -5675,7 +5808,16 @@ export const useGameStore = create<GameState>()(
 
         // Migration: add missing state fields
         if (!merged.autonomousWorkers) merged.autonomousWorkers = [];
-        if (!merged.unifiedWorkers) merged.unifiedWorkers = createDefaultUnifiedWorkers();
+        if (!merged.unifiedWorkers) {
+          merged.unifiedWorkers = createDefaultUnifiedWorkers();
+        } else {
+          const defaultWorkers = createDefaultUnifiedWorkers();
+          for (const r of Object.keys(defaultWorkers) as WorkerRole[]) {
+            if (!merged.unifiedWorkers[r]) {
+              merged.unifiedWorkers[r] = defaultWorkers[r];
+            }
+          }
+        }
         if (!merged.activeEvent) merged.activeEvent = null;
         if (!merged.lastEventTriggerTime) merged.lastEventTriggerTime = Date.now();
         if (!merged.notifications) merged.notifications = [];

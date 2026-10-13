@@ -3,7 +3,7 @@
 import { useGameStore } from '@/game/store';
 import { FARMHANDS, OUTFITS, WATER_ZONES, ROD_TIERS, type FarmhandRole, type OutfitId } from '@/game/data';
 
-const ROLE_LIST: FarmhandRole[] = ['lumberjack', 'fisherman', 'farmer', 'artisan'];
+const ROLE_LIST: FarmhandRole[] = ['farmer', 'herder', 'lumberjack', 'fisherman', 'artisan'];
 
 export function FarmhandPanel() {
   const { farmhands, coins, fishery, buyFarmhand, equipOutfit } = useGameStore();
