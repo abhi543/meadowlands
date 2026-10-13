@@ -5,10 +5,23 @@ import { xpForLevel } from '@/game/data';
 
 interface HUDProps {
   onOpenBackupModal?: () => void;
+  onSelectTab?: (tab: 'animals' | 'market') => void;
 }
 
-export function HUD({ onOpenBackupModal }: HUDProps) {
-  const { coins, gems, xp, level, silo, barn, currentEstateAura, bonusStorageCapacity, resetGame } = useGameStore();
+export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
+  const {
+    coins,
+    gems,
+    xp,
+    level,
+    silo,
+    barn,
+    currentEstateAura,
+    bonusStorageCapacity,
+    resetGame,
+    animals = [],
+    livestockReserve = [],
+  } = useGameStore();
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
@@ -72,16 +85,30 @@ export function HUD({ onOpenBackupModal }: HUDProps) {
           </div>
         </div>
 
-        {/* Storage Pills */}
-        <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0">
-          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5">
+        {/* Storage & Animals Pills */}
+        <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0 flex-wrap">
+          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5" title="Silo Storage (Crops & Feed)">
             <span>🌾</span>
             <span className={siloUsed >= siloMax ? 'text-red-300' : ''}>{siloUsed}/{siloMax}</span>
           </div>
-          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5">
+          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5" title="Barn Storage (Products & Items)">
             <span>🏠</span>
             <span className={barnUsed >= barnMax ? 'text-red-300' : ''}>{barnUsed}/{barnMax}</span>
           </div>
+          <button
+            type="button"
+            onClick={() => onSelectTab?.('animals')}
+            className="bg-white/15 hover:bg-white/25 active:scale-95 transition-all backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/15"
+            title="Farm Animals (Tap to open Pastures)"
+          >
+            <span>🐾</span>
+            <span className="font-bold">{animals.length}/16</span>
+            {livestockReserve.length > 0 && (
+              <span className="text-[10px] bg-amber-300 text-stone-950 font-black px-1 rounded-sm shadow-2xs">
+                +{livestockReserve.length}
+              </span>
+            )}
+          </button>
           <button
             onClick={resetGame}
             className="ml-auto text-[10px] bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md transition-colors"

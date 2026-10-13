@@ -67,6 +67,7 @@ function useHydrated() {
 
 export default function Home() {
   const tick = useGameStore(s => s.tick);
+  const animals = useGameStore(s => s.animals || []);
   const [activeTab, setActiveTab] = useState<TabId>('farm');
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
@@ -151,7 +152,7 @@ export default function Home() {
       {/* Header */}
       <header className="sticky top-0 z-50 p-3 pb-0">
         <div className="w-full max-w-[1600px] mx-auto">
-          <HUD onOpenBackupModal={() => setBackupModalOpen(true)} />
+          <HUD onOpenBackupModal={() => setBackupModalOpen(true)} onSelectTab={setActiveTab} />
         </div>
       </header>
 
@@ -170,7 +171,7 @@ export default function Home() {
 
         {/* Tab Content */}
         <div className={activeTab === 'animals' ? 'flex-1 min-h-0' : 'min-h-[400px]'}>
-          {activeTab === 'farm' && <FarmGrid />}
+          {activeTab === 'farm' && <FarmGrid onSelectTab={setActiveTab} />}
           {activeTab === 'animals' && <AnimalsTab />}
           {activeTab === 'production' && <ProductionPanel />}
           {activeTab === 'orders' && <OrderBoard />}
@@ -217,15 +218,22 @@ export default function Home() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-1.5 md:py-2 px-1 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 ${
+                className={`py-1.5 md:py-2 px-1 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 relative ${
                   isActive
                     ? `${tab.bgActive} ${tab.color} shadow-sm`
                     : `text-stone-400 dark:text-gray-500 ${tab.bgInactive}`
                 }`}
               >
-                <span className={`transition-transform duration-200 leading-none ${isActive ? 'text-xl' : 'text-lg'}`}>
-                  {tab.emoji}
-                </span>
+                <div className="relative leading-none">
+                  <span className={`transition-transform duration-200 leading-none ${isActive ? 'text-xl' : 'text-lg'}`}>
+                    {tab.emoji}
+                  </span>
+                  {tab.id === 'animals' && (
+                    <span className="absolute -top-1 -right-2.5 px-1 py-0.2 rounded-full text-[8px] font-black bg-amber-500 text-stone-950 shadow-2xs leading-none border border-white dark:border-stone-800">
+                      {animals.length}
+                    </span>
+                  )}
+                </div>
                 <span className={`text-[9px] md:text-[11px] leading-tight truncate w-full text-center ${isActive ? 'font-bold' : 'font-medium'}`}>
                   {tab.label}
                 </span>

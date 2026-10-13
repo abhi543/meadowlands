@@ -88,8 +88,17 @@ export function AnimalsTab() {
 
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
             <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700/60 font-bold">
-              {animals.length}/16 Animals
+              {animals.length}/16 Pasture
             </span>
+            {livestockReserve.length > 0 && (
+              <button
+                onClick={() => setShowReserveModal(true)}
+                className="px-2 py-0.5 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 font-bold transition-colors cursor-pointer"
+                title="View Livestock Reserve"
+              >
+                📦 {livestockReserve.length} Reserve
+              </button>
+            )}
             <span className="hidden md:inline px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/50 font-semibold">
               🫗 {silo.feed || 0} Feed
             </span>

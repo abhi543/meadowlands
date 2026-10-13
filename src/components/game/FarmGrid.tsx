@@ -8,7 +8,11 @@ import { OverclockActionMenu } from './OverclockActionMenu';
 
 const CROP_LIST = Object.values(CROPS);
 
-export function FarmGrid() {
+interface FarmGridProps {
+  onSelectTab?: (tab: 'animals' | 'market') => void;
+}
+
+export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const {
     plots,
     unlockedPlots,
@@ -31,10 +35,21 @@ export function FarmGrid() {
     resolveCrisisDefense,
     entityOverclocks,
     cureEntityExhaustion,
+    animals = [],
+    livestockReserve = [],
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
 
   const visiblePlots = plots.slice(0, unlockedPlots);
+
+  // Livestock summary stats
+  const chickensCount = animals.filter(a => a.species === 'chicken').length;
+  const cowsCount = animals.filter(a => a.species === 'cow').length;
+  const sheepCount = animals.filter(a => a.species === 'sheep').length;
+  const pigsCount = animals.filter(a => a.species === 'pig').length;
+  const readyCollectCount = animals.filter(a => a.productReady).length;
+  const hungryCount = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder').length;
+  const totalFarmAnimals = animals.length + livestockReserve.length;
 
   // Count ready, empty, and unwatered plots for batch actions
   const readyCount = visiblePlots.filter(p => p.crop && p.ready).length;
@@ -52,6 +67,75 @@ export function FarmGrid() {
     <div className="space-y-3.5">
       {/* Interactive Farm Well HUD */}
       <FarmWell />
+
+      {/* Farm Livestock & Animals Overview Widget */}
+      <div className="bg-gradient-to-r from-amber-50/90 via-stone-50 to-orange-50/80 dark:from-stone-900/90 dark:via-stone-850 dark:to-stone-900/90 rounded-2xl p-3 border border-amber-200/90 dark:border-amber-900/50 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 dark:bg-amber-400/20 border border-amber-300 dark:border-amber-700/80 flex items-center justify-center text-xl shrink-0 shadow-2xs">
+            🐾
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-extrabold text-xs sm:text-sm text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                Farm Animals
+              </h3>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 shadow-2xs">
+                {animals.length}/16 Pastures
+              </span>
+              {livestockReserve.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-stone-200/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 shadow-2xs">
+                  📦 {livestockReserve.length} Reserve
+                </span>
+              )}
+              <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
+                ({totalFarmAnimals} total on farm)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2.5 text-xs text-stone-700 dark:text-stone-300 mt-1 flex-wrap">
+              <span className="inline-flex items-center gap-1 font-medium bg-white/80 dark:bg-stone-800/80 px-1.5 py-0.5 rounded border border-stone-200/60 dark:border-stone-700/60">
+                🐔 <span className="font-bold">{chickensCount}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-medium bg-white/80 dark:bg-stone-800/80 px-1.5 py-0.5 rounded border border-stone-200/60 dark:border-stone-700/60">
+                🐄 <span className="font-bold">{cowsCount}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-medium bg-white/80 dark:bg-stone-800/80 px-1.5 py-0.5 rounded border border-stone-200/60 dark:border-stone-700/60">
+                🐑 <span className="font-bold">{sheepCount}</span>
+              </span>
+              <span className="inline-flex items-center gap-1 font-medium bg-white/80 dark:bg-stone-800/80 px-1.5 py-0.5 rounded border border-stone-200/60 dark:border-stone-700/60">
+                🐷 <span className="font-bold">{pigsCount}</span>
+              </span>
+
+              {readyCollectCount > 0 && (
+                <span className="inline-flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400 bg-amber-100/80 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 animate-pulse text-[11px]">
+                  🧺 {readyCollectCount} ready!
+                </span>
+              )}
+              {hungryCount > 0 && (
+                <span className="inline-flex items-center gap-1 font-semibold text-sky-600 dark:text-sky-400 bg-sky-100/80 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-300 dark:border-sky-800 text-[11px]">
+                  🫗 {hungryCount} hungry
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto sm:ml-0">
+          <button
+            onClick={() => onSelectTab?.('animals')}
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>🐔 Pastures</span>
+            <span>➔</span>
+          </button>
+          <button
+            onClick={() => onSelectTab?.('market')}
+            className="px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-750 active:scale-95 text-stone-700 dark:text-stone-300 font-semibold text-xs border border-stone-200 dark:border-stone-700 transition-all flex items-center gap-1 cursor-pointer"
+          >
+            <span>🐄 Livestock</span>
+          </button>
+        </div>
+      </div>
 
       {/* Crop Selector Toolbar */}
       <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2 border border-amber-200 dark:border-amber-800">

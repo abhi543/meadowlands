@@ -26,15 +26,25 @@ export function LivestockMarketPanel() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          {'🐄'} Livestock Page
-        </h3>
-        {livestockReserve.length > 0 && (
-          <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700 font-bold">
-            📦 {livestockReserve.length} in Reserve
+      <div className="flex items-center justify-between flex-wrap gap-2.5">
+        <div>
+          <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
+            {'🐄'} Livestock Page
+          </h3>
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            Total Farm Animals: <span className="font-bold text-stone-800 dark:text-stone-200">{animals.length + livestockReserve.length}</span> ({animals.length} Active in Pastures, {livestockReserve.length} in Holding Reserve)
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 font-bold font-mono">
+            🐾 {animals.length}/16 Pastures
           </span>
-        )}
+          {livestockReserve.length > 0 && (
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 font-bold font-mono">
+              📦 {livestockReserve.length} Reserve
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Livestock Breeding & Incubator */}
