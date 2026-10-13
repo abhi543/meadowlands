@@ -75,16 +75,25 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
   const parent1 = animals.find(a => a.id === parent1Id && a.species === selectedSpecies);
   const parent2 = animals.find(a => a.id === parent2Id && a.species === selectedSpecies);
 
-  // Available animals of selected species that aren't fed/breeding/elder
-  const availableAnimals = animals.filter(
-    a => a.species === selectedSpecies && !a.fed && !a.productReady && a.age !== 'elder'
+  // Busy parent animal IDs currently in active incubator chambers
+  const busyParentIds = new Set(
+    activeBreedings.flatMap(b => [b.parent1Id, b.parent2Id]).filter(Boolean)
   );
 
-  // Species info & habitat capacity
+  // Available animals of selected species that aren't currently incubating and aren't elders
+  const availableAnimals = animals.filter(
+    a => a.species === selectedSpecies && a.age !== 'elder' && !busyParentIds.has(a.id)
+  );
+
+  // Species info & Sanctuary spaces (4 common, 4 uncommon, 4 rare, 4 legendary = 16 total spaces)
   const speciesDef = ANIMALS[selectedSpecies];
-  const currentCount = animals.filter(a => a.species === selectedSpecies).length;
-  const maxCap = animalCapacity[selectedSpecies] || speciesDef.capacity;
-  const isHabitatFull = currentCount >= maxCap;
+  const commonCount = animals.filter(a => a.tier === 'common').length;
+  const uncommonCount = animals.filter(a => a.tier === 'uncommon').length;
+  const rareCount = animals.filter(a => a.tier === 'rare').length;
+  const legendaryCount = animals.filter(a => a.tier === 'legendary').length;
+  const totalSanctuaryCount = animals.length;
+  const totalOccupiedAndPending = totalSanctuaryCount + activeBreedings.length;
+  const areAllSanctuariesFull = totalOccupiedAndPending >= 16;
 
   // Odds breakdown if both parents are selected
   const oddsBreakdown = parent1 && parent2
@@ -388,15 +397,36 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                 })}
               </div>
 
-              {/* Habitat Capacity Badge */}
-              <div className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium ${
-                isHabitatFull
-                  ? 'bg-red-950/60 border-red-500/40 text-red-300'
-                  : 'bg-stone-900 border-stone-800 text-stone-300'
-              }`}>
-                <span>{speciesDef.habitatEmoji}</span>
-                <span>{speciesDef.habitat}: {currentCount}/{maxCap}</span>
-                {isHabitatFull && <span className="font-bold text-red-400">(FULL)</span>}
+              {/* Sanctuary Capacity Overview */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium ${
+                  areAllSanctuariesFull
+                    ? 'bg-red-950/60 border-red-500/40 text-red-300'
+                    : 'bg-stone-900 border-stone-800 text-stone-300'
+                }`}>
+                  <span>🐾</span>
+                  <span>Sanctuary Spaces: <strong className="text-white">{totalSanctuaryCount}/16</strong></span>
+                  {areAllSanctuariesFull ? (
+                    <span className="font-bold text-red-400">(ALL FULL)</span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold">({16 - totalSanctuaryCount} open)</span>
+                  )}
+                </div>
+
+                <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono">
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 font-semibold">
+                    🟢 Common {commonCount}/4
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-sky-950/60 text-sky-300 border border-sky-800/60 font-semibold">
+                    🔵 Uncommon {uncommonCount}/4
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-purple-950/60 text-purple-300 border border-purple-800/60 font-semibold">
+                    🟣 Rare {rareCount}/4
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60 font-semibold">
+                    🟡 Legendary {legendaryCount}/4
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -617,16 +647,22 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                   {/* Start Breeding Button */}
                   <button
                     onClick={handleStartBreeding}
-                    disabled={activeBreedings.length >= breedingSlots || isHabitatFull}
+                    disabled={activeBreedings.length >= breedingSlots || areAllSanctuariesFull}
                     className="w-full py-3 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-sm rounded-xl shadow-lg shadow-violet-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
                     <span>🥚</span>
                     <span>Start Incubation ({activeBreedings.length}/{breedingSlots} slots)</span>
                   </button>
 
-                  {isHabitatFull && (
+                  {commonCount >= 4 && !areAllSanctuariesFull && (
+                    <div className="text-center text-xs text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded-lg py-1 px-2 font-medium">
+                      ✨ Common Pasture is full (4/4)! Breeding will automatically promote offspring into open Uncommon, Rare, and Legendary sanctuaries!
+                    </div>
+                  )}
+
+                  {areAllSanctuariesFull && (
                     <div className="text-center text-xs text-red-400 font-medium">
-                      ⚠️ Cannot start breeding: {speciesDef.habitat} is currently full ({maxCap}/{maxCap}).
+                      ⚠️ All 16 spaces across Common, Uncommon, Rare, and Legendary are full or reserved by incubating eggs ({totalOccupiedAndPending}/16). Sell elder animals to breed new ones.
                     </div>
                   )}
                   {activeBreedings.length >= breedingSlots && (

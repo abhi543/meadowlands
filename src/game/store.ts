@@ -854,7 +854,7 @@ export const useGameStore = create<GameState>()(
       unlockedPlots: GRID_SIZE,
 
       animals: initialAnimals,
-      animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
+      animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
 
       productionQueues: {
         feed_mill: [],
@@ -1456,9 +1456,11 @@ export const useGameStore = create<GameState>()(
 
       buyAnimal: (species, tier = 'common' as Tier) => {
         const state = get();
-        const def = ANIMALS[species];
-        const currentCount = state.animals.filter(a => a.species === species).length;
-        if (currentCount >= (state.animalCapacity[species] || def.capacity)) return;
+        const tierCount = state.animals.filter(a => a.tier === tier).length;
+        if (tierCount >= 4 || state.animals.length >= 16) {
+          state.addNotification(`The ${TIER_LABELS[tier]} sector is at full capacity (4/4)! Breed to fill higher tiers.`, '⚠️', 'info');
+          return;
+        }
         const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
         const tierMult: Record<Tier, number> = { common: 1, uncommon: 1.5, rare: 2.5, legendary: 5 };
         const cost = Math.floor(costs[species] * tierMult[tier]);
@@ -2298,16 +2300,61 @@ export const useGameStore = create<GameState>()(
         if (parent1.species !== parent2.species) return false;
         if (state.activeBreedings.length >= state.breedingSlots) return false;
 
+        // Check if all 16 sanctuary spaces are already filled or occupied by incubating eggs
+        const totalAnimals = state.animals.length;
+        const totalPending = state.activeBreedings.length;
+        if (totalAnimals + totalPending >= 16) {
+          playDefeatSound();
+          state.addNotification('All 16 sanctuary spaces (Common, Uncommon, Rare, Legendary) are full or reserved by incubating eggs!', '⚠️', 'info');
+          return false;
+        }
+
         // Roll tier based on parent tiers using probability engine
-        const offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
+        let offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
 
         // 5% Mutation Chance for rare apex mutant tier variant
         const isMutantRoll = Math.random() < 0.05;
         const mutantDef = isMutantRoll ? MUTATION_VARIANTS[parent1.species] : null;
 
-        const finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
+        let finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
+
+        // Check per-tier capacities: each tier (common, uncommon, rare, legendary) has 4 slots (16 total).
+        // If the rolled tier is already full (current animals in tier + pending incubating eggs in tier >= 4),
+        // auto-promote to the next tier with open space so the player can keep breeding until ALL 16 spaces are filled!
+        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+        const getTierOccupancy = (t: Tier) => {
+          const countInSanctuary = state.animals.filter(a => a.tier === t).length;
+          const pendingInIncubator = state.activeBreedings.filter(b => b.offspringTier === t).length;
+          return countInSanctuary + pendingInIncubator;
+        };
+
+        if (getTierOccupancy(finalTier) >= 4) {
+          // Find next tier in order with space (< 4)
+          let promotedTier: Tier | null = null;
+          const startIdx = tierOrder.indexOf(finalTier);
+          for (let i = startIdx + 1; i < tierOrder.length; i++) {
+            if (getTierOccupancy(tierOrder[i]) < 4) {
+              promotedTier = tierOrder[i];
+              break;
+            }
+          }
+          // If no higher tier is open, check any other open tier
+          if (!promotedTier) {
+            for (let i = 0; i < tierOrder.length; i++) {
+              if (getTierOccupancy(tierOrder[i]) < 4) {
+                promotedTier = tierOrder[i];
+                break;
+              }
+            }
+          }
+          if (promotedTier) {
+            finalTier = promotedTier;
+            offspringTier = promotedTier;
+          }
+        }
+
         const offspringBreedId = mutantDef ? mutantDef.id : `${parent1.species}_${finalTier}`;
-        const durationSec = INCUBATION_TIMES[offspringTier] || 120;
+        const durationSec = INCUBATION_TIMES[finalTier] || 120;
         const durationMs = durationSec * 1000;
 
         const breeding: ActiveBreeding = {
@@ -2380,17 +2427,28 @@ export const useGameStore = create<GameState>()(
         const elapsed = Date.now() - breeding.startedAt;
         if (elapsed < breeding.durationMs) return null;
 
-        // Check animal capacity
-        const currentCount = state.animals.filter(a => a.species === breeding.species).length;
-        const cap = state.animalCapacity[breeding.species] || ANIMALS[breeding.species]?.capacity || 6;
-        if (currentCount >= cap) {
+        // Check total animal sanctuary capacity (16 slots across all 4 tiers)
+        if (state.animals.length >= 16) {
           playDefeatSound();
           state.addNotification(
-            `Cannot hatch egg! Your ${ANIMALS[breeding.species]?.habitat || 'habitat'} is at maximum capacity (${cap}). Upgrade habitat first!`,
+            'Cannot hatch egg! All 16 animal sanctuary spaces across Common, Uncommon, Rare, and Legendary are full (16/16).',
             '⚠️',
             'info'
           );
           return null;
+        }
+
+        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+        let offspringTier: Tier = breeding.offspringTier || 'common';
+
+        // Check if the target tier is already at 4/4 capacity
+        const currentTierCount = state.animals.filter(a => a.tier === offspringTier).length;
+        if (currentTierCount >= 4) {
+          // Promote to the next available tier that has an open slot (< 4)
+          const openTier = tierOrder.find(t => state.animals.filter(a => a.tier === t).length < 4);
+          if (openTier) {
+            offspringTier = openTier;
+          }
         }
 
         const parent1 = state.animals.find(a => a.id === breeding.parent1Id);
@@ -2399,15 +2457,15 @@ export const useGameStore = create<GameState>()(
         const parent1BreedName = parent1 ? (BREED_REGISTRY[parent1.breedId]?.name || TIER_LABELS[parent1.tier]) : 'Parent 1';
         const parent2BreedName = parent2 ? (BREED_REGISTRY[parent2.breedId]?.name || TIER_LABELS[parent2.tier]) : 'Parent 2';
 
-        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
         const p1TierIdx = parent1 ? tierOrder.indexOf(parent1.tier) : 0;
         const p2TierIdx = parent2 ? tierOrder.indexOf(parent2.tier) : 0;
         const maxParentTierIdx = Math.max(p1TierIdx, p2TierIdx);
-        const offspringTier: Tier = breeding.offspringTier || 'common';
         const offspringTierIdx = tierOrder.indexOf(offspringTier);
         const wasMutationUp = offspringTierIdx > maxParentTierIdx;
 
-        const breedId = breeding.offspringBreedId || `${breeding.species}_${offspringTier}`;
+        const breedId = breeding.isMutated && breeding.offspringBreedId
+          ? breeding.offspringBreedId
+          : `${breeding.species}_${offspringTier}`;
         const breedDef = BREED_REGISTRY[breedId];
         const breedName = breedDef?.name || TIER_LABELS[offspringTier];
         const maxCycles = breeding.isMutated ? 25 : (breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier));
@@ -2468,9 +2526,15 @@ export const useGameStore = create<GameState>()(
           wasMutationUp,
         };
 
+        const updatedCapacity = {
+          ...state.animalCapacity,
+          [breeding.species]: Math.max(state.animalCapacity[breeding.species] || 16, 16),
+        };
+
         set({
           animals: [...updatedAnimals, newAnimal],
           activeBreedings: updatedBreedings,
+          animalCapacity: updatedCapacity,
           codex: updatedCodex,
           gems: state.gems + gemReward,
           hatchReveal: revealData,
@@ -5398,7 +5462,7 @@ export const useGameStore = create<GameState>()(
           barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
           plots: initialPlots, unlockedPlots: GRID_SIZE,
           animals: initialAnimals,
-          animalCapacity: { chicken: 6, cow: 4, sheep: 4, pig: 4 },
+          animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
