@@ -27,10 +27,10 @@ const SECTOR_EMOJIS: Record<AnimalTier, string> = {
 };
 
 const TIER_BORDER_STYLES: Record<AnimalTier, string> = {
-  common: 'border-emerald-600/30 shadow-emerald-950/20',
-  uncommon: 'border-sky-600/30 shadow-sky-950/20',
-  rare: 'border-purple-600/30 shadow-purple-950/20',
-  legendary: 'border-amber-600/30 shadow-amber-950/20 ring-1 ring-amber-400/20',
+  common: 'border-emerald-300 dark:border-emerald-500/40 shadow-sm shadow-emerald-500/10',
+  uncommon: 'border-sky-300 dark:border-sky-500/40 shadow-sm shadow-sky-500/10',
+  rare: 'border-purple-300 dark:border-purple-500/40 shadow-sm shadow-purple-500/10',
+  legendary: 'border-amber-300 dark:border-amber-500/50 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/30',
 };
 
 export function AnimalsTab() {
@@ -74,23 +74,23 @@ export function AnimalsTab() {
   const commonAnimalsCount = animals.filter(a => a.tier === 'common').length;
 
   return (
-    <div className="w-full h-[calc(100vh-140px)] flex flex-col p-3 box-border overflow-hidden select-none">
+    <div className="w-full h-[calc(100vh-140px)] flex flex-col p-2 sm:p-3 box-border overflow-hidden select-none">
       
       {/* COMPACT TOP DASHBOARD CONTROL STRIP (Zero Scroll, fixed height ~38px) */}
-      <div className="h-10 shrink-0 flex items-center justify-between gap-2 px-2.5 py-1 mb-2.5 rounded-xl bg-stone-900/90 border border-stone-800/80 shadow-md backdrop-blur-md">
+      <div className="h-10 shrink-0 flex items-center justify-between gap-2 px-3 py-1 mb-2.5 rounded-2xl bg-white/95 dark:bg-stone-900/95 border border-stone-200/90 dark:border-stone-800 shadow-sm backdrop-blur-md">
         
         {/* Left: Summary Title & Live Counters */}
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex items-center gap-1.5 font-black text-xs text-white tracking-wide shrink-0">
-            <span className="text-sm">🐾</span>
-            <span className="hidden sm:inline">Livestock Sanctuaries</span>
+          <div className="flex items-center gap-1.5 font-black text-xs text-stone-800 dark:text-stone-100 tracking-wide shrink-0">
+            <span className="text-base">🐾</span>
+            <span className="hidden sm:inline">Livestock Pastures</span>
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
-            <span className="px-2 py-0.5 rounded-md bg-stone-800 text-stone-300 border border-stone-700/60 font-semibold">
+            <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700/60 font-bold">
               {animals.length}/16 Animals
             </span>
-            <span className="hidden md:inline px-2 py-0.5 rounded-md bg-stone-800/80 text-blue-300 border border-stone-700/50">
+            <span className="hidden md:inline px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/50 font-semibold">
               🫗 {silo.feed || 0} Feed
             </span>
           </div>
@@ -101,16 +101,16 @@ export function AnimalsTab() {
           <button
             onClick={() => collectAllProducts()}
             disabled={collectibleAnimals.length === 0}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm ${
+            className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs ${
               collectibleAnimals.length > 0
-                ? 'bg-yellow-500 hover:bg-yellow-400 text-stone-950 shadow-yellow-500/20 active:scale-95'
-                : 'bg-stone-800 text-stone-500 border border-stone-700/50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 text-stone-950 font-black shadow-amber-300/40 active:scale-95'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border border-stone-200 dark:border-stone-700/50 cursor-not-allowed'
             }`}
           >
             <span>🧺</span>
             <span>Collect All</span>
             {collectibleAnimals.length > 0 && (
-              <span className="bg-stone-950/20 px-1 rounded text-[10px] font-black">
+              <span className="bg-stone-900/10 dark:bg-stone-950/20 px-1 rounded text-[10px] font-black">
                 {collectibleAnimals.length}
               </span>
             )}
@@ -119,10 +119,10 @@ export function AnimalsTab() {
           <button
             onClick={() => feedAllAnimals()}
             disabled={canFeedCount === 0}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-sm ${
+            className={`px-3 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs ${
               canFeedCount > 0
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 active:scale-95'
-                : 'bg-stone-800 text-stone-500 border border-stone-700/50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white font-bold shadow-blue-300/40 active:scale-95'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border border-stone-200 dark:border-stone-700/50 cursor-not-allowed'
             }`}
           >
             <span>🫗</span>
@@ -140,8 +140,8 @@ export function AnimalsTab() {
           <button
             onClick={() => setShowAdoptModal(true)}
             disabled={commonAnimalsCount >= 4}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 transition-all flex items-center gap-1 disabled:opacity-40"
-            title="Adopt starter livestock into Common Paddock"
+            className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 text-white shadow-xs shadow-emerald-200 dark:shadow-none transition-all flex items-center gap-1 active:scale-95"
+            title="Adopt starter livestock into Common Pasture"
           >
             <span>➕</span>
             <span className="hidden sm:inline">Adopt</span>
@@ -149,20 +149,20 @@ export function AnimalsTab() {
 
           <button
             onClick={() => setShowBreedingModal(true)}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 shadow-md ${
+            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs ${
               readyEggsCount > 0
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-stone-950 font-black animate-pulse shadow-amber-500/30'
-                : 'bg-violet-600 hover:bg-violet-500 text-white border border-violet-400/40'
+                ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-stone-950 font-black animate-pulse shadow-amber-300/50'
+                : 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-violet-200 dark:shadow-none'
             }`}
           >
             <span>🧬</span>
             <span>Incubator</span>
             {readyEggsCount > 0 ? (
-              <span className="bg-amber-950 text-amber-200 px-1 rounded text-[10px] font-black">
+              <span className="bg-amber-900 text-amber-100 px-1 rounded text-[10px] font-black">
                 {readyEggsCount} Ready!
               </span>
             ) : activeBreedings.length > 0 ? (
-              <span className="bg-violet-950/60 px-1 rounded text-[10px] font-semibold">
+              <span className="bg-white/20 px-1 rounded text-[10px] font-semibold">
                 {activeBreedings.length}/{breedingSlots}
               </span>
             ) : null}
@@ -182,17 +182,17 @@ export function AnimalsTab() {
           return (
             <div
               key={tier}
-              className={`rounded-xl border-2 ${config.borderColor} ${TIER_BORDER_STYLES[tier]} bg-gradient-to-b ${config.bgGradient} p-2 flex flex-col h-full min-h-0 overflow-hidden shadow-lg`}
+              className={`rounded-2xl border-2 ${config.borderColor} ${TIER_BORDER_STYLES[tier]} bg-gradient-to-b ${config.bgGradient} p-2.5 sm:p-3 flex flex-col h-full min-h-0 overflow-hidden shadow-sm backdrop-blur-xs`}
             >
               
               {/* Sector Header (Compact, 1 Line, no overflow) */}
-              <div className="flex items-center justify-between gap-1.5 pb-1 mb-1 border-b border-stone-800/80 shrink-0">
+              <div className="flex items-center justify-between gap-1.5 pb-1.5 mb-1.5 border-b border-stone-200/80 dark:border-stone-700/60 shrink-0">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-sm shrink-0">{SECTOR_EMOJIS[tier]}</span>
+                  <span className="text-base shrink-0">{SECTOR_EMOJIS[tier]}</span>
                   <h3 className={`font-black text-xs sm:text-sm tracking-wide truncate ${config.textColor}`}>
                     {config.title}
                   </h3>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-stone-900/90 text-stone-300 border border-stone-700/60 font-bold shrink-0">
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/90 dark:bg-stone-900/90 text-stone-700 dark:text-stone-300 border border-stone-200/90 dark:border-stone-700/60 font-bold shrink-0 shadow-2xs">
                     {sectorAnimals.length}/{maxCapacity}
                   </span>
                 </div>
@@ -200,7 +200,7 @@ export function AnimalsTab() {
                 {/* Passive Perk Badge */}
                 <div className="shrink-0">
                   <span
-                    className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border truncate inline-block max-w-[170px] ${config.badgeColor}`}
+                    className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border truncate inline-block max-w-[170px] shadow-2xs ${config.badgeColor}`}
                     title={config.passivePerk}
                   >
                     {config.passivePerk}
@@ -236,18 +236,18 @@ export function AnimalsTab() {
                   return (
                     <div
                       key={animal.id}
-                      className={`rounded-lg border p-1.5 flex flex-col justify-between min-h-0 text-center relative overflow-hidden transition-all ${
+                      className={`rounded-xl border p-2 flex flex-col justify-between min-h-0 text-center relative overflow-hidden transition-all shadow-xs hover:shadow-sm ${
                         isMutated
-                          ? 'border-fuchsia-400/80 bg-fuchsia-950/40 shadow-sm'
+                          ? 'border-fuchsia-400 bg-gradient-to-br from-fuchsia-50/90 to-pink-50/70 dark:from-fuchsia-950/40 dark:to-pink-950/20 shadow-fuchsia-200/50 ring-1 ring-fuchsia-300 dark:ring-fuchsia-500/40'
                           : isOverclocked
-                          ? 'border-amber-400 bg-amber-950/40 animate-pulse'
+                          ? 'border-amber-400 bg-gradient-to-br from-amber-50/90 to-yellow-50/70 dark:from-amber-950/40 dark:to-yellow-950/20 animate-pulse ring-1 ring-amber-300'
                           : isExhausted
-                          ? 'border-stone-700 bg-stone-900/90 opacity-75'
+                          ? 'border-stone-300 dark:border-stone-700 bg-stone-100/90 dark:bg-stone-900/90 opacity-75'
                           : canCollect
-                          ? 'border-yellow-400/90 bg-yellow-950/30 shadow-sm'
+                          ? 'border-amber-400 bg-gradient-to-b from-amber-50 to-yellow-100/90 dark:from-yellow-950/40 dark:to-amber-950/20 shadow-md shadow-amber-200/50 dark:shadow-none ring-1.5 ring-amber-400/80 animate-pulse'
                           : animal.fed && !animal.productReady
-                          ? 'border-blue-500/50 bg-blue-950/20'
-                          : 'border-stone-800 bg-stone-900/80'
+                          ? 'border-sky-300 dark:border-sky-500/40 bg-sky-50/80 dark:bg-sky-950/30'
+                          : 'border-stone-200/90 dark:border-stone-800 bg-white/95 dark:bg-stone-900/90 shadow-2xs hover:border-stone-300'
                       }`}
                     >
                       {/* Top Row: Emoji + Breed Name + Cycles */}
@@ -255,19 +255,19 @@ export function AnimalsTab() {
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-base shrink-0 leading-none">{def.emoji}</span>
                           <span
-                            className="text-[11px] font-bold text-white truncate text-left flex-1"
+                            className="text-[11px] font-bold text-stone-800 dark:text-stone-100 truncate text-left flex-1"
                             title={breedName}
                           >
                             {breedName}
                           </span>
-                          <span className="text-[9px] font-mono text-stone-400 shrink-0">
+                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-bold border border-stone-200/60 dark:border-stone-700/60 shrink-0">
                             {animal.cyclesRemaining}c
                           </span>
                         </div>
 
                         {/* Mutated / Apex Banner */}
                         {isMutated && (
-                          <div className="text-[8px] font-black text-fuchsia-300 bg-fuchsia-950/80 px-1 py-0.2 rounded border border-fuchsia-500/40 truncate text-left mt-0.5">
+                          <div className="text-[8px] font-black text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-100 dark:bg-fuchsia-950/80 px-1 py-0.2 rounded border border-fuchsia-300 dark:border-fuchsia-500/40 truncate text-left mt-0.5">
                             🧬 Apex (+50%)
                           </div>
                         )}
@@ -278,36 +278,36 @@ export function AnimalsTab() {
                         {canCollect ? (
                           <button
                             onClick={() => collectProduct(animal.id)}
-                            className="w-full py-1 bg-yellow-400 hover:bg-yellow-300 text-stone-950 font-black text-[11px] rounded transition-transform active:scale-95 shadow"
+                            className="w-full py-1 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 text-stone-950 font-black text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-amber-300/40"
                           >
                             {def.productEmoji} Collect
                           </button>
                         ) : canFeed && animal.age !== 'elder' && !isExhausted ? (
                           <button
                             onClick={() => feedAnimal(animal.id)}
-                            className="w-full py-1 bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] rounded transition-transform active:scale-95"
+                            className="w-full py-1 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white font-bold text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-blue-200 dark:shadow-none"
                           >
                             🫗 Feed
                           </button>
                         ) : animal.fed && !animal.productReady ? (
                           <div className="space-y-0.5">
-                            <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden border border-stone-700/60">
+                            <div className="w-full h-1.5 bg-sky-100 dark:bg-sky-950 rounded-full overflow-hidden border border-sky-200 dark:border-sky-800/60">
                               <div
-                                className="h-full bg-blue-400 rounded-full transition-all duration-300"
+                                className="h-full bg-gradient-to-r from-sky-400 to-blue-500 rounded-full transition-all duration-300"
                                 style={{ width: `${prodProgress * 100}%` }}
                               />
                             </div>
-                            <div className="text-[9px] text-blue-300 font-mono">Producing...</div>
+                            <div className="text-[9px] text-sky-700 dark:text-sky-300 font-mono font-medium">Producing...</div>
                           </div>
                         ) : animal.age === 'elder' ? (
-                          <div className="text-[9px] text-amber-400 font-semibold italic">Market Ready</div>
+                          <div className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">Market Ready</div>
                         ) : (
-                          <div className="text-[9px] text-stone-400 font-medium">Needs Feed 🫗</div>
+                          <div className="text-[9px] text-stone-500 dark:text-stone-400 font-medium">Needs Feed 🫗</div>
                         )}
                       </div>
 
                       {/* Bottom Row: Micro Overclock Menu & Status */}
-                      <div className="pt-0.5 border-t border-stone-800/60 flex items-center justify-between text-[9px] text-stone-400 min-h-0">
+                      <div className="pt-0.5 border-t border-stone-100 dark:border-stone-800/80 flex items-center justify-between text-[9px] text-stone-500 dark:text-stone-400 min-h-0">
                         <span className="truncate">
                           {breedDef?.bonusDrop ? '⭐ +proc' : `${def.productYield}x ${def.product}`}
                         </span>
@@ -332,24 +332,24 @@ export function AnimalsTab() {
                 {Array.from({ length: emptyCount }).map((_, slotIdx) => (
                   <div
                     key={`empty-slot-${tier}-${slotIdx}`}
-                    className="rounded-lg border border-dashed border-stone-800/80 bg-stone-950/40 p-1.5 flex flex-col items-center justify-center text-center space-y-1 min-h-0"
+                    className="rounded-xl border-2 border-dashed border-stone-200/90 dark:border-stone-800/80 bg-white/60 dark:bg-stone-950/30 p-2 flex flex-col items-center justify-center text-center space-y-1 min-h-0 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:bg-white/80 dark:hover:bg-stone-900/60 transition-all"
                   >
-                    <span className="text-sm opacity-50">{SECTOR_EMOJIS[tier]}</span>
-                    <div className="text-[10px] font-bold text-stone-400">
+                    <span className="text-sm opacity-60">{SECTOR_EMOJIS[tier]}</span>
+                    <div className="text-[10px] font-bold text-stone-500 dark:text-stone-400">
                       Slot Available
                     </div>
 
                     {tier === 'common' ? (
                       <button
                         onClick={() => setShowAdoptModal(true)}
-                        className="px-2 py-0.5 text-[9px] font-bold rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 transition-all active:scale-95"
+                        className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs shadow-emerald-200 dark:shadow-none transition-all active:scale-95"
                       >
                         + Adopt
                       </button>
                     ) : (
                       <button
                         onClick={() => setShowBreedingModal(true)}
-                        className="px-2 py-0.5 text-[9px] font-bold rounded bg-violet-950/80 hover:bg-violet-900 text-violet-300 border border-violet-500/40 transition-all active:scale-95"
+                        className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-violet-600 hover:bg-violet-500 text-white shadow-2xs shadow-violet-200 dark:shadow-none transition-all active:scale-95"
                       >
                         + Incubate
                       </button>
@@ -366,23 +366,23 @@ export function AnimalsTab() {
 
       {/* QUICK ADOPT MODAL (Modal overlay, does not alter desktop viewport) */}
       {showAdoptModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-stone-900 border-2 border-emerald-500/50 rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-stone-900 border-2 border-emerald-400 dark:border-emerald-500/50 rounded-2xl p-5 w-full max-w-md shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🟢</span>
-                <h3 className="font-bold text-sm text-white">Adopt Starter Livestock</h3>
+                <h3 className="font-bold text-sm text-stone-900 dark:text-white">Adopt Starter Livestock</h3>
               </div>
               <button
                 onClick={() => setShowAdoptModal(false)}
-                className="w-7 h-7 rounded-full bg-stone-800 text-stone-400 hover:text-white flex items-center justify-center text-xs"
+                className="w-7 h-7 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center text-xs transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-xs text-stone-300">
-              Select livestock to place directly into an available Common Paddock slot ({commonAnimalsCount}/4):
+            <p className="text-xs text-stone-600 dark:text-stone-300">
+              Select livestock to place directly into an available Common Pasture slot ({commonAnimalsCount}/4):
             </p>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -401,19 +401,19 @@ export function AnimalsTab() {
                       }
                     }}
                     disabled={!canBuy}
-                    className="p-3 rounded-xl bg-stone-950 hover:bg-stone-800 disabled:opacity-40 text-stone-200 border border-stone-800 hover:border-emerald-500/60 flex flex-col items-center justify-center transition-all text-center space-y-1 shadow"
+                    className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-40 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 hover:border-emerald-400 flex flex-col items-center justify-center transition-all text-center space-y-1 shadow-xs"
                   >
                     <span className="text-2xl">{def.emoji}</span>
-                    <span className="text-xs font-bold capitalize text-white">{def.name}</span>
-                    <span className="text-xs font-mono font-bold text-amber-400">🪙 {cost}</span>
+                    <span className="text-xs font-bold capitalize text-stone-900 dark:text-white">{def.name}</span>
+                    <span className="text-xs font-mono font-bold text-amber-600 dark:text-amber-400">🪙 {cost}</span>
                   </button>
                 );
               })}
             </div>
 
             {commonAnimalsCount >= 4 && (
-              <div className="text-center text-xs text-amber-400 font-medium">
-                Common Paddock is at full capacity (4/4 slots).
+              <div className="text-center text-xs text-amber-600 dark:text-amber-400 font-medium">
+                Common Pasture is at full capacity (4/4 slots).
               </div>
             )}
           </div>
