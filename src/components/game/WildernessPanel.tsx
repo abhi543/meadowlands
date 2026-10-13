@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useGameStore } from '@/game/store';
 import { RogueliteExpeditionMap } from './RogueliteExpeditionMap';
+import { WildExpedition3D } from './WildExpedition3D';
 import {
   ANIMALS, BIOMES, LURES, TIER_COLORS, TIER_LABELS,
   type BiomeId, type LureTypeId, type Tier,
@@ -17,14 +18,42 @@ export function WildernessPanel() {
     wilderness, launchExpedition, resolveExpeditionChoice,
   } = useGameStore();
 
+  const [viewMode, setViewMode] = useState<'3d' | 'classic'>('3d');
+
   const activeExpeditions = wilderness.activeExpeditions;
   const busyFarmhandIds = new Set(activeExpeditions.map(e => e.farmhandId));
   const idleFarmhands = farmhands.filter(fh => !busyFarmhandIds.has(fh.id));
 
   return (
     <div className="space-y-4">
-      {/* Step 2: Roguelite Wild Expeditions (Push-Your-Luck Exploration) */}
-      <RogueliteExpeditionMap />
+      {/* View Switcher Pill Bar */}
+      <div className="flex items-center justify-between bg-stone-900/90 p-1.5 rounded-2xl border border-stone-800">
+        <button
+          onClick={() => setViewMode('3d')}
+          className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            viewMode === '3d'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-stone-950 shadow-md shadow-emerald-500/20'
+              : 'text-stone-400 hover:text-stone-200'
+          }`}
+        >
+          <span>🎮</span>
+          <span>3D Low-Poly Explorer</span>
+        </button>
+        <button
+          onClick={() => setViewMode('classic')}
+          className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            viewMode === 'classic'
+              ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-stone-950 shadow-md shadow-emerald-500/20'
+              : 'text-stone-400 hover:text-stone-200'
+          }`}
+        >
+          <span>🗺️</span>
+          <span>Tactical Route Map</span>
+        </button>
+      </div>
+
+      {/* 3D Expedition Explorer or Classic Tactical Map */}
+      {viewMode === '3d' ? <WildExpedition3D /> : <RogueliteExpeditionMap />}
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-800 to-teal-700 dark:from-emerald-900 dark:to-teal-900 rounded-xl p-4 text-white">
         <div className="flex items-center gap-3">

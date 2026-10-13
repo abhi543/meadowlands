@@ -41,7 +41,7 @@ export function OverclockActionMenu({
     overclockEntity,
     cureEntityExhaustion,
     freeOverclocks,
-    useInstantOverclock,
+    consumeInstantOverclock,
   } = useGameStore();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -224,7 +224,7 @@ export function OverclockActionMenu({
               <button
                 type="button"
                 onClick={() => {
-                  const success = useInstantOverclock(entityId, entityType);
+                  const success = consumeInstantOverclock(entityId, entityType);
                   if (success) {
                     setIsOpen(false);
                     onOverclockActivated?.(3);

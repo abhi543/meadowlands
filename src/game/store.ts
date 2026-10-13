@@ -557,6 +557,7 @@ export interface GameState {
   dismissSystemicEvent: () => void;
   claimCountyFairTrophy: () => boolean;
   useGlowingSpore: (buildingId: BuildingId, slotIndex: number) => boolean;
+  applyGlowingSpore: (buildingId: BuildingId, slotIndex: number) => boolean;
   clearSurpriseEventAlert: () => void;
 
   // High-Stakes Sudden Event Engine Actions
@@ -606,7 +607,9 @@ export interface GameState {
   // Town Favor Shop & VIP Utilities
   purchaseFavorItem: (itemId: string) => boolean;
   useOrderReroll: () => boolean;
+  consumeOrderReroll: () => boolean;
   useInstantOverclock: (entityId: string, entityType: OverclockEntityType) => boolean;
+  consumeInstantOverclock: (entityId: string, entityType: OverclockEntityType) => boolean;
 
   tick: () => void;
   resetGame: () => void;
@@ -4039,6 +4042,10 @@ export const useGameStore = create<GameState>()(
       },
 
       useGlowingSpore: (buildingId, slotIndex) => {
+        return get().applyGlowingSpore(buildingId, slotIndex);
+      },
+
+      applyGlowingSpore: (buildingId, slotIndex) => {
         const state = get();
         if (state.relics.glowingSpores <= 0) return false;
         const queue = state.productionQueues[buildingId] || [];
@@ -5178,11 +5185,19 @@ export const useGameStore = create<GameState>()(
       },
 
       useOrderReroll: () => {
+        return get().consumeOrderReroll();
+      },
+
+      consumeOrderReroll: () => {
         const state = get();
         return state.purchaseFavorItem('favor_order_reroll');
       },
 
       useInstantOverclock: (entityId, entityType) => {
+        return get().consumeInstantOverclock(entityId, entityType);
+      },
+
+      consumeInstantOverclock: (entityId, entityType) => {
         const state = get();
         if ((state.freeOverclocks || 0) <= 0) {
           state.addNotification('No Instant Overclock Vouchers remaining! Purchase from the Favor Shop.', '⚡', 'info');

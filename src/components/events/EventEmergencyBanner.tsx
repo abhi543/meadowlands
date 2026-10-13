@@ -21,7 +21,9 @@ export function EventEmergencyBanner() {
 
   useEffect(() => {
     if (suddenEventFlash) {
-      setIsShaking(true);
+      const startTimer = setTimeout(() => {
+        setIsShaking(true);
+      }, 0);
       const shakeTimer = setTimeout(() => {
         setIsShaking(false);
       }, 500);
@@ -31,6 +33,7 @@ export function EventEmergencyBanner() {
       }, 1500);
 
       return () => {
+        clearTimeout(startTimer);
         clearTimeout(shakeTimer);
         clearTimeout(flashTimer);
       };

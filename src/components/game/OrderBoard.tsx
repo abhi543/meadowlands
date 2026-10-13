@@ -64,7 +64,7 @@ export function OrderBoard() {
     freeOverclocks,
     bonusStorageCapacity,
     purchaseFavorItem,
-    useOrderReroll,
+    consumeOrderReroll,
     fulfillDeliveryOrder,
     trashOrder,
     level,
@@ -251,7 +251,7 @@ export function OrderBoard() {
               <span>🏛️ VIP Shop</span>
             </button>
             <button
-              onClick={() => useOrderReroll()}
+              onClick={() => consumeOrderReroll()}
               disabled={(globalReputation?.spendableFavor || 0) < 15}
               className="px-2 py-1 rounded-lg text-[10px] font-black bg-stone-800 hover:bg-stone-700 disabled:opacity-40 text-stone-300 border border-stone-700 transition-all flex items-center gap-1"
               title="Reroll all contracts for 15 Favor"

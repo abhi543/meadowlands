@@ -107,8 +107,11 @@ export default function Home() {
   // When an autonomous surprise event triggers, dramatically pop open the event hub!
   useEffect(() => {
     if (surpriseEventAlert) {
-      setEventModalOpen(true);
-      clearSurpriseEventAlert();
+      const timer = setTimeout(() => {
+        setEventModalOpen(true);
+        clearSurpriseEventAlert();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [surpriseEventAlert, clearSurpriseEventAlert]);
 

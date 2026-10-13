@@ -13,7 +13,7 @@ export function RelicMonumentsPanel({ isOpen, onClose }: RelicMonumentsPanelProp
   const {
     relics,
     claimCountyFairTrophy,
-    useGlowingSpore,
+    applyGlowingSpore,
   } = useGameStore();
 
   if (!isOpen) return null;
@@ -120,7 +120,7 @@ export function RelicMonumentsPanel({ isOpen, onClose }: RelicMonumentsPanelProp
       statusText: `${relics.glowingSpores} units in alchemical vault`,
       action: relics.glowingSpores > 0 ? (
         <button
-          onClick={() => useGlowingSpore('bakery', 0)}
+          onClick={() => applyGlowingSpore('bakery', 0)}
           className="px-3 py-1 rounded-xl text-xs font-black bg-emerald-500 hover:bg-emerald-400 text-white shadow-sm"
         >
           Use Potion (-1)
