@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useGameStore } from '@/game/store';
 import { HUD } from '@/components/game/HUD';
 import { FarmGrid } from '@/components/game/FarmGrid';
-import { AnimalPanel } from '@/components/game/AnimalPanel';
+import { AnimalsTab } from '@/components/game/AnimalsTab';
 import { ProductionPanel } from '@/components/game/ProductionPanel';
 import { OrderBoard } from '@/components/game/OrderBoard';
 import { ShopPanel } from '@/components/game/ShopPanel';
@@ -153,7 +153,7 @@ export default function Home() {
         <HUD onOpenBackupModal={() => setBackupModalOpen(true)} />
       </header>
 
-      <main className="max-w-2xl mx-auto p-3 pt-2 pb-28">
+      <main className={`mx-auto ${activeTab === 'animals' ? 'max-w-6xl p-2 pt-1 pb-16' : 'max-w-2xl p-3 pt-2 pb-28'}`}>
         {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
         <EventTickingClock />
 
@@ -164,12 +164,12 @@ export default function Home() {
         />
 
         {/* Legacy Hourly Event Banner */}
-        <EventBanner />
+        {activeTab !== 'animals' && <EventBanner />}
 
         {/* Tab Content */}
-        <div className="min-h-[400px]">
+        <div className={activeTab === 'animals' ? 'h-full' : 'min-h-[400px]'}>
           {activeTab === 'farm' && <FarmGrid />}
-          {activeTab === 'animals' && <AnimalPanel />}
+          {activeTab === 'animals' && <AnimalsTab />}
           {activeTab === 'production' && <ProductionPanel />}
           {activeTab === 'orders' && <OrderBoard />}
           {activeTab === 'shop' && <ShopPanel />}
