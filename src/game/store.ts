@@ -174,6 +174,9 @@ export interface AnimalInstance {
   isMutated?: boolean;
   mutationVariant?: string;
   mutationBonus?: number;
+  // Track B: Breeding Status (Decoupled & Independent)
+  breedingCooldownExpiresAt?: number | null;
+  breedingCooldownSec?: number;
 }
 
 export interface ProductionSlot {
@@ -2310,6 +2313,17 @@ export const useGameStore = create<GameState>()(
         if (parent1.species !== parent2.species) return false;
         if (state.activeBreedings.length >= state.breedingSlots) return false;
 
+        const now = Date.now();
+        // Check breeding cooldown on parents
+        if (parent1.breedingCooldownExpiresAt && parent1.breedingCooldownExpiresAt > now) {
+          state.addNotification('Parent 1 is resting from breeding!', '⏳', 'info');
+          return false;
+        }
+        if (parent2.breedingCooldownExpiresAt && parent2.breedingCooldownExpiresAt > now) {
+          state.addNotification('Parent 2 is resting from breeding!', '⏳', 'info');
+          return false;
+        }
+
         // Roll tier based on parent tiers using probability engine
         const offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
 
@@ -2338,17 +2352,20 @@ export const useGameStore = create<GameState>()(
           notified: false,
         };
 
-        // Mark parents as unavailable (fed state) in active pastures or reserve
+        // Decoupled Pipeline: Parents stay in pens and continue production/feeding unhindered.
+        // They only receive a temporary breeding cooldown (60 seconds).
+        const cooldownUntil = now + 60 * 1000;
+
         const newAnimals = state.animals.map(a => {
           if (a.id === parent1Id || a.id === parent2Id) {
-            return { ...a, fed: true, fedAt: Date.now() };
+            return { ...a, breedingCooldownExpiresAt: cooldownUntil };
           }
           return a;
         });
 
         const newReserve = (state.livestockReserve || []).map(a => {
           if (a.id === parent1Id || a.id === parent2Id) {
-            return { ...a, fed: true, fedAt: Date.now() };
+            return { ...a, breedingCooldownExpiresAt: cooldownUntil };
           }
           return a;
         });
@@ -2457,25 +2474,9 @@ export const useGameStore = create<GameState>()(
           ...(breeding.isMutated ? { [`mutant_${breedId}`]: true } : {}),
         };
 
-        // Reset parents in active pastures
-        const updatedAnimals = state.animals.map(a => {
-          if (a.id === breeding.parent1Id || a.id === breeding.parent2Id) {
-            return { ...a, fed: false, fedAt: null };
-          }
-          return a;
-        });
-
-        // Reset parents in livestock reserve
-        const updatedReserve = (state.livestockReserve || []).map(a => {
-          if (a.id === breeding.parent1Id || a.id === breeding.parent2Id) {
-            return { ...a, fed: false, fedAt: null };
-          }
-          return a;
-        });
-
         // Place animal in active pasture or store in livestock reserve if pasture is full
-        const finalAnimals = storedInReserve ? updatedAnimals : [...updatedAnimals, newAnimal];
-        const finalReserve = storedInReserve ? [...updatedReserve, newAnimal] : updatedReserve;
+        const finalAnimals = storedInReserve ? state.animals : [...state.animals, newAnimal];
+        const finalReserve = storedInReserve ? [...(state.livestockReserve || []), newAnimal] : (state.livestockReserve || []);
 
         // Remove breeding from activeBreedings
         const updatedBreedings = state.activeBreedings.filter(b => b.id !== breedingId);
@@ -2575,13 +2576,7 @@ export const useGameStore = create<GameState>()(
         const animal = state.animals.find(a => a.id === animalId);
         if (!animal) return false;
 
-        // Check if currently incubating in active breeding
-        const isBusyBreeding = state.activeBreedings.some(b => b.parent1Id === animal.id || b.parent2Id === animal.id);
-        if (isBusyBreeding) {
-          playDefeatSound();
-          state.addNotification('Cannot move animal to reserve: Currently incubating an egg in the chamber!', '⚠️', 'info');
-          return false;
-        }
+
 
         const updatedAnimals = state.animals.filter(a => a.id !== animalId);
         const updatedReserve = [...(state.livestockReserve || []), animal];

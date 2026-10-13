@@ -78,15 +78,13 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
   const parent1 = allFarmAnimals.find(a => a.id === parent1Id && a.species === selectedSpecies);
   const parent2 = allFarmAnimals.find(a => a.id === parent2Id && a.species === selectedSpecies);
 
-  // Busy parent animal IDs currently in active incubator chambers
-  const busyParentIds = new Set(
-    activeBreedings.flatMap(b => [b.parent1Id, b.parent2Id]).filter(Boolean)
-  );
-
-  // Available animals of selected species that aren't currently incubating and aren't elders
+  // Available animals of selected species that aren't on breeding cooldown and aren't elders
   const availableAnimals = allFarmAnimals.filter(
-    a => a.species === selectedSpecies && a.age !== 'elder' && !busyParentIds.has(a.id)
+    a => a.species === selectedSpecies && a.age !== 'elder' && (!a.breedingCooldownExpiresAt || a.breedingCooldownExpiresAt <= now)
   );
+  const restingAnimalsCount = allFarmAnimals.filter(
+    a => a.species === selectedSpecies && a.age !== 'elder' && Boolean(a.breedingCooldownExpiresAt && a.breedingCooldownExpiresAt > now)
+  ).length;
 
   // Species info & Sanctuary spaces (4 common, 4 uncommon, 4 rare, 4 legendary = 16 total spaces)
   const speciesDef = ANIMALS[selectedSpecies];
@@ -677,6 +675,7 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                 </h4>
                 <span className="text-[11px] text-stone-500">
                   Tap an animal to select as parent
+                  {restingAnimalsCount > 0 && ` • (${restingAnimalsCount} resting)`}
                 </span>
               </div>
 

@@ -1,5 +1,32 @@
 export type AnimalTier = 'common' | 'uncommon' | 'rare' | 'legendary';
 
+export interface Animal {
+  id: string;
+  name: string;
+  species: 'chicken' | 'cow' | 'sheep' | 'pig';
+  tier: AnimalTier;
+  icon: string;
+
+  // Track A: Production & Feeding
+  isFed: boolean;
+  feedTimeRemainingSec: number;
+  productionProgress: number; // 0 to 100
+  productionReady: boolean;
+  yieldItem: string;
+
+  // Track B: Breeding Status (Independent)
+  breedingCooldownSec: number; // 0 = ready to breed, >0 = resting
+  breedingCooldownExpiresAt?: number | null;
+}
+
+export interface IncubatorEgg {
+  id: string;
+  species: string;
+  targetTier: AnimalTier;
+  timeRemainingSec: number;
+  totalTimeSec: number;
+}
+
 export interface SectorConfig {
   tier: AnimalTier;
   title: string;

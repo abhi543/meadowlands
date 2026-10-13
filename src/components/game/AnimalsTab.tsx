@@ -239,6 +239,9 @@ export function AnimalsTab() {
                   const isExhausted = Boolean(
                     animal.isExhausted && animal.exhaustedUntil && animal.exhaustedUntil > Date.now()
                   );
+                  const isBreedingResting = Boolean(
+                    animal.breedingCooldownExpiresAt && animal.breedingCooldownExpiresAt > Date.now()
+                  );
 
                   return (
                     <div
@@ -272,12 +275,22 @@ export function AnimalsTab() {
                           </span>
                         </div>
 
-                        {/* Mutated / Apex Banner */}
-                        {isMutated && (
-                          <div className="text-[8px] font-black text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-100 dark:bg-fuchsia-950/80 px-1 py-0.2 rounded border border-fuchsia-300 dark:border-fuchsia-500/40 truncate text-left mt-0.5">
-                            🧬 Apex (+50%)
-                          </div>
-                        )}
+                        {/* Mutated / Apex / Breeding Status Badges */}
+                        <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                          {isMutated && (
+                            <div className="text-[8px] font-black text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-100 dark:bg-fuchsia-950/80 px-1 py-0.2 rounded border border-fuchsia-300 dark:border-fuchsia-500/40 truncate text-left">
+                              🧬 Apex (+50%)
+                            </div>
+                          )}
+                          {isBreedingResting && (
+                            <div
+                              className="text-[8px] font-bold text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-950/80 px-1 py-0.2 rounded border border-violet-300 dark:border-violet-700/60 truncate text-left"
+                              title="Resting from breeding (produces and feeds normally!)"
+                            >
+                              ⏳ Rest
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Middle: Production State / Action */}
