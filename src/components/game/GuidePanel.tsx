@@ -6,6 +6,7 @@ import {
   PRODUCTS, BREED_REGISTRY, TIER_COLORS, TIER_LABELS, BIOMES, LURES,
   PARCEL_CONFIGS, PARCEL_ORDER, ESTATE_AURAS, FREIGHT_CONTRACT_TEMPLATES,
   WORKER_REGISTRY, WORKER_DIVISIONS, MILESTONE_RANKS,
+  HOURLY_EVENTS,
   type AnimalSpecies, type Tier, type BiomeId, type LureTypeId,
 } from '@/game/data';
 import {
@@ -16,9 +17,11 @@ import {
 import {
   SYSTEMIC_EVENTS,
   EVENT_LEVEL_GATES,
+  FAIR_ITEM_SCORES,
   type SystemicEventDef,
   type SystemicEventId,
 } from '@/game/eventsData';
+import { SUDDEN_EVENT_TEMPLATES } from '@/lib/eventDirector';
 
 type GuideTab =
   | 'overview'
@@ -912,137 +915,569 @@ function ShopGuide() {
 }
 
 // -------------------------------------------------------------
+// -------------------------------------------------------------
 // 8. REGIONAL PHENOMENA & RELICS GUIDE
 // -------------------------------------------------------------
 function EventsGuide() {
+  const [eventCategory, setEventCategory] = useState<'regional' | 'sudden' | 'hourly' | 'relics'>('regional');
+  const [expandedEvent, setExpandedEvent] = useState<string | null>('county_fair');
+  const [eventSearch, setEventSearch] = useState<string>('');
+
+  const filteredRegionalEvents = Object.values(SYSTEMIC_EVENTS).filter(ev => {
+    if (!eventSearch) return true;
+    const q = eventSearch.toLowerCase();
+    return (
+      ev.name.toLowerCase().includes(q) ||
+      ev.premise.toLowerCase().includes(q) ||
+      ev.mechanicalShift.toLowerCase().includes(q) ||
+      ev.grandReward.relicName.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div>
         <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          📡 Regional Phenomena, Horizon Radar &amp; Relics Vault
+          📡 Comprehensive Event Encyclopedia &amp; Relics Vault
         </h4>
         <p className="text-xs text-stone-500 dark:text-gray-400">
-          Surprise environmental events, live anomaly detection, and permanent relic monuments.
+          Master guides, stage-by-stage requirements, item scoring tables, and strategy blueprints for every event in Meadowlands.
         </p>
       </div>
 
-      {/* Radar Engine Callout */}
+      {/* Autonomous Horizon Radar Banner */}
       <div className="bg-gradient-to-r from-rose-900 via-pink-900 to-amber-900 rounded-xl p-3.5 text-white shadow-md text-xs space-y-2">
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-sm flex items-center gap-1.5 text-rose-200">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="font-black text-sm flex items-center gap-1.5 text-rose-200">
             <span>📡</span> Autonomous Horizon Radar Engine
           </span>
-          <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full border border-white/30 animate-pulse">
-            Live Anomaly ETA
+          <span className="text-[10px] bg-white/20 text-white font-bold px-2.5 py-0.5 rounded-full border border-white/30 animate-pulse">
+            Live Anomaly Detection
           </span>
         </div>
-        <p className="text-rose-100 leading-relaxed">
-          The Horizon Radar constantly sweeps the atmospheric frontier of Meadowlands. Every 2 to 5 minutes, an autonomous regional phenomenon is detected!
+        <p className="text-rose-100 leading-relaxed text-[11px]">
+          The Horizon Radar constantly scans the atmospheric frontier. Regional phenomena trigger cyclically across 3 distinct lifecycle phases:
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-rose-800/80 text-[11px]">
-          <div className="bg-black/20 p-2 rounded">
-            <span className="text-amber-300 font-bold">⏱️ Live Anomaly ETA:</span>
-            <p className="text-rose-200 mt-0.5">
-              The top event banner displays real-time radar scanning countdowns until the next phenomenon arrives.
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-rose-800/80 text-[11px]">
+          <div className="bg-black/25 p-2 rounded-lg">
+            <span className="text-amber-300 font-bold block">1. ⏱️ Forecast Phase</span>
+            <p className="text-rose-200 mt-0.5 text-[10px] leading-snug">
+              Radar warning alert with a prep timer (5–15 min). Stockpile raw crops and mill feed before the competition begins!
             </p>
           </div>
-          <div className="bg-black/20 p-2 rounded">
-            <span className="text-emerald-300 font-bold">⚡ Instant Trigger Button:</span>
-            <p className="text-rose-200 mt-0.5">
-              Want immediate action? Tap <strong>Trigger ⚡</strong> on the Horizon Radar modal to instantly summon an eligible anomaly.
+          <div className="bg-black/25 p-2 rounded-lg">
+            <span className="text-emerald-300 font-bold block">2. ⚡ Active Phase</span>
+            <p className="text-rose-200 mt-0.5 text-[10px] leading-snug">
+              Special global modifiers activate (e.g. 4x workshop speed, flat 30s crops, 0s fishing cooldowns). Fulfill stages to claim rewards!
+            </p>
+          </div>
+          <div className="bg-black/25 p-2 rounded-lg">
+            <span className="text-purple-300 font-bold block">3. 🏆 Settlement Phase</span>
+            <p className="text-rose-200 mt-0.5 text-[10px] leading-snug">
+              Claim grand coin and gem jackpots and permanently install exclusive Relic Monuments into your Relics Vault!
             </p>
           </div>
         </div>
       </div>
 
-      {/* 3 Event Lifecycle Phases */}
-      <div className="bg-stone-50 dark:bg-stone-900/40 rounded-xl p-3 text-xs border border-stone-200 dark:border-gray-800 space-y-1.5">
-        <h5 className="font-bold text-stone-800 dark:text-gray-200">The 3 Event Lifecycle Phases:</h5>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-stone-600 dark:text-stone-300">
-          <div className="bg-white dark:bg-gray-800 p-2 rounded border border-stone-200 dark:border-gray-700">
-            <span className="font-bold text-amber-600 dark:text-amber-400 block mb-0.5">1. Forecast Phase:</span>
-            Radar anomaly alert with a prep timer. Stock your silos and craft feeds before the active window begins.
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-2 rounded border border-stone-200 dark:border-gray-700">
-            <span className="font-bold text-emerald-600 dark:text-emerald-400 block mb-0.5">2. Active Phase:</span>
-            Unique global rules activate (e.g. 4x crafting speed, 0s fishing cooldowns). Complete 2–4 tiered delivery stages.
-          </div>
-          <div className="bg-white dark:bg-gray-800 p-2 rounded border border-stone-200 dark:border-gray-700">
-            <span className="font-bold text-purple-600 dark:text-purple-400 block mb-0.5">3. Settlement Phase:</span>
-            Claim huge coin &amp; gem payouts and permanently install exclusive Relic Monuments into the Relics Vault!
-          </div>
-        </div>
+      {/* Sub-Category Navigation Pills */}
+      <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-xl border border-stone-200 dark:border-stone-800 overflow-x-auto">
+        <button
+          onClick={() => setEventCategory('regional')}
+          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            eventCategory === 'regional'
+              ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+          }`}
+        >
+          <span>🎪</span>
+          <span>10 Regional Master Events</span>
+        </button>
+        <button
+          onClick={() => setEventCategory('sudden')}
+          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            eventCategory === 'sudden'
+              ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+          }`}
+        >
+          <span>🚨</span>
+          <span>Sudden Crises &amp; Bounties</span>
+        </button>
+        <button
+          onClick={() => setEventCategory('hourly')}
+          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            eventCategory === 'hourly'
+              ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+          }`}
+        >
+          <span>⏳</span>
+          <span>Hourly Encounters</span>
+        </button>
+        <button
+          onClick={() => setEventCategory('relics')}
+          className={`py-1.5 px-3 rounded-lg text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            eventCategory === 'relics'
+              ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
+              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
+          }`}
+        >
+          <span>🏛️</span>
+          <span>Relics Vault Directory</span>
+        </button>
       </div>
 
-      {/* 10 Master Regional Events */}
-      <div className="space-y-2">
-        <h5 className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-gray-400">
-          The 10 Regional Master Phenomena &amp; Unlock Levels
-        </h5>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-          {Object.values(SYSTEMIC_EVENTS).map(ev => {
-            const minLevel = EVENT_LEVEL_GATES[ev.id] || 1;
-            return (
-              <div
-                key={ev.id}
-                className="border border-stone-200 dark:border-gray-800 rounded-xl p-2.5 bg-stone-50/50 dark:bg-stone-900/30 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-gray-100 text-xs">
-                      <span>{ev.emoji}</span>
-                      <span>{ev.name}</span>
+      {/* ========================================================= */}
+      {/* 1. REGIONAL MASTER EVENTS TAB                             */}
+      {/* ========================================================= */}
+      {eventCategory === 'regional' && (
+        <div className="space-y-3">
+          {/* Search bar */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Search event name, rule, or relic reward..."
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs rounded-xl px-3 py-2 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+            />
+          </div>
+
+          <div className="space-y-3">
+            {filteredRegionalEvents.map(ev => {
+              const minLevel = EVENT_LEVEL_GATES[ev.id] || 1;
+              const isExpanded = expandedEvent === ev.id;
+              const forecastMin = Math.round(ev.forecastDurationMs / 60000);
+              const activeMin = Math.round(ev.activeDurationMs / 60000);
+              const cooldownHr = Math.round(ev.cooldownMs / 3600000);
+
+              return (
+                <div
+                  key={ev.id}
+                  className="border border-stone-200 dark:border-stone-800 rounded-2xl bg-white dark:bg-stone-900/60 shadow-sm overflow-hidden transition-all"
+                >
+                  {/* Card Header */}
+                  <div className="p-3.5 space-y-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-2xl p-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                          {ev.emoji}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h5 className="font-black text-sm text-stone-900 dark:text-white">
+                              {ev.name}
+                            </h5>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                              Lv.{minLevel}+
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400 font-bold uppercase tracking-wider">
+                            {ev.badge}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Timers Badge */}
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800/80 px-2 py-1 rounded-lg">
+                        <span>⏳ Prep: {forecastMin}m</span>
+                        <span>•</span>
+                        <span>⚡ Active: {activeMin}m</span>
+                        <span>•</span>
+                        <span>💤 CD: {cooldownHr}h</span>
+                      </div>
                     </div>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                      Lv.{minLevel}+
-                    </span>
+
+                    <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+                      {ev.premise}
+                    </p>
+
+                    {/* Mechanical Shift Box */}
+                    <div className="bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/40 p-2.5 rounded-xl text-xs space-y-0.5">
+                      <span className="font-black text-amber-800 dark:text-amber-300 flex items-center gap-1 text-[11px] uppercase tracking-wide">
+                        <span>⚡</span> Active Global Rule:
+                      </span>
+                      <p className="text-stone-700 dark:text-stone-300 text-[11px] leading-relaxed">
+                        {ev.mechanicalShift}
+                      </p>
+                    </div>
+
+                    {/* Quick Grand Reward Banner */}
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200/60 dark:border-stone-700/60 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{ev.grandReward.relicEmoji}</span>
+                        <div>
+                          <span className="font-black text-stone-800 dark:text-stone-200 text-xs block">
+                            {ev.grandReward.relicName}
+                          </span>
+                          <span className="text-[10px] text-stone-500 dark:text-stone-400">
+                            {ev.grandReward.relicDescription}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap pl-2">
+                        +{ev.grandReward.coins.toLocaleString()} 🪙<br />+{ev.grandReward.gems} 💎
+                      </div>
+                    </div>
+
+                    {/* Toggle Button */}
+                    <button
+                      onClick={() => setExpandedEvent(isExpanded ? null : ev.id)}
+                      className="w-full mt-1 py-1.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700/80 text-[11px] font-bold text-stone-700 dark:text-stone-300 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <span>{isExpanded ? '▲ Hide Full Stages & Walkthrough' : '▼ View Stage Requirements & Pro Strategy'}</span>
+                    </button>
                   </div>
-                  <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug mb-2">
-                    {ev.premise}
+
+                  {/* Expanded Stage & Strategy Details */}
+                  {isExpanded && (
+                    <div className="border-t border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-950/40 p-3.5 space-y-3 animate-in fade-in">
+                      {/* Objective Summary */}
+                      <div className="text-xs">
+                        <span className="font-black uppercase tracking-wider text-[10px] text-stone-500 dark:text-stone-400 block mb-1">
+                          🎯 Event Objective
+                        </span>
+                        <p className="text-stone-700 dark:text-stone-300 font-medium">
+                          {ev.objectiveSummary}
+                        </p>
+                      </div>
+
+                      {/* Stage-by-Stage Breakdown */}
+                      <div className="space-y-2">
+                        <span className="font-black uppercase tracking-wider text-[10px] text-stone-500 dark:text-stone-400 block">
+                          📋 Tiered Progression Stages ({ev.stages.length} Stages)
+                        </span>
+                        <div className="grid grid-cols-1 gap-2">
+                          {ev.stages.map(st => (
+                            <div
+                              key={st.stage}
+                              className="p-2.5 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs"
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-black text-amber-600 dark:text-amber-400 text-xs">
+                                    Stage {st.stage}: {st.title}
+                                  </span>
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-mono font-bold">
+                                    Target: {st.targetCount}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-stone-600 dark:text-stone-400">
+                                  {st.itemCategoryDesc}
+                                  {st.requiredItemTypes && st.requiredItemTypes.length > 0 && (
+                                    <span className="block text-[10px] text-stone-500 dark:text-stone-500 font-mono mt-0.5">
+                                      Accepted: {st.requiredItemTypes.join(', ')}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              <div className="text-right text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 rounded-lg border border-emerald-200/50 dark:border-emerald-800/40 whitespace-nowrap">
+                                🎁 {st.rewardDescription}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Special Embedded Guide for County Fair Grand Derby */}
+                      {ev.id === 'county_fair' && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 rounded-xl space-y-2 text-xs">
+                          <h6 className="font-black text-amber-900 dark:text-amber-200 flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                            <span>🎪</span> County Fair Exhibition Item Scoring Guide
+                          </h6>
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Points are rarity-weighted. Submit goods in batches of 5, 25, or All from your Silo &amp; Barn:
+                          </p>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                            <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                              <span className="font-black text-stone-700 dark:text-stone-300 block mb-0.5">⚪ Common (1 pt)</span>
+                              <span className="text-stone-500 leading-tight block">Wheat, Corn, Egg, Milk, Feed, Carrot, Cotton</span>
+                            </div>
+                            <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                              <span className="font-black text-emerald-600 dark:text-emerald-400 block mb-0.5">🟢 Uncommon (3 pts)</span>
+                              <span className="text-stone-500 leading-tight block">Strawberry, Soybean, Bread, Wool, Honey, Fish, Berries</span>
+                            </div>
+                            <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                              <span className="font-black text-purple-600 dark:text-purple-400 block mb-0.5">🟣 Rare (10 pts)</span>
+                              <span className="text-stone-500 leading-tight block">Pumpkin, Cheese, Pie, Sweater, Truffle, Silk, Butter</span>
+                            </div>
+                            <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                              <span className="font-black text-amber-600 dark:text-amber-400 block mb-0.5">🌟 Legendary (25 pts)</span>
+                              <span className="text-stone-500 leading-tight block">Gold Nugget, Golden Egg, Starlight Milk, Gilded Wool, Cake</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-amber-800 dark:text-amber-300 font-semibold italic">
+                            💡 Speed Run Strategy: 24 Legendary items (25 pts each) or 60 Rare items (10 pts each) instantly achieves the 600-point Grand Championship!
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Walkthrough & Pro Tips */}
+                      <div className="bg-stone-100 dark:bg-stone-800/60 p-3 rounded-xl text-xs space-y-1">
+                        <span className="font-black text-stone-800 dark:text-stone-200 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                          <span>💡</span> Pro Strategy &amp; Walkthrough
+                        </span>
+                        {ev.id === 'royal_fleet' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            During the 15-minute forecast, stockpile high-volume wheat and feed. In active phase, bake bread and pies continuously. Complete Stage 4 fine textiles using wool and sweaters to secure the 24-hour +15% delivery payout crest!
+                          </p>
+                        )}
+                        {ev.id === 'barn_fire' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Keep your well water supply topped off! When flare-ups spawn across your farm plots, immediately click them with bucket water to prevent scorched crops and unlock the Mineral Ash 3x growth boost.
+                          </p>
+                        )}
+                        {ev.id === 'midnight_smuggler' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            The black market barge accepts valuable truffle products, silk, and starlight milk. Deliver all 3 contracts to win the Smuggler's Compass (-20% Wilderness expedition timers).
+                          </p>
+                        )}
+                        {ev.id === 'locust_swarm' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Locusts will hover over mature fields blocking regular harvests. Rapidly tap the locust entities to jar-capture 30 swarms. Stationing beekeepers passively repels them!
+                          </p>
+                        )}
+                        {ev.id === 'salmon_run' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            The fishery dock cooldown is completely eliminated during this frenzy! Cast continuously to catch 15 migration salmon and unlock the prestigious 40,000 Coin Feast of Kings recipe!
+                          </p>
+                        )}
+                        {ev.id === 'carnival_circus' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Supply high volumes of animal feed, wheat, carrots, and berries to the carnival manager stall. Hitting 100 total feeds permanently awards the companion Circus Cub (+10% permanent XP)!
+                          </p>
+                        )}
+                        {ev.id === 'alchemical_bloom' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            All plots enjoy flat 30-second crop growth during spore fog! Plant carrots or wheat rapidly to harvest 40 times and stock up on instant-finish Glowing Spore potions.
+                          </p>
+                        )}
+                        {ev.id === 'artisan_masterclass' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Workshops operate at 4x speed with ZERO ingredient loss! Stack bread, sweaters, and cheese to complete 20 crafts and permanently reduce machine crafting duration across the estate by 5%.
+                          </p>
+                        )}
+                        {ev.id === 'ancient_ruins' && (
+                          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
+                            Donate raw cotton, wool, gold nuggets, and truffle to clear the 3 temple chambers (120 total donations) to excavate the Ancient Sun Relic for a permanent +15% XP multiplier.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2. SUDDEN CRISES & BOUNTIES TAB                           */}
+      {/* ========================================================= */}
+      {eventCategory === 'sudden' && (
+        <div className="space-y-3">
+          <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/40 rounded-xl p-3 text-xs text-red-900 dark:text-red-200 space-y-1">
+            <h5 className="font-bold flex items-center gap-1.5">
+              <span>🚨</span> High-Stakes Adrenaline Crises (30s–75s Countdown)
+            </h5>
+            <p className="text-stone-700 dark:text-stone-300 leading-relaxed text-[11px]">
+              Sudden crises trigger unpredictably on your Horizon Radar with glowing red screen pulses and an urgent ticking clock HUD.
+              You must act before the timer expires to avert devastating livestock and crop losses!
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {Object.entries(SUDDEN_EVENT_TEMPLATES).map(([key, ev]) => (
+              <div
+                key={key}
+                className={`p-3 rounded-xl border flex flex-col justify-between ${
+                  ev.type === 'CRISIS'
+                    ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40'
+                    : 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40'
+                }`}
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{ev.emoji}</span>
+                      <div>
+                        <h6 className="font-black text-sm text-stone-900 dark:text-white">
+                          {ev.title}
+                        </h6>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded-full ${
+                          ev.type === 'CRISIS' ? 'bg-rose-100 dark:bg-rose-900 text-rose-800 dark:text-rose-200' : 'bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200'
+                        }`}>
+                          {ev.type} • {ev.durationSeconds}s Timer • Lv.{ev.minLevel}+
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed">
+                    {ev.description}
                   </p>
-                  <div className="text-[10px] text-stone-500 dark:text-gray-400 bg-white/70 dark:bg-gray-800/70 p-1.5 rounded border border-stone-200/50 dark:border-gray-800 mb-2">
-                    <strong>Rule:</strong> {ev.mechanicalShift}
+
+                  <div className="p-2 rounded-lg bg-white/70 dark:bg-stone-900/70 border border-stone-200/50 dark:border-stone-800 text-[10px] space-y-1">
+                    <div>
+                      <strong className="text-stone-800 dark:text-stone-200">Action Required:</strong>{' '}
+                      <span className="text-stone-600 dark:text-stone-400">
+                        {ev.requiredAction.type === 'RAPID_TAP'
+                          ? `Rapid-Tap button (${ev.requiredAction.targetCount} taps within ${ev.durationSeconds}s)`
+                          : `Resource Sacrifice (${ev.requiredAction.resourceCost?.label})`}
+                      </span>
+                    </div>
+                    {ev.penaltyOnFail.amountPercentage > 0 && (
+                      <div className="text-rose-600 dark:text-rose-400 font-semibold">
+                        ⚠️ Failure Penalty: {ev.penaltyOnFail.description}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="pt-1.5 border-t border-stone-200/60 dark:border-gray-800 text-[10px] text-amber-700 dark:text-amber-300 flex items-center justify-between">
-                  <span className="font-bold flex items-center gap-1">
-                    <span>{ev.grandReward.relicEmoji}</span>
-                    <span>{ev.grandReward.relicName}</span>
-                  </span>
-                  <span>🪙{ev.grandReward.coins.toLocaleString()} • 💎{ev.grandReward.gems}</span>
+                <div className="pt-2 border-t border-stone-200/60 dark:border-stone-800 mt-2 flex items-center justify-between text-[10px] font-bold text-amber-700 dark:text-amber-300">
+                  <span>Victory: +{ev.rewardOnSuccess.coins.toLocaleString()} 🪙 • +{ev.rewardOnSuccess.gems} 💎</span>
+                  {ev.rewardOnSuccess.relicName && (
+                    <span className="text-purple-600 dark:text-purple-300 truncate max-w-[120px]">
+                      {ev.rewardOnSuccess.relicName}
+                    </span>
+                  )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            ))}
+          </div>
 
-      {/* Relics Vault & Sudden Radar Crises */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <div className="border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 bg-amber-50/50 dark:bg-amber-950/20 space-y-1.5">
-          <h5 className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-            <span>🏛️</span> Relics Vault
-          </h5>
-          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
-            Relic Monuments won from regional events are preserved permanently in your <strong>Relics Vault</strong> (accessible via the top banner).
-            They bestow permanent passive multipliers such as +15% delivery payouts, 5% faster machine crafting, and +15% total XP!
-          </p>
+          {/* Tactical Crisis Countermeasures */}
+          <div className="p-3 bg-stone-50 dark:bg-stone-900/50 border border-stone-200 dark:border-stone-800 rounded-xl space-y-2 text-xs">
+            <h6 className="font-black text-stone-800 dark:text-stone-200 text-xs uppercase tracking-wide flex items-center gap-1.5">
+              <span>🛡️</span> Radar Crisis Tactical Countermeasures
+            </h6>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                <span className="font-bold text-amber-700 dark:text-amber-400">🐺 Predator Ambush:</span>
+                <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                  Rapidly tap the Alarm Bell to scare away wolves, or station a <strong>Guardian Sheepdog</strong> to automatically eliminate predators.
+                </p>
+              </div>
+              <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                <span className="font-bold text-emerald-700 dark:text-emerald-400">🍂 Blight Outbreak:</span>
+                <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                  Administer Quarantine Vaccines to infected plots or deploy chemical fungicides before the infection bar hits 100%.
+                </p>
+              </div>
+              <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                <span className="font-bold text-blue-700 dark:text-blue-400">💧 Drought Heatwave:</span>
+                <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                  Pump the artisan well to irrigate parched soil. Upgrading the well grants larger emergency reserves.
+                </p>
+              </div>
+              <div className="bg-white dark:bg-stone-900 p-2 rounded-lg border border-stone-200 dark:border-stone-800">
+                <span className="font-bold text-purple-700 dark:text-purple-400">🛡️ Crisis Shields:</span>
+                <p className="text-stone-600 dark:text-stone-400 mt-0.5">
+                  Purchase emergency crisis shields in the Town Favor Shop. Shields automatically negate any sudden crisis without resource loss!
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
+      )}
 
-        <div className="border border-red-200 dark:border-red-800/40 rounded-xl p-3 bg-red-50/50 dark:bg-red-950/20 space-y-1.5">
-          <h5 className="font-bold text-red-900 dark:text-red-200 flex items-center gap-1.5">
-            <span>🚨</span> Sudden Radar Crises (30s–75s)
-          </h5>
-          <p className="text-stone-600 dark:text-stone-300 text-[11px] leading-relaxed">
-            High-urgency sudden crises (predator raids, blight, brushfires) feature pulsing screen edges and a ticking clock HUD.
-            Use Rapid-Tap defense or resource sacrifices to avert crop loss.
-          </p>
-          <p className="text-[10px] text-stone-500 dark:text-gray-400 font-semibold">
-            🛡️ Tab-Sleep Inactive Safety: Crisis timers freeze/extend when your browser tab is inactive so you are never penalized while away!
-          </p>
+      {/* ========================================================= */}
+      {/* 3. HOURLY WEATHER & VISITS TAB                            */}
+      {/* ========================================================= */}
+      {eventCategory === 'hourly' && (
+        <div className="space-y-3">
+          <div className="bg-sky-50 dark:bg-sky-950/20 border border-sky-200 dark:border-sky-800/40 rounded-xl p-3 text-xs text-sky-900 dark:text-sky-200 space-y-1">
+            <h5 className="font-bold flex items-center gap-1.5">
+              <span>⏳</span> Periodic Hourly Farm Encounters
+            </h5>
+            <p className="text-stone-700 dark:text-stone-300 leading-relaxed text-[11px]">
+              Every hour, a brief atmospheric weather phenomenon or wandering trader visits your estate for 3 to 15 minutes.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {Object.values(HOURLY_EVENTS).map(ev => {
+              const durationMin = Math.round(ev.durationMs / 60000);
+              return (
+                <div
+                  key={ev.type}
+                  className="p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 shadow-xs flex flex-col justify-between"
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl">{ev.emoji}</span>
+                        <div>
+                          <h6 className="font-black text-sm text-stone-900 dark:text-white">{ev.name}</h6>
+                          <span className="text-[10px] font-mono text-stone-500 dark:text-stone-400">
+                            Duration: {durationMin} Minutes
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed">
+                      {ev.description}
+                    </p>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-stone-200/60 dark:border-stone-800 text-[10px] text-stone-500 dark:text-stone-400">
+                    {ev.type === 'vip_chef' && '👨‍🍳 Tip: Deliver specialty bakery and dairy goods for 2.5x coin payouts.'}
+                    {ev.type === 'crow_attack' && '🐦 Tip: Tap the crows hovering over plots to shoo them before they damage seeds.'}
+                    {ev.type === 'rainstorm' && '⛈️ Tip: Plant slow crops like pumpkins and cotton; rain speeds growth by 50%!'}
+                    {ev.type === 'smuggler' && '📦 Tip: Free mystery crate containing coins, gems, and rare seeds.'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 4. RELICS VAULT MASTER DIRECTORY TAB                      */}
+      {/* ========================================================= */}
+      {eventCategory === 'relics' && (
+        <div className="space-y-3">
+          <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-3 text-xs text-purple-900 dark:text-purple-200 space-y-1">
+            <h5 className="font-bold flex items-center gap-1.5">
+              <span>🏛️</span> The Relics Vault &amp; Permanent Monument Multipliers
+            </h5>
+            <p className="text-stone-700 dark:text-stone-300 leading-relaxed text-[11px]">
+              Relics are prestigious, permanent artifacts unlocked by completing the Settlement Phase of regional events.
+              Once installed, their passive buffs stack across your entire estate!
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            {Object.values(SYSTEMIC_EVENTS).map(ev => (
+              <div
+                key={ev.id}
+                className="p-3 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/60 flex items-start gap-2.5 shadow-xs"
+              >
+                <span className="text-3xl p-1.5 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  {ev.grandReward.relicEmoji}
+                </span>
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-1">
+                    <h6 className="font-black text-xs text-stone-900 dark:text-white">
+                      {ev.grandReward.relicName}
+                    </h6>
+                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.2 rounded">
+                      {ev.emoji} {ev.name}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-relaxed">
+                    {ev.grandReward.relicDescription}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
