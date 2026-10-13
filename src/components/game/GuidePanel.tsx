@@ -472,16 +472,17 @@ function AnimalsGuide() {
 // -------------------------------------------------------------
 function BreedingGuide() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          🧬 Breeding, Tiers &amp; Genetic Codex
+          🧬 Breeding, Tier Mutation Engine &amp; Incubator
         </h4>
         <p className="text-xs text-stone-500 dark:text-gray-400">
-          Combine animals to mutate into higher tiers and discover lucrative breed products.
+          Pair adult livestock in the Incubator to trigger upward tier mutations and hatch Rare &amp; Legendary breeds.
         </p>
       </div>
 
+      {/* Tier Badges */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {(['common', 'uncommon', 'rare', 'legendary'] as Tier[]).map(tier => (
           <div
@@ -493,22 +494,97 @@ function BreedingGuide() {
               {tier} Tier
             </div>
             <div className="text-[11px] text-stone-600 dark:text-stone-300 mt-1">
-              {tier === 'common' && '8 Base Cycles • Base Products'}
-              {tier === 'uncommon' && '12 Base Cycles • +15% Bonus Drops'}
-              {tier === 'rare' && '16 Base Cycles • +25% Bonus Drops'}
-              {tier === 'legendary' && '20 Base Cycles • Periodic Gem Drops!'}
+              {tier === 'common' && '8 Base Cycles • 2m Hatch • Base Products'}
+              {tier === 'uncommon' && '12 Base Cycles • 5m Hatch • +15% Drops'}
+              {tier === 'rare' && '16 Base Cycles • 10m Hatch • +25% Drops'}
+              {tier === 'legendary' && '20 Base Cycles • 20m Hatch • Periodic Gems!'}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="bg-stone-50 dark:bg-stone-900/40 rounded-lg p-3 text-xs space-y-1.5 text-stone-600 dark:text-stone-300">
-        <h5 className="font-bold text-stone-800 dark:text-gray-200">Genetic Rules to Remember:</h5>
+      {/* Probability Mutation Table */}
+      <div className="bg-violet-50 dark:bg-violet-950/20 border border-violet-200 dark:border-violet-800/40 rounded-xl p-3.5 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🎲</span>
+          <h5 className="font-bold text-xs uppercase tracking-wider text-violet-900 dark:text-violet-200">
+            Tier Mutation Probability Engine
+          </h5>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-violet-200 dark:border-violet-800/60 text-stone-500 dark:text-stone-400 text-[11px]">
+                <th className="py-1.5 px-2">Parent Pair</th>
+                <th className="py-1.5 px-2">Common</th>
+                <th className="py-1.5 px-2">Uncommon</th>
+                <th className="py-1.5 px-2">Rare</th>
+                <th className="py-1.5 px-2">Legendary</th>
+                <th className="py-1.5 px-2">Upward Mutation</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-violet-100 dark:divide-violet-900/40 text-[11px]">
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Common + Common</td>
+                <td className="py-1.5 px-2 text-stone-500">85%</td>
+                <td className="py-1.5 px-2 text-emerald-600 dark:text-emerald-400 font-bold">15%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-emerald-600 dark:text-emerald-400 font-bold">+15% to Uncommon</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Common + Uncommon</td>
+                <td className="py-1.5 px-2 text-stone-500">45%</td>
+                <td className="py-1.5 px-2 text-emerald-600 dark:text-emerald-400">50%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400 font-bold">5%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400 font-bold">+5% Rare Jackpot</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Uncommon + Uncommon</td>
+                <td className="py-1.5 px-2 text-stone-500">20%</td>
+                <td className="py-1.5 px-2 text-emerald-600 dark:text-emerald-400">65%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400 font-bold">15%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400 font-bold">+15% to Rare</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Rare + Uncommon</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-emerald-600 dark:text-emerald-400">50%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400">45%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">5%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">+5% Legendary Jackpot</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Rare + Rare</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400">88%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">12%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">+12% Legendary Jackpot</td>
+              </tr>
+              <tr>
+                <td className="py-1.5 px-2 font-semibold">Legendary + Rare / Leg.</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-stone-400">0%</td>
+                <td className="py-1.5 px-2 text-sky-600 dark:text-sky-400">65%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">35%</td>
+                <td className="py-1.5 px-2 text-amber-500 font-bold">+35% Legendary Offspring</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="bg-stone-50 dark:bg-stone-900/40 rounded-xl p-3.5 text-xs space-y-2 text-stone-600 dark:text-stone-300">
+        <h5 className="font-bold text-stone-800 dark:text-gray-200">Incubator Mechanics &amp; Secrets:</h5>
         <ul className="list-disc ml-4 space-y-1">
-          <li><strong>Parents:</strong> Select two animals of the same species. Breeding does not consume parents; they return to their pasture after mating!</li>
-          <li><strong>Offspring:</strong> Offspring inherit species traits with a strong probability of upgrading to the next tier (e.g. Common + Common can yield Uncommon).</li>
-          <li><strong>Codex Gem Bounties:</strong> Every new breed discovered registers in your Codex and pays out immediate <strong>Gems</strong>!</li>
-          <li><strong>Important Notice:</strong> High-tier breeds yield special variants (e.g., Gilded Wool, Golden Eggs). Always keep at least 1 Common animal if standard recipes demand regular Wool or Eggs!</li>
+          <li><strong>Parents Never Consumed:</strong> Parents rest temporarily during mating and immediately return to their coop or pasture once incubation starts!</li>
+          <li><strong>Active Incubator Slots:</strong> Track egg hatch timers in real time. Incubators can be expanded with gems to incubate multiple eggs simultaneously.</li>
+          <li><strong>Coin Speedups:</strong> Need eggs hatched before a crisis or fair? Pay a coin speedup fee proportional to remaining time for instant hatch readiness.</li>
+          <li><strong>Animated Egg Hatching Reveal:</strong> Tap to crack your eggs and discover their breed, stats, and mutation bonus with celebratory sound effects!</li>
+          <li><strong>5% Apex Mutant Jackpot:</strong> Every egg has a bonus 5% roll to hatch as an Apex Mutant with permanent 1.5x production speed and +5 Gems!</li>
         </ul>
       </div>
     </div>

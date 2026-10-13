@@ -26,7 +26,13 @@ import {
   type CrisisType, type CrisisDef, CRISIS_DEFINITIONS,
   MUTATION_VARIANTS, type MutationVariantDef,
   MARKET_COMMODITIES, MARKET_NEWS_TEMPLATES, type MarketNewsTemplate,
+  TIER_LABELS,
 } from './data';
+import {
+  rollBreedingTier,
+  INCUBATION_TIMES,
+  type AnimalTier,
+} from '@/utils/breedingLogic';
 import {
   SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, getEligibleRandomEvents,
   type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
@@ -330,6 +336,22 @@ export interface ActiveBreeding {
   parent2Id: string;
   startedAt: number;
   durationMs: number;
+  offspringTier?: Tier;
+  offspringBreedId?: string;
+  isMutated?: boolean;
+  mutationVariant?: string;
+  mutationBonus?: number;
+  notified?: boolean;
+}
+
+export interface HatchRevealData {
+  animal: AnimalInstance;
+  breedName: string;
+  parent1BreedName: string;
+  parent2BreedName: string;
+  isNewCodex: boolean;
+  gemReward: number;
+  wasMutationUp: boolean;
 }
 
 export interface ActiveExpedition {
@@ -403,6 +425,7 @@ export interface GameState {
   // Breeding
   breedingSlots: number;
   activeBreedings: ActiveBreeding[];
+  hatchReveal: HatchRevealData | null;
 
   // Wilderness Expeditions
   wilderness: {
@@ -510,7 +533,10 @@ export interface GameState {
   openSmugglerCrate: () => void;
 
   // Breeding
-  breedAnimals: (parent1Id: string, parent2Id: string) => void;
+  breedAnimals: (parent1Id: string, parent2Id: string) => boolean;
+  speedUpBreeding: (breedingId: string) => boolean;
+  claimHatchedAnimal: (breedingId: string) => AnimalInstance | null;
+  clearHatchReveal: () => void;
   upgradeBreedingSlot: () => void;
 
   // Wilderness
@@ -871,6 +897,7 @@ export const useGameStore = create<GameState>()(
 
       breedingSlots: 1,
       activeBreedings: [],
+      hatchReveal: null,
 
       wilderness: {
         unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
@@ -2267,21 +2294,21 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const parent1 = state.animals.find(a => a.id === parent1Id);
         const parent2 = state.animals.find(a => a.id === parent2Id);
-        if (!parent1 || !parent2) return;
-        if (parent1.species !== parent2.species) return;
-        if (state.activeBreedings.length >= state.breedingSlots) return;
+        if (!parent1 || !parent2) return false;
+        if (parent1.species !== parent2.species) return false;
+        if (state.activeBreedings.length >= state.breedingSlots) return false;
 
-        // Determine offspring tier based on parent tiers
-        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
-        const maxTierIdx = Math.max(tierOrder.indexOf(parent1.tier), tierOrder.indexOf(parent2.tier));
-        let offspringTier: Tier;
-        // 30% chance to breed UP a tier
-        if (Math.random() < 0.3 && maxTierIdx < tierOrder.length - 1) {
-          offspringTier = tierOrder[maxTierIdx + 1];
-        } else {
-          offspringTier = tierOrder[maxTierIdx];
-        }
-        const offspringBreedId = `${parent1.species}_${offspringTier}`;
+        // Roll tier based on parent tiers using probability engine
+        const offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
+
+        // 5% Mutation Chance for rare apex mutant tier variant
+        const isMutantRoll = Math.random() < 0.05;
+        const mutantDef = isMutantRoll ? MUTATION_VARIANTS[parent1.species] : null;
+
+        const finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
+        const offspringBreedId = mutantDef ? mutantDef.id : `${parent1.species}_${finalTier}`;
+        const durationSec = INCUBATION_TIMES[offspringTier] || 120;
+        const durationMs = durationSec * 1000;
 
         const breeding: ActiveBreeding = {
           id: generateId(),
@@ -2289,7 +2316,13 @@ export const useGameStore = create<GameState>()(
           parent1Id,
           parent2Id,
           startedAt: Date.now(),
-          durationMs: 120000, // 2 min
+          durationMs,
+          offspringTier: finalTier,
+          offspringBreedId,
+          isMutated: Boolean(mutantDef),
+          mutationVariant: mutantDef ? mutantDef.name : undefined,
+          mutationBonus: mutantDef ? mutantDef.speedBonus : undefined,
+          notified: false,
         };
 
         // Mark parents as unavailable (fed state)
@@ -2300,11 +2333,154 @@ export const useGameStore = create<GameState>()(
           return a;
         });
 
+        playClockTickSound(true);
         set({
           animals: newAnimals,
           activeBreedings: [...state.activeBreedings, breeding],
-          codex: { ...state.codex, [offspringBreedId]: true },
         });
+        return true;
+      },
+
+      speedUpBreeding: (breedingId: string) => {
+        const state = get();
+        const breeding = state.activeBreedings.find(b => b.id === breedingId);
+        if (!breeding) return false;
+        const elapsed = Date.now() - breeding.startedAt;
+        const remainingSec = Math.max(0, Math.ceil((breeding.durationMs - elapsed) / 1000));
+        if (remainingSec <= 0) return false;
+
+        const costCoins = Math.max(5, Math.ceil(remainingSec * 0.5));
+        if (state.coins < costCoins) {
+          playDefeatSound();
+          state.addNotification(`Not enough coins for incubator speedup! Need 🪙${costCoins}.`, '⚠️', 'info');
+          return false;
+        }
+
+        const updatedBreedings = state.activeBreedings.map(b => {
+          if (b.id === breedingId) {
+            return { ...b, startedAt: Date.now() - b.durationMs };
+          }
+          return b;
+        });
+
+        playCashRegisterSound();
+        set({
+          coins: state.coins - costCoins,
+          activeBreedings: updatedBreedings,
+        });
+
+        state.addNotification('⚡ Incubator speedup successful! Egg is ready to hatch!', '✨', 'event');
+        return true;
+      },
+
+      claimHatchedAnimal: (breedingId: string) => {
+        const state = get();
+        const breeding = state.activeBreedings.find(b => b.id === breedingId);
+        if (!breeding) return null;
+        const elapsed = Date.now() - breeding.startedAt;
+        if (elapsed < breeding.durationMs) return null;
+
+        // Check animal capacity
+        const currentCount = state.animals.filter(a => a.species === breeding.species).length;
+        const cap = state.animalCapacity[breeding.species] || ANIMALS[breeding.species]?.capacity || 6;
+        if (currentCount >= cap) {
+          playDefeatSound();
+          state.addNotification(
+            `Cannot hatch egg! Your ${ANIMALS[breeding.species]?.habitat || 'habitat'} is at maximum capacity (${cap}). Upgrade habitat first!`,
+            '⚠️',
+            'info'
+          );
+          return null;
+        }
+
+        const parent1 = state.animals.find(a => a.id === breeding.parent1Id);
+        const parent2 = state.animals.find(a => a.id === breeding.parent2Id);
+
+        const parent1BreedName = parent1 ? (BREED_REGISTRY[parent1.breedId]?.name || TIER_LABELS[parent1.tier]) : 'Parent 1';
+        const parent2BreedName = parent2 ? (BREED_REGISTRY[parent2.breedId]?.name || TIER_LABELS[parent2.tier]) : 'Parent 2';
+
+        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
+        const p1TierIdx = parent1 ? tierOrder.indexOf(parent1.tier) : 0;
+        const p2TierIdx = parent2 ? tierOrder.indexOf(parent2.tier) : 0;
+        const maxParentTierIdx = Math.max(p1TierIdx, p2TierIdx);
+        const offspringTier: Tier = breeding.offspringTier || 'common';
+        const offspringTierIdx = tierOrder.indexOf(offspringTier);
+        const wasMutationUp = offspringTierIdx > maxParentTierIdx;
+
+        const breedId = breeding.offspringBreedId || `${breeding.species}_${offspringTier}`;
+        const breedDef = BREED_REGISTRY[breedId];
+        const breedName = breedDef?.name || TIER_LABELS[offspringTier];
+        const maxCycles = breeding.isMutated ? 25 : (breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier));
+
+        const newAnimal: AnimalInstance = {
+          id: generateId(),
+          species: breeding.species,
+          tier: offspringTier,
+          breedId,
+          fed: false,
+          fedAt: null,
+          productReady: false,
+          age: 'baby',
+          maxCycles,
+          cyclesRemaining: maxCycles,
+          cyclesCompletedTotal: 0,
+          isMutated: breeding.isMutated,
+          mutationVariant: breeding.mutationVariant,
+          mutationBonus: breeding.mutationBonus,
+        };
+
+        const isNewCodex = !state.codex[breedId];
+        let gemReward = isNewCodex && breedDef ? (breedDef.codexGemReward || 0) : 0;
+        if (breeding.isMutated && !state.codex[`mutant_${breedId}`]) {
+          gemReward += 5;
+        }
+
+        const updatedCodex = {
+          ...state.codex,
+          [breedId]: true,
+          ...(breeding.isMutated ? { [`mutant_${breedId}`]: true } : {}),
+        };
+
+        // Reset parents
+        const updatedAnimals = state.animals.map(a => {
+          if (a.id === breeding.parent1Id || a.id === breeding.parent2Id) {
+            return { ...a, fed: false, fedAt: null };
+          }
+          return a;
+        });
+
+        // Remove breeding from activeBreedings
+        const updatedBreedings = state.activeBreedings.filter(b => b.id !== breedingId);
+
+        if (offspringTier === 'legendary' || breeding.isMutated) {
+          playGoldRushFanfare();
+        } else {
+          playVictoryChime();
+        }
+
+        const revealData: HatchRevealData = {
+          animal: newAnimal,
+          breedName,
+          parent1BreedName,
+          parent2BreedName,
+          isNewCodex,
+          gemReward,
+          wasMutationUp,
+        };
+
+        set({
+          animals: [...updatedAnimals, newAnimal],
+          activeBreedings: updatedBreedings,
+          codex: updatedCodex,
+          gems: state.gems + gemReward,
+          hatchReveal: revealData,
+        });
+
+        return newAnimal;
+      },
+
+      clearHatchReveal: () => {
+        set({ hatchReveal: null });
       },
 
       upgradeBreedingSlot: () => {
@@ -3084,72 +3260,17 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Breeding completion
-        const newActiveBreedings = state.activeBreedings.filter(b => {
-          if (now - b.startedAt >= b.durationMs) {
-            return false;
+        // Breeding incubation progress check & notification
+        let hasNewReadyEgg = false;
+        const newActiveBreedings = state.activeBreedings.map(b => {
+          if (now - b.startedAt >= b.durationMs && !b.notified) {
+            hasNewReadyEgg = true;
+            return { ...b, notified: true };
           }
-          return true;
+          return b;
         });
-
-        // Actually process completed breedings — use parent tiers for proper offspring tier roll
-        const completedBreedings = state.activeBreedings.filter(b => now - b.startedAt >= b.durationMs);
-        let breedingAnimals = [...newAnimals];
-        for (const b of completedBreedings) {
-          // Look up parent animals to determine offspring tier properly
-          const parent1 = breedingAnimals.find(a => a.id === b.parent1Id);
-          const parent2 = breedingAnimals.find(a => a.id === b.parent2Id);
-          const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
-          let offspringTier: Tier;
-          if (parent1 && parent2) {
-            const maxTierIdx = Math.max(tierOrder.indexOf(parent1.tier), tierOrder.indexOf(parent2.tier));
-            if (Math.random() < 0.3 && maxTierIdx < tierOrder.length - 1) {
-              offspringTier = tierOrder[maxTierIdx + 1];
-            } else {
-              offspringTier = tierOrder[maxTierIdx];
-            }
-          } else {
-            // Fallback if parents not found
-            offspringTier = Math.random() < 0.3 ? 'uncommon' : 'common';
-          }
-          // 5% Mutation Chance for rare mutant tier variant (Step 4)
-          const isMutantRoll = Math.random() < 0.05;
-          const mutantDef = isMutantRoll ? MUTATION_VARIANTS[b.species] : null;
-
-          const offspringBreedId = mutantDef ? mutantDef.id : `${b.species}_${offspringTier}`;
-          const breedDef = BREED_REGISTRY[offspringBreedId];
-          const offspringMaxCycles = mutantDef ? 25 : (breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier));
-          const newAnimal: AnimalInstance = {
-            id: generateId(),
-            species: b.species,
-            tier: mutantDef ? 'legendary' : offspringTier,
-            breedId: offspringBreedId,
-            fed: false,
-            fedAt: null,
-            productReady: false,
-            age: 'baby',
-            maxCycles: offspringMaxCycles,
-            cyclesRemaining: offspringMaxCycles,
-            cyclesCompletedTotal: 0,
-            isMutated: Boolean(mutantDef),
-            mutationVariant: mutantDef ? mutantDef.name : undefined,
-            mutationBonus: mutantDef ? mutantDef.speedBonus : undefined,
-          };
-          if (mutantDef) {
-            newCodex[`mutant_${mutantDef.id}`] = true;
-            newGems += 5;
-            playGoldRushFanfare();
-            state.addNotification(`🧬 MUTATION DISCOVERED! Rare ${mutantDef.name} born with permanent 1.5x production speed!`, '✨', 'event');
-          }
-          breedingAnimals.push(newAnimal);
-          // Reset parents
-          breedingAnimals = breedingAnimals.map(a => {
-            if (a.id === b.parent1Id || a.id === b.parent2Id) {
-              return { ...a, fed: false, fedAt: null };
-            }
-            return a;
-          });
-          newCodex[offspringBreedId] = true;
+        if (hasNewReadyEgg) {
+          state.addNotification('🥚 An incubator egg is ready to hatch! Visit your Incubator to reveal it!', '✨', 'discovery');
         }
 
     // --- Expedition Processing ---
@@ -3457,7 +3578,7 @@ export const useGameStore = create<GameState>()(
 
         set({
           plots: newPlots,
-          animals: completedBreedings.length > 0 ? breedingAnimals : newAnimals,
+          animals: newAnimals,
           productionQueues: newQueues,
           barn: newBarn,
           silo: newSilo,

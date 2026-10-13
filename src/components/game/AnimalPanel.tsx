@@ -16,6 +16,7 @@ const TIER_CARD_STYLES: Record<Tier, string> = {
 
 import { useState, useEffect } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { BreedingModal } from './BreedingModal';
 
 export function AnimalPanel() {
   const {
@@ -34,8 +35,11 @@ export function AnimalPanel() {
     upgradeHabitat,
     toggleAnimalOverclock,
     cureAnimalExhaustion,
+    breedingSlots,
+    activeBreedings,
   } = useGameStore();
 
+  const [showBreedingModal, setShowBreedingModal] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -61,6 +65,48 @@ export function AnimalPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Livestock Breeding & Incubator Entrypoint */}
+      {(() => {
+        const readyEggsCount = activeBreedings.filter(b => Date.now() - b.startedAt >= b.durationMs).length;
+        return (
+          <div className="bg-gradient-to-r from-violet-950/80 via-purple-950/80 to-stone-900 border-2 border-violet-500/50 rounded-2xl p-4 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-violet-600/30 border border-violet-400/40 flex items-center justify-center text-2xl shadow-inner relative">
+                🧬
+                {readyEggsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-400 rounded-full animate-ping" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-white text-base">Livestock Breeding & Incubator</h3>
+                  {readyEggsCount > 0 ? (
+                    <span className="bg-amber-400 text-amber-950 text-xs font-black px-2 py-0.5 rounded-full animate-bounce">
+                      ✨ {readyEggsCount} Egg Ready to Hatch!
+                    </span>
+                  ) : activeBreedings.length > 0 ? (
+                    <span className="bg-violet-500/30 text-violet-300 text-xs font-bold px-2 py-0.5 rounded-full border border-violet-400/30">
+                      🥚 {activeBreedings.length}/{breedingSlots} Incubating
+                    </span>
+                  ) : null}
+                </div>
+                <p className="text-xs text-violet-200 mt-0.5">
+                  Combine purebred livestock to trigger upward mutations into Rare & Legendary breeds.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowBreedingModal(true)}
+              className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-violet-500 via-fuchsia-600 to-indigo-600 hover:from-violet-600 hover:to-indigo-700 text-white font-bold text-sm rounded-xl shadow-lg shadow-violet-600/30 transition-all active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <span>🥚</span>
+              Open Incubator & Breeding
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Batch Action Buttons */}
       {(canFeedCount > 0 || collectibleAnimals.length > 0) && (
         <div className="flex gap-2 flex-wrap">
@@ -328,6 +374,9 @@ export function AnimalPanel() {
           );
         })}
       </div>
+
+      {/* Dedicated Breeding & Incubator Modal */}
+      <BreedingModal isOpen={showBreedingModal} onClose={() => setShowBreedingModal(false)} />
     </div>
   );
 }
