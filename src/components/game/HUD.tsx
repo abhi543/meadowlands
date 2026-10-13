@@ -2,6 +2,7 @@
 
 import { useGameStore } from '@/game/store';
 import { xpForLevel } from '@/game/data';
+import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 
 interface HUDProps {
   onOpenBackupModal?: () => void;
@@ -102,7 +103,7 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             title="Farm Animals (Tap to open Pastures)"
           >
             <span>🐾</span>
-            <span className="font-bold">{animals.length}/16</span>
+            <span className="font-bold">{animals.length}/{TOTAL_PASTURE_CAPACITY}</span>
             {livestockReserve.length > 0 && (
               <span className="text-[10px] bg-amber-300 text-stone-950 font-black px-1 rounded-sm shadow-2xs">
                 +{livestockReserve.length}

@@ -5,6 +5,7 @@ import { CROPS, type CropId } from '@/game/data';
 import { useState } from 'react';
 import { FarmWell } from './FarmWell';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -80,7 +81,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 Farm Animals
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700/60 shadow-2xs">
-                {animals.length}/16 Pastures
+                {animals.length}/{TOTAL_PASTURE_CAPACITY} Pastures
               </span>
               {livestockReserve.length > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-bold bg-stone-200/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 shadow-2xs">

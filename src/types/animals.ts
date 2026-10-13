@@ -22,7 +22,7 @@ export const TIER_SECTORS: Record<AnimalTier, SectorConfig> = {
     bgGradient: 'from-emerald-50 via-teal-50/40 to-white dark:from-emerald-950/40 dark:via-emerald-900/20 dark:to-stone-900/90',
     roleDescription: 'Bulk Raw Producers',
     passivePerk: 'Safe Overclock (0% Burnout)',
-    maxCapacity: 4,
+    maxCapacity: 50,
   },
   uncommon: {
     tier: 'uncommon',
@@ -58,3 +58,8 @@ export const TIER_SECTORS: Record<AnimalTier, SectorConfig> = {
     maxCapacity: 4,
   },
 };
+
+export const TOTAL_PASTURE_CAPACITY = Object.values(TIER_SECTORS).reduce(
+  (sum, sector) => sum + sector.maxCapacity,
+  0
+); // 62 total slots (50 common + 4 uncommon + 4 rare + 4 legendary)

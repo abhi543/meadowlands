@@ -15,6 +15,7 @@ import {
   getBreedingOddsBreakdown,
   INCUBATION_TIMES,
 } from '@/utils/breedingLogic';
+import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 import {
   playGoldRushFanfare,
   playVictoryChime,
@@ -401,17 +402,17 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium bg-stone-900 border-stone-800 text-stone-300">
                   <span>🐾</span>
-                  <span>Sanctuary Spaces: <strong className="text-white">{totalSanctuaryCount}/16</strong></span>
-                  {totalSanctuaryCount >= 16 ? (
+                  <span>Sanctuary Spaces: <strong className="text-white">{totalSanctuaryCount}/{TOTAL_PASTURE_CAPACITY}</strong></span>
+                  {totalSanctuaryCount >= TOTAL_PASTURE_CAPACITY ? (
                     <span className="font-bold text-amber-400">(All Active Full)</span>
                   ) : (
-                    <span className="text-emerald-400 font-bold">({16 - totalSanctuaryCount} open)</span>
+                    <span className="text-emerald-400 font-bold">({TOTAL_PASTURE_CAPACITY - totalSanctuaryCount} open)</span>
                   )}
                 </div>
 
                 <div className="hidden sm:flex items-center gap-1.5 text-[10px] font-mono">
                   <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60 font-semibold">
-                    🟢 Common {commonCount}/4
+                    🟢 Common {commonCount}/50
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-sky-950/60 text-sky-300 border border-sky-800/60 font-semibold">
                     🔵 Uncommon {uncommonCount}/4

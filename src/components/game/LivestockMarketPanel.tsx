@@ -8,6 +8,7 @@ import {
   type AnimalSpecies, type Tier,
 } from '@/game/data';
 import { BreedingPanel } from './BreedingPanel';
+import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
@@ -37,7 +38,7 @@ export function LivestockMarketPanel() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 font-bold font-mono">
-            🐾 {animals.length}/16 Pastures
+            🐾 {animals.length}/{TOTAL_PASTURE_CAPACITY} Pastures
           </span>
           {livestockReserve.length > 0 && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 font-bold font-mono">

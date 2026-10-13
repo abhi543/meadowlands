@@ -10,7 +10,7 @@ import {
   type AnimalSpecies,
   type Tier,
 } from '@/game/data';
-import { TIER_SECTORS, type AnimalTier, type SectorConfig } from '@/types/animals';
+import { TIER_SECTORS, TOTAL_PASTURE_CAPACITY, type AnimalTier, type SectorConfig } from '@/types/animals';
 import { OverclockActionMenu } from './OverclockActionMenu';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
@@ -88,7 +88,7 @@ export function AnimalsTab() {
 
           <div className="flex items-center gap-1.5 text-[11px] font-mono">
             <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700/60 font-bold">
-              {animals.length}/16 Pasture
+              {animals.length}/{TOTAL_PASTURE_CAPACITY} Pasture
             </span>
             {livestockReserve.length > 0 && (
               <button
@@ -177,8 +177,9 @@ export function AnimalsTab() {
         {SECTOR_ORDER.map(tier => {
           const config = TIER_SECTORS[tier];
           const sectorAnimals = animals.filter(a => a.tier === tier);
-          const maxCapacity = config.maxCapacity; // exactly 4 slots
+          const maxCapacity = config.maxCapacity;
           const filledSlots = sectorAnimals.slice(0, maxCapacity);
+          const isCommon = tier === 'common';
           const emptyCount = Math.max(0, maxCapacity - filledSlots.length);
 
           return (
@@ -210,8 +211,12 @@ export function AnimalsTab() {
                 </div>
               </div>
 
-              {/* 4-Slot Inner Sub-Grid (2x2 sub-grid inside quadrant, 100% fits within height) */}
-              <div className="grid grid-cols-2 grid-rows-2 gap-1.5 flex-1 min-h-0 overflow-hidden">
+              {/* Sub-Grid (scrollable for common up to 50 animals, fixed 2x2 for higher tiers) */}
+              <div className={`gap-1.5 flex-1 min-h-0 ${
+                isCommon
+                  ? 'grid grid-cols-2 auto-rows-max overflow-y-auto pr-1'
+                  : 'grid grid-cols-2 grid-rows-2 overflow-hidden'
+              }`}>
                 
                 {/* Active Animal Slots */}
                 {filledSlots.map(animal => {
@@ -337,38 +342,69 @@ export function AnimalsTab() {
                   );
                 })}
 
-                {/* Empty Slot Placeholders (Fill remaining slots up to 4) */}
-                {Array.from({ length: emptyCount }).map((_, slotIdx) => (
-                  <div
-                    key={`empty-slot-${tier}-${slotIdx}`}
-                    className="rounded-xl border-2 border-dashed border-stone-200/90 dark:border-stone-800/80 bg-white/60 dark:bg-stone-950/30 p-2 flex flex-col items-center justify-center text-center space-y-1 min-h-0 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:bg-white/80 dark:hover:bg-stone-900/60 transition-all"
-                  >
-                    <span className="text-sm opacity-60">{SECTOR_EMOJIS[tier]}</span>
-                    <div className="text-[10px] font-bold text-stone-500 dark:text-stone-400">
-                      Slot Available
-                    </div>
-
-                    {tier === 'common' ? (
+                {/* Empty Slot Placeholders */}
+                {isCommon ? (
+                  filledSlots.length === 0 ? (
+                    Array.from({ length: 4 }).map((_, slotIdx) => (
+                      <div
+                        key={`empty-slot-common-${slotIdx}`}
+                        className="rounded-xl border-2 border-dashed border-stone-200/90 dark:border-stone-800/80 bg-white/60 dark:bg-stone-950/30 p-2 flex flex-col items-center justify-center text-center space-y-1 min-h-[90px] hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:bg-white/80 dark:hover:bg-stone-900/60 transition-all"
+                      >
+                        <span className="text-sm opacity-60">🟢</span>
+                        <div className="text-[10px] font-bold text-stone-500 dark:text-stone-400">
+                          Slot Available
+                        </div>
+                        <button
+                          onClick={() => setShowAdoptModal(true)}
+                          className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs shadow-emerald-200 dark:shadow-none transition-all active:scale-95 cursor-pointer"
+                        >
+                          + Adopt
+                        </button>
+                      </div>
+                    ))
+                  ) : filledSlots.length < maxCapacity ? (
+                    <div
+                      key="adopt-more-common"
+                      className="rounded-xl border-2 border-dashed border-emerald-300/80 dark:border-emerald-700/60 bg-emerald-50/40 dark:bg-emerald-950/20 p-2 flex flex-col items-center justify-center text-center space-y-1 min-h-[90px] hover:border-emerald-400 hover:bg-emerald-50/70 transition-all"
+                    >
+                      <span className="text-sm opacity-70">➕</span>
+                      <div className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
+                        Pasture Open ({filledSlots.length}/50)
+                      </div>
                       <button
                         onClick={() => setShowAdoptModal(true)}
-                        className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs shadow-emerald-200 dark:shadow-none transition-all active:scale-95"
+                        className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white shadow-2xs shadow-emerald-200 dark:shadow-none transition-all active:scale-95 cursor-pointer"
                       >
-                        + Adopt
+                        + Adopt More
                       </button>
-                    ) : livestockReserve.some(a => a.tier === tier) ? (
-                      <button
-                        onClick={() => setShowReserveModal(true)}
-                        className="px-2 py-0.5 text-[9px] font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-black shadow-2xs shadow-amber-200 dark:shadow-none transition-all active:scale-95"
-                      >
-                        Deploy ({livestockReserve.filter(a => a.tier === tier).length})
-                      </button>
-                    ) : (
-                      <span className="text-[9px] font-medium text-stone-400 dark:text-stone-500 italic">
-                        Empty
-                      </span>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  ) : null
+                ) : (
+                  Array.from({ length: emptyCount }).map((_, slotIdx) => (
+                    <div
+                      key={`empty-slot-${tier}-${slotIdx}`}
+                      className="rounded-xl border-2 border-dashed border-stone-200/90 dark:border-stone-800/80 bg-white/60 dark:bg-stone-950/30 p-2 flex flex-col items-center justify-center text-center space-y-1 min-h-0 hover:border-emerald-300 dark:hover:border-emerald-500/40 hover:bg-white/80 dark:hover:bg-stone-900/60 transition-all"
+                    >
+                      <span className="text-sm opacity-60">{SECTOR_EMOJIS[tier]}</span>
+                      <div className="text-[10px] font-bold text-stone-500 dark:text-stone-400">
+                        Slot Available
+                      </div>
+
+                      {livestockReserve.some(a => a.tier === tier) ? (
+                        <button
+                          onClick={() => setShowReserveModal(true)}
+                          className="px-2 py-0.5 text-[9px] font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-black shadow-2xs shadow-amber-200 dark:shadow-none transition-all active:scale-95 cursor-pointer"
+                        >
+                          Deploy ({livestockReserve.filter(a => a.tier === tier).length})
+                        </button>
+                      ) : (
+                        <span className="text-[9px] font-medium text-stone-400 dark:text-stone-500 italic">
+                          Empty
+                        </span>
+                      )}
+                    </div>
+                  ))
+                )}
 
               </div>
 

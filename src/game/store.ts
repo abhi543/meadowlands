@@ -861,7 +861,7 @@ export const useGameStore = create<GameState>()(
       unlockedPlots: GRID_SIZE,
 
       animals: initialAnimals,
-      animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
+      animalCapacity: { chicken: 50, cow: 50, sheep: 50, pig: 50 },
       livestockReserve: [],
 
       productionQueues: {
@@ -1465,8 +1465,10 @@ export const useGameStore = create<GameState>()(
       buyAnimal: (species, tier = 'common' as Tier) => {
         const state = get();
         const tierCount = state.animals.filter(a => a.tier === tier).length;
-        if (tierCount >= 4 || state.animals.length >= 16) {
-          state.addNotification(`The ${TIER_LABELS[tier]} sector is at full capacity (4/4)! Breed to fill higher tiers.`, '⚠️', 'info');
+        const maxTierCap = tier === 'common' ? 50 : 4;
+        const totalPastureCap = 62;
+        if (tierCount >= maxTierCap || state.animals.length >= totalPastureCap) {
+          state.addNotification(`The ${TIER_LABELS[tier]} sector is at full capacity (${tierCount}/${maxTierCap})!`, '⚠️', 'info');
           return;
         }
         const costs: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -2402,9 +2404,10 @@ export const useGameStore = create<GameState>()(
         const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
         const offspringTier: Tier = breeding.offspringTier || 'common';
 
-        // Check if active pasture for this tier is full (>= 4 slots)
+        // Check if active pasture for this tier is full (>= 50 slots for common, >= 4 for others)
         const currentTierCount = state.animals.filter(a => a.tier === offspringTier).length;
-        const storedInReserve = currentTierCount >= 4;
+        const maxTierCap = offspringTier === 'common' ? 50 : 4;
+        const storedInReserve = currentTierCount >= maxTierCap;
 
         const parent1 = state.animals.find(a => a.id === breeding.parent1Id) || (state.livestockReserve || []).find(a => a.id === breeding.parent1Id);
         const parent2 = state.animals.find(a => a.id === breeding.parent2Id) || (state.livestockReserve || []).find(a => a.id === breeding.parent2Id);
@@ -2542,10 +2545,11 @@ export const useGameStore = create<GameState>()(
         if (!animal) return false;
 
         const currentTierCount = state.animals.filter(a => a.tier === animal.tier).length;
-        if (currentTierCount >= 4) {
+        const maxTierCap = animal.tier === 'common' ? 50 : 4;
+        if (currentTierCount >= maxTierCap) {
           playDefeatSound();
           state.addNotification(
-            `Cannot move to pasture: ${TIER_LABELS[animal.tier]} Pasture is at max capacity (4/4). Move an active animal to reserve or sell an elder first.`,
+            `Cannot move to pasture: ${TIER_LABELS[animal.tier]} Pasture is at max capacity (${currentTierCount}/${maxTierCap}). Move an active animal to reserve or sell an elder first.`,
             '⚠️',
             'info'
           );
@@ -5520,7 +5524,7 @@ export const useGameStore = create<GameState>()(
           barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
           plots: initialPlots, unlockedPlots: GRID_SIZE,
           animals: initialAnimals,
-          animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
+          animalCapacity: { chicken: 50, cow: 50, sheep: 50, pig: 50 },
           livestockReserve: [],
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6, 1),
@@ -5809,6 +5813,18 @@ export const useGameStore = create<GameState>()(
         if (!merged.buildingOverclocks) merged.buildingOverclocks = createDefaultBuildingOverclocks();
         if (!merged.entityOverclocks) merged.entityOverclocks = {};
         if (!merged.clientReputation) merged.clientReputation = DEFAULT_CLIENT_REPUTATION;
+
+        // Migration: animalCapacity baseline upgrade to 50
+        if (merged.animalCapacity) {
+          merged.animalCapacity = {
+            chicken: Math.max(merged.animalCapacity.chicken || 50, 50),
+            cow: Math.max(merged.animalCapacity.cow || 50, 50),
+            sheep: Math.max(merged.animalCapacity.sheep || 50, 50),
+            pig: Math.max(merged.animalCapacity.pig || 50, 50),
+          };
+        } else {
+          merged.animalCapacity = { chicken: 50, cow: 50, sheep: 50, pig: 50 };
+        }
 
         // Migration: Global Reputation & Favor Shop
         if (!merged.globalReputation) {
