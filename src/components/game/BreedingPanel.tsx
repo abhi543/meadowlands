@@ -1,14 +1,19 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/game/store';
 import { BreedingModal } from './BreedingModal';
 import { ANIMALS, BREED_REGISTRY, TIER_LABELS } from '@/game/data';
 
 export function BreedingPanel() {
   const [modalOpen, setModalOpen] = useState(false);
-  const { breedingSlots, activeBreedings, animals, claimHatchedAnimal, speedUpBreeding, coins } = useGameStore();
-  const now = Date.now();
+  const { breedingSlots, activeBreedings, animals, claimHatchedAnimal, speedUpBreeding, coins, hatchReveal } = useGameStore();
+  const [now, setNow] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const readyEggs = activeBreedings.filter(b => now - b.startedAt >= b.durationMs);
 

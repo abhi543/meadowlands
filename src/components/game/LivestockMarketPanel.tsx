@@ -7,6 +7,7 @@ import {
   livestockBuyPrice, livestockSellPriceForAnimal,
   type AnimalSpecies, type Tier,
 } from '@/game/data';
+import { BreedingPanel } from './BreedingPanel';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
@@ -35,6 +36,9 @@ export function LivestockMarketPanel() {
           </span>
         )}
       </div>
+
+      {/* Livestock Breeding & Incubator */}
+      <BreedingPanel />
 
       {/* Livestock Reserve Section (Holding Barn) */}
       <div className="bg-gradient-to-r from-stone-50 via-amber-50/30 to-stone-50 dark:from-stone-900 dark:via-amber-950/20 dark:to-stone-900 border-2 border-amber-300/80 dark:border-amber-800/50 rounded-2xl p-3.5 space-y-3 shadow-xs">

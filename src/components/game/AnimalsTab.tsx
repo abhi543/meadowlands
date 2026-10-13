@@ -12,7 +12,6 @@ import {
 } from '@/game/data';
 import { TIER_SECTORS, type AnimalTier, type SectorConfig } from '@/types/animals';
 import { OverclockActionMenu } from './OverclockActionMenu';
-import { BreedingModal } from './BreedingModal';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -43,15 +42,12 @@ export function AnimalsTab() {
     feedAllAnimals,
     collectAllProducts,
     buyAnimal,
-    breedingSlots,
-    activeBreedings,
     livestockReserve = [],
     moveToPasture,
     moveToReserve,
     sellReserveAnimal,
   } = useGameStore();
 
-  const [showBreedingModal, setShowBreedingModal] = useState(false);
   const [showAdoptModal, setShowAdoptModal] = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [, setTick] = useState(0);
@@ -75,7 +71,6 @@ export function AnimalsTab() {
     }
   }
 
-  const readyEggsCount = activeBreedings.filter(b => Date.now() - b.startedAt >= b.durationMs).length;
   const commonAnimalsCount = animals.filter(a => a.tier === 'common').length;
 
   return (
@@ -164,27 +159,6 @@ export function AnimalsTab() {
           >
             <span>➕</span>
             <span className="hidden sm:inline">Adopt</span>
-          </button>
-
-          <button
-            onClick={() => setShowBreedingModal(true)}
-            className={`px-2.5 py-1 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shadow-xs ${
-              readyEggsCount > 0
-                ? 'bg-gradient-to-r from-amber-400 to-yellow-400 text-stone-950 font-black animate-pulse shadow-amber-300/50'
-                : 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-violet-200 dark:shadow-none'
-            }`}
-          >
-            <span>🧬</span>
-            <span>Incubator</span>
-            {readyEggsCount > 0 ? (
-              <span className="bg-amber-900 text-amber-100 px-1 rounded text-[10px] font-black">
-                {readyEggsCount} Ready!
-              </span>
-            ) : activeBreedings.length > 0 ? (
-              <span className="bg-white/20 px-1 rounded text-[10px] font-semibold">
-                {activeBreedings.length}/{breedingSlots}
-              </span>
-            ) : null}
           </button>
         </div>
       </div>
@@ -372,13 +346,17 @@ export function AnimalsTab() {
                       >
                         + Adopt
                       </button>
-                    ) : (
+                    ) : livestockReserve.some(a => a.tier === tier) ? (
                       <button
-                        onClick={() => setShowBreedingModal(true)}
-                        className="px-2.5 py-0.5 text-[9px] font-bold rounded-lg bg-violet-600 hover:bg-violet-500 text-white shadow-2xs shadow-violet-200 dark:shadow-none transition-all active:scale-95"
+                        onClick={() => setShowReserveModal(true)}
+                        className="px-2 py-0.5 text-[9px] font-bold rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-black shadow-2xs shadow-amber-200 dark:shadow-none transition-all active:scale-95"
                       >
-                        + Incubate
+                        Deploy ({livestockReserve.filter(a => a.tier === tier).length})
                       </button>
+                    ) : (
+                      <span className="text-[9px] font-medium text-stone-400 dark:text-stone-500 italic">
+                        Empty
+                      </span>
                     )}
                   </div>
                 ))}
@@ -445,9 +423,6 @@ export function AnimalsTab() {
           </div>
         </div>
       )}
-
-      {/* DEDICATED BREEDING & INCUBATOR MODAL */}
-      <BreedingModal isOpen={showBreedingModal} onClose={() => setShowBreedingModal(false)} />
 
       {/* LIVESTOCK RESERVE MODAL */}
       {showReserveModal && (
