@@ -45,10 +45,15 @@ export function AnimalsTab() {
     buyAnimal,
     breedingSlots,
     activeBreedings,
+    livestockReserve = [],
+    moveToPasture,
+    moveToReserve,
+    sellReserveAnimal,
   } = useGameStore();
 
   const [showBreedingModal, setShowBreedingModal] = useState(false);
   const [showAdoptModal, setShowAdoptModal] = useState(false);
+  const [showReserveModal, setShowReserveModal] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -137,6 +142,20 @@ export function AnimalsTab() {
 
         {/* Right: Quick Adopt & Incubator Actions */}
         <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowReserveModal(true)}
+            className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60 shadow-xs transition-all flex items-center gap-1 active:scale-95"
+            title="View livestock stored in holding reserve"
+          >
+            <span>📦</span>
+            <span className="hidden sm:inline">Reserve</span>
+            {livestockReserve.length > 0 && (
+              <span className="bg-amber-500 text-stone-950 px-1 rounded text-[10px] font-black">
+                {livestockReserve.length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={() => setShowAdoptModal(true)}
             disabled={commonAnimalsCount >= 4}
@@ -313,7 +332,14 @@ export function AnimalsTab() {
                         </span>
 
                         {animal.age !== 'elder' && (
-                          <div className="shrink-0">
+                          <div className="shrink-0 flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveToReserve(animal.id); }}
+                              className="px-1 py-0.5 rounded text-[10px] hover:bg-stone-200 dark:hover:bg-stone-800 text-stone-400 hover:text-amber-500 transition-colors"
+                              title="Store animal in Livestock Reserve"
+                            >
+                              📦
+                            </button>
                             <OverclockActionMenu
                               entityId={`animal_${animal.id}`}
                               entityType="animal"
@@ -422,6 +448,99 @@ export function AnimalsTab() {
 
       {/* DEDICATED BREEDING & INCUBATOR MODAL */}
       <BreedingModal isOpen={showBreedingModal} onClose={() => setShowBreedingModal(false)} />
+
+      {/* LIVESTOCK RESERVE MODAL */}
+      {showReserveModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-stone-900 border-2 border-amber-400 dark:border-amber-600/60 rounded-2xl p-5 w-full max-w-lg shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-stone-200 dark:border-stone-800 pb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📦</span>
+                <div>
+                  <h3 className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-2">
+                    Livestock Reserve & Holding Barn
+                    <span className="text-xs px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold">
+                      {livestockReserve.length} Stored
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    Animals stored when pastures are full (e.g. Common 4/4). Deploy them into active pastures anytime!
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowReserveModal(false)}
+                className="w-7 h-7 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center text-xs transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {livestockReserve.length === 0 ? (
+              <div className="py-8 text-center text-xs text-stone-500 dark:text-stone-400 border border-dashed border-stone-200 dark:border-stone-800 rounded-xl space-y-1">
+                <div className="text-2xl">📦</div>
+                <div className="font-bold text-stone-700 dark:text-stone-300">No animals in reserve right now</div>
+                <div className="text-[11px] max-w-xs mx-auto">
+                  When your Common Pasture is full (4/4), newly hatched common livestock will be safely preserved here!
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-72 overflow-y-auto pr-1">
+                {livestockReserve.map(animal => {
+                  const def = ANIMALS[animal.species];
+                  const breedDef = BREED_REGISTRY[animal.breedId];
+                  const breedName = breedDef?.name || TIER_LABELS[animal.tier];
+                  const tierCount = animals.filter(a => a.tier === animal.tier).length;
+                  const canDeploy = tierCount < 4;
+
+                  return (
+                    <div
+                      key={animal.id}
+                      className="rounded-xl border-2 p-2.5 bg-stone-50 dark:bg-stone-950/70 flex flex-col justify-between space-y-2"
+                      style={{ borderColor: TIER_COLORS[animal.tier] }}
+                    >
+                      <div className="text-center">
+                        <div className="text-2xl mb-0.5">{def.emoji}</div>
+                        <div
+                          className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded inline-block"
+                          style={{
+                            color: TIER_COLORS[animal.tier],
+                            backgroundColor: `${TIER_COLORS[animal.tier]}20`,
+                          }}
+                        >
+                          {TIER_LABELS[animal.tier]}
+                        </div>
+                        <div className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate mt-1" title={breedName}>
+                          {breedName}
+                        </div>
+                        <div className="text-[10px] text-stone-500">
+                          {animal.cyclesRemaining}/{animal.maxCycles} cycles
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 pt-1.5 border-t border-stone-200 dark:border-stone-800">
+                        <button
+                          onClick={() => moveToPasture(animal.id)}
+                          disabled={!canDeploy}
+                          className="w-full py-1 text-[10px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all shadow-xs"
+                        >
+                          {canDeploy ? 'Deploy to Pasture' : 'Pasture Full (4/4)'}
+                        </button>
+                        <button
+                          onClick={() => sellReserveAnimal(animal.id)}
+                          className="w-full py-1 text-[9px] font-semibold rounded-lg bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors"
+                        >
+                          Sell to Market
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -44,6 +44,7 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
     claimHatchedAnimal,
     upgradeBreedingSlot,
     animalCapacity,
+    livestockReserve = [],
     hatchReveal,
     clearHatchReveal,
   } = useGameStore();
@@ -71,9 +72,10 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
 
   if (!isOpen) return null;
 
-  // Selected parent animal objects
-  const parent1 = animals.find(a => a.id === parent1Id && a.species === selectedSpecies);
-  const parent2 = animals.find(a => a.id === parent2Id && a.species === selectedSpecies);
+  // Selected parent animal objects (can come from active animals or livestock reserve)
+  const allFarmAnimals = [...animals, ...(livestockReserve || [])];
+  const parent1 = allFarmAnimals.find(a => a.id === parent1Id && a.species === selectedSpecies);
+  const parent2 = allFarmAnimals.find(a => a.id === parent2Id && a.species === selectedSpecies);
 
   // Busy parent animal IDs currently in active incubator chambers
   const busyParentIds = new Set(
@@ -81,7 +83,7 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
   );
 
   // Available animals of selected species that aren't currently incubating and aren't elders
-  const availableAnimals = animals.filter(
+  const availableAnimals = allFarmAnimals.filter(
     a => a.species === selectedSpecies && a.age !== 'elder' && !busyParentIds.has(a.id)
   );
 
@@ -92,8 +94,6 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
   const rareCount = animals.filter(a => a.tier === 'rare').length;
   const legendaryCount = animals.filter(a => a.tier === 'legendary').length;
   const totalSanctuaryCount = animals.length;
-  const totalOccupiedAndPending = totalSanctuaryCount + activeBreedings.length;
-  const areAllSanctuariesFull = totalOccupiedAndPending >= 16;
 
   // Odds breakdown if both parents are selected
   const oddsBreakdown = parent1 && parent2
@@ -399,15 +399,11 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
 
               {/* Sanctuary Capacity Overview */}
               <div className="flex items-center gap-2 flex-wrap">
-                <div className={`text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium ${
-                  areAllSanctuariesFull
-                    ? 'bg-red-950/60 border-red-500/40 text-red-300'
-                    : 'bg-stone-900 border-stone-800 text-stone-300'
-                }`}>
+                <div className="text-xs px-3 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium bg-stone-900 border-stone-800 text-stone-300">
                   <span>🐾</span>
                   <span>Sanctuary Spaces: <strong className="text-white">{totalSanctuaryCount}/16</strong></span>
-                  {areAllSanctuariesFull ? (
-                    <span className="font-bold text-red-400">(ALL FULL)</span>
+                  {totalSanctuaryCount >= 16 ? (
+                    <span className="font-bold text-amber-400">(All Active Full)</span>
                   ) : (
                     <span className="text-emerald-400 font-bold">({16 - totalSanctuaryCount} open)</span>
                   )}
@@ -425,6 +421,9 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-800/60 font-semibold">
                     🟡 Legendary {legendaryCount}/4
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded bg-amber-900/50 text-amber-300 border border-amber-600/60 font-bold">
+                    📦 Reserve: {livestockReserve.length}
                   </span>
                 </div>
               </div>
@@ -647,24 +646,19 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                   {/* Start Breeding Button */}
                   <button
                     onClick={handleStartBreeding}
-                    disabled={activeBreedings.length >= breedingSlots || areAllSanctuariesFull}
+                    disabled={activeBreedings.length >= breedingSlots}
                     className="w-full py-3 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-40 text-white font-black text-sm rounded-xl shadow-lg shadow-violet-600/30 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
                     <span>🥚</span>
                     <span>Start Incubation ({activeBreedings.length}/{breedingSlots} slots)</span>
                   </button>
 
-                  {commonCount >= 4 && !areAllSanctuariesFull && (
-                    <div className="text-center text-xs text-sky-300 bg-sky-950/60 border border-sky-800/60 rounded-lg py-1 px-2 font-medium">
-                      ✨ Common Pasture is full (4/4)! Breeding will automatically promote offspring into open Uncommon, Rare, and Legendary sanctuaries!
+                  {commonCount >= 4 && (
+                    <div className="text-center text-xs text-amber-300 bg-amber-950/60 border border-amber-800/60 rounded-lg py-1.5 px-2 font-medium">
+                      📦 Common Pasture is full (4/4)! If offspring hatches as Common, it will be safely stored in your Livestock Reserve for future use.
                     </div>
                   )}
 
-                  {areAllSanctuariesFull && (
-                    <div className="text-center text-xs text-red-400 font-medium">
-                      ⚠️ All 16 spaces across Common, Uncommon, Rare, and Legendary are full or reserved by incubating eggs ({totalOccupiedAndPending}/16). Sell elder animals to breed new ones.
-                    </div>
-                  )}
                   {activeBreedings.length >= breedingSlots && (
                     <div className="text-center text-xs text-amber-400 font-medium">
                       ⚠️ Incubator chambers full. Unlock an additional slot or wait for current eggs to hatch!
@@ -738,6 +732,11 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                             >
                               {TIER_LABELS[animal.tier]}
                             </span>
+                            {livestockReserve.some(r => r.id === animal.id) && (
+                              <span className="text-[9px] font-bold text-amber-300 bg-amber-950 px-1 rounded border border-amber-500/40">
+                                📦 Reserve
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs font-bold text-white truncate" title={breedName}>
                             {breedName}
@@ -870,6 +869,13 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                       <span>NEW CODEX DISCOVERY! +{hatchReveal.gemReward} 💎 Gems</span>
                     </div>
                   )}
+
+                  {hatchReveal.storedInReserve && (
+                    <div className="bg-gradient-to-r from-amber-950/90 to-yellow-950/90 border border-amber-400/80 rounded-xl p-2.5 text-xs text-amber-200 font-bold flex items-center justify-center gap-2 shadow-sm">
+                      <span>📦</span>
+                      <span>STORED IN LIVESTOCK RESERVE! (Pasture Full 4/4)</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Details */}
@@ -885,6 +891,12 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                   <div className="flex justify-between">
                     <span className="text-stone-500">Parentage:</span>
                     <span className="font-bold text-stone-400">{hatchReveal.parent1BreedName} × {hatchReveal.parent2BreedName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Destination:</span>
+                    <span className={hatchReveal.storedInReserve ? "font-bold text-amber-400" : "font-bold text-emerald-400"}>
+                      {hatchReveal.storedInReserve ? "📦 Livestock Reserve (Saved for future use)" : `🌿 ${TIER_LABELS[hatchReveal.animal.tier]} Pasture`}
+                    </span>
                   </div>
                 </div>
 

@@ -352,6 +352,7 @@ export interface HatchRevealData {
   isNewCodex: boolean;
   gemReward: number;
   wasMutationUp: boolean;
+  storedInReserve?: boolean;
 }
 
 export interface ActiveExpedition {
@@ -385,9 +386,10 @@ export interface GameState {
   plots: PlotState[];
   unlockedPlots: number;
 
-  // Animals
+  // Animals & Livestock Reserve
   animals: AnimalInstance[];
   animalCapacity: Record<AnimalSpecies, number>;
+  livestockReserve: AnimalInstance[];
 
   // Production
   productionQueues: Record<BuildingId, ProductionSlot[]>;
@@ -538,6 +540,11 @@ export interface GameState {
   claimHatchedAnimal: (breedingId: string) => AnimalInstance | null;
   clearHatchReveal: () => void;
   upgradeBreedingSlot: () => void;
+
+  // Livestock Reserve Management
+  moveToPasture: (animalId: string) => boolean;
+  moveToReserve: (animalId: string) => boolean;
+  sellReserveAnimal: (animalId: string) => void;
 
   // Wilderness
   launchExpedition: (biomeId: BiomeId, farmhandId: string, lureId: LureTypeId) => void;
@@ -855,6 +862,7 @@ export const useGameStore = create<GameState>()(
 
       animals: initialAnimals,
       animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
+      livestockReserve: [],
 
       productionQueues: {
         feed_mill: [],
@@ -2294,64 +2302,20 @@ export const useGameStore = create<GameState>()(
       // Breeding
       breedAnimals: (parent1Id, parent2Id) => {
         const state = get();
-        const parent1 = state.animals.find(a => a.id === parent1Id);
-        const parent2 = state.animals.find(a => a.id === parent2Id);
+        const parent1 = state.animals.find(a => a.id === parent1Id) || (state.livestockReserve || []).find(a => a.id === parent1Id);
+        const parent2 = state.animals.find(a => a.id === parent2Id) || (state.livestockReserve || []).find(a => a.id === parent2Id);
         if (!parent1 || !parent2) return false;
         if (parent1.species !== parent2.species) return false;
         if (state.activeBreedings.length >= state.breedingSlots) return false;
 
-        // Check if all 16 sanctuary spaces are already filled or occupied by incubating eggs
-        const totalAnimals = state.animals.length;
-        const totalPending = state.activeBreedings.length;
-        if (totalAnimals + totalPending >= 16) {
-          playDefeatSound();
-          state.addNotification('All 16 sanctuary spaces (Common, Uncommon, Rare, Legendary) are full or reserved by incubating eggs!', '⚠️', 'info');
-          return false;
-        }
-
         // Roll tier based on parent tiers using probability engine
-        let offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
+        const offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
 
         // 5% Mutation Chance for rare apex mutant tier variant
         const isMutantRoll = Math.random() < 0.05;
         const mutantDef = isMutantRoll ? MUTATION_VARIANTS[parent1.species] : null;
 
-        let finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
-
-        // Check per-tier capacities: each tier (common, uncommon, rare, legendary) has 4 slots (16 total).
-        // If the rolled tier is already full (current animals in tier + pending incubating eggs in tier >= 4),
-        // auto-promote to the next tier with open space so the player can keep breeding until ALL 16 spaces are filled!
-        const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
-        const getTierOccupancy = (t: Tier) => {
-          const countInSanctuary = state.animals.filter(a => a.tier === t).length;
-          const pendingInIncubator = state.activeBreedings.filter(b => b.offspringTier === t).length;
-          return countInSanctuary + pendingInIncubator;
-        };
-
-        if (getTierOccupancy(finalTier) >= 4) {
-          // Find next tier in order with space (< 4)
-          let promotedTier: Tier | null = null;
-          const startIdx = tierOrder.indexOf(finalTier);
-          for (let i = startIdx + 1; i < tierOrder.length; i++) {
-            if (getTierOccupancy(tierOrder[i]) < 4) {
-              promotedTier = tierOrder[i];
-              break;
-            }
-          }
-          // If no higher tier is open, check any other open tier
-          if (!promotedTier) {
-            for (let i = 0; i < tierOrder.length; i++) {
-              if (getTierOccupancy(tierOrder[i]) < 4) {
-                promotedTier = tierOrder[i];
-                break;
-              }
-            }
-          }
-          if (promotedTier) {
-            finalTier = promotedTier;
-            offspringTier = promotedTier;
-          }
-        }
+        const finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
 
         const offspringBreedId = mutantDef ? mutantDef.id : `${parent1.species}_${finalTier}`;
         const durationSec = INCUBATION_TIMES[finalTier] || 120;
@@ -2372,8 +2336,15 @@ export const useGameStore = create<GameState>()(
           notified: false,
         };
 
-        // Mark parents as unavailable (fed state)
+        // Mark parents as unavailable (fed state) in active pastures or reserve
         const newAnimals = state.animals.map(a => {
+          if (a.id === parent1Id || a.id === parent2Id) {
+            return { ...a, fed: true, fedAt: Date.now() };
+          }
+          return a;
+        });
+
+        const newReserve = (state.livestockReserve || []).map(a => {
           if (a.id === parent1Id || a.id === parent2Id) {
             return { ...a, fed: true, fedAt: Date.now() };
           }
@@ -2383,6 +2354,7 @@ export const useGameStore = create<GameState>()(
         playClockTickSound(true);
         set({
           animals: newAnimals,
+          livestockReserve: newReserve,
           activeBreedings: [...state.activeBreedings, breeding],
         });
         return true;
@@ -2427,32 +2399,15 @@ export const useGameStore = create<GameState>()(
         const elapsed = Date.now() - breeding.startedAt;
         if (elapsed < breeding.durationMs) return null;
 
-        // Check total animal sanctuary capacity (16 slots across all 4 tiers)
-        if (state.animals.length >= 16) {
-          playDefeatSound();
-          state.addNotification(
-            'Cannot hatch egg! All 16 animal sanctuary spaces across Common, Uncommon, Rare, and Legendary are full (16/16).',
-            '⚠️',
-            'info'
-          );
-          return null;
-        }
-
         const tierOrder: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
-        let offspringTier: Tier = breeding.offspringTier || 'common';
+        const offspringTier: Tier = breeding.offspringTier || 'common';
 
-        // Check if the target tier is already at 4/4 capacity
+        // Check if active pasture for this tier is full (>= 4 slots)
         const currentTierCount = state.animals.filter(a => a.tier === offspringTier).length;
-        if (currentTierCount >= 4) {
-          // Promote to the next available tier that has an open slot (< 4)
-          const openTier = tierOrder.find(t => state.animals.filter(a => a.tier === t).length < 4);
-          if (openTier) {
-            offspringTier = openTier;
-          }
-        }
+        const storedInReserve = currentTierCount >= 4;
 
-        const parent1 = state.animals.find(a => a.id === breeding.parent1Id);
-        const parent2 = state.animals.find(a => a.id === breeding.parent2Id);
+        const parent1 = state.animals.find(a => a.id === breeding.parent1Id) || (state.livestockReserve || []).find(a => a.id === breeding.parent1Id);
+        const parent2 = state.animals.find(a => a.id === breeding.parent2Id) || (state.livestockReserve || []).find(a => a.id === breeding.parent2Id);
 
         const parent1BreedName = parent1 ? (BREED_REGISTRY[parent1.breedId]?.name || TIER_LABELS[parent1.tier]) : 'Parent 1';
         const parent2BreedName = parent2 ? (BREED_REGISTRY[parent2.breedId]?.name || TIER_LABELS[parent2.tier]) : 'Parent 2';
@@ -2499,13 +2454,25 @@ export const useGameStore = create<GameState>()(
           ...(breeding.isMutated ? { [`mutant_${breedId}`]: true } : {}),
         };
 
-        // Reset parents
+        // Reset parents in active pastures
         const updatedAnimals = state.animals.map(a => {
           if (a.id === breeding.parent1Id || a.id === breeding.parent2Id) {
             return { ...a, fed: false, fedAt: null };
           }
           return a;
         });
+
+        // Reset parents in livestock reserve
+        const updatedReserve = (state.livestockReserve || []).map(a => {
+          if (a.id === breeding.parent1Id || a.id === breeding.parent2Id) {
+            return { ...a, fed: false, fedAt: null };
+          }
+          return a;
+        });
+
+        // Place animal in active pasture or store in livestock reserve if pasture is full
+        const finalAnimals = storedInReserve ? updatedAnimals : [...updatedAnimals, newAnimal];
+        const finalReserve = storedInReserve ? [...updatedReserve, newAnimal] : updatedReserve;
 
         // Remove breeding from activeBreedings
         const updatedBreedings = state.activeBreedings.filter(b => b.id !== breedingId);
@@ -2524,6 +2491,7 @@ export const useGameStore = create<GameState>()(
           isNewCodex,
           gemReward,
           wasMutationUp,
+          storedInReserve,
         };
 
         const updatedCapacity = {
@@ -2532,13 +2500,20 @@ export const useGameStore = create<GameState>()(
         };
 
         set({
-          animals: [...updatedAnimals, newAnimal],
+          animals: finalAnimals,
+          livestockReserve: finalReserve,
           activeBreedings: updatedBreedings,
           animalCapacity: updatedCapacity,
           codex: updatedCodex,
           gems: state.gems + gemReward,
           hatchReveal: revealData,
         });
+
+        if (storedInReserve) {
+          state.addNotification(`📦 ${TIER_LABELS[offspringTier]} Pasture is full (4/4)! Stored new ${breedName} in your Livestock Reserve for future use.`, '📦', 'event');
+        } else {
+          state.addNotification(`✨ New ${breedName} placed in ${TIER_LABELS[offspringTier]} Pasture!`, '🐣', 'event');
+        }
 
         return newAnimal;
       },
@@ -2558,6 +2533,89 @@ export const useGameStore = create<GameState>()(
           gems: state.gems - upgrade.costGems,
           breedingSlots: nextSlot,
         });
+      },
+
+      // Livestock Reserve Management
+      moveToPasture: (animalId: string) => {
+        const state = get();
+        const animal = (state.livestockReserve || []).find(a => a.id === animalId);
+        if (!animal) return false;
+
+        const currentTierCount = state.animals.filter(a => a.tier === animal.tier).length;
+        if (currentTierCount >= 4) {
+          playDefeatSound();
+          state.addNotification(
+            `Cannot move to pasture: ${TIER_LABELS[animal.tier]} Pasture is at max capacity (4/4). Move an active animal to reserve or sell an elder first.`,
+            '⚠️',
+            'info'
+          );
+          return false;
+        }
+
+        const updatedReserve = (state.livestockReserve || []).filter(a => a.id !== animalId);
+        const updatedAnimals = [...state.animals, animal];
+
+        playVictoryChime();
+        set({
+          animals: updatedAnimals,
+          livestockReserve: updatedReserve,
+        });
+
+        const breedName = BREED_REGISTRY[animal.breedId]?.name || TIER_LABELS[animal.tier];
+        state.addNotification(`🐾 Deployed ${breedName} from Livestock Reserve into ${TIER_LABELS[animal.tier]} Pasture!`, '✅', 'event');
+        return true;
+      },
+
+      moveToReserve: (animalId: string) => {
+        const state = get();
+        const animal = state.animals.find(a => a.id === animalId);
+        if (!animal) return false;
+
+        // Check if currently incubating in active breeding
+        const isBusyBreeding = state.activeBreedings.some(b => b.parent1Id === animal.id || b.parent2Id === animal.id);
+        if (isBusyBreeding) {
+          playDefeatSound();
+          state.addNotification('Cannot move animal to reserve: Currently incubating an egg in the chamber!', '⚠️', 'info');
+          return false;
+        }
+
+        const updatedAnimals = state.animals.filter(a => a.id !== animalId);
+        const updatedReserve = [...(state.livestockReserve || []), animal];
+
+        playCashRegisterSound();
+        set({
+          animals: updatedAnimals,
+          livestockReserve: updatedReserve,
+        });
+
+        const breedName = BREED_REGISTRY[animal.breedId]?.name || TIER_LABELS[animal.tier];
+        state.addNotification(`📦 Moved ${breedName} to your Livestock Reserve holding barn.`, '📦', 'info');
+        return true;
+      },
+
+      sellReserveAnimal: (animalId: string) => {
+        const state = get();
+        const animal = (state.livestockReserve || []).find(a => a.id === animalId);
+        if (!animal) return;
+
+        const breedDef = BREED_REGISTRY[animal.breedId];
+        let sellPrice: number;
+        if (breedDef && animal.age === 'elder') {
+          sellPrice = breedDef.elderMarketValue;
+        } else {
+          sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+        }
+
+        const updatedReserve = (state.livestockReserve || []).filter(a => a.id !== animalId);
+
+        playCashRegisterSound();
+        set({
+          coins: state.coins + sellPrice,
+          livestockReserve: updatedReserve,
+        });
+
+        const breedName = breedDef?.name || TIER_LABELS[animal.tier];
+        state.addNotification(`💰 Sold ${breedName} from Livestock Reserve for 🪙${sellPrice}!`, '💰', 'coin');
       },
 
       // Wilderness
@@ -5463,6 +5521,7 @@ export const useGameStore = create<GameState>()(
           plots: initialPlots, unlockedPlots: GRID_SIZE,
           animals: initialAnimals,
           animalCapacity: { chicken: 16, cow: 16, sheep: 16, pig: 16 },
+          livestockReserve: [],
           productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
