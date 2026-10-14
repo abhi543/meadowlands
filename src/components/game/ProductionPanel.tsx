@@ -5,13 +5,14 @@ import { BUILDINGS, PRODUCTS, CROPS, type BuildingId, type RecipeDef } from '@/g
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 
-const BUILDING_LIST: BuildingId[] = ['feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
+const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
 
 const BUILDING_THEME: Record<BuildingId, {
   emoji: string; color: string; bgActive: string; borderActive: string;
   headerFrom: string; headerTo: string; headerText: string; headerSub: string;
   progressColor: string; craftBtn: string; craftBtnHover: string;
 }> = {
+  animal_feed: { emoji: '🥣', color: 'text-amber-700 dark:text-amber-300', bgActive: 'bg-amber-500 dark:bg-amber-600', borderActive: 'border-amber-600', headerFrom: 'from-amber-100', headerTo: 'to-yellow-100', headerText: 'text-amber-950 dark:text-amber-100', headerSub: 'text-amber-800 dark:text-amber-300', progressColor: 'bg-amber-500 dark:bg-amber-400', craftBtn: 'bg-amber-500 hover:bg-amber-600', craftBtnHover: 'bg-amber-600 hover:bg-amber-700' },
   feed_mill: { emoji: '\u2699\uFE0F', color: 'text-slate-600 dark:text-slate-300', bgActive: 'bg-slate-500 dark:bg-slate-600', borderActive: 'border-slate-600', headerFrom: 'from-slate-100', headerTo: 'to-gray-100', headerText: 'text-slate-900 dark:text-slate-100', headerSub: 'text-slate-700 dark:text-slate-300', progressColor: 'bg-slate-400 dark:bg-slate-500', craftBtn: 'bg-slate-500 hover:bg-slate-600', craftBtnHover: 'bg-slate-600 hover:bg-slate-700' },
   bakery: { emoji: '\u{1F3ED}', color: 'text-orange-600 dark:text-orange-300', bgActive: 'bg-orange-500 dark:bg-orange-600', borderActive: 'border-orange-600', headerFrom: 'from-orange-100', headerTo: 'to-amber-100', headerText: 'text-orange-900 dark:text-orange-100', headerSub: 'text-orange-700 dark:text-orange-300', progressColor: 'bg-orange-400 dark:bg-orange-500', craftBtn: 'bg-orange-500 hover:bg-orange-600', craftBtnHover: 'bg-orange-600 hover:bg-orange-700' },
   dairy: { emoji: '\u{1F9C0}', color: 'text-yellow-600 dark:text-yellow-300', bgActive: 'bg-yellow-500 dark:bg-yellow-600', borderActive: 'border-yellow-600', headerFrom: 'from-yellow-100', headerTo: 'to-amber-50', headerText: 'text-yellow-900 dark:text-yellow-100', headerSub: 'text-yellow-700 dark:text-yellow-300', progressColor: 'bg-yellow-400 dark:bg-yellow-500', craftBtn: 'bg-yellow-500 hover:bg-yellow-600', craftBtnHover: 'bg-yellow-600 hover:bg-yellow-700' },
@@ -50,7 +51,7 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'foraged_nut') return 'Proc: Iberian Bristle Boar (25% chance)';
   if (itemId === 'ancient_hoard') return 'Proc: Gilded Snout Chimera (100%)';
   if (itemId === 'fish') return 'Catch at Fishery or use Auto-Fisher';
-  if (itemId === 'feed') return 'Craft at Feed Mill';
+  if (itemId === 'feed') return 'Craft in Animal Feed tab';
   if (itemId === 'bread') return 'Bake at Bakery';
   if (itemId === 'cheese') return 'Craft at Dairy';
   if (itemId === 'fabric') return 'Weave at Loom';
@@ -126,7 +127,7 @@ export function ProductionPanel() {
     toggleBuildingOverclock,
     cureBuildingExhaustion,
   } = useGameStore();
-  const [activeBuilding, setActiveBuilding] = useState<BuildingId>('feed_mill');
+  const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
   const [, setTick] = useState(0);
 
   // 1-second interval for overclock timers
@@ -157,7 +158,7 @@ export function ProductionPanel() {
   return (
     <div className="space-y-3">
       {/* Building Tabs */}
-      <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
         {BUILDING_LIST.map(bId => {
           const b = BUILDINGS[bId];
           const t = BUILDING_THEME[bId];

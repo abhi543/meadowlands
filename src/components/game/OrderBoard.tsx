@@ -27,7 +27,7 @@ function getItemSourceHint(itemId: string): string {
   if (itemId === 'wool') return 'Feed Sheep in Pasture';
   if (itemId === 'truffle') return 'Feed Pigs in Pasture';
   if (itemId === 'fish') return 'Catch at Fishery Dock';
-  if (itemId === 'feed') return 'Craft at Feed Mill';
+  if (itemId === 'feed') return 'Craft in Animal Feed tab (Produce)';
   if (itemId === 'bread') return 'Bake at Bakery';
   if (itemId === 'cheese') return 'Craft at Dairy';
   if (itemId === 'fabric') return 'Weave at Loom';

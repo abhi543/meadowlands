@@ -152,7 +152,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
       tabId: 'production' as GuideTab,
       label: '3. Produce (⚙️)',
       role: 'Manufacturing & Workshop Overclocks',
-      desc: 'Transform raw farm harvest into artisan goods across 7 buildings: Feed Mill, Bakery, Dairy, Loom, Press, Textiles, and Tailor Shop with overclock multipliers.',
+      desc: 'Transform raw farm harvest into artisan goods across 8 facilities: Animal Feed, Feed Mill, Bakery, Dairy, Loom, Press, Textiles, and Tailor Shop with overclock multipliers.',
       action: 'Explore Recipes',
       color: 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900/40',
     },
@@ -368,8 +368,8 @@ function FarmGuide() {
 
 function getCropUsage(cropId: string): string {
   switch (cropId) {
-    case 'wheat': return 'Animal Feed (Feed Mill), Artisan Bread (Bakery), Orders.';
-    case 'corn': return 'Animal Feed (Feed Mill), Orders.';
+    case 'wheat': return 'Animal Feed (Produce), Artisan Bread (Bakery), Orders.';
+    case 'corn': return 'Animal Feed (Produce), Orders.';
     case 'carrot': return 'Fruit & Veggie Pies (Bakery), high-tier orders.';
     case 'strawberry': return 'Glazed Berry Pastry Lure (Wilderness), Bakery Pies.';
     case 'soybean': return 'Tofu & Soy Press processing, specialized contracts.';
@@ -400,7 +400,7 @@ function AnimalsGuide() {
         <h5 className="font-bold flex items-center gap-1.5">
           <span>🌾</span> The Feeding Loop:
         </h5>
-        <p>1. Craft <strong>Animal Feed</strong> at the <strong>Feed Mill</strong> (⚙️ Produce tab) using Wheat + Corn.</p>
+        <p>1. Craft <strong>Animal Feed</strong> at the <strong>Animal Feed</strong> tab (🥣 Produce tab) using Wheat, Corn, Carrots, or Soybeans.</p>
         <p>2. Tap <strong>Feed</strong> on hungry animals (or <strong>Feed All</strong>).</p>
         <p>3. While eating, their production cycle timer ticks down.</p>
         <p>4. When finished, tap <strong>Collect</strong> to gather their yield into your Barn!</p>
@@ -1819,7 +1819,7 @@ function TipsGuide() {
         <div className="border border-stone-200 dark:border-gray-800 rounded-lg p-3 bg-stone-50/50 dark:bg-stone-900/30">
           <h5 className="font-bold text-stone-800 dark:text-gray-200 mb-1">6. Automate Feeding with Barn Overseer</h5>
           <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
-            Once unlocked in the Workers tab, the Barn Overseer will automatically replenish troughs as long as your Silo contains Animal Feed. Keep your Feed Mill running!
+            Once unlocked in the Workers tab, the Barn Overseer will automatically replenish troughs as long as your Silo contains Animal Feed. Keep your Animal Feed production running!
           </p>
         </div>
       </div>

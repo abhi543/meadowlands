@@ -816,6 +816,7 @@ function createInitialMarketTrends(): Record<string, MarketTrendItem> {
 
 function createDefaultBuildingOverclocks(): Record<BuildingId, BuildingOverclockState> {
   return {
+    animal_feed: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
     feed_mill: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
     bakery: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
     dairy: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
@@ -905,6 +906,7 @@ export const useGameStore = create<GameState>()(
       livestockReserve: [],
 
       productionQueues: {
+        animal_feed: [],
         feed_mill: [],
         bakery: [],
         dairy: [],
@@ -1649,11 +1651,21 @@ export const useGameStore = create<GameState>()(
         let outputItem = '';
         let outputQty = 0;
         const building = BUILDINGS[buildingId];
-        for (const recipe of building.recipes) {
+        for (const recipe of building?.recipes || []) {
           if (recipe.id === slot.recipeId) {
             outputItem = recipe.output.productId;
             outputQty = recipe.output.qty;
             break;
+          }
+        }
+        if (!outputItem) {
+          for (const b of Object.values(BUILDINGS)) {
+            const found = b.recipes.find(r => r.id === slot.recipeId);
+            if (found) {
+              outputItem = found.output.productId;
+              outputQty = found.output.qty;
+              break;
+            }
           }
         }
         if (!outputItem) return;
@@ -1802,11 +1814,21 @@ export const useGameStore = create<GameState>()(
           if (slot.done) {
             let outputItem = '';
             let outputQty = 0;
-            for (const recipe of building.recipes) {
+            for (const recipe of building?.recipes || []) {
               if (recipe.id === slot.recipeId) {
                 outputItem = recipe.output.productId;
                 outputQty = recipe.output.qty;
                 break;
+              }
+            }
+            if (!outputItem) {
+              for (const b of Object.values(BUILDINGS)) {
+                const found = b.recipes.find(r => r.id === slot.recipeId);
+                if (found) {
+                  outputItem = found.output.productId;
+                  outputQty = found.output.qty;
+                  break;
+                }
               }
             }
             if (outputItem) {
@@ -6076,7 +6098,7 @@ export const useGameStore = create<GameState>()(
           animals: initialAnimals,
           animalCapacity: { chicken: 50, cow: 50, sheep: 50, pig: 50 },
           livestockReserve: [],
-          productionQueues: { feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
+          productionQueues: { animal_feed: [], feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
           orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
           globalReputation: createInitialGlobalReputation(),
@@ -6334,16 +6356,29 @@ export const useGameStore = create<GameState>()(
 
         // Migration: production slots with missing recipeName/recipeEmoji
         if (merged.productionQueues) {
+          if (!merged.productionQueues.animal_feed) {
+            merged.productionQueues.animal_feed = [];
+          }
           for (const buildingId of Object.keys(merged.productionQueues) as BuildingId[]) {
-            merged.productionQueues[buildingId] = merged.productionQueues[buildingId].map((slot: ProductionSlot) => {
+            if (!BUILDINGS[buildingId]) continue;
+            merged.productionQueues[buildingId] = (merged.productionQueues[buildingId] || []).map((slot: ProductionSlot) => {
               if (!slot.recipeName || !slot.recipeEmoji) {
                 const building = BUILDINGS[buildingId];
-                const recipe = building?.recipes.find(r => r.id === slot.recipeId);
+                let recipe = building?.recipes.find(r => r.id === slot.recipeId);
+                if (!recipe) {
+                  for (const b of Object.values(BUILDINGS)) {
+                    recipe = b.recipes.find(r => r.id === slot.recipeId);
+                    if (recipe) break;
+                  }
+                }
                 return { ...slot, recipeName: recipe?.name || slot.recipeId, recipeEmoji: recipe?.emoji || '' };
               }
               return slot;
             });
           }
+        }
+        if (merged.buildingOverclocks && !merged.buildingOverclocks.animal_feed) {
+          merged.buildingOverclocks.animal_feed = { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null };
         }
 
         // Migration: territory expansion state

@@ -347,7 +347,7 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
 };
 
 // --- Production Buildings ---
-export type BuildingId = 'feed_mill' | 'bakery' | 'dairy' | 'loom' | 'press' | 'tailor_shop' | 'textiles';
+export type BuildingId = 'animal_feed' | 'feed_mill' | 'bakery' | 'dairy' | 'loom' | 'press' | 'tailor_shop' | 'textiles';
 
 export interface BuildingDef {
   id: BuildingId;
@@ -368,11 +368,20 @@ export interface RecipeDef {
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
+  animal_feed: {
+    id: 'animal_feed', name: 'Animal Feed', emoji: '🥣', queueSlots: 20,
+    recipes: [
+      { id: 'make_feed', name: 'Grain Feed (Wheat)', emoji: '🥣', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
+      { id: 'make_feed_corn', name: 'Corn Feed Blend', emoji: '🌽', inputs: [{ productId: 'corn', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
+      { id: 'make_feed_carrot', name: 'Carrot Feed Blend', emoji: '🥕', inputs: [{ productId: 'carrot', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
+      { id: 'make_feed_soybean', name: 'Protein Soy Chow', emoji: '🫘', inputs: [{ productId: 'soybean', qty: 2 }], output: { productId: 'feed', qty: 5 }, timeSec: 60 },
+    ],
+  },
   feed_mill: {
     id: 'feed_mill', name: 'Feed Mill', emoji: '\u2699\uFE0F', queueSlots: 20,
     recipes: [
-      { id: 'make_feed', name: 'Make Feed', emoji: '\u{1FAD9}', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
       { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
+      { id: 'make_seed_blend', name: 'Wild Forage Seed Blend', emoji: '🌱', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'corn', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 100 },
     ],
   },
   bakery: {
