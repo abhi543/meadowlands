@@ -50,8 +50,8 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
         </div>
       </div>
 
-      {/* 3-Column Desktop Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Responsive Specialist Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {LIVESTOCK_WORKER_ROSTER.map(worker => {
           const state = specialistWorkers?.[worker.id] || {
             id: worker.id,

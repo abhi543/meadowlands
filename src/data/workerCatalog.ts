@@ -1,6 +1,6 @@
-export type WorkerSpecialty = 'crop_tender' | 'artisan_crafter' | 'wild_hauler' | 'paddock_wrangler' | 'stable_master';
+export type WorkerSpecialty = 'crop_tender' | 'artisan_crafter' | 'wild_hauler' | 'paddock_wrangler' | 'stable_master' | 'feed_master';
 
-export type SpecialistWorkerId = 'worker_caravaner_orin' | 'worker_wrangler_tessa' | 'worker_stablemaster_elric';
+export type SpecialistWorkerId = 'worker_caravaner_orin' | 'worker_wrangler_tessa' | 'worker_stablemaster_elric' | 'worker_feedmaster_barnaby';
 
 export interface HireableWorkerTemplate {
   id: SpecialistWorkerId;
@@ -94,6 +94,29 @@ export const LIVESTOCK_WORKER_ROSTER: HireableWorkerTemplate[] = [
       accent: 'text-indigo-600 dark:text-indigo-400',
     },
   },
+  {
+    id: 'worker_feedmaster_barnaby',
+    name: 'Barnaby the Feed Master',
+    title: 'Master Feed Miller',
+    specialty: 'feed_master',
+    avatar: '🥣',
+    hireCostCoins: 400,
+    dailyWageCoins: 28,
+    description: 'Master grain artisan coordinating animal feed milling across all pasture livestock types.',
+    station: 'Feed Mill & Granary Outpost',
+    stationEmoji: '🥣',
+    perks: [
+      '+30% crafting speed for all Animal Feed production lines',
+      '+1 bonus feed yield on every manual or automated feed craft batch',
+      'Coordinates with Feed Millers to prevent trough shortages across all pens',
+    ],
+    themeColor: {
+      border: 'border-amber-500 dark:border-amber-600',
+      bg: 'from-amber-500/10 to-yellow-500/10',
+      badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300',
+      accent: 'text-amber-600 dark:text-amber-400',
+    },
+  },
 ];
 
 export interface SpecialistWorkerState {
@@ -128,6 +151,15 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
     },
     worker_stablemaster_elric: {
       id: 'worker_stablemaster_elric',
+      isHired: false,
+      isActive: true,
+      isStriking: false,
+      hiredAt: null,
+      unpaidWages: 0,
+      totalWagesPaid: 0,
+    },
+    worker_feedmaster_barnaby: {
+      id: 'worker_feedmaster_barnaby',
       isHired: false,
       isActive: true,
       isStriking: false,

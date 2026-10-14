@@ -739,6 +739,7 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
   const workers: Partial<Record<WorkerRole, UnifiedWorkerInstance>> = {};
   const allRoles: WorkerRole[] = [
     'farmer', 'herder', 'lumberjack', 'fisherman', 'artisan',
+    'feed_miller_wheat', 'feed_miller_corn', 'feed_miller_carrot', 'feed_miller_soy',
     'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
     'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
   ];
@@ -1673,7 +1674,13 @@ export const useGameStore = create<GameState>()(
         const bOverclock = state.entityOverclocks?.[`building_${buildingId}`] || state.buildingOverclocks?.[buildingId];
         const isOverclocked = Boolean(bOverclock?.isOverclocked && (!bOverclock.expiresAt || Date.now() < bOverclock.expiresAt));
         const bonusYield = isOverclocked && bOverclock?.bonusYield ? bOverclock.bonusYield : 0;
-        const totalOutput = outputQty + bonusYield;
+        const isBarnabyActive = Boolean(
+          state.specialistWorkers?.worker_feedmaster_barnaby?.isHired &&
+          state.specialistWorkers?.worker_feedmaster_barnaby?.isActive &&
+          !state.specialistWorkers?.worker_feedmaster_barnaby?.isStriking
+        );
+        const barnabyBonus = (isBarnabyActive && outputItem === 'feed') ? 1 : 0;
+        const totalOutput = outputQty + bonusYield + barnabyBonus;
 
         const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
         const newSilo = { ...state.silo };
@@ -1832,11 +1839,18 @@ export const useGameStore = create<GameState>()(
               }
             }
             if (outputItem) {
+              const isBarnabyActive = Boolean(
+                state.specialistWorkers?.worker_feedmaster_barnaby?.isHired &&
+                state.specialistWorkers?.worker_feedmaster_barnaby?.isActive &&
+                !state.specialistWorkers?.worker_feedmaster_barnaby?.isStriking
+              );
+              const barnabyBonus = (isBarnabyActive && outputItem === 'feed') ? 1 : 0;
+              const finalOutput = outputQty + barnabyBonus;
               const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
               if (isCropOutput) {
-                newSilo[outputItem] = (newSilo[outputItem] || 0) + outputQty;
+                newSilo[outputItem] = (newSilo[outputItem] || 0) + finalOutput;
               } else {
-                newBarn[outputItem] = (newBarn[outputItem] || 0) + outputQty;
+                newBarn[outputItem] = (newBarn[outputItem] || 0) + finalOutput;
               }
               collectedCount++;
             }
@@ -3210,7 +3224,13 @@ export const useGameStore = create<GameState>()(
           }
           const overclockMultiplier = isBuildingOverclocked ? 3.0 : 1.0;
           const isArtisanWorkshop = buildingId === 'bakery' || buildingId === 'loom' || buildingId === 'press';
-          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier * overclockMultiplier;
+          const isBarnabyActive = Boolean(
+            state.specialistWorkers?.worker_feedmaster_barnaby?.isHired &&
+            state.specialistWorkers?.worker_feedmaster_barnaby?.isActive &&
+            !state.specialistWorkers?.worker_feedmaster_barnaby?.isStriking
+          );
+          const barnabySpeed = (isBarnabyActive && (buildingId === 'animal_feed' || buildingId === 'feed_mill')) ? 1.3 : 1.0;
+          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier * overclockMultiplier * barnabySpeed;
 
           newQueues[buildingId] = queue.map(slot => {
             if (!slot.done) {
@@ -3523,7 +3543,29 @@ export const useGameStore = create<GameState>()(
                     }
                   } else if (cfg.hoardItem) {
                     // Deposit hoard item to barn or silo
-                    const qty = multiplier;
+                    let qty = multiplier;
+
+                    // Specialized bonus for feed millers when raw crops are available
+                    const barnLocks = state.barnItemLocks || {};
+                    const isWheatLocked = barnLocks['wheat']?.isLockedForWorkers;
+                    const isCornLocked = barnLocks['corn']?.isLockedForWorkers;
+                    const isCarrotLocked = barnLocks['carrot']?.isLockedForWorkers;
+                    const isSoyLocked = barnLocks['soybean']?.isLockedForWorkers;
+
+                    if (role === 'feed_miller_wheat' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
+                      newSilo.wheat -= 1;
+                      qty += multiplier * 2;
+                    } else if (role === 'feed_miller_corn' && !isCornLocked && (newSilo.corn || 0) > 2) {
+                      newSilo.corn -= 1;
+                      qty += multiplier * 3;
+                    } else if (role === 'feed_miller_carrot' && !isCarrotLocked && (newSilo.carrot || 0) > 2) {
+                      newSilo.carrot -= 1;
+                      qty += multiplier * 3;
+                    } else if (role === 'feed_miller_soy' && !isSoyLocked && (newSilo.soybean || 0) > 2) {
+                      newSilo.soybean -= 1;
+                      qty += multiplier * 4;
+                    }
+
                     if (cfg.hoardIsSilo) {
                       newSilo[cfg.hoardItem] = (newSilo[cfg.hoardItem] || 0) + qty;
                     } else {

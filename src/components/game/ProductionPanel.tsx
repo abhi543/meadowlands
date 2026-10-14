@@ -1,11 +1,18 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { BUILDINGS, PRODUCTS, CROPS, type BuildingId, type RecipeDef } from '@/game/data';
+import { BUILDINGS, PRODUCTS, CROPS, WORKER_REGISTRY, type BuildingId, type RecipeDef, type WorkerRole } from '@/game/data';
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 
 const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
+
+const FEED_MILLER_ROLES: { role: WorkerRole; feedName: string; cropName: string; icon: string }[] = [
+  { role: 'feed_miller_wheat', feedName: 'Grain Feed', cropName: 'Wheat', icon: '🌾' },
+  { role: 'feed_miller_corn', feedName: 'Corn Feed', cropName: 'Corn', icon: '🌽' },
+  { role: 'feed_miller_carrot', feedName: 'Carrot Blend', cropName: 'Carrot', icon: '🥕' },
+  { role: 'feed_miller_soy', feedName: 'Soy Chow', cropName: 'Soybean', icon: '🫘' },
+];
 
 const BUILDING_THEME: Record<BuildingId, {
   emoji: string; color: string; bgActive: string; borderActive: string;
@@ -126,6 +133,10 @@ export function ProductionPanel() {
     buildingOverclocks,
     toggleBuildingOverclock,
     cureBuildingExhaustion,
+    unifiedWorkers,
+    hireUnifiedWorker,
+    toggleUnifiedWorkerMode,
+    specialistWorkers,
   } = useGameStore();
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
   const [, setTick] = useState(0);
@@ -250,6 +261,110 @@ export function ProductionPanel() {
                 <span>{'\u{1F4E6}'}</span>
                 <span className="font-medium">Queue full!</span>
                 <span>Wait for items to finish or collect completed ones to free slots.</span>
+              </div>
+            )}
+
+            {/* Feed Millers Automation Roster for All Feed Types */}
+            {activeBuilding === 'animal_feed' && (
+              <div className="mx-3 mt-3 p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 border border-amber-300 dark:border-amber-700/60 shadow-xs">
+                <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🥣</span>
+                    <div>
+                      <h4 className="font-black text-xs sm:text-sm text-stone-800 dark:text-stone-100 flex items-center gap-1.5">
+                        Feed Millers Guild (All Animal Feed Types)
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                          {FEED_MILLER_ROLES.filter(f => unifiedWorkers?.[f.role]?.isHired).length}/4 Active
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                        Hire specialized millers to automate feed production for every grain and livestock type.
+                      </p>
+                    </div>
+                  </div>
+
+                  {specialistWorkers?.worker_feedmaster_barnaby?.isHired && (
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-200 shadow-xs">
+                      <span className="text-sm">🥣</span>
+                      <span>Barnaby: +30% Speed, +1 Bonus Feed Yield</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {FEED_MILLER_ROLES.map(({ role, feedName, cropName, icon }) => {
+                    const cfg = WORKER_REGISTRY[role];
+                    const worker = unifiedWorkers?.[role];
+                    const isHired = Boolean(worker?.isHired);
+                    const canAfford = coins >= cfg.baseCost;
+                    const isUnlocked = level >= cfg.unlockLevel;
+
+                    return (
+                      <div
+                        key={role}
+                        className={`p-2.5 rounded-xl border transition-all ${
+                          isHired
+                            ? 'bg-white/90 dark:bg-stone-900/90 border-amber-400/80 shadow-xs'
+                            : 'bg-stone-50/70 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800 opacity-90'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-xl">{icon}</span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs text-stone-800 dark:text-stone-100 truncate">
+                                {cfg.name}
+                              </div>
+                              <div className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
+                                {cropName} &rarr; {feedName}
+                              </div>
+                            </div>
+                          </div>
+                          {isHired && (
+                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                              Lv.{worker?.level || 1}
+                            </span>
+                          )}
+                        </div>
+
+                        {isHired ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                                {worker?.autoSell ? 'Auto-Selling' : 'Milling to Silo'}
+                              </span>
+                              <span className="font-semibold text-stone-600 dark:text-stone-300">
+                                {worker?.stats?.totalItemsProduced || 0} batches
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => toggleUnifiedWorkerMode(role)}
+                              className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 border-stone-300 dark:border-stone-700"
+                              title="Toggle between Hoard mode (deposits feed in Silo) and Auto-Sell (converts to coins)"
+                            >
+                              <span>{worker?.autoSell ? '🪙 Coins Mode' : '🥣 Silo Mode'}</span>
+                              <span className="opacity-70 text-[9px]">(Switch)</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-1.5">
+                            <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                              {!isUnlocked ? `Unlocks at Lv.${cfg.unlockLevel}` : `Cost: ${cfg.baseCost}🪙`}
+                            </div>
+                            <button
+                              onClick={() => hireUnifiedWorker(role)}
+                              disabled={!isUnlocked || !canAfford}
+                              className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold text-stone-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 transition-all active:scale-95 cursor-pointer shadow-xs disabled:cursor-not-allowed"
+                            >
+                              {!isUnlocked ? `Reach Lv.${cfg.unlockLevel}` : `Hire (${cfg.baseCost}🪙)`}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 

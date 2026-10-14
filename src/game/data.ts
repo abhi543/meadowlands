@@ -931,14 +931,16 @@ export function livestockBuyPrice(species: AnimalSpecies, tier: Tier): number {
 // Unified Master Worker Ecosystem (v2.0) — 13 Workers, 120 Levels
 // ============================================================
 
-export type WorkerDivision = 'farmhand' | 'autonomous' | 'utility';
+export type WorkerDivision = 'farmhand' | 'millers' | 'autonomous' | 'utility';
 
 export type WorkerRole =
   // Division A: Farmhands (Site Buffers)
   | 'farmer' | 'herder' | 'lumberjack' | 'fisherman' | 'artisan'
-  // Division B: Autonomous Specialists (Passive Harvesters)
+  // Division B: Feed Millers (Animal Feed for All Types)
+  | 'feed_miller_wheat' | 'feed_miller_corn' | 'feed_miller_carrot' | 'feed_miller_soy'
+  // Division C: Autonomous Specialists (Passive Harvesters)
   | 'auto_fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector'
-  // Division C: Utility Specialists (Converters)
+  // Division D: Utility Specialists (Converters)
   | 'alchemist' | 'barn_overseer' | 'cellar_ager' | 'tinkerer';
 
 export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: string; roles: WorkerRole[] }> = {
@@ -946,6 +948,11 @@ export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: st
     label: 'Field Crew',
     emoji: '\u{1F33E}',
     roles: ['farmer', 'herder', 'lumberjack', 'fisherman', 'artisan'],
+  },
+  millers: {
+    label: 'Feed Millers',
+    emoji: '🥣',
+    roles: ['feed_miller_wheat', 'feed_miller_corn', 'feed_miller_carrot', 'feed_miller_soy'],
   },
   autonomous: {
     label: 'Harvesters',
@@ -1014,6 +1021,36 @@ export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
     description: 'Cuts manufacturing duration at production buildings', division: 'farmhand',
     baseCost: 800, baseIntervalMs: 60000, exponent: 1.073, unlockLevel: 10,
     autoSellPayout: 20, hoardItem: 'bread', hoardItemEmoji: '\u{1F35E}', hoardIsSilo: false,
+  },
+
+  // --- Division B: Feed Millers (Animal Feed for All Types) ---
+  feed_miller_wheat: {
+    role: 'feed_miller_wheat', name: 'Grain Feed Miller', emoji: '🌾',
+    description: 'Milling specialist producing Grain Feed (Wheat) for chickens & livestock', division: 'millers',
+    baseCost: 80, baseIntervalMs: 15000, exponent: 1.068, unlockLevel: 1,
+    autoSellPayout: 6, hoardItem: 'feed', hoardItemEmoji: '🥣', hoardIsSilo: true,
+    rareItem: 'wheat', rareItemEmoji: '🌾', rareItemSellPrice: 4,
+  },
+  feed_miller_corn: {
+    role: 'feed_miller_corn', name: 'Corn Feed Miller', emoji: '🌽',
+    description: 'Crushes corn into sweet feed pellets preferred by dairy cows', division: 'millers',
+    baseCost: 150, baseIntervalMs: 18000, exponent: 1.069, unlockLevel: 2,
+    autoSellPayout: 10, hoardItem: 'feed', hoardItemEmoji: '🥣', hoardIsSilo: true,
+    rareItem: 'corn', rareItemEmoji: '🌽', rareItemSellPrice: 6,
+  },
+  feed_miller_carrot: {
+    role: 'feed_miller_carrot', name: 'Carrot Feed Miller', emoji: '🥕',
+    description: 'Blends carrots into vitamin-rich feed mash favored by pasture pigs', division: 'millers',
+    baseCost: 250, baseIntervalMs: 22000, exponent: 1.070, unlockLevel: 3,
+    autoSellPayout: 14, hoardItem: 'feed', hoardItemEmoji: '🥣', hoardIsSilo: true,
+    rareItem: 'carrot', rareItemEmoji: '🥕', rareItemSellPrice: 10,
+  },
+  feed_miller_soy: {
+    role: 'feed_miller_soy', name: 'Soy Protein Miller', emoji: '🫘',
+    description: 'Presses soybeans into high-protein chow ideal for wool sheep & breeding', division: 'millers',
+    baseCost: 400, baseIntervalMs: 25000, exponent: 1.071, unlockLevel: 4,
+    autoSellPayout: 18, hoardItem: 'feed', hoardItemEmoji: '🥣', hoardIsSilo: true,
+    rareItem: 'soybean', rareItemEmoji: '🫘', rareItemSellPrice: 14,
   },
   // --- Division B: Autonomous Specialists ---
   auto_fisherman: {
