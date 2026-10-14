@@ -3,6 +3,11 @@
 import React, { useState } from 'react';
 import { useGameStore } from '@/game/store';
 import { LIVESTOCK_WORKER_ROSTER, type SpecialistWorkerId, type HireableWorkerTemplate } from '@/data/workerCatalog';
+import {
+  WORKER_UPKEEP_ROSTER,
+  calculateStaffUpkeep,
+  FOOD_CATEGORY_INFO,
+} from '@/data/workerUpkeep';
 
 interface SpecialistWorkersSectionProps {
   onSelectTab?: (tab: string) => void;
@@ -12,6 +17,9 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
   const {
     coins,
     specialistWorkers,
+    unifiedWorkers,
+    payrollVaultCoins,
+    staffPantry,
     hireSpecialistWorker,
     toggleSpecialistDuty,
     dismissSpecialistWorker,
@@ -21,6 +29,14 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
   } = useGameStore();
 
   const [tessaDrawerOpen, setTessaDrawerOpen] = useState(false);
+
+  const telemetry = calculateStaffUpkeep(
+    unifiedWorkers,
+    specialistWorkers,
+    payrollVaultCoins,
+    staffPantry
+  );
+
 
   return (
     <div className="bg-gradient-to-b from-stone-900/90 to-stone-950/95 dark:from-gray-900 dark:to-black rounded-2xl border border-amber-500/30 p-5 shadow-xl shadow-amber-950/20 backdrop-blur-md space-y-4">
@@ -138,6 +154,72 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                     </div>
                   </div>
                 </div>
+
+                {/* Upkeep Metric Badge & Status Pills */}
+                {(() => {
+                  const upkeep = WORKER_UPKEEP_ROSTER[worker.id];
+                  const upkeepStatus = telemetry.workerUpkeeps[worker.id];
+                  const morale = state.moraleTier || (state.isStriking ? 'striking' : 'content');
+
+                  return (
+                    <>
+                      {upkeep && (
+                        <div className="mt-2.5 p-2 rounded-lg bg-stone-950/70 border border-stone-800 text-[10px] space-y-1">
+                          <div className="flex items-center justify-between text-stone-300 font-semibold flex-wrap gap-1">
+                            <span className="flex items-center gap-1 font-bold text-amber-400">
+                              <span>💰</span>
+                              <span>{upkeep.baseDailyWage} Coins</span>
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span>{FOOD_CATEGORY_INFO[upkeep.dietaryCategory].icon}</span>
+                              <span>{upkeep.dietaryUnits} {FOOD_CATEGORY_INFO[upkeep.dietaryCategory].label}</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-yellow-400">
+                              <span>⭐</span>
+                              <span>Fav: {upkeep.favoriteRecipeEmoji} {upkeep.favoriteRecipeName}</span>
+                            </span>
+                          </div>
+
+                          {isHired && (
+                            <div className="flex items-center justify-between pt-1 border-t border-stone-800 gap-1 flex-wrap">
+                              <span
+                                className={`px-1.5 py-0.5 rounded-md font-bold text-[9px] ${
+                                  upkeepStatus?.isWageSecured
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                }`}
+                              >
+                                {upkeepStatus?.isWageSecured ? '🟢 Wage: In Vault' : '⚠️ Wage: Unfunded'}
+                              </span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded-md font-bold text-[9px] ${
+                                  upkeepStatus?.isRationAvailable
+                                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                    : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                }`}
+                              >
+                                {upkeepStatus?.isRationAvailable ? '🟢 Ration: In Pantry' : '⚠️ Ration: Missing'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {isHired && morale === 'inspired' && (
+                        <div className="mt-2 p-1.5 rounded-lg bg-yellow-400/15 border border-yellow-400/40 text-yellow-300 text-[10px] font-bold flex items-center gap-1.5">
+                          <span>✨</span>
+                          <span>Inspired (+20% Efficiency) — Fed favorite recipe {upkeep?.favoriteRecipeEmoji}!</span>
+                        </div>
+                      )}
+                      {isHired && morale === 'grumbling' && (
+                        <div className="mt-2 p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1.5">
+                          <span>⚠️</span>
+                          <span>Grumbling — Operating at 50% Speed</span>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Description */}
                 <p className="text-xs text-stone-300/90 mt-3 leading-relaxed border-t border-stone-800/80 pt-2.5">

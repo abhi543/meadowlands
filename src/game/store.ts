@@ -120,6 +120,18 @@ import {
   ITEM_CATALOG_META,
   SPECIES_FAVORITE_CROPS,
 } from '@/utils/barnInventory';
+import {
+  type FoodCategory,
+  type MoraleTier,
+  type StaffUpkeepTelemetry,
+  COMMISSARY_FOOD_ITEMS,
+  WORKER_UPKEEP_ROSTER,
+  getGuildTaxRate,
+  getMoraleSpeedMultiplier,
+  calculateStaffUpkeep,
+  processUpkeepSettlement,
+} from '@/data/workerUpkeep';
+
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -347,6 +359,10 @@ export interface UnifiedWorkerInstance {
     totalItemsProduced: number;
     totalGemsEarned: number;
   };
+  moraleTier?: MoraleTier;
+  missedCycles?: number;
+  lastFedAt?: number;
+  lastPaidAt?: number;
 }
 
 // Hourly Events
@@ -449,6 +465,11 @@ export interface GameState {
   // Specialist Workers (Livestock, Expeditions & Genetics)
   specialistWorkers: Record<SpecialistWorkerId, SpecialistWorkerState>;
   lastSpecialistWageTime: number;
+
+  // Worker Commissary & Payroll Vault (Staged Coins & Food Survival System)
+  payrollVaultCoins: number;
+  staffPantry: Record<string, number>;
+  lastSettlementTimestamp: number;
 
   // Worker Feeding Automation & Barn Lock Policies
   wranglerPolicy: WranglerPolicyConfig;
@@ -568,6 +589,13 @@ export interface GameState {
   toggleSpecialistDuty: (workerId: SpecialistWorkerId) => void;
   dismissSpecialistWorker: (workerId: SpecialistWorkerId) => void;
   paySpecialistBackPay: (workerId: SpecialistWorkerId) => boolean;
+
+  // Worker Commissary & Payroll Vault Handlers
+  depositToPayrollVault: (amount: number) => boolean;
+  withdrawFromPayrollVault: (amount: number) => boolean;
+  transferToStaffPantry: (itemId: string, quantity: number) => boolean;
+  returnFromStaffPantry: (itemId: string, quantity: number) => boolean;
+  processSettlementCycle: () => void;
 
   // Wrangler Feed Policy & Automation Controls
   updateWranglerPolicy: (policy: Partial<WranglerPolicyConfig>) => void;
@@ -774,6 +802,8 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
       lastActionTimestamp: now,
       bufferCount: 0,
       stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+      moraleTier: 'content',
+      missedCycles: 0,
     };
   }
   return workers as Record<WorkerRole, UnifiedWorkerInstance>;
@@ -1029,6 +1059,11 @@ export const useGameStore = create<GameState>()(
       // Specialist Workers (Livestock, Expeditions & Genetics)
       specialistWorkers: createDefaultSpecialistWorkers(),
       lastSpecialistWageTime: Date.now(),
+
+      // Worker Commissary & Payroll Vault
+      payrollVaultCoins: 0,
+      staffPantry: {},
+      lastSettlementTimestamp: Date.now(),
 
       // Wrangler Feeding Automation & Barn Lock Policies
       wranglerPolicy: DEFAULT_WRANGLER_POLICY,
@@ -2545,6 +2580,119 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
+      // Worker Commissary & Payroll Vault Handlers (Staged Coins & Food Survival System)
+      depositToPayrollVault: (amount: number) => {
+        const state = get();
+        const num = Math.floor(amount);
+        if (num <= 0 || state.coins < num) return false;
+        playCashRegisterSound();
+        set({
+          coins: state.coins - num,
+          payrollVaultCoins: (state.payrollVaultCoins || 0) + num,
+        });
+        state.addNotification(`🪙 Deposited ${num.toLocaleString()} coins into Payroll Vault.`, '💰', 'coin');
+        return true;
+      },
+
+      withdrawFromPayrollVault: (amount: number) => {
+        const state = get();
+        const currentStaged = state.payrollVaultCoins || 0;
+        const num = Math.floor(amount);
+        if (num <= 0 || currentStaged < num) return false;
+        playCashRegisterSound();
+        set({
+          coins: state.coins + num,
+          payrollVaultCoins: currentStaged - num,
+        });
+        state.addNotification(`🪙 Withdrew ${num.toLocaleString()} coins from Payroll Vault to purse.`, '👛', 'coin');
+        return true;
+      },
+
+      transferToStaffPantry: (itemId: string, quantity: number) => {
+        const state = get();
+        const qty = Math.floor(quantity);
+        const foodMeta = COMMISSARY_FOOD_ITEMS[itemId];
+        if (!foodMeta || qty <= 0) return false;
+
+        const isSiloItem = foodMeta.category === 'crop' && (state.silo[itemId] || 0) > 0;
+        const currentAvail = isSiloItem ? (state.silo[itemId] || 0) : (state.barn[itemId] || 0);
+        if (currentAvail < qty) return false;
+
+        const updatedSilo = { ...state.silo };
+        const updatedBarn = { ...state.barn };
+        if (isSiloItem) {
+          updatedSilo[itemId] = currentAvail - qty;
+          if (updatedSilo[itemId] === 0) delete updatedSilo[itemId];
+        } else {
+          updatedBarn[itemId] = currentAvail - qty;
+          if (updatedBarn[itemId] === 0) delete updatedBarn[itemId];
+        }
+
+        const updatedPantry = { ...state.staffPantry };
+        updatedPantry[itemId] = (updatedPantry[itemId] || 0) + qty;
+
+        playRapidTapSound(1);
+        set({
+          silo: updatedSilo,
+          barn: updatedBarn,
+          staffPantry: updatedPantry,
+        });
+        state.addNotification(`🍲 Staged ${qty}x ${foodMeta.name} into Staff Pantry.`, foodMeta.icon, 'info');
+        return true;
+      },
+
+      returnFromStaffPantry: (itemId: string, quantity: number) => {
+        const state = get();
+        const qty = Math.floor(quantity);
+        const foodMeta = COMMISSARY_FOOD_ITEMS[itemId];
+        const currentPantry = state.staffPantry[itemId] || 0;
+        if (!foodMeta || qty <= 0 || currentPantry < qty) return false;
+
+        const updatedPantry = { ...state.staffPantry };
+        updatedPantry[itemId] = currentPantry - qty;
+        if (updatedPantry[itemId] === 0) delete updatedPantry[itemId];
+
+        // Return to silo if crop, else barn
+        if (foodMeta.category === 'crop') {
+          const updatedSilo = { ...state.silo, [itemId]: (state.silo[itemId] || 0) + qty };
+          set({ silo: updatedSilo, staffPantry: updatedPantry });
+        } else {
+          const updatedBarn = { ...state.barn, [itemId]: (state.barn[itemId] || 0) + qty };
+          set({ barn: updatedBarn, staffPantry: updatedPantry });
+        }
+        playRapidTapSound(1);
+        state.addNotification(`📦 Returned ${qty}x ${foodMeta.name} to Barn inventory.`, foodMeta.icon, 'info');
+        return true;
+      },
+
+      processSettlementCycle: () => {
+        const state = get();
+        const res = processUpkeepSettlement({
+          unifiedWorkers: state.unifiedWorkers,
+          specialistWorkers: state.specialistWorkers,
+          payrollVaultCoins: state.payrollVaultCoins || 0,
+          staffPantry: state.staffPantry || {},
+        });
+
+        set({
+          payrollVaultCoins: res.payrollVaultCoins,
+          staffPantry: res.staffPantry,
+          unifiedWorkers: res.updatedUnifiedWorkers,
+          specialistWorkers: res.updatedSpecialistWorkers,
+          lastSettlementTimestamp: Date.now(),
+        });
+
+        if (res.desertedWorkers.length > 0) {
+          state.addNotification(`🚨 Desertion Notice: ${res.desertedWorkers.join(', ')} left the farm after 4 unpaid cycles!`, '⚠️', 'event');
+        } else if (res.strikeCount > 0) {
+          state.addNotification(`⚠️ Strike Alert: ${res.strikeCount} workers halted operations due to staging shortfall!`, '🛑', 'event');
+        } else if (res.grumblingCount > 0) {
+          state.addNotification(`🟡 Grumbling Alert: ${res.grumblingCount} workers running at 50% speed from supply shortage.`, '⚠️', 'event');
+        } else if (res.paidCount > 0) {
+          state.addNotification(`✅ Settlement Cleared: Paid & fed ${res.paidCount} staff from Payroll Vault & Pantry! (${res.inspiredCount} inspired)`, '🎉', 'coin');
+        }
+      },
+
       // Wrangler Feed Policy & Automation Controls
       updateWranglerPolicy: (policyUpdate) => {
         const state = get();
@@ -3954,11 +4102,18 @@ export const useGameStore = create<GameState>()(
             const isWorkerOverclocked = Boolean(wOverclock?.isOverclocked && (!wOverclock.expiresAt || now < wOverclock.expiresAt));
             const wMultiplier = isWorkerOverclocked ? wOverclock.speedMultiplier : 1.0;
 
+            const morale = worker.moraleTier || 'content';
+            if (morale === 'striking' || morale === 'deserted') {
+              worker.lastActionTimestamp = now;
+              continue; // 0% efficiency, complete halt during strike
+            }
+            const moraleMultiplier = getMoraleSpeedMultiplier(morale);
+
             const cfg = WORKER_REGISTRY[role];
             // Outfit bonus for herder
             const hasHerderOutfit = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder' && fh.equippedOutfit === 'herders_chaps');
             const outfitSpeed = hasHerderOutfit ? 0.7 : 1.0;
-            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / wMultiplier;
+            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / (wMultiplier * moraleMultiplier);
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -4369,46 +4524,41 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // --- Specialist Workers Daily Wage Deduction Loop (every 90s) ---
+        // --- Unified Commissary & Payroll Vault Settlement Loop (every 90s) ---
         let updatedSpecialistWorkers = state.specialistWorkers ? { ...state.specialistWorkers } : createDefaultSpecialistWorkers();
-        let newLastSpecialistWageTime = state.lastSpecialistWageTime || now;
-        const WAGE_CYCLE_MS = 90000;
+        let newPayrollVaultCoins = state.payrollVaultCoins || 0;
+        let newStaffPantry = state.staffPantry ? { ...state.staffPantry } : {};
+        let newLastSettlementTime = state.lastSettlementTimestamp || now;
+        const SETTLEMENT_CYCLE_MS = 90000;
 
-        if (now - newLastSpecialistWageTime >= WAGE_CYCLE_MS) {
-          newLastSpecialistWageTime = now;
-          const activeHired = LIVESTOCK_WORKER_ROSTER.filter(t => {
-            const w = updatedSpecialistWorkers[t.id];
-            return w && w.isHired && w.isActive;
-          });
+        if (now - newLastSettlementTime >= SETTLEMENT_CYCLE_MS) {
+          const elapsedCycles = Math.min(Math.floor((now - newLastSettlementTime) / SETTLEMENT_CYCLE_MS), 20);
+          newLastSettlementTime = now;
 
-          if (activeHired.length > 0) {
-            let totalWagesNeeded = 0;
-            activeHired.forEach(t => { totalWagesNeeded += t.dailyWageCoins; });
+          for (let cycle = 0; cycle < elapsedCycles; cycle++) {
+            const settlementRes = processUpkeepSettlement({
+              unifiedWorkers: updatedUnifiedWorkers,
+              specialistWorkers: updatedSpecialistWorkers,
+              payrollVaultCoins: newPayrollVaultCoins,
+              staffPantry: newStaffPantry,
+            });
 
-            if (newCoins >= totalWagesNeeded) {
-              newCoins -= totalWagesNeeded;
-              activeHired.forEach(t => {
-                const w = updatedSpecialistWorkers[t.id];
-                updatedSpecialistWorkers[t.id] = {
-                  ...w,
-                  isStriking: false,
-                  totalWagesPaid: (w.totalWagesPaid || 0) + t.dailyWageCoins,
-                };
-              });
-            } else {
-              activeHired.forEach(t => {
-                const w = updatedSpecialistWorkers[t.id];
-                updatedSpecialistWorkers[t.id] = {
-                  ...w,
-                  isStriking: true,
-                  unpaidWages: (w.unpaidWages || 0) + t.dailyWageCoins,
-                };
-              });
-              state.addNotification(
-                '⚠️ Strike Notice: Not enough coins to pay specialist staff wages! Perks paused until back pay is settled.',
-                '⚠️',
-                'event'
-              );
+            newPayrollVaultCoins = settlementRes.payrollVaultCoins;
+            newStaffPantry = settlementRes.staffPantry;
+            Object.assign(updatedUnifiedWorkers, settlementRes.updatedUnifiedWorkers);
+            Object.assign(updatedSpecialistWorkers, settlementRes.updatedSpecialistWorkers);
+            unifiedWorkersModified = true;
+
+            if (cycle === elapsedCycles - 1) {
+              if (settlementRes.desertedWorkers.length > 0) {
+                state.addNotification(`🚨 Desertion Notice: ${settlementRes.desertedWorkers.join(', ')} left the farm contract after 4 unpaid cycles!`, '⚠️', 'event');
+              } else if (settlementRes.strikeCount > 0) {
+                state.addNotification(`⚠️ Strike Alert: ${settlementRes.strikeCount} staff halted work due to empty staging buffers!`, '🛑', 'event');
+              } else if (settlementRes.grumblingCount > 0) {
+                state.addNotification(`🟡 Grumbling Alert: ${settlementRes.grumblingCount} staff running at 50% speed from supply shortage.`, '⚠️', 'event');
+              } else if (settlementRes.paidCount > 0) {
+                state.addNotification(`✅ Settlement Cleared: Paid & fed ${settlementRes.paidCount} staff from Payroll Vault & Pantry! (${settlementRes.inspiredCount} inspired)`, '🎉', 'coin');
+              }
             }
           }
         }
@@ -4880,7 +5030,10 @@ export const useGameStore = create<GameState>()(
           activeBreedings: finalActiveBreedings,
           livestockReserve: finalReserve,
           specialistWorkers: updatedSpecialistWorkers,
-          lastSpecialistWageTime: newLastSpecialistWageTime,
+          lastSpecialistWageTime: newLastSettlementTime,
+          payrollVaultCoins: newPayrollVaultCoins,
+          staffPantry: newStaffPantry,
+          lastSettlementTimestamp: newLastSettlementTime,
           parcels: parcelsChanged ? parcelsUpdated : state.parcels,
           activeFreightContract: updatedFreightContract,
           freightContractRefreshAt: updatedFreightRefreshAt,
@@ -6866,8 +7019,10 @@ export const useGameStore = create<GameState>()(
           for (const r of Object.keys(defaultWorkers) as WorkerRole[]) {
             if (!merged.unifiedWorkers[r]) {
               merged.unifiedWorkers[r] = defaultWorkers[r];
-            } else if (merged.unifiedWorkers[r].isPaused === undefined) {
-              merged.unifiedWorkers[r].isPaused = false;
+            } else {
+              if (merged.unifiedWorkers[r].isPaused === undefined) merged.unifiedWorkers[r].isPaused = false;
+              if (merged.unifiedWorkers[r].moraleTier === undefined) merged.unifiedWorkers[r].moraleTier = 'content';
+              if (merged.unifiedWorkers[r].missedCycles === undefined) merged.unifiedWorkers[r].missedCycles = 0;
             }
           }
         }
@@ -6880,9 +7035,17 @@ export const useGameStore = create<GameState>()(
           for (const sId of Object.keys(defaultSpecialists) as SpecialistWorkerId[]) {
             if (!merged.specialistWorkers[sId]) {
               merged.specialistWorkers[sId] = defaultSpecialists[sId];
+            } else {
+              if (merged.specialistWorkers[sId].moraleTier === undefined) {
+                merged.specialistWorkers[sId].moraleTier = merged.specialistWorkers[sId].isStriking ? 'striking' : 'content';
+              }
+              if (merged.specialistWorkers[sId].missedCycles === undefined) merged.specialistWorkers[sId].missedCycles = 0;
             }
           }
         }
+        if (merged.payrollVaultCoins === undefined) merged.payrollVaultCoins = 0;
+        if (!merged.staffPantry) merged.staffPantry = {};
+        if (!merged.lastSettlementTimestamp) merged.lastSettlementTimestamp = Date.now();
         if (!merged.lastSpecialistWageTime) merged.lastSpecialistWageTime = Date.now();
         if (!merged.wranglerPolicy) merged.wranglerPolicy = DEFAULT_WRANGLER_POLICY;
         if (!merged.barnItemLocks) merged.barnItemLocks = {};

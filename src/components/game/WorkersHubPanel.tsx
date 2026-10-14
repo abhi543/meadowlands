@@ -12,6 +12,13 @@ import {
 } from '@/game/data';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { SpecialistWorkersSection } from './SpecialistWorkersSection';
+import { StaffCommissaryCommandCard } from './StaffCommissaryCommandCard';
+import {
+  WORKER_UPKEEP_ROSTER,
+  calculateStaffUpkeep,
+  FOOD_CATEGORY_INFO,
+} from '@/data/workerUpkeep';
+
 
 /** Generate contextual help hint for why a worker can't be hired/upgraded */
 function getBlockHint(args: {
@@ -92,6 +99,9 @@ function getNextPerkHint(currentLevel: number): string | null {
 export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) => void } = {}) {
   const {
     unifiedWorkers,
+    specialistWorkers,
+    payrollVaultCoins,
+    staffPantry,
     coins,
     level,
     hireUnifiedWorker,
@@ -105,6 +115,13 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
   const now = Date.now();
 
+  const telemetry = calculateStaffUpkeep(
+    unifiedWorkers,
+    specialistWorkers,
+    payrollVaultCoins,
+    staffPantry
+  );
+
   const division = WORKER_DIVISIONS[activeDivision];
   const hiredCount = Object.values(unifiedWorkers).filter(w => w.isHired).length;
   const totalWorkers = Object.keys(WORKER_REGISTRY).length;
@@ -116,7 +133,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
@@ -160,6 +177,9 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           </button>
         </div>
       )}
+
+      {/* Unified Executive Management Header: Staff Commissary & Payroll Vault Command Card */}
+      <StaffCommissaryCommandCard />
 
       {/* Prominent Dedicated Specialist Workers Section */}
       <SpecialistWorkersSection onSelectTab={onSelectTab} />
@@ -243,12 +263,25 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const nextMilestone = worker.isHired ? getNextMilestoneHint(worker.level) : null;
           const nextPerk = worker.isHired ? getNextPerkHint(worker.level) : null;
 
+          const upkeep = WORKER_UPKEEP_ROSTER[role];
+          const upkeepStatus = telemetry.workerUpkeeps[role];
+          const morale = worker.moraleTier || 'content';
+          const isStriking = morale === 'striking';
+          const isGrumbling = morale === 'grumbling';
+          const isInspired = morale === 'inspired';
+
           return (
             <div
               key={role}
               className={`rounded-xl border p-3 transition-all ${
                 worker.isHired
-                  ? `${rank.bgColor} ${rank.borderColor}`
+                  ? isStriking
+                    ? 'border-red-500/70 bg-red-950/20 dark:bg-red-950/30 ring-1 ring-red-500/40 shadow-sm'
+                    : isGrumbling
+                    ? 'border-amber-500/60 bg-amber-950/15 dark:bg-amber-950/25 ring-1 ring-amber-500/30'
+                    : isInspired
+                    ? 'border-yellow-400/70 bg-yellow-950/15 dark:bg-yellow-950/25 ring-1 ring-yellow-400/40'
+                    : `${rank.bgColor} ${rank.borderColor}`
                   : 'bg-white dark:bg-gray-900 border-stone-200 dark:border-gray-700'
               } ${!isUnlocked ? 'opacity-60' : ''}`}
             >
@@ -262,7 +295,22 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     <h4 className="font-semibold text-sm text-stone-800 dark:text-gray-200 truncate">
                       {cfg.name}
                     </h4>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                      {worker.isHired && isStriking && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-500/25 text-red-600 dark:text-red-300 border border-red-500/50 whitespace-nowrap animate-pulse">
+                          🛑 On Strike
+                        </span>
+                      )}
+                      {worker.isHired && isGrumbling && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/50 whitespace-nowrap">
+                          🟡 Grumbling
+                        </span>
+                      )}
+                      {worker.isHired && isInspired && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-yellow-400/25 text-yellow-600 dark:text-yellow-300 border border-yellow-400/50 whitespace-nowrap shadow-xs">
+                          ✨ Inspired
+                        </span>
+                      )}
                       {worker.isHired && worker.isPaused && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 whitespace-nowrap">
                           ⏸️ Paused
@@ -278,6 +326,83 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
 
                   {/* Description */}
                   <p className="text-xs text-stone-500 dark:text-gray-400 mt-0.5">{cfg.description}</p>
+
+                  {/* Upkeep Metric Badge & Status Pills */}
+                  {upkeep && (
+                    <div className="mt-2 p-2 rounded-lg bg-stone-100 dark:bg-stone-950/70 border border-stone-200 dark:border-stone-800 text-[10px] space-y-1">
+                      <div className="flex items-center justify-between text-stone-600 dark:text-stone-300 font-semibold flex-wrap gap-1">
+                        <span className="flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400">
+                          <span>💰</span>
+                          <span>{upkeep.baseDailyWage} Coins</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span>{FOOD_CATEGORY_INFO[upkeep.dietaryCategory].icon}</span>
+                          <span>{upkeep.dietaryUnits} {FOOD_CATEGORY_INFO[upkeep.dietaryCategory].label}</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                          <span>⭐</span>
+                          <span>Fav: {upkeep.favoriteRecipeEmoji} {upkeep.favoriteRecipeName}</span>
+                        </span>
+                      </div>
+
+                      {worker.isHired && (
+                        <div className="flex items-center justify-between pt-1 border-t border-stone-200 dark:border-stone-800 gap-1 flex-wrap">
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md font-bold text-[9px] ${
+                              upkeepStatus?.isWageSecured
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                                : 'bg-red-500/15 text-red-700 dark:text-red-400 border border-red-500/30'
+                            }`}
+                          >
+                            {upkeepStatus?.isWageSecured ? '🟢 Wage: Secured in Vault' : '⚠️ Wage: Unfunded'}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md font-bold text-[9px] ${
+                              upkeepStatus?.isRationAvailable
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                            }`}
+                          >
+                            {upkeepStatus?.isRationAvailable ? '🟢 Ration: In Pantry' : '⚠️ Ration: Missing'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Strike and Grumbling alerts */}
+                  {worker.isHired && (
+                    <div className="mt-1.5">
+                      {isStriking && (
+                        <div className="p-2 rounded-lg bg-red-500/15 border border-red-500/40 text-red-700 dark:text-red-300 text-xs font-bold flex items-center gap-1.5">
+                          <span className="text-base animate-bounce">🛑</span>
+                          <div>
+                            <div>ON STRIKE — Work Halted!</div>
+                            <div className="text-[10px] font-normal opacity-90">
+                              Missed {worker.missedCycles || 2} cycles upkeep. Restock vault & pantry to resume.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {isGrumbling && (
+                        <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5">
+                          <span>⚠️</span>
+                          <div>
+                            <div>Grumbling — Half-Speed (50%)</div>
+                            <div className="text-[10px] font-normal opacity-90">
+                              Missed 1 settlement cycle. Restock supplies to prevent strike!
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      {isInspired && (
+                        <div className="p-1.5 rounded-lg bg-yellow-400/15 border border-yellow-400/40 text-yellow-700 dark:text-yellow-300 text-[11px] font-bold flex items-center gap-1.5">
+                          <span className="text-base">✨</span>
+                          <span>Inspired (+20% Efficiency) — Fed favorite recipe {upkeep.favoriteRecipeEmoji}!</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Unlock requirement hint (for unhired, locked workers) */}
                   {!worker.isHired && !isUnlocked && (
@@ -323,6 +448,12 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                         <span className="text-[10px] text-stone-500 dark:text-gray-400">
                           {worker.isPaused ? (
                             <span className="text-amber-600 dark:text-amber-400 font-medium">⏸️ Operation Paused</span>
+                          ) : isStriking ? (
+                            <span className="text-red-500 dark:text-red-400 font-bold">🛑 Production Halted (On Strike)</span>
+                          ) : isGrumbling ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">🐢 Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (Half-Speed)</span>
+                          ) : isInspired ? (
+                            <span className="text-yellow-600 dark:text-yellow-400 font-bold">✨ Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (+20% Speed)</span>
                           ) : (
                             `Next: ${Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s`
                           )}
@@ -333,9 +464,15 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                           className={`h-full rounded-full transition-all ${
                             worker.isPaused
                               ? 'bg-amber-400 dark:bg-amber-500 opacity-60'
+                              : isStriking
+                              ? 'bg-red-500 opacity-40'
+                              : isGrumbling
+                              ? 'bg-amber-500'
+                              : isInspired
+                              ? 'bg-gradient-to-r from-amber-400 to-yellow-300'
                               : 'bg-emerald-400 dark:bg-emerald-500'
                           }`}
-                          style={{ width: `${(worker.isPaused ? 0.35 : progress) * 100}%` }}
+                          style={{ width: `${(worker.isPaused || isStriking ? 0.35 : progress) * 100}%` }}
                         />
                       </div>
                     </div>

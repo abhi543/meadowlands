@@ -127,6 +127,10 @@ export interface SpecialistWorkerState {
   hiredAt: number | null;
   unpaidWages: number;
   totalWagesPaid: number;
+  moraleTier?: 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted';
+  missedCycles?: number;
+  lastFedAt?: number;
+  lastPaidAt?: number;
 }
 
 export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, SpecialistWorkerState> {
@@ -139,6 +143,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       hiredAt: null,
       unpaidWages: 0,
       totalWagesPaid: 0,
+      moraleTier: 'content',
+      missedCycles: 0,
     },
     worker_wrangler_tessa: {
       id: 'worker_wrangler_tessa',
@@ -148,6 +154,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       hiredAt: null,
       unpaidWages: 0,
       totalWagesPaid: 0,
+      moraleTier: 'content',
+      missedCycles: 0,
     },
     worker_stablemaster_elric: {
       id: 'worker_stablemaster_elric',
@@ -157,6 +165,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       hiredAt: null,
       unpaidWages: 0,
       totalWagesPaid: 0,
+      moraleTier: 'content',
+      missedCycles: 0,
     },
     worker_feedmaster_barnaby: {
       id: 'worker_feedmaster_barnaby',
@@ -166,6 +176,9 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       hiredAt: null,
       unpaidWages: 0,
       totalWagesPaid: 0,
+      moraleTier: 'content',
+      missedCycles: 0,
     },
   };
 }
+
