@@ -336,12 +336,12 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                         {isActive ? (
                           <>
                             <span>⏸️</span>
-                            <span>Set to Resting</span>
+                            <span>Pause (Rest)</span>
                           </>
                         ) : (
                           <>
                             <span>🟢</span>
-                            <span>Assign to Duty</span>
+                            <span>Resume (Duty)</span>
                           </>
                         )}
                       </button>

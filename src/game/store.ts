@@ -317,6 +317,7 @@ export interface UnifiedWorkerInstance {
   isHired: boolean;
   level: number;           // 1–120
   autoSell: boolean;       // true = Auto-Sell Mode, false = Hoard Mode
+  isPaused?: boolean;      // true = Paused by player
   lastActionTimestamp: number;
   bufferCount: number;     // Level 40+ hopper buffer cycles
   stats: {
@@ -437,6 +438,7 @@ export interface GameState {
 
   // Unified Workers (v2.0)
   unifiedWorkers: Record<WorkerRole, UnifiedWorkerInstance>;
+  isAllWorkersPaused?: boolean;
 
   // Specialist Workers (Livestock, Expeditions & Genetics)
   specialistWorkers: Record<SpecialistWorkerId, SpecialistWorkerState>;
@@ -553,6 +555,8 @@ export interface GameState {
   hireUnifiedWorker: (role: WorkerRole) => void;
   upgradeUnifiedWorker: (role: WorkerRole, levelsToBuy: number) => void;
   toggleUnifiedWorkerMode: (role: WorkerRole) => void;
+  togglePauseUnifiedWorker: (role: WorkerRole) => void;
+  togglePauseAllWorkers: (pause?: boolean) => void;
   bulkUpgradeUnifiedWorker: (role: WorkerRole, mode: BulkMode) => void;
 
   // Specialist Workers (Livestock, Expeditions & Genetics)
@@ -749,6 +753,7 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
       isHired: false,
       level: 1,
       autoSell: role === 'merchant', // merchant defaults to auto-sell
+      isPaused: false,
       lastActionTimestamp: now,
       bufferCount: 0,
       stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
@@ -941,6 +946,7 @@ export const useGameStore = create<GameState>()(
 
       autonomousWorkers: [],
       unifiedWorkers: initialUnifiedWorkers,
+      isAllWorkersPaused: false,
       activeEvent: null,
       lastEventTriggerTime: Date.now(),
 
@@ -2276,6 +2282,7 @@ export const useGameStore = create<GameState>()(
           isHired: true,
           level: 1,
           autoSell: role === 'merchant',
+          isPaused: false,
           lastActionTimestamp: now,
           bufferCount: 0,
           stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
@@ -2330,6 +2337,73 @@ export const useGameStore = create<GameState>()(
         const newWorkers = { ...state.unifiedWorkers };
         newWorkers[role] = { ...worker, level: worker.level + result.levelsToBuy };
         set({ coins: state.coins - result.totalCost, unifiedWorkers: newWorkers });
+      },
+
+      togglePauseUnifiedWorker: (role) => {
+        const state = get();
+        const worker = state.unifiedWorkers[role];
+        if (!worker || !worker.isHired) return;
+        const newPaused = !worker.isPaused;
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = {
+          ...worker,
+          isPaused: newPaused,
+          lastActionTimestamp: Date.now(),
+        };
+        const cfg = WORKER_REGISTRY[role];
+        // If all hired unified workers are paused, sync global pause flag
+        const hiredList = Object.values(newWorkers).filter(w => w.isHired);
+        const allPaused = hiredList.length > 0 && hiredList.every(w => w.isPaused);
+        set({
+          unifiedWorkers: newWorkers,
+          isAllWorkersPaused: allPaused ? true : (newPaused ? state.isAllWorkersPaused : false),
+        });
+        state.addNotification(
+          `${cfg.name} is now ${newPaused ? '⏸️ Paused' : '▶️ Resumed'}.`,
+          newPaused ? '⏸️' : '▶️',
+          'info'
+        );
+      },
+
+      togglePauseAllWorkers: (pause) => {
+        const state = get();
+        const willPause = pause !== undefined ? pause : !state.isAllWorkersPaused;
+        const now = Date.now();
+        const newUnified = { ...state.unifiedWorkers };
+        for (const role of Object.keys(newUnified) as WorkerRole[]) {
+          if (newUnified[role]?.isHired) {
+            newUnified[role] = {
+              ...newUnified[role],
+              isPaused: willPause,
+              lastActionTimestamp: now,
+            };
+          }
+        }
+
+        let newSpecialists = state.specialistWorkers;
+        if (state.specialistWorkers) {
+          newSpecialists = { ...state.specialistWorkers };
+          for (const key of Object.keys(newSpecialists) as SpecialistWorkerId[]) {
+            if (newSpecialists[key]?.isHired) {
+              newSpecialists[key] = {
+                ...newSpecialists[key],
+                isActive: !willPause,
+              };
+            }
+          }
+        }
+
+        set({
+          isAllWorkersPaused: willPause,
+          unifiedWorkers: newUnified,
+          specialistWorkers: newSpecialists,
+        });
+
+        state.addNotification(
+          willPause ? '⏸️ All Workers Paused (Operations Halted)' : '▶️ All Workers Resumed (Workforce Active)',
+          willPause ? '⏸️' : '▶️',
+          'info'
+        );
       },
 
       // Specialist Livestock & Expedition Staff (Hauler, Wrangler, Stable Master)
@@ -3250,9 +3324,16 @@ export const useGameStore = create<GameState>()(
         let newCodex = { ...state.codex };
         let newFishCodex = { ...state.fishery.fishCodex };
         const newCatchTimestamps = { ...state.fishery.lastCatchTimestamps };
+        // Check if workers are paused due to user master pause or sudden crisis penalty
+        const areWorkersPaused = Boolean(state.isAllWorkersPaused || (state.workersPausedUntil && now < state.workersPausedUntil));
 
-        // Only catch fish if at least one fisherman exists (farmhand, autonomous, or unified)
-        const hasFisherman = state.farmhands.some(f => f.role === 'fisherman') || state.autonomousWorkers.some(w => w.type === 'fisherman') || Boolean(state.unifiedWorkers?.fisherman?.isHired) || Boolean(state.unifiedWorkers?.auto_fisherman?.isHired);
+        // Only catch fish if at least one active fisherman exists (farmhand, autonomous, or unpaused unified)
+        const hasFisherman = !areWorkersPaused && (
+          state.farmhands.some(f => f.role === 'fisherman') ||
+          state.autonomousWorkers.some(w => w.type === 'fisherman') ||
+          (Boolean(state.unifiedWorkers?.fisherman?.isHired) && !state.unifiedWorkers?.fisherman?.isPaused) ||
+          (Boolean(state.unifiedWorkers?.auto_fisherman?.isHired) && !state.unifiedWorkers?.auto_fisherman?.isPaused)
+        );
 
         const rod = ROD_TIERS[state.fishery.rodTier];
         if (hasFisherman) {
@@ -3315,9 +3396,6 @@ export const useGameStore = create<GameState>()(
         }
         } // end if (hasFisherman)
 
-        // Check if workers are paused due to sudden crisis penalty
-        const areWorkersPaused = Boolean(state.workersPausedUntil && now < state.workersPausedUntil);
-
         // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
         let newCoins = state.coins;
         let newXp = state.xp;
@@ -3371,6 +3449,10 @@ export const useGameStore = create<GameState>()(
             const worker = updatedUnifiedWorkers[role];
             const hasLegacyFarmhand = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder');
             if (!worker || (!worker.isHired && !hasLegacyFarmhand)) continue;
+            if (worker.isPaused) {
+              worker.lastActionTimestamp = now;
+              continue;
+            }
             if (hasLegacyFarmhand && !worker.isHired) {
               worker.isHired = true;
             }
@@ -3844,6 +3926,7 @@ export const useGameStore = create<GameState>()(
 
         // --- Paddock Wrangler (Tessa) Auto-Feed Pass ---
         const isTessaActive = Boolean(
+          !areWorkersPaused &&
           updatedSpecialistWorkers.worker_wrangler_tessa?.isHired &&
           updatedSpecialistWorkers.worker_wrangler_tessa?.isActive &&
           !updatedSpecialistWorkers.worker_wrangler_tessa?.isStriking
@@ -3923,6 +4006,7 @@ export const useGameStore = create<GameState>()(
 
         // --- Incubator & Stable Master (Elric) Auto-Hatch Pass ---
         const isElricActive = Boolean(
+          !areWorkersPaused &&
           updatedSpecialistWorkers.worker_stablemaster_elric?.isHired &&
           updatedSpecialistWorkers.worker_stablemaster_elric?.isActive &&
           !updatedSpecialistWorkers.worker_stablemaster_elric?.isStriking
@@ -3953,6 +4037,7 @@ export const useGameStore = create<GameState>()(
 
         // --- Wilderness Caravaner (Orin) Auto-Haul from Reserve to Paddocks ---
         const isOrinActive = Boolean(
+          !areWorkersPaused &&
           updatedSpecialistWorkers.worker_caravaner_orin?.isHired &&
           updatedSpecialistWorkers.worker_caravaner_orin?.isActive &&
           !updatedSpecialistWorkers.worker_caravaner_orin?.isStriking
@@ -6156,6 +6241,7 @@ export const useGameStore = create<GameState>()(
           },
           autonomousWorkers: [],
           unifiedWorkers: initialUnifiedWorkers,
+          isAllWorkersPaused: false,
           specialistWorkers: createDefaultSpecialistWorkers(),
           lastSpecialistWageTime: Date.now(),
           wranglerPolicy: DEFAULT_WRANGLER_POLICY,
@@ -6230,6 +6316,7 @@ export const useGameStore = create<GameState>()(
         fishery: state.fishery,
         autonomousWorkers: state.autonomousWorkers,
         unifiedWorkers: state.unifiedWorkers,
+        isAllWorkersPaused: state.isAllWorkersPaused,
         specialistWorkers: state.specialistWorkers,
         lastSpecialistWageTime: state.lastSpecialistWageTime,
         wranglerPolicy: state.wranglerPolicy,
@@ -6310,9 +6397,12 @@ export const useGameStore = create<GameState>()(
           for (const r of Object.keys(defaultWorkers) as WorkerRole[]) {
             if (!merged.unifiedWorkers[r]) {
               merged.unifiedWorkers[r] = defaultWorkers[r];
+            } else if (merged.unifiedWorkers[r].isPaused === undefined) {
+              merged.unifiedWorkers[r].isPaused = false;
             }
           }
         }
+        if (merged.isAllWorkersPaused === undefined) merged.isAllWorkersPaused = false;
 
         if (!merged.specialistWorkers) {
           merged.specialistWorkers = createDefaultSpecialistWorkers();

@@ -90,7 +90,17 @@ function getNextPerkHint(currentLevel: number): string | null {
 }
 
 export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) => void } = {}) {
-  const { unifiedWorkers, coins, level, hireUnifiedWorker, bulkUpgradeUnifiedWorker, toggleUnifiedWorkerMode } = useGameStore();
+  const {
+    unifiedWorkers,
+    coins,
+    level,
+    hireUnifiedWorker,
+    bulkUpgradeUnifiedWorker,
+    toggleUnifiedWorkerMode,
+    togglePauseUnifiedWorker,
+    togglePauseAllWorkers,
+    isAllWorkersPaused,
+  } = useGameStore();
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
   const now = Date.now();
@@ -108,12 +118,48 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          {'\u{1F477}'} Workers & Guilds
-        </h3>
-        <span className="text-xs text-stone-500 dark:text-gray-400">{hiredCount}/{totalWorkers} hired</span>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <h3 className="font-bold text-lg text-stone-800 dark:text-gray-100 flex items-center gap-2">
+            {'\u{1F477}'} Workers & Guilds
+          </h3>
+          <span className="text-xs text-stone-500 dark:text-gray-400">{hiredCount}/{totalWorkers} hired</span>
+        </div>
+
+        {hiredCount > 0 && (
+          <button
+            onClick={() => togglePauseAllWorkers(!isAllWorkersPaused)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+              isAllWorkersPaused
+                ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-emerald-500/20 ring-2 ring-emerald-500/30'
+                : 'bg-stone-100 hover:bg-amber-100 dark:bg-stone-800 dark:hover:bg-amber-950/40 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 hover:border-amber-400'
+            }`}
+            title={isAllWorkersPaused ? "Resume all automated operations and production" : "Pause all automated operations and worker cycles"}
+          >
+            <span>{isAllWorkersPaused ? '▶️' : '⏸️'}</span>
+            <span>{isAllWorkersPaused ? 'Resume All Workers' : 'Pause All Workers'}</span>
+          </button>
+        )}
       </div>
+
+      {/* Global Workforce Paused Banner */}
+      {isAllWorkersPaused && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-900 dark:text-amber-200 text-xs shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl animate-pulse">⏸️</span>
+            <div>
+              <div className="font-black text-sm">All Automated Workers Paused</div>
+              <div className="text-[11px] opacity-85">Autonomous routines, resource consumption, and specialist tasks are on hold.</div>
+            </div>
+          </div>
+          <button
+            onClick={() => togglePauseAllWorkers(false)}
+            className="shrink-0 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black shadow-xs transition-all active:scale-95 cursor-pointer ml-2"
+          >
+            ▶️ Resume All
+          </button>
+        </div>
+      )}
 
       {/* Prominent Dedicated Specialist Workers Section */}
       <SpecialistWorkersSection onSelectTab={onSelectTab} />
@@ -216,11 +262,18 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     <h4 className="font-semibold text-sm text-stone-800 dark:text-gray-200 truncate">
                       {cfg.name}
                     </h4>
-                    {worker.isHired && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${rank.color} ${rank.bgColor} border ${rank.borderColor} whitespace-nowrap`}>
-                        {rank.emoji} {rank.title}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {worker.isHired && worker.isPaused && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 whitespace-nowrap">
+                          ⏸️ Paused
+                        </span>
+                      )}
+                      {worker.isHired && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${rank.color} ${rank.bgColor} border ${rank.borderColor} whitespace-nowrap`}>
+                          {rank.emoji} {rank.title}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Description */}
@@ -268,13 +321,21 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     <div className="mt-1.5">
                       <div className="flex items-center justify-between mb-0.5">
                         <span className="text-[10px] text-stone-500 dark:text-gray-400">
-                          Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s
+                          {worker.isPaused ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">⏸️ Operation Paused</span>
+                          ) : (
+                            `Next: ${Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s`
+                          )}
                         </span>
                       </div>
                       <div className="w-full h-1.5 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-emerald-400 dark:bg-emerald-500 rounded-full transition-all"
-                          style={{ width: `${progress * 100}%` }}
+                          className={`h-full rounded-full transition-all ${
+                            worker.isPaused
+                              ? 'bg-amber-400 dark:bg-amber-500 opacity-60'
+                              : 'bg-emerald-400 dark:bg-emerald-500'
+                          }`}
+                          style={{ width: `${(worker.isPaused ? 0.35 : progress) * 100}%` }}
                         />
                       </div>
                     </div>
@@ -400,6 +461,20 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                           {' '}({'\u{1F4B0}'}{upgradeResult.totalCost.toLocaleString()})
                         </button>
                       </>
+                    )}
+                    {worker.isHired && (
+                      <button
+                        onClick={() => togglePauseUnifiedWorker(role)}
+                        className={`px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer flex items-center gap-1 shadow-xs active:scale-95 ${
+                          worker.isPaused
+                            ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-700 dark:text-emerald-300 border-emerald-500/50'
+                            : 'bg-stone-100 hover:bg-amber-50 dark:bg-stone-800 dark:hover:bg-amber-950/30 text-stone-600 hover:text-amber-700 dark:text-stone-300 dark:hover:text-amber-300 border-stone-300 dark:border-stone-700'
+                        }`}
+                        title={worker.isPaused ? "Resume this worker's automated tasks" : "Temporarily pause this worker without firing"}
+                      >
+                        <span>{worker.isPaused ? '▶️' : '⏸️'}</span>
+                        <span>{worker.isPaused ? 'Resume' : 'Pause'}</span>
+                      </button>
                     )}
                     {worker.isHired && (
                       <OverclockActionMenu

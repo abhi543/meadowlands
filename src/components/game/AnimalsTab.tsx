@@ -50,11 +50,14 @@ export function AnimalsTab() {
     unifiedWorkers,
     hireUnifiedWorker,
     toggleUnifiedWorkerMode,
+    togglePauseUnifiedWorker,
+    isAllWorkersPaused,
     specialistWorkers,
     wranglerPolicy,
   } = useGameStore();
 
   const isTessaActive = Boolean(
+    !isAllWorkersPaused &&
     specialistWorkers?.worker_wrangler_tessa?.isHired &&
     specialistWorkers?.worker_wrangler_tessa?.isActive &&
     !specialistWorkers?.worker_wrangler_tessa?.isStriking
@@ -161,15 +164,32 @@ export function AnimalsTab() {
           {/* Livestock Rancher / Herder Worker Status */}
           {herderWorker?.isHired ? (
             <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/15 dark:bg-amber-500/25 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-600/50 shadow-xs"
-              title={`Livestock Rancher Lv.${herderWorker.level}: Automatically feeding & collecting animal products (Mode: ${herderWorker.autoSell ? 'Auto-Sell' : 'Hoard to Barn'})`}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold border shadow-xs transition-all ${
+                herderWorker.isPaused || isAllWorkersPaused
+                  ? 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-300 dark:border-stone-700'
+                  : 'bg-amber-500/15 dark:bg-amber-500/25 text-amber-900 dark:text-amber-200 border border-amber-300/80 dark:border-amber-600/50'
+              }`}
+              title={`Livestock Rancher Lv.${herderWorker.level}: Automatically feeding & collecting animal products (${herderWorker.isPaused || isAllWorkersPaused ? 'Paused' : 'Active'})`}
             >
               <span className="text-sm">🤠</span>
               <span className="hidden md:inline font-bold">Rancher Lv.{herderWorker.level}</span>
-              <span className="flex h-2 w-2 relative" title="Worker actively feeding and gathering">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
+              {herderWorker.isPaused || isAllWorkersPaused ? (
+                <span className="px-1 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                  ⏸️ Paused
+                </span>
+              ) : (
+                <span className="flex h-2 w-2 relative" title="Worker actively feeding and gathering">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
+              <button
+                onClick={() => togglePauseUnifiedWorker('herder')}
+                className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-stone-800 hover:bg-white text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 cursor-pointer font-semibold"
+                title={herderWorker.isPaused ? "Resume Rancher" : "Pause Rancher"}
+              >
+                {herderWorker.isPaused ? '▶️ Resume' : '⏸️ Pause'}
+              </button>
               <button
                 onClick={() => toggleUnifiedWorkerMode('herder')}
                 className="text-[10px] px-1.5 py-0.5 rounded bg-white/80 dark:bg-stone-800 hover:bg-white text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 cursor-pointer font-mono font-semibold"
