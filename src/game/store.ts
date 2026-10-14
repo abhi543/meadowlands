@@ -1673,6 +1673,10 @@ export const useGameStore = create<GameState>()(
 
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
+        if ((newBarn as Record<string, number>).honey_comb) {
+          newSilo.honey_comb = (newSilo.honey_comb || 0) + ((newBarn as Record<string, number>).honey_comb || 0);
+          delete (newBarn as Record<string, number>).honey_comb;
+        }
         for (const input of recipe.inputs) {
           const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
           const storage = isCrop ? newSilo : newBarn;
@@ -1816,6 +1820,10 @@ export const useGameStore = create<GameState>()(
         // Figure out how many times we can afford to craft this recipe
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
+        if ((newBarn as Record<string, number>).honey_comb) {
+          newSilo.honey_comb = (newSilo.honey_comb || 0) + ((newBarn as Record<string, number>).honey_comb || 0);
+          delete (newBarn as Record<string, number>).honey_comb;
+        }
         let craftCount = 0;
         for (let i = 0; i < freeSlots; i++) {
           let canAfford = true;
@@ -3957,6 +3965,13 @@ export const useGameStore = create<GameState>()(
         // Multi-zone fishery: iterate ALL unlocked zones in parallel
         let newBarn = { ...state.barn };
         let newSilo = { ...state.silo };
+        if ((newBarn as Record<string, number>).honey_comb) {
+          const stranded = (newBarn as Record<string, number>).honey_comb || 0;
+          if (stranded > 0) {
+            newSilo.honey_comb = (newSilo.honey_comb || 0) + stranded;
+          }
+          delete (newBarn as Record<string, number>).honey_comb;
+        }
         let newGems = state.gems;
         let newCodex = { ...state.codex };
         let newFishCodex = { ...state.fishery.fishCodex };
@@ -7060,6 +7075,20 @@ export const useGameStore = create<GameState>()(
         // Migration: add new silo/barn keys
         if (!merged.silo.cotton) merged.silo = { ...merged.silo, cotton: 0, honey_comb: 0, wild_berries: 0, gold_nugget: 0 };
         if (!merged.barn.yarn) merged.barn = { ...merged.barn, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 };
+
+        // Migration: move any stranded honeycomb from barn to silo
+        if (merged.barn && (merged.barn as Record<string, number>).honey_comb) {
+          const stranded = (merged.barn as Record<string, number>).honey_comb || 0;
+          if (stranded > 0) {
+            merged.silo = {
+              ...merged.silo,
+              honey_comb: (merged.silo.honey_comb || 0) + stranded,
+            };
+          }
+          const updatedBarn = { ...merged.barn };
+          delete (updatedBarn as Record<string, number>).honey_comb;
+          merged.barn = updatedBarn;
+        }
 
         // Migration: animals with missing cycles fields
         if (merged.animals) {

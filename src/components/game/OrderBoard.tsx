@@ -33,7 +33,8 @@ function getItemSourceHint(itemId: string): string {
   if (itemId === 'fabric') return 'Weave at Loom';
   if (itemId === 'yarn') return 'Spin at Loom';
   if (itemId === 'truffle_oil') return 'Press at Oil Press';
-  if (itemId === 'honey' || itemId === 'honey_comb') return 'Beekeeper worker / Hive';
+  if (itemId === 'honey') return 'Press at Press building (requires 2x Honey Comb)';
+  if (itemId === 'honey_comb') return 'Beekeeper worker / Apiary Tender (Workers tab, Hoard mode)';
   if (itemId === 'wild_berries') return 'Forager worker or Farm';
   if (itemId === 'gold_nugget') return 'Prospector worker or Mine';
   if (itemId === 'cotton') return 'Grow Cotton on Farm';

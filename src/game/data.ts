@@ -1064,7 +1064,7 @@ export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
     role: 'beekeeper', name: 'Apiary Tender', emoji: '\u{1F36F}',
     description: 'Tends hives for honeycomb and royal jelly', division: 'autonomous',
     baseCost: 1000, baseIntervalMs: 90000, exponent: 1.074, unlockLevel: 12,
-    autoSellPayout: 25, hoardItem: 'honey_comb', hoardItemEmoji: '\u{1F36F}', hoardIsSilo: false,
+    autoSellPayout: 25, hoardItem: 'honey_comb', hoardItemEmoji: '\u{1F36F}', hoardIsSilo: true,
     rareItem: 'honey', rareItemEmoji: '\u{1F36F}', rareItemSellPrice: 60,
   },
   forager: {

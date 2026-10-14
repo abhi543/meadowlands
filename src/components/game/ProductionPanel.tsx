@@ -103,7 +103,8 @@ function canCraftRecipe(recipe: RecipeDef, silo: Record<string, number>, barn: R
   for (const input of recipe.inputs) {
     const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
     const storage = isCrop ? silo : barn;
-    if ((storage[input.productId] || 0) < input.qty) return false;
+    const have = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+    if (have < input.qty) return false;
   }
   return true;
 }
@@ -113,7 +114,7 @@ function calcMaxCraftable(recipe: RecipeDef, silo: Record<string, number>, barn:
   for (const input of recipe.inputs) {
     const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
     const storage = isCrop ? silo : barn;
-    const available = storage[input.productId] || 0;
+    const available = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
     max = Math.min(max, Math.floor(available / input.qty));
   }
   return max === Infinity ? 0 : max;
@@ -437,7 +438,7 @@ export function ProductionPanel() {
                 for (const inp of recipe.inputs) {
                   const isCrop = inp.productId in CROPS || inp.productId === 'feed' || inp.productId === 'cotton' || inp.productId === 'honey_comb' || inp.productId === 'wild_berries' || inp.productId === 'gold_nugget';
                   const storage = isCrop ? silo : barn;
-                  const have = storage[inp.productId] || 0;
+                  const have = (storage[inp.productId] || 0) + (inp.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
                   if (have < inp.qty) {
                     missingIngredients.push({ name: getItemName(inp.productId), emoji: getItemEmoji(inp.productId), have, need: inp.qty, source: getIngredientSourceHint(inp.productId) });
                   }
