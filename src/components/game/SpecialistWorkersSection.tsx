@@ -1,10 +1,14 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '@/game/store';
 import { LIVESTOCK_WORKER_ROSTER, type SpecialistWorkerId, type HireableWorkerTemplate } from '@/data/workerCatalog';
 
-export function SpecialistWorkersSection() {
+interface SpecialistWorkersSectionProps {
+  onSelectTab?: (tab: string) => void;
+}
+
+export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSectionProps) {
   const {
     coins,
     specialistWorkers,
@@ -12,7 +16,11 @@ export function SpecialistWorkersSection() {
     toggleSpecialistDuty,
     dismissSpecialistWorker,
     paySpecialistBackPay,
+    wranglerPolicy,
+    updateWranglerPolicy,
   } = useGameStore();
+
+  const [tessaDrawerOpen, setTessaDrawerOpen] = useState(false);
 
   return (
     <div className="bg-gradient-to-b from-stone-900/90 to-stone-950/95 dark:from-gray-900 dark:to-black rounded-2xl border border-amber-500/30 p-5 shadow-xl shadow-amber-950/20 backdrop-blur-md space-y-4">
@@ -150,6 +158,128 @@ export function SpecialistWorkersSection() {
                     ))}
                   </ul>
                 </div>
+
+                {/* Embedded Policy Settings Drawer on Tessa's Card */}
+                {worker.id === 'worker_wrangler_tessa' && (
+                  <div className="mt-3 border-t border-stone-800/80 pt-2.5">
+                    <button
+                      onClick={() => setTessaDrawerOpen(!tessaDrawerOpen)}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-950/80 hover:bg-stone-850 border border-stone-700/60 text-xs font-bold text-amber-300 transition-all shadow-xs"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span>⚙️</span>
+                        <span>Feed Selection Policy & Floors</span>
+                      </span>
+                      <span className="text-[10px] text-stone-400 font-mono">
+                        {tessaDrawerOpen ? '▲ Hide' : '▼ Edit'}
+                      </span>
+                    </button>
+
+                    {tessaDrawerOpen && (
+                      <div className="mt-2 p-3 bg-stone-950/90 rounded-xl border border-amber-500/30 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                        {/* Toggle Automation */}
+                        <div className="flex items-center justify-between pb-2 border-b border-stone-800">
+                          <div>
+                            <div className="text-xs font-bold text-stone-200">Auto-Feeding Routine</div>
+                            <div className="text-[10px] text-stone-400">Paddock Wrangler feed execution</div>
+                          </div>
+                          <button
+                            onClick={() => updateWranglerPolicy({ isEnabled: !wranglerPolicy?.isEnabled })}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                              wranglerPolicy?.isEnabled
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-stone-800 text-stone-400 border border-stone-700'
+                            }`}
+                          >
+                            {wranglerPolicy?.isEnabled ? '🟢 Enabled' : '⏸️ Paused'}
+                          </button>
+                        </div>
+
+                        {/* Strategy Selector */}
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
+                            Feeding Strategy
+                          </label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              onClick={() => updateWranglerPolicy({ strategy: 'budget_saver' })}
+                              className={`p-2 rounded-lg text-left transition-all border ${
+                                wranglerPolicy?.strategy === 'budget_saver'
+                                  ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300 ring-1 ring-emerald-500/30'
+                                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700'
+                              }`}
+                            >
+                              <div className="text-xs font-bold flex items-center gap-1">
+                                <span>🌾</span> Budget Saver
+                              </div>
+                              <div className="text-[10px] text-stone-400 mt-0.5 leading-tight">
+                                Cheapest crops & feed first
+                              </div>
+                            </button>
+
+                            <button
+                              onClick={() => updateWranglerPolicy({ strategy: 'gourmet_breeder' })}
+                              className={`p-2 rounded-lg text-left transition-all border ${
+                                wranglerPolicy?.strategy === 'gourmet_breeder'
+                                  ? 'bg-amber-950/40 border-amber-500/60 text-amber-300 ring-1 ring-amber-500/30'
+                                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:border-stone-700'
+                              }`}
+                            >
+                              <div className="text-xs font-bold flex items-center gap-1">
+                                <span>⭐</span> Gourmet
+                              </div>
+                              <div className="text-[10px] text-stone-400 mt-0.5 leading-tight">
+                                Species favorites first
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Global Safety Reserve Floor */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                              Global Barn Reserve Floor
+                            </span>
+                            <span className="font-mono font-bold text-amber-300">
+                              {wranglerPolicy?.globalReserveFloor ?? 10} crops
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-stone-400 leading-snug">
+                            Caretakers will NEVER consume Barn crops when supply is at or below this floor, protecting your delivery contracts.
+                          </p>
+                          <div className="flex items-center gap-1 pt-1">
+                            {[5, 10, 25, 50].map(floor => (
+                              <button
+                                key={floor}
+                                onClick={() => updateWranglerPolicy({ globalReserveFloor: floor })}
+                                className={`flex-1 py-1 text-xs font-bold rounded-lg transition-all ${
+                                  (wranglerPolicy?.globalReserveFloor ?? 10) === floor
+                                    ? 'bg-amber-500 text-stone-950 shadow-xs'
+                                    : 'bg-stone-900 text-stone-400 hover:bg-stone-800 border border-stone-800'
+                                }`}
+                              >
+                                {floor}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Shortcut to Barn Locks */}
+                        {onSelectTab && (
+                          <button
+                            onClick={() => onSelectTab('barn')}
+                            className="w-full py-1.5 px-2 rounded-lg bg-stone-900 hover:bg-stone-850 text-amber-300 hover:text-amber-200 text-[11px] font-bold transition-all border border-amber-500/20 flex items-center justify-center gap-1.5 shadow-xs"
+                          >
+                            <span>🔒</span>
+                            <span>Manage Individual Crop Locks in Barn Tab</span>
+                            <span>➔</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons Footer */}

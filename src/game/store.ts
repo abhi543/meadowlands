@@ -86,6 +86,18 @@ import {
   LIVESTOCK_WORKER_ROSTER,
   createDefaultSpecialistWorkers,
 } from '@/data/workerCatalog';
+import {
+  type FeedingStrategy,
+  type BarnItemLockMap,
+} from '@/types/inventory';
+import {
+  type WranglerPolicyConfig,
+  DEFAULT_WRANGLER_POLICY,
+} from '@/types/workers';
+import {
+  ITEM_CATALOG_META,
+  SPECIES_FAVORITE_CROPS,
+} from '@/utils/barnInventory';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -430,6 +442,10 @@ export interface GameState {
   specialistWorkers: Record<SpecialistWorkerId, SpecialistWorkerState>;
   lastSpecialistWageTime: number;
 
+  // Worker Feeding Automation & Barn Lock Policies
+  wranglerPolicy: WranglerPolicyConfig;
+  barnItemLocks: BarnItemLockMap;
+
   // Hourly Events
   activeEvent: ActiveHourlyEvent | null;
   lastEventTriggerTime: number;
@@ -544,6 +560,11 @@ export interface GameState {
   toggleSpecialistDuty: (workerId: SpecialistWorkerId) => void;
   dismissSpecialistWorker: (workerId: SpecialistWorkerId) => void;
   paySpecialistBackPay: (workerId: SpecialistWorkerId) => boolean;
+
+  // Wrangler Feed Policy & Automation Controls
+  updateWranglerPolicy: (policy: Partial<WranglerPolicyConfig>) => void;
+  toggleBarnItemLock: (itemId: string) => void;
+  setBarnItemCustomReserve: (itemId: string, threshold?: number) => void;
 
   // Outfits
   equipOutfit: (farmhandId: string, outfitId: OutfitId | null) => void;
@@ -984,6 +1005,10 @@ export const useGameStore = create<GameState>()(
       // Specialist Workers (Livestock, Expeditions & Genetics)
       specialistWorkers: createDefaultSpecialistWorkers(),
       lastSpecialistWageTime: Date.now(),
+
+      // Wrangler Feeding Automation & Barn Lock Policies
+      wranglerPolicy: DEFAULT_WRANGLER_POLICY,
+      barnItemLocks: {},
 
       lastTick: Date.now(),
 
@@ -2395,6 +2420,40 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
+      // Wrangler Feed Policy & Automation Controls
+      updateWranglerPolicy: (policyUpdate) => {
+        const state = get();
+        const current = state.wranglerPolicy || DEFAULT_WRANGLER_POLICY;
+        set({ wranglerPolicy: { ...current, ...policyUpdate } });
+      },
+
+      toggleBarnItemLock: (itemId) => {
+        const state = get();
+        const currentLocks = { ...(state.barnItemLocks || {}) };
+        const itemLock = currentLocks[itemId] || { isLockedForWorkers: false };
+        const nextLocked = !itemLock.isLockedForWorkers;
+        currentLocks[itemId] = { ...itemLock, isLockedForWorkers: nextLocked };
+        set({ barnItemLocks: currentLocks });
+
+        const itemMeta = ITEM_CATALOG_META[itemId];
+        const itemName = itemMeta?.name || itemId;
+        state.addNotification(
+          nextLocked
+            ? `🔒 ${itemName} locked: Caretakers will NOT consume this item!`
+            : `🔓 ${itemName} unlocked: Eligible for automated caretaker feeding.`,
+          nextLocked ? '🔒' : '🔓',
+          'info'
+        );
+      },
+
+      setBarnItemCustomReserve: (itemId, threshold) => {
+        const state = get();
+        const currentLocks = { ...(state.barnItemLocks || {}) };
+        const itemLock = currentLocks[itemId] || { isLockedForWorkers: false };
+        currentLocks[itemId] = { ...itemLock, customReserveThreshold: threshold };
+        set({ barnItemLocks: currentLocks });
+      },
+
       // Outfits
       equipOutfit: (farmhandId, outfitId) => {
         const state = get();
@@ -3726,8 +3785,12 @@ export const useGameStore = create<GameState>()(
           !updatedSpecialistWorkers.worker_wrangler_tessa?.isStriking
         );
 
-        if (isTessaActive) {
-          let feedAvailable = (newSilo.feed || 0) + (newBarn.feed || 0) + (newSilo.wheat || 0);
+        const currentWranglerPolicy = state.wranglerPolicy || DEFAULT_WRANGLER_POLICY;
+        const currentBarnLocks = state.barnItemLocks || {};
+
+        if (isTessaActive && currentWranglerPolicy.isEnabled) {
+          const eligibleFeedIds = Object.keys(ITEM_CATALOG_META).filter(k => ITEM_CATALOG_META[k].isEdibleFeed);
+
           newAnimals = newAnimals.map(a => {
             const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
             const isAnimalExhausted = Boolean(
@@ -3735,16 +3798,57 @@ export const useGameStore = create<GameState>()(
               (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
             );
             if (a.fed || a.productReady || a.age === 'elder' || isAnimalExhausted) return a;
-            if (feedAvailable <= 0) return a;
 
-            if ((newSilo.feed || 0) > 0) {
-              newSilo.feed -= 1;
-            } else if ((newBarn.feed || 0) > 0) {
-              newBarn.feed -= 1;
-            } else if ((newSilo.wheat || 0) > 0) {
-              newSilo.wheat -= 1;
+            // Find valid feed items that are not locked and have surplus over reserve floor
+            const validCandidates = eligibleFeedIds.filter(fId => {
+              if (currentBarnLocks[fId]?.isLockedForWorkers) return false;
+              const customFloor = currentBarnLocks[fId]?.customReserveThreshold;
+              const floor = customFloor !== undefined ? customFloor : (fId === 'feed' ? 0 : currentWranglerPolicy.globalReserveFloor);
+              const currentStock = (newSilo[fId] || 0) + (newBarn[fId] || 0);
+              return currentStock > floor;
+            });
+
+            if (validCandidates.length === 0) return a;
+
+            // Sort candidate feed items based on policy strategy
+            validCandidates.sort((candA, candB) => {
+              const metaA = ITEM_CATALOG_META[candA];
+              const metaB = ITEM_CATALOG_META[candB];
+
+              if (currentWranglerPolicy.strategy === 'budget_saver') {
+                // Cheapest first
+                if (metaA.baseValue !== metaB.baseValue) {
+                  return metaA.baseValue - metaB.baseValue;
+                }
+                const stockA = (newSilo[candA] || 0) + (newBarn[candA] || 0);
+                const stockB = (newSilo[candB] || 0) + (newBarn[candB] || 0);
+                return stockB - stockA; // higher surplus first
+              } else {
+                // gourmet_breeder: favorite crops of species first!
+                const favs = SPECIES_FAVORITE_CROPS[a.species] || [];
+                const isFavA = favs.includes(candA);
+                const isFavB = favs.includes(candB);
+
+                if (isFavA && !isFavB) return -1;
+                if (!isFavA && isFavB) return 1;
+
+                if (isFavA && isFavB) {
+                  // Prefer higher nutritional richness among favorites
+                  return metaB.baseValue - metaA.baseValue;
+                }
+
+                // If neither is favorite, fall back to cheapest
+                return metaA.baseValue - metaB.baseValue;
+              }
+            });
+
+            const chosenFeedId = validCandidates[0];
+            if ((newSilo[chosenFeedId] || 0) > 0) {
+              newSilo[chosenFeedId] -= 1;
+            } else if ((newBarn[chosenFeedId] || 0) > 0) {
+              newBarn[chosenFeedId] -= 1;
             }
-            feedAvailable -= 1;
+
             return {
               ...a,
               fed: true,
@@ -5990,6 +6094,8 @@ export const useGameStore = create<GameState>()(
           unifiedWorkers: initialUnifiedWorkers,
           specialistWorkers: createDefaultSpecialistWorkers(),
           lastSpecialistWageTime: Date.now(),
+          wranglerPolicy: DEFAULT_WRANGLER_POLICY,
+          barnItemLocks: {},
           activeEvent: null,
           lastEventTriggerTime: Date.now(),
           notifications: [],
@@ -6062,6 +6168,8 @@ export const useGameStore = create<GameState>()(
         unifiedWorkers: state.unifiedWorkers,
         specialistWorkers: state.specialistWorkers,
         lastSpecialistWageTime: state.lastSpecialistWageTime,
+        wranglerPolicy: state.wranglerPolicy,
+        barnItemLocks: state.barnItemLocks,
         livestockReserve: state.livestockReserve,
         activeEvent: state.activeEvent,
         lastEventTriggerTime: state.lastEventTriggerTime,
@@ -6153,6 +6261,8 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (!merged.lastSpecialistWageTime) merged.lastSpecialistWageTime = Date.now();
+        if (!merged.wranglerPolicy) merged.wranglerPolicy = DEFAULT_WRANGLER_POLICY;
+        if (!merged.barnItemLocks) merged.barnItemLocks = {};
         if (!merged.livestockReserve) merged.livestockReserve = [];
         if (!merged.activeEvent) merged.activeEvent = null;
         if (!merged.lastEventTriggerTime) merged.lastEventTriggerTime = Date.now();

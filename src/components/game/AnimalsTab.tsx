@@ -51,6 +51,7 @@ export function AnimalsTab() {
     hireUnifiedWorker,
     toggleUnifiedWorkerMode,
     specialistWorkers,
+    wranglerPolicy,
   } = useGameStore();
 
   const isTessaActive = Boolean(
@@ -194,10 +195,12 @@ export function AnimalsTab() {
           {isTessaActive && (
             <div
               className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500/15 dark:bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border border-emerald-400/50 shadow-xs"
-              title="Paddock Wrangler Tessa is actively feeding animals and maintaining Well-Fed status (+10% Mutation Luck, -10% Overclock cost)"
+              title={`Paddock Wrangler Tessa is feeding animals via ${wranglerPolicy?.strategy === 'gourmet_breeder' ? 'Gourmet Breeder (Favorites first)' : 'Budget Saver (Cheapest first)'} policy with a safety reserve floor of ${wranglerPolicy?.globalReserveFloor ?? 10} crops`}
             >
               <span className="text-sm">🌾</span>
-              <span>Tessa: Well-Fed Active</span>
+              <span>
+                Tessa: {wranglerPolicy?.strategy === 'gourmet_breeder' ? 'Gourmet Feed' : 'Budget Feed'} ({wranglerPolicy?.globalReserveFloor ?? 10} min)
+              </span>
               <span className="flex h-1.5 w-1.5 relative">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>

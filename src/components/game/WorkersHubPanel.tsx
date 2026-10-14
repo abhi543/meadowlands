@@ -89,7 +89,7 @@ function getNextPerkHint(currentLevel: number): string | null {
   return null;
 }
 
-export function WorkersHubPanel() {
+export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) => void } = {}) {
   const { unifiedWorkers, coins, level, hireUnifiedWorker, bulkUpgradeUnifiedWorker, toggleUnifiedWorkerMode } = useGameStore();
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
@@ -116,7 +116,7 @@ export function WorkersHubPanel() {
       </div>
 
       {/* Prominent Dedicated Specialist Workers Section */}
-      <SpecialistWorkersSection />
+      <SpecialistWorkersSection onSelectTab={onSelectTab} />
 
       {/* Division Tabs */}
       <div className="flex gap-1 bg-stone-100 dark:bg-gray-800 rounded-lg p-1">

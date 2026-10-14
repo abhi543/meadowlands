@@ -6,7 +6,7 @@ import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 
 interface HUDProps {
   onOpenBackupModal?: () => void;
-  onSelectTab?: (tab: 'animals' | 'market') => void;
+  onSelectTab?: (tab: 'animals' | 'market' | 'barn' | 'farmhands') => void;
 }
 
 export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
@@ -88,14 +88,24 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
 
         {/* Storage & Animals Pills */}
         <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0 flex-wrap">
-          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5" title="Silo Storage (Crops & Feed)">
+          <button
+            type="button"
+            onClick={() => onSelectTab?.('barn')}
+            className="bg-white/15 hover:bg-white/25 active:scale-95 transition-all backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/15"
+            title="Silo Storage & Crop Feed Locks (Tap to open Barn Inventory)"
+          >
             <span>🌾</span>
             <span className={siloUsed >= siloMax ? 'text-red-300' : ''}>{siloUsed}/{siloMax}</span>
-          </div>
-          <div className="bg-white/15 backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5" title="Barn Storage (Products & Items)">
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectTab?.('barn')}
+            className="bg-white/15 hover:bg-white/25 active:scale-95 transition-all backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/15"
+            title="Barn Storage & Worker Feed Locks (Tap to open Barn Inventory)"
+          >
             <span>🏠</span>
             <span className={barnUsed >= barnMax ? 'text-red-300' : ''}>{barnUsed}/{barnMax}</span>
-          </div>
+          </button>
           <button
             type="button"
             onClick={() => onSelectTab?.('animals')}

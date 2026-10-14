@@ -27,9 +27,10 @@ import { WildernessPanel } from '@/components/game/WildernessPanel';
 import { TerritoryMapView } from '@/components/game/TerritoryMapView';
 import { FloatingNumbers } from '@/components/game/FloatingNumbers';
 import { BackupModal } from '@/components/game/BackupModal';
+import { BarnTab } from '@/components/game/BarnTab';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
-type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
+type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
 
 interface TabDef {
   id: TabId;
@@ -46,6 +47,7 @@ const TABS: TabDef[] = [
   { id: 'production', label: 'Produce',  emoji: '⚙️', color: 'text-orange-600 dark:text-orange-400',     bgActive: 'bg-orange-100 dark:bg-orange-900/40',   bgInactive: 'hover:bg-orange-50 dark:hover:bg-orange-900/20' },
   { id: 'orders',     label: 'Orders',   emoji: '🚚', color: 'text-blue-600 dark:text-blue-400',         bgActive: 'bg-blue-100 dark:bg-blue-900/40',       bgInactive: 'hover:bg-blue-50 dark:hover:bg-blue-900/20' },
   { id: 'shop',       label: 'Shop',     emoji: '🏪', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
+  { id: 'barn',       label: 'Barn',     emoji: '🏠', color: 'text-amber-700 dark:text-amber-300',       bgActive: 'bg-amber-100 dark:bg-amber-900/40',     bgInactive: 'hover:bg-amber-50 dark:hover:bg-amber-900/20' },
   { id: 'farmhands',  label: 'Workers',  emoji: '👷', color: 'text-violet-600 dark:text-violet-400',     bgActive: 'bg-violet-100 dark:bg-violet-900/40',   bgInactive: 'hover:bg-violet-50 dark:hover:bg-violet-900/20' },
   { id: 'fishery',    label: 'Fishery',  emoji: '🎣', color: 'text-cyan-600 dark:text-cyan-400',         bgActive: 'bg-cyan-100 dark:bg-cyan-900/40',       bgInactive: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/20' },
   { id: 'wilderness', label: 'Wild',     emoji: '🏕️', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
@@ -176,8 +178,9 @@ export default function Home() {
           {activeTab === 'production' && <ProductionPanel />}
           {activeTab === 'orders' && <OrderBoard />}
           {activeTab === 'shop' && <ShopPanel />}
+          {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
           {activeTab === 'farmhands' && (
-            <WorkersHubPanel />
+            <WorkersHubPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />
           )}
           {activeTab === 'fishery' && <FisheryPanel />}
           {activeTab === 'wilderness' && <WildernessPanel />}
@@ -211,7 +214,7 @@ export default function Home() {
 
       {/* Bottom Tab Bar - Compact 2-row grid on mobile, sleek full row on desktop */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
-        <div className="w-full max-w-[1600px] mx-auto grid grid-cols-6 md:grid-cols-11 gap-1 px-2 sm:px-6 lg:px-8 pt-1 pb-1.5 md:py-2">
+        <div className="w-full max-w-[1600px] mx-auto grid grid-cols-6 md:grid-cols-12 gap-1 px-2 sm:px-6 lg:px-8 pt-1 pb-1.5 md:py-2">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id;
             return (
