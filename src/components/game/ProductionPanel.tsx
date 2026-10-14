@@ -4,6 +4,7 @@ import { useGameStore } from '@/game/store';
 import { BUILDINGS, PRODUCTS, CROPS, WORKER_REGISTRY, type BuildingId, type RecipeDef, type WorkerRole } from '@/game/data';
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { getItemEconomicProfile } from '@/game/pricingEngine';
 
 const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
 
@@ -444,18 +445,41 @@ export function ProductionPanel() {
                   }
                 }
 
+                const outputProfile = getItemEconomicProfile(recipe.output.productId);
+                const totalOutputValue = outputProfile.baseValue * recipe.output.qty;
+
                 return (
                   <div key={recipe.id} className="bg-stone-50 dark:bg-stone-900/30 rounded-lg p-2.5 border border-stone-100 dark:border-gray-800">
                     <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-sm text-stone-800 dark:text-gray-200">{recipe.emoji} {recipe.name}</div>
-                        <div className="text-xs text-stone-500 dark:text-gray-400 mt-0.5">
+                      <div className="flex-1 min-w-0 pr-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-sm text-stone-800 dark:text-gray-100 truncate">
+                            {recipe.emoji} {recipe.name}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-mono text-xs font-black text-amber-600 dark:text-amber-400" title={`Derived Base Value: ${outputProfile.baseValue}c per unit`}>
+                              🪙 {totalOutputValue}
+                            </span>
+                            {recipe.output.qty > 1 && (
+                              <span className="text-[10px] text-stone-400 dark:text-stone-500 ml-1">({outputProfile.baseValue}c/ea)</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {outputProfile.breakdownText && (
+                          <div className="text-[10px] text-amber-700 dark:text-amber-300/90 font-medium italic mt-0.5 flex items-center gap-1 truncate" title={outputProfile.formulaDescription}>
+                            <span>✨</span>
+                            <span className="truncate">{outputProfile.breakdownText}</span>
+                          </div>
+                        )}
+
+                        <div className="text-xs text-stone-500 dark:text-gray-400 mt-1">
                           {recipe.inputs.map(inp => `${getItemEmoji(inp.productId)}${inp.qty}`).join(' + ')} {'\u2192'} {getItemEmoji(recipe.output.productId)}{recipe.output.qty}
                           <span className={`ml-2 ${theme.headerSub}`}>{'\u23F1'} {recipe.timeSec}s</span>
                         </div>
                         {maxCraftable > 0 && <div className="text-[10px] text-stone-400 dark:text-gray-500 mt-0.5">Can craft: {maxCraftable}x | Free slots: {freeSlots}</div>}
                       </div>
-                      <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                      <div className="flex items-center gap-1.5 ml-1 shrink-0">
                         <button onClick={() => startProduction(activeBuilding, recipe)} disabled={!canCraft || queueFull} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${theme.craftBtn} disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors`}>Craft</button>
                         <button onClick={() => startProductionAll(activeBuilding, recipe)} disabled={canCraftAll <= 0} className={`px-3 py-1.5 text-xs font-bold rounded-lg ${theme.craftBtnHover} disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors flex items-center gap-1`}>
                           <span>{'\u26A1'}</span> All {canCraftAll > 0 && <span className="bg-white/30 px-1 py-0.5 rounded text-[10px] font-bold">{canCraftAll}</span>}

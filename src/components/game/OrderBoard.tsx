@@ -16,6 +16,15 @@ import {
   CLIENT_TIERS_CONFIG,
   getClientLevelFromXp,
 } from '@/types/reputation';
+import {
+  calculateMasterSettlement,
+  getItemEconomicProfile,
+  getTradeStreakMultiplier,
+  inferContractTier,
+  CONTRACT_TIER_CONFIG,
+  type ContractEconomicTier,
+} from '@/game/pricingEngine';
+import { calculateStaffUpkeep } from '@/data/workerUpkeep';
 import { FavorShopView } from '@/components/game/FavorShopView';
 import { playClockTickSound, playCashRegisterSound, playDefeatSound } from '@/lib/soundEffects';
 
@@ -69,9 +78,15 @@ export function OrderBoard() {
     fulfillDeliveryOrder,
     trashOrder,
     level,
+    tradeStreak,
+    lastTradeStreakTimestamp,
+    unifiedWorkers,
+    specialistWorkers,
+    payrollVaultCoins,
+    staffPantry,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'timed' | 'favor_shop' | 'reputation'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'local' | 'merchant' | 'noble' | 'timed' | 'favor_shop' | 'reputation'>('all');
   const [selectedOrderForRoute, setSelectedOrderForRoute] = useState<DeliveryOrder | null>(null);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [dispatchResult, setDispatchResult] = useState<{ id: string; message: string; hazard: boolean } | null>(null);
@@ -85,6 +100,18 @@ export function OrderBoard() {
   }, []);
 
   const now = Date.now();
+
+  // Trade Velocity Streak Engine (resets after 45 minutes of trade inactivity)
+  const streakValid = Boolean(lastTradeStreakTimestamp && (now - lastTradeStreakTimestamp <= 45 * 60 * 1000));
+  const currentStreak = streakValid ? (tradeStreak || 0) : 0;
+  const streakInfo = getTradeStreakMultiplier(currentStreak);
+  const streakMinutesRemaining = (streakValid && lastTradeStreakTimestamp)
+    ? Math.max(1, Math.ceil((lastTradeStreakTimestamp + 45 * 60 * 1000 - now) / 60000))
+    : 0;
+
+  // Real-time Staff Upkeep Telemetry for Payroll Coverage Benchmarks
+  const staffTelemetry = calculateStaffUpkeep(unifiedWorkers, specialistWorkers, payrollVaultCoins, staffPantry);
+  const dailyPayrollBurnRate = staffTelemetry.baseDailyPayroll;
 
   // Play ticking sound if any rush contract is under 15 seconds
   useEffect(() => {
@@ -125,30 +152,38 @@ export function OrderBoard() {
   };
 
   const fulfillableCount = orders.filter(o => checkOrderFulfillable(o)).length;
+  const localOrders = orders.filter(o => (o.contractTier || inferContractTier(o.type, level)) === 'tier1_local');
+  const merchantOrders = orders.filter(o => (o.contractTier || inferContractTier(o.type, level)) === 'tier2_merchant');
+  const nobleOrders = orders.filter(o => (o.contractTier || inferContractTier(o.type, level)) === 'tier3_noble');
   const timedOrders = orders.filter(o => o.type === 'rush' || o.type === 'futures' || o.isRushOrder);
 
-  const displayedOrders = activeTab === 'timed' ? timedOrders : orders;
+  let displayedOrders = orders;
+  if (activeTab === 'local') displayedOrders = localOrders;
+  else if (activeTab === 'merchant') displayedOrders = merchantOrders;
+  else if (activeTab === 'noble') displayedOrders = nobleOrders;
+  else if (activeTab === 'timed') displayedOrders = timedOrders;
 
   return (
     <div className="space-y-3.5">
       {/* Top Logistics & Economic Calibration Header */}
-      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border border-stone-700/80 rounded-2xl p-3 text-stone-100 shadow-md">
+      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border border-stone-700/80 rounded-2xl p-3 text-stone-100 shadow-md space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-stone-700/60">
           <div className="flex items-center gap-2">
             <span className="text-2xl select-none">🚚</span>
             <div>
               <h3 className="font-black text-sm tracking-wide text-white flex items-center gap-2">
-                Meadowlands Logistics Engine
+                Meadowlands Macro-Contract Exchange
                 <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Lv. {level} Contracts
+                  Lv. {level} Tiered Economy
                 </span>
               </h3>
               <p className="text-[11px] text-stone-400">
-                Premium client contracts, persistent reputation perks &amp; route hazard logistics.
+                Mathematical production valuation, compounding artisan margins &amp; velocity trade streaks.
               </p>
             </div>
           </div>
 
+          {/* Navigation Category Tabs */}
           <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
             <button
               onClick={() => setActiveTab('all')}
@@ -159,6 +194,39 @@ export function OrderBoard() {
               }`}
             >
               All ({orders.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('local')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                activeTab === 'local'
+                  ? 'bg-amber-500 text-stone-950 shadow-sm'
+                  : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+              }`}
+            >
+              <span>🏡 Local</span>
+              <span className="text-[10px] opacity-75">({localOrders.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('merchant')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                activeTab === 'merchant'
+                  ? 'bg-sky-500 text-stone-950 shadow-sm'
+                  : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+              }`}
+            >
+              <span>🚢 Freight</span>
+              <span className="text-[10px] opacity-75">({merchantOrders.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('noble')}
+              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
+                activeTab === 'noble'
+                  ? 'bg-purple-500 text-white shadow-sm'
+                  : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+              }`}
+            >
+              <span>👑 Noble</span>
+              <span className="text-[10px] opacity-75">({nobleOrders.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('timed')}
@@ -201,28 +269,70 @@ export function OrderBoard() {
           </div>
         </div>
 
-        {/* Economic Calibration Rate Comparison Strip */}
-        <div className="pt-2 grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] font-medium">
-          <div className="bg-stone-950/60 p-1.5 rounded-xl border border-stone-800 flex items-center justify-between">
-            <span className="text-stone-400">🗑️ Shop Dump:</span>
-            <span className="font-bold text-rose-400 font-mono">60% Value</span>
+        {/* Standardized Economic Multipliers Calibration Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px] font-medium">
+          <div className="bg-stone-950/60 p-2 rounded-xl border border-stone-800 flex items-center justify-between">
+            <span className="text-amber-400 font-bold">🏡 Tier 1 Local:</span>
+            <span className="font-bold text-emerald-400 font-mono">1.1x (+10%)</span>
           </div>
-          <div className="bg-stone-950/60 p-1.5 rounded-xl border border-stone-800 flex items-center justify-between">
-            <span className="text-stone-400">📋 Standard:</span>
-            <span className="font-bold text-emerald-400 font-mono">140% Coins</span>
+          <div className="bg-stone-950/60 p-2 rounded-xl border border-stone-800 flex items-center justify-between">
+            <span className="text-sky-400 font-bold">🚢 Tier 2 Freight:</span>
+            <span className="font-bold text-sky-400 font-mono">1.4x (+40%)</span>
           </div>
-          <div className="bg-stone-950/60 p-1.5 rounded-xl border border-stone-800 flex items-center justify-between">
-            <span className="text-stone-400">📈 Futures:</span>
-            <span className="font-bold text-sky-400 font-mono">180% Coins</span>
+          <div className="bg-stone-950/60 p-2 rounded-xl border border-stone-800 flex items-center justify-between">
+            <span className="text-purple-400 font-bold">👑 Tier 3 Noble:</span>
+            <span className="font-bold text-purple-300 font-mono">2.0x (+100%)</span>
           </div>
-          <div className="bg-stone-950/60 p-1.5 rounded-xl border border-stone-800 flex items-center justify-between">
-            <span className="text-stone-400">⚡ VIP Rush:</span>
-            <span className="font-bold text-amber-400 font-mono">220% Coins</span>
+          <div className="bg-stone-950/60 p-2 rounded-xl border border-stone-800 flex items-center justify-between">
+            <span className="text-red-400 font-bold">⚡ Courier Rush:</span>
+            <span className="font-bold text-red-300 font-mono">3.0x Multiplier</span>
+          </div>
+        </div>
+
+        {/* Trade Velocity Streak Engine Banner */}
+        <div className="bg-gradient-to-r from-amber-950/70 via-stone-950 to-amber-950/70 border border-amber-500/40 rounded-xl p-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-2xl animate-pulse shrink-0">🔥</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-xs sm:text-sm text-amber-200">
+                  Trade Velocity Streak: {currentStreak} Orders Completed
+                </span>
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                  currentStreak >= 5
+                    ? 'bg-red-500 text-white shadow-xs'
+                    : currentStreak >= 3
+                    ? 'bg-amber-500 text-stone-950 font-black shadow-xs'
+                    : 'bg-stone-800 text-stone-400 border border-stone-700'
+                }`}>
+                  {streakInfo.multiplier > 1.0
+                    ? `Active Bonus: +${streakInfo.bonusPercent}% (${streakInfo.multiplier}x Payout)`
+                    : '1.0x Baseline (0-2 Orders)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-400 truncate">
+                {currentStreak === 0
+                  ? 'Complete 3+ consecutive orders to unlock +25% bonus coins, or 5+ for +50% on all deliveries!'
+                  : `Streak active! Maintain trade velocity within 45m (${streakMinutesRemaining}m remaining) to keep bonus.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs font-mono shrink-0 self-end sm:self-center">
+            <div className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${currentStreak < 3 ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' : 'bg-stone-900 border-stone-800 text-stone-500'}`}>
+              0-2: 1.0x
+            </div>
+            <div className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${currentStreak >= 3 && currentStreak < 5 ? 'bg-amber-500 text-stone-950 font-black shadow-xs' : 'bg-stone-900 border-stone-800 text-stone-500'}`}>
+              3-4: 1.25x (+25%)
+            </div>
+            <div className={`px-2 py-0.5 rounded-md border text-[10px] font-bold ${currentStreak >= 5 ? 'bg-gradient-to-r from-red-500 to-amber-500 text-white font-black shadow-xs' : 'bg-stone-900 border-stone-800 text-stone-500'}`}>
+              5+: 1.50x (+50%)
+            </div>
           </div>
         </div>
 
         {/* VIP Favor & Utilities Ribbon */}
-        <div className="mt-2 pt-2 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="pt-1.5 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="font-mono font-bold text-amber-300 flex items-center gap-1">
               <span>🎖️</span>
@@ -420,7 +530,7 @@ export function OrderBoard() {
       )}
 
       {/* Main Delivery Contracts Board */}
-      {(activeTab === 'all' || activeTab === 'timed') && (
+      {(activeTab === 'all' || activeTab === 'local' || activeTab === 'merchant' || activeTab === 'noble' || activeTab === 'timed') && (
         <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h4 className="font-black text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400">
@@ -434,14 +544,14 @@ export function OrderBoard() {
             ) : (
               <span>0 ready</span>
             )}
-            {' • '}{orders.length} orders
+            {' • '}{displayedOrders.length} contracts
           </span>
         </div>
 
-        {orders.length === 0 && (
+        {displayedOrders.length === 0 && (
           <div className="text-center py-8 bg-stone-50 dark:bg-stone-900/40 rounded-2xl border border-stone-200 dark:border-stone-800">
             <span className="text-3xl">📭</span>
-            <p className="text-xs text-stone-500 mt-2 font-medium">All contracts dispatched. New clients arriving shortly...</p>
+            <p className="text-xs text-stone-500 mt-2 font-medium">No contracts in this category. New clients arriving shortly...</p>
           </div>
         )}
 
@@ -455,8 +565,15 @@ export function OrderBoard() {
             const expiry = order.expiresAt || order.rushExpiresAt;
             const remainingSec = isTimed && expiry ? Math.max(0, Math.ceil((expiry - now) / 1000)) : null;
             const isCritical = remainingSec !== null && remainingSec <= 15;
+            const isRushActive = Boolean(
+              (order.type === 'rush' || order.isRushOrder) &&
+              remainingSec !== null && remainingSec > 0
+            );
 
-            // Missing items hints
+            const contractTier: ContractEconomicTier = order.contractTier || inferContractTier(order.type, level);
+            const tierConfig = CONTRACT_TIER_CONFIG[contractTier] || CONTRACT_TIER_CONFIG.tier1_local;
+
+            // Missing items hints and required list
             const missingItems: { name: string; icon: string; have: number; need: number; source: string }[] = [];
             const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty, name: r.name, icon: r.emoji })) || []);
             for (const item of required) {
@@ -473,16 +590,25 @@ export function OrderBoard() {
               }
             }
 
-            // Theme border styling per order type
+            // Real-time Master Settlement Breakdown
+            const settlement = calculateMasterSettlement(
+              required,
+              contractTier,
+              currentStreak,
+              isRushActive,
+              dailyPayrollBurnRate
+            );
+
+            // Theme border styling per order type and tier
             let cardBorder = 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900';
-            if (order.type === 'rush' || order.isRushOrder) {
+            if (isRushActive) {
               cardBorder = isCritical
                 ? 'border-red-500 bg-red-950/20 shadow-md shadow-red-500/20 ring-1 ring-red-400'
-                : 'border-amber-500/80 bg-amber-950/10 shadow-md shadow-amber-500/10';
-            } else if (order.type === 'futures') {
-              cardBorder = 'border-sky-500/80 bg-sky-950/10 shadow-md shadow-sky-500/10';
-            } else if (order.type === 'town_project') {
-              cardBorder = 'border-purple-500/80 bg-purple-950/10 shadow-md shadow-purple-500/10';
+                : 'border-amber-500/80 bg-amber-950/10 shadow-md shadow-amber-500/10 ring-1 ring-amber-400/30';
+            } else if (contractTier === 'tier3_noble') {
+              cardBorder = 'border-purple-500/80 bg-purple-950/10 shadow-md shadow-purple-500/10 ring-1 ring-purple-400/30';
+            } else if (contractTier === 'tier2_merchant') {
+              cardBorder = 'border-sky-500/80 bg-sky-950/10 shadow-md shadow-sky-500/10 ring-1 ring-sky-400/30';
             } else if (fulfilled) {
               cardBorder = 'border-emerald-400/80 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-sm';
             }
@@ -510,45 +636,50 @@ export function OrderBoard() {
                       </div>
                     </div>
 
-                    {/* Contract Badge */}
-                    <div className="flex-shrink-0">
-                      {order.type === 'rush' || order.isRushOrder ? (
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                          isCritical
-                            ? 'bg-red-500 text-white animate-pulse'
-                            : 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40'
-                        }`}>
-                          <span>⚡</span> {remainingSec !== null ? `${remainingSec}s` : 'RUSH'}
-                        </span>
-                      ) : order.type === 'futures' ? (
-                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/40 flex items-center gap-1">
-                          <span>📈</span> {remainingSec !== null ? `${remainingSec}s` : 'FUTURES'}
-                        </span>
-                      ) : order.type === 'town_project' ? (
+                    {/* Contract Tier Badge */}
+                    <div className="flex-shrink-0 flex items-center gap-1">
+                      {contractTier === 'tier3_noble' ? (
                         <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/40 flex items-center gap-1">
-                          <span>🏛️</span> TOWN PROJECT
+                          <span>👑</span> Noble (+100%)
+                        </span>
+                      ) : contractTier === 'tier2_merchant' ? (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/40 flex items-center gap-1">
+                          <span>🚢</span> Freight (+40%)
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full">
-                          STANDARD
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                          🏡 Local (+10%)
+                        </span>
+                      )}
+                      {isRushActive && (
+                        <span className={`text-[10px] font-black uppercase px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+                          isCritical
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40'
+                        }`}>
+                          <span>⚡</span> 3.0x {remainingSec !== null ? `${remainingSec}s` : 'RUSH'}
                         </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Required Items */}
+                  {/* Required Items with Unit Valuations */}
                   <div className="space-y-1.5 mb-2.5">
                     {required.map((it, i) => {
                       const storage = isCropItem(it.itemId) ? silo : barn;
                       const have = storage[it.itemId] || 0;
                       const enough = have >= it.quantity;
+                      const itemProfile = getItemEconomicProfile(it.itemId);
 
                       return (
-                        <div key={i} className="flex items-center justify-between text-xs">
+                        <div key={i} className="flex items-center justify-between text-xs py-0.5 border-b border-stone-100/50 dark:border-stone-800/50 last:border-0">
                           <span className="flex items-center gap-1.5 min-w-0">
                             <span className="text-base select-none">{it.icon}</span>
                             <span className="text-stone-700 dark:text-stone-300 font-medium truncate">
                               {it.name}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-mono" title={`Derived Base Value: ${itemProfile.baseValue}c`}>
+                              (🪙{itemProfile.baseValue}/ea)
                             </span>
                           </span>
                           <span className={`font-mono text-xs font-bold ${
@@ -576,39 +707,73 @@ export function OrderBoard() {
                     </div>
                   )}
 
-                  {/* Rewards summary strip */}
-                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center gap-2.5 text-xs flex-wrap mb-2">
-                    <span className="flex items-center gap-1 text-amber-700 dark:text-amber-300 font-extrabold font-mono">
-                      🪙 {order.rewards?.coins || order.coinReward}
-                      {order.type === 'rush' || order.isRushOrder ? (
-                        <span className="text-[9px] font-black bg-amber-500 text-stone-950 px-1 rounded ml-0.5">2.2X</span>
-                      ) : order.type === 'futures' ? (
-                        <span className="text-[9px] font-black bg-sky-500 text-white px-1 rounded ml-0.5">1.8X</span>
-                      ) : (
-                        <span className="text-[9px] font-black bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 px-1 rounded ml-0.5">+140%</span>
+                  {/* Transparent Contract Financial Settlement Receipt */}
+                  <div className="bg-stone-950/70 dark:bg-stone-950/90 rounded-xl p-2.5 border border-stone-800 my-2 space-y-1 text-xs">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-stone-400 flex items-center justify-between border-b border-stone-800 pb-1">
+                      <span className="flex items-center gap-1">🧾 Settlement Receipt</span>
+                      <span className="text-amber-400 font-mono font-bold">{tierConfig.label}</span>
+                    </div>
+
+                    <div className="space-y-0.5 text-[10px] font-mono pt-0.5">
+                      <div className="flex items-center justify-between text-stone-300">
+                        <span className="text-stone-400">Base Commodity Value:</span>
+                        <span>🪙 {settlement.baseCommodityValue}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-stone-300">
+                        <span className="text-stone-400">Contract Tier Markup:</span>
+                        <span className="text-sky-300 font-bold">+{settlement.tierMarkupPercent}% ({settlement.tierMultiplier}x)</span>
+                      </div>
+                      {settlement.streakMultiplier > 1.0 && (
+                        <div className="flex items-center justify-between text-amber-300 font-bold">
+                          <span className="text-stone-400">Trade Streak Bonus:</span>
+                          <span>+{settlement.streakBonusPercent}% ({settlement.streakMultiplier}x)</span>
+                        </div>
                       )}
-                    </span>
+                      {settlement.isRush && (
+                        <div className="flex items-center justify-between text-red-400 font-bold">
+                          <span>Courier Rush Multiplier:</span>
+                          <span>⚡ 3.0x</span>
+                        </div>
+                      )}
+                    </div>
 
-                    <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-bold font-mono">
-                      ⭐ +{order.rewards?.xp || order.xpReward} XP
-                    </span>
-
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold font-mono">
-                      💎 +{order.rewards?.reputationPoints || 15} Rep
-                    </span>
-
-                    {Boolean(order.rewards?.gems || order.bonusGems) && (
-                      <span className="flex items-center gap-1 text-cyan-600 dark:text-cyan-300 font-black font-mono">
-                        💎 +{order.rewards?.gems || order.bonusGems}
+                    <div className="pt-1.5 border-t border-stone-800 flex items-center justify-between font-black">
+                      <span className="text-stone-300 text-xs">Net Settlement Payout:</span>
+                      <span className="text-amber-400 font-mono text-sm sm:text-base font-extrabold tracking-tight drop-shadow-sm">
+                        🪙 {settlement.finalCoinPayout} COINS
                       </span>
-                    )}
+                    </div>
 
-                    {Boolean(order.rewards?.specialItem || order.relicFragmentReward) && (
-                      <span className="flex items-center gap-1 text-purple-600 dark:text-purple-300 font-black text-[10px] bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded-md border border-purple-300 dark:border-purple-700">
-                        🎁 {order.rewards?.specialItem || 'Relic Frag'}
-                      </span>
-                    )}
+                    {/* Secondary XP & Rep badges */}
+                    <div className="pt-1 border-t border-stone-800/60 flex items-center gap-2 text-[10px] flex-wrap text-stone-400">
+                      <span className="text-blue-400 font-bold">⭐ +{order.rewards?.xp || order.xpReward} XP</span>
+                      <span className="text-emerald-400 font-bold">💎 +{order.rewards?.reputationPoints || 15} Rep</span>
+                      {Boolean(order.rewards?.gems || order.bonusGems) && (
+                        <span className="text-cyan-400 font-bold">💎 +{order.rewards?.gems || order.bonusGems} Gems</span>
+                      )}
+                      {Boolean(order.rewards?.specialItem || order.relicFragmentReward) && (
+                        <span className="text-purple-300 font-bold">🎁 {order.rewards?.specialItem || 'Relic Frag'}</span>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Payroll Coverage Benchmark Indicator for Tier 2 and Tier 3 Contracts */}
+                  {(contractTier === 'tier2_merchant' || contractTier === 'tier3_noble') && (
+                    <div className="mb-2 px-2.5 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-[10px] text-emerald-300 flex items-center gap-1.5">
+                      <span className="text-sm shrink-0">🏦</span>
+                      <span className="font-medium leading-tight">
+                        {dailyPayrollBurnRate > 0 ? (
+                          <>
+                            This delivery funds <strong className="text-emerald-200 underline decoration-emerald-500/60 font-bold">{(settlement.finalCoinPayout / dailyPayrollBurnRate).toFixed(1)} days</strong> of active worker payroll and pantry upkeep.
+                          </>
+                        ) : (
+                          <>
+                            This high-tier delivery yields <strong className="text-emerald-200 font-bold">🪙{settlement.finalCoinPayout}</strong> to fund multi-day worker payroll vaults &amp; facility expansions.
+                          </>
+                        )}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Penalty notice for timed orders */}
                   {isTimed && Boolean(order.penaltyCoins || order.breachFee) && (

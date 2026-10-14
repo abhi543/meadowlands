@@ -1,5 +1,6 @@
 import { CROPS, PRODUCTS, type CropId, type ProductId } from '@/game/data';
 import { BarnItem, BarnItemCategory, BarnItemLockMap } from '@/types/inventory';
+import { getItemEconomicProfile } from '@/game/pricingEngine';
 
 // Static base values & categories mapping for all items
 export interface ItemCatalogMeta {
@@ -110,14 +111,17 @@ export function getAllBarnItems(
 
     const qty = (silo[id] || 0) + (barn[id] || 0);
     const lockInfo = locks[id];
+    const econProfile = getItemEconomicProfile(id);
 
     items.push({
       id,
-      name: meta.name,
-      icon: meta.icon,
+      name: econProfile.name || meta.name,
+      icon: econProfile.icon || meta.icon,
       category: meta.category,
       quantity: qty,
-      baseValue: meta.baseValue,
+      baseValue: econProfile.baseValue,
+      formulaDescription: econProfile.formulaDescription,
+      breakdownText: econProfile.breakdownText,
       isLockedForWorkers: Boolean(lockInfo?.isLockedForWorkers),
       customReserveThreshold: lockInfo?.customReserveThreshold,
     });

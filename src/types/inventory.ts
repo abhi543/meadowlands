@@ -9,6 +9,8 @@ export interface BarnItem {
   category: BarnItemCategory;
   quantity: number;
   baseValue: number;
+  formulaDescription?: string;
+  breakdownText?: string;
   // Automation Protection
   isLockedForWorkers: boolean; // Default: false (true = workers cannot touch)
   customReserveThreshold?: number; // Optional per-item reserve floor override

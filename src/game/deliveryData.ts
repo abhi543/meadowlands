@@ -4,6 +4,13 @@
 // ============================================================
 
 import { CROPS, PRODUCTS, type CropId } from './data';
+import {
+  getDerivedItemPrice,
+  getItemEconomicProfile,
+  calculateMasterSettlement,
+  type ContractEconomicTier,
+  type ContractSettlementBreakdown,
+} from './pricingEngine';
 
 export type OrderType = 'standard' | 'rush' | 'futures' | 'town_project';
 
@@ -38,6 +45,8 @@ export interface DeliveryOrder {
   id: string;
   clientId: string;
   type: OrderType;
+  contractTier?: ContractEconomicTier;
+  settlementBreakdown?: ContractSettlementBreakdown;
   requiredItems: {
     itemId: string;
     name: string;
@@ -189,46 +198,14 @@ export function getReputationInfo(xp: number, clientDef: ClientDefinition) {
   };
 }
 
-// --- Item Base Value Calculator ---
+// --- Item Base Value Calculator (Powered by Mathematical Pricing Engine) ---
 export function getItemBaseValue(itemId: string): number {
-  if (itemId in CROPS) {
-    const cropDef = CROPS[itemId as CropId];
-    return Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
-  }
-  const product = PRODUCTS[itemId as keyof typeof PRODUCTS];
-  if (product && product.sellPrice > 0) {
-    return product.sellPrice;
-  }
-  const extraValues: Record<string, number> = {
-    cotton: 6,
-    honey_comb: 12,
-    wild_berries: 8,
-    gold_nugget: 50,
-    fish: 15,
-    feed: 4,
-  };
-  return extraValues[itemId] || 8;
+  return getDerivedItemPrice(itemId);
 }
 
 export function getItemMeta(itemId: string): { name: string; icon: string; baseValue: number } {
-  if (itemId in CROPS) {
-    const c = CROPS[itemId as CropId];
-    return { name: c.name, icon: c.emoji, baseValue: getItemBaseValue(itemId) };
-  }
-  if (itemId in PRODUCTS) {
-    const p = PRODUCTS[itemId as keyof typeof PRODUCTS];
-    return { name: p.name, icon: p.emoji, baseValue: getItemBaseValue(itemId) };
-  }
-  const extras: Record<string, { name: string; icon: string }> = {
-    cotton: { name: 'Cotton', icon: '🌿' },
-    honey_comb: { name: 'Honey Comb', icon: '🍯' },
-    wild_berries: { name: 'Wild Berries', icon: '🍇' },
-    gold_nugget: { name: 'Gold Nugget', icon: '⭐' },
-    fish: { name: 'Fish', icon: '🐟' },
-    feed: { name: 'Animal Feed', icon: '🥣' },
-  };
-  const extra = extras[itemId] || { name: itemId, icon: '📦' };
-  return { ...extra, baseValue: getItemBaseValue(itemId) };
+  const profile = getItemEconomicProfile(itemId);
+  return { name: profile.name, icon: profile.icon, baseValue: profile.baseValue };
 }
 
 // --- Item Unlock Level Registry ---
@@ -447,50 +424,32 @@ export function generateDeliveryOrder(
 
   const totalBaseValue = requiredItems.reduce((acc, it) => acc + (getItemBaseValue(it.itemId) * it.quantity), 0);
 
-  let coins = 0;
-  let xp = 0;
-  let gems: number | undefined;
-  let specialItem: string | undefined;
-  let durationRemaining: number | undefined;
-  let totalDuration: number | undefined;
-  let penaltyCoins: number | undefined;
-  let reputationPoints = 15;
+  // Determine Macro-Contract Economic Tier
+  let contractTier: ContractEconomicTier = 'tier1_local';
+  if (type === 'town_project' || safeLevel >= 12) {
+    contractTier = (type === 'town_project' || Math.random() < 0.45) ? 'tier3_noble' : 'tier2_merchant';
+  } else if (safeLevel >= 4 || type === 'futures') {
+    contractTier = 'tier2_merchant';
+  } else {
+    contractTier = 'tier1_local';
+  }
+
+  const isRush = type === 'rush';
+  const settlement = calculateMasterSettlement(requiredItems, contractTier, 0, isRush);
 
   const specialItemPool = ['Expansion Deed', 'Nail', 'Plank', 'Relic Fragment'];
+  const specialItem = (type === 'town_project' || (isRush && Math.random() < 0.5)) ? specialItemPool[Math.floor(Math.random() * specialItemPool.length)] : undefined;
+  const gems = isRush ? 2 : (type === 'town_project' ? 1 : undefined);
 
-  if (type === 'standard') {
-    // Standard: 140% coins, 120% XP
-    coins = Math.max(15, Math.round(totalBaseValue * 1.40));
-    xp = Math.max(10, Math.round(totalBaseValue * 1.20));
-    reputationPoints = 15 + Math.floor(totalBaseValue / 12);
-  } else if (type === 'rush') {
-    // Timed Rush: 220% coins, 1-3 Gems, Relic/Expansion shards, strict 90s countdown, 10% breach penalty
-    coins = Math.max(30, Math.round(totalBaseValue * 2.20));
-    xp = Math.max(20, Math.round(totalBaseValue * 1.80));
-    gems = 1 + Math.floor(Math.random() * 3); // 1-3 gems
-    specialItem = specialItemPool[Math.floor(Math.random() * specialItemPool.length)];
-    totalDuration = 90;
-    durationRemaining = 90;
-    penaltyCoins = Math.max(20, Math.round(coins * 0.10)); // 10% coin breach penalty
-    reputationPoints = 30 + Math.floor(totalBaseValue / 8);
-  } else if (type === 'futures') {
-    // Advance Futures: 180% coins, 180s countdown, guaranteed Gems & Materials, 15% breach penalty
-    coins = Math.max(25, Math.round(totalBaseValue * 1.80));
-    xp = Math.max(15, Math.round(totalBaseValue * 1.50));
-    gems = 2;
-    specialItem = Math.random() < 0.6 ? 'Plank' : 'Expansion Deed';
-    totalDuration = 180;
-    durationRemaining = 180;
-    penaltyCoins = Math.max(25, Math.round(coins * 0.15)); // 15% breach penalty
-    reputationPoints = 25 + Math.floor(totalBaseValue / 9);
-  } else if (type === 'town_project') {
-    // Town Project: Community/Municipal construction, +50 Rep, Expansion Deed, 160% coins
-    coins = Math.max(50, Math.round(totalBaseValue * 1.60));
-    xp = Math.max(40, Math.round(totalBaseValue * 1.60));
-    gems = 1;
-    specialItem = 'Expansion Deed';
-    reputationPoints = 50 + Math.floor(totalBaseValue / 10);
-  }
+  const coins = settlement.finalCoinPayout;
+  const xp = Math.max(15, Math.round(settlement.baseCommodityValue * 0.75));
+  let reputationPoints = contractTier === 'tier3_noble' ? 50 : (contractTier === 'tier2_merchant' ? 25 : 15);
+  if (isRush) reputationPoints *= 2;
+
+  // 10-minute countdown for Courier Rush bounties
+  const totalDuration = isRush ? 600 : (type === 'futures' ? 300 : undefined);
+  const durationRemaining = totalDuration;
+  const penaltyCoins = isRush ? Math.max(25, Math.round(coins * 0.10)) : undefined;
 
   const id = `deliv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const now = Date.now();
@@ -499,6 +458,8 @@ export function generateDeliveryOrder(
     id,
     clientId: selectedClientId,
     type,
+    contractTier,
+    settlementBreakdown: settlement,
     requiredItems,
     rewards: {
       coins,
@@ -526,9 +487,9 @@ export function generateDeliveryOrder(
     })),
     coinReward: coins,
     xpReward: xp,
-    isRushOrder: type === 'rush',
-    rushExpiresAt: type === 'rush' ? now + 90000 : null,
-    rushDurationSec: type === 'rush' ? 90 : undefined,
+    isRushOrder: isRush,
+    rushExpiresAt: isRush ? now + 600000 : null,
+    rushDurationSec: isRush ? 600 : undefined,
     breachFee: penaltyCoins,
     bonusGems: gems,
     relicFragmentReward: specialItem === 'Relic Fragment' ? 1 : 0,

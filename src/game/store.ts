@@ -64,6 +64,7 @@ import {
   CLIENT_DEFINITIONS, REPUTATION_THRESHOLDS, getReputationInfo,
   generateDeliveryOrder, getItemBaseValue, ITEM_UNLOCK_LEVELS,
 } from './deliveryData';
+import { calculateMasterSettlement, type ContractEconomicTier } from './pricingEngine';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
   type ActiveEventInstance,
@@ -440,6 +441,8 @@ export interface GameState {
 
   // Orders & Client Personas (Logistics Overhaul)
   orders: DeliveryOrder[];
+  tradeStreak: number;
+  lastTradeStreakTimestamp: number | null;
   clientReputation: Record<string, { level: number; xp: number }>;
   globalReputation: GlobalReputationState;
   crisisShields: number;
@@ -970,6 +973,8 @@ export const useGameStore = create<GameState>()(
       },
 
       orders: initialOrders,
+      tradeStreak: 0,
+      lastTradeStreakTimestamp: null,
       clientReputation: DEFAULT_CLIENT_REPUTATION,
       globalReputation: createInitialGlobalReputation(),
       crisisShields: 0,
@@ -1955,7 +1960,23 @@ export const useGameStore = create<GameState>()(
           storage[item.itemId] = (storage[item.itemId] || 0) - item.quantity;
         }
 
-        const baseCoins = order.rewards?.coins || order.coinReward || 20;
+        const now = Date.now();
+        // Daily Trade Velocity Streak (resets if inactive > 45 mins)
+        const streakValid = Boolean(state.lastTradeStreakTimestamp && (now - state.lastTradeStreakTimestamp <= 45 * 60 * 1000));
+        const currentStreak = streakValid ? (state.tradeStreak || 0) : 0;
+        const isRush = Boolean(
+          (order.type === 'rush' || order.isRushOrder) &&
+          ((order.expiresAt && order.expiresAt > now) || (order.rushExpiresAt && order.rushExpiresAt > now))
+        );
+
+        // Daily payroll burn rate for coverage calculation
+        const telemetry = calculateStaffUpkeep(state.unifiedWorkers, state.specialistWorkers, state.payrollVaultCoins, state.staffPantry);
+        const dailyBurnRate = telemetry.baseDailyPayroll;
+
+        const contractTier = order.contractTier || 'tier1_local';
+        const settlement = calculateMasterSettlement(required, contractTier, currentStreak, isRush, dailyBurnRate);
+
+        const baseCoins = settlement.finalCoinPayout;
         let baseGems = order.rewards?.gems || order.bonusGems || 0;
         const repGain = order.rewards?.reputationPoints || 15;
         let specialItemWon = order.rewards?.specialItem || (order.relicFragmentReward ? 'Relic Fragment' : undefined);
@@ -2073,6 +2094,8 @@ export const useGameStore = create<GameState>()(
           clientReputation: updatedClientRep,
           globalReputation: updatedGlobalRep,
           orders: newOrders,
+          tradeStreak: currentStreak + 1,
+          lastTradeStreakTimestamp: now,
           isDirty: true,
         });
 
@@ -7089,6 +7112,10 @@ export const useGameStore = create<GameState>()(
           delete (updatedBarn as Record<string, number>).honey_comb;
           merged.barn = updatedBarn;
         }
+
+        // Migration: add new tradeStreak fields
+        if (merged.tradeStreak === undefined) merged.tradeStreak = 0;
+        if (merged.lastTradeStreakTimestamp === undefined) merged.lastTradeStreakTimestamp = null;
 
         // Migration: animals with missing cycles fields
         if (merged.animals) {

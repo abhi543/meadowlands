@@ -198,13 +198,18 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
                         <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 truncate">
                           {item.name}
                         </h4>
-                        <div className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mt-0.5">
+                        <div className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="font-black text-amber-700 dark:text-amber-300 font-mono">
                             {item.quantity} in stock
                           </span>
                           <span>·</span>
-                          <span className="text-[10px]">🪙 {item.baseValue}/ea</span>
+                          <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">🪙 {item.baseValue}/ea</span>
                         </div>
+                        {item.breakdownText && (
+                          <div className="text-[9px] text-stone-400 dark:text-stone-500 mt-0.5 font-medium truncate" title={item.formulaDescription}>
+                            {item.breakdownText}
+                          </div>
+                        )}
                       </div>
                     </div>
 
