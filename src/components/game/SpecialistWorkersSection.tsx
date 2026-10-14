@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/game/store';
 import { LIVESTOCK_WORKER_ROSTER, type SpecialistWorkerId, type HireableWorkerTemplate } from '@/data/workerCatalog';
 import {
