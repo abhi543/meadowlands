@@ -15,7 +15,14 @@ export function WildernessPanel() {
   const {
     level, coins, barn, farmhands, animals, animalCapacity,
     wilderness, launchExpedition, resolveExpeditionChoice,
+    specialistWorkers,
   } = useGameStore();
+
+  const isOrinActive = Boolean(
+    specialistWorkers?.worker_caravaner_orin?.isHired &&
+    specialistWorkers?.worker_caravaner_orin?.isActive &&
+    !specialistWorkers?.worker_caravaner_orin?.isStriking
+  );
 
   const activeExpeditions = wilderness.activeExpeditions;
   const busyFarmhandIds = new Set(activeExpeditions.map(e => e.farmhandId));
@@ -26,11 +33,18 @@ export function WildernessPanel() {
       {/* 3D Low-Poly Roguelite Wild Expedition */}
       <WildExpedition3D />
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-800 to-teal-700 dark:from-emerald-900 dark:to-teal-900 rounded-xl p-4 text-white">
+      <div className="bg-gradient-to-r from-emerald-800 to-teal-700 dark:from-emerald-900 dark:to-teal-900 rounded-xl p-4 text-white flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <span className="text-3xl">🏕️</span>
           <div>
-            <h2 className="font-bold text-lg">Wilderness Outpost</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-bold text-lg">Wilderness Outpost</h2>
+              {isOrinActive && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-400/25 text-amber-200 border border-amber-300/40 shadow-sm animate-pulse">
+                  <span>🚜</span> Orin Caravaner Active: Auto-Hauling & +1 Pack Slot
+                </span>
+              )}
+            </div>
             <p className="text-emerald-200 text-xs">Dispatch farmhands on wildlife rescue expeditions</p>
           </div>
         </div>

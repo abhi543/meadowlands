@@ -132,7 +132,14 @@ export function WildExpedition3D() {
     barn,
     wildExpedition,
     addNotification,
+    specialistWorkers,
   } = useGameStore();
+
+  const isOrinActive = Boolean(
+    specialistWorkers?.worker_caravaner_orin?.isHired &&
+    specialistWorkers?.worker_caravaner_orin?.isActive &&
+    !specialistWorkers?.worker_caravaner_orin?.isStriking
+  );
 
   // Local Roguelite Expedition State
   const [depth, setDepth] = useState<number>(1);
@@ -1505,9 +1512,16 @@ export function WildExpedition3D() {
         {/* Unbanked Loot Grid */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="text-left">
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
-              🎒 Unbanked Haul
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
+                🎒 Unbanked Haul
+              </span>
+              {isOrinActive && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-bold inline-flex items-center gap-1 shadow-xs animate-pulse">
+                  <span>🚜</span> Orin: +1 Pack Slot & Auto-Hauler
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-xs font-black mt-0.5">
               <span className="px-2 py-0.5 rounded-lg bg-stone-950 border border-stone-800 text-amber-200">
                 🪙 {unbankedLoot.coins}

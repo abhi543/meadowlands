@@ -50,7 +50,14 @@ export function AnimalsTab() {
     unifiedWorkers,
     hireUnifiedWorker,
     toggleUnifiedWorkerMode,
+    specialistWorkers,
   } = useGameStore();
+
+  const isTessaActive = Boolean(
+    specialistWorkers?.worker_wrangler_tessa?.isHired &&
+    specialistWorkers?.worker_wrangler_tessa?.isActive &&
+    !specialistWorkers?.worker_wrangler_tessa?.isStriking
+  );
 
   const [showAdoptModal, setShowAdoptModal] = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
@@ -182,6 +189,21 @@ export function AnimalsTab() {
               <span className="text-[10px] font-black opacity-80">{level < 2 ? 'Lv2' : '100🪙'}</span>
             </button>
           )}
+
+          {/* Tessa Paddock Wrangler Badge */}
+          {isTessaActive && (
+            <div
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500/15 dark:bg-emerald-500/25 text-emerald-800 dark:text-emerald-200 border border-emerald-400/50 shadow-xs"
+              title="Paddock Wrangler Tessa is actively feeding animals and maintaining Well-Fed status (+10% Mutation Luck, -10% Overclock cost)"
+            >
+              <span className="text-sm">🌾</span>
+              <span>Tessa: Well-Fed Active</span>
+              <span className="flex h-1.5 w-1.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right: Quick Adopt & Incubator Actions */}
@@ -238,10 +260,27 @@ export function AnimalsTab() {
                   <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-white/90 dark:bg-stone-900/90 text-stone-700 dark:text-stone-300 border border-stone-200/90 dark:border-stone-700/60 font-bold shrink-0 shadow-2xs">
                     {sectorAnimals.length}/{maxCapacity}
                   </span>
+                  {isTessaActive && (
+                    <span
+                      className="hidden md:inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40 shrink-0 shadow-2xs"
+                      title="Tessa the Gentle on duty: Auto-feeding unfed livestock & maintaining Well-Fed bonus"
+                    >
+                      <span>🌾</span>
+                      <span>Well-Fed</span>
+                    </span>
+                  )}
                 </div>
 
-                {/* Passive Perk Badge */}
-                <div className="shrink-0">
+                {/* Passive Perk Badge & Tessa Mobile Icon */}
+                <div className="shrink-0 flex items-center gap-1">
+                  {isTessaActive && (
+                    <span
+                      className="md:hidden text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-400/40"
+                      title="Tessa: Well-Fed (+10% Mutation Luck)"
+                    >
+                      🌾
+                    </span>
+                  )}
                   <span
                     className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border truncate inline-block max-w-[170px] shadow-2xs ${config.badgeColor}`}
                     title={config.passivePerk}

@@ -11,6 +11,7 @@ import {
   type WorkerRole, type WorkerDivision, type BulkMode,
 } from '@/game/data';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { SpecialistWorkersSection } from './SpecialistWorkersSection';
 
 /** Generate contextual help hint for why a worker can't be hired/upgraded */
 function getBlockHint(args: {
@@ -113,6 +114,9 @@ export function WorkersHubPanel() {
         </h3>
         <span className="text-xs text-stone-500 dark:text-gray-400">{hiredCount}/{totalWorkers} hired</span>
       </div>
+
+      {/* Prominent Dedicated Specialist Workers Section */}
+      <SpecialistWorkersSection />
 
       {/* Division Tabs */}
       <div className="flex gap-1 bg-stone-100 dark:bg-gray-800 rounded-lg p-1">

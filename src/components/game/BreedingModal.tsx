@@ -48,7 +48,20 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
     livestockReserve = [],
     hatchReveal,
     clearHatchReveal,
+    specialistWorkers,
   } = useGameStore();
+
+  const isTessaActive = Boolean(
+    specialistWorkers?.worker_wrangler_tessa?.isHired &&
+    specialistWorkers?.worker_wrangler_tessa?.isActive &&
+    !specialistWorkers?.worker_wrangler_tessa?.isStriking
+  );
+
+  const isElricActive = Boolean(
+    specialistWorkers?.worker_stablemaster_elric?.isHired &&
+    specialistWorkers?.worker_stablemaster_elric?.isActive &&
+    !specialistWorkers?.worker_stablemaster_elric?.isStriking
+  );
 
   const [selectedSpecies, setSelectedSpecies] = useState<AnimalSpecies>('chicken');
   const [parent1Id, setParent1Id] = useState<string | null>(null);
@@ -96,7 +109,7 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
 
   // Odds breakdown if both parents are selected
   const oddsBreakdown = parent1 && parent2
-    ? getBreedingOddsBreakdown(parent1.tier, parent2.tier)
+    ? getBreedingOddsBreakdown(parent1.tier, parent2.tier, isTessaActive ? 10 : 0)
     : null;
 
   // Slot upgrade info
@@ -201,12 +214,17 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
 
           {/* SECTION 1: ACTIVE INCUBATOR SLOTS */}
           <div className="bg-stone-950/60 border border-violet-900/40 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xl">🥚</span>
                 <h3 className="font-bold text-sm text-stone-100 tracking-wide uppercase">
                   Incubator Chambers ({activeBreedings.length}/{breedingSlots} Active)
                 </h3>
+                {isElricActive && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm animate-pulse">
+                    <span>🧬</span> Master Elric: -20% Incubation Time & Auto-Hatch
+                  </span>
+                )}
               </div>
               {nextSlotUpgrade && (
                 <button
@@ -564,11 +582,18 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                         Offspring Tier Probability Breakdown
                       </h4>
                     </div>
-                    {oddsBreakdown.upwardMutationChance > 0 && (
-                      <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-400/50 animate-pulse">
-                        ⚡ {oddsBreakdown.upwardMutationChance}% Upward Mutation Chance!
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isTessaActive && (
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                          <span>🌾</span> Tessa: Well-Fed (+10% Mutation)
+                        </span>
+                      )}
+                      {oddsBreakdown.upwardMutationChance > 0 && (
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-400/50 animate-pulse">
+                          ⚡ {oddsBreakdown.upwardMutationChance}% Upward Mutation Chance!
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* Tier Probability Bars */}

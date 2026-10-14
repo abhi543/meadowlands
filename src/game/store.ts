@@ -80,6 +80,12 @@ import {
   getClientLevelFromXp,
   computeUnlockedPerks,
 } from '@/types/reputation';
+import {
+  type SpecialistWorkerId,
+  type SpecialistWorkerState,
+  LIVESTOCK_WORKER_ROSTER,
+  createDefaultSpecialistWorkers,
+} from '@/data/workerCatalog';
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
 
@@ -420,6 +426,10 @@ export interface GameState {
   // Unified Workers (v2.0)
   unifiedWorkers: Record<WorkerRole, UnifiedWorkerInstance>;
 
+  // Specialist Workers (Livestock, Expeditions & Genetics)
+  specialistWorkers: Record<SpecialistWorkerId, SpecialistWorkerState>;
+  lastSpecialistWageTime: number;
+
   // Hourly Events
   activeEvent: ActiveHourlyEvent | null;
   lastEventTriggerTime: number;
@@ -528,6 +538,12 @@ export interface GameState {
   upgradeUnifiedWorker: (role: WorkerRole, levelsToBuy: number) => void;
   toggleUnifiedWorkerMode: (role: WorkerRole) => void;
   bulkUpgradeUnifiedWorker: (role: WorkerRole, mode: BulkMode) => void;
+
+  // Specialist Workers (Livestock, Expeditions & Genetics)
+  hireSpecialistWorker: (workerId: SpecialistWorkerId) => boolean;
+  toggleSpecialistDuty: (workerId: SpecialistWorkerId) => void;
+  dismissSpecialistWorker: (workerId: SpecialistWorkerId) => void;
+  paySpecialistBackPay: (workerId: SpecialistWorkerId) => boolean;
 
   // Outfits
   equipOutfit: (farmhandId: string, outfitId: OutfitId | null) => void;
@@ -964,6 +980,10 @@ export const useGameStore = create<GameState>()(
       maxWaterLevel: 10,
       wellLevel: 1,
       lastWellAutoRefill: null,
+
+      // Specialist Workers (Livestock, Expeditions & Genetics)
+      specialistWorkers: createDefaultSpecialistWorkers(),
+      lastSpecialistWageTime: Date.now(),
 
       lastTick: Date.now(),
 
@@ -2251,6 +2271,130 @@ export const useGameStore = create<GameState>()(
         set({ coins: state.coins - result.totalCost, unifiedWorkers: newWorkers });
       },
 
+      // Specialist Livestock & Expedition Staff (Hauler, Wrangler, Stable Master)
+      hireSpecialistWorker: (workerId) => {
+        const state = get();
+        const template = LIVESTOCK_WORKER_ROSTER.find(t => t.id === workerId);
+        if (!template) return false;
+        if (state.coins < template.hireCostCoins) {
+          state.addNotification(`Need 🪙${template.hireCostCoins} to contract ${template.name}!`, '⚠️', 'info');
+          return false;
+        }
+
+        const now = Date.now();
+        const currentWorkers = state.specialistWorkers || createDefaultSpecialistWorkers();
+        const updated = {
+          ...currentWorkers,
+          [workerId]: {
+            id: workerId,
+            isHired: true,
+            isActive: true,
+            isStriking: false,
+            hiredAt: now,
+            unpaidWages: 0,
+            totalWagesPaid: 0,
+          },
+        };
+
+        playCashRegisterSound();
+        playVictoryChime();
+
+        set({
+          coins: state.coins - template.hireCostCoins,
+          specialistWorkers: updated,
+        });
+
+        state.addNotification(
+          `🎉 Contracted ${template.name} (${template.title})! Stationed at ${template.station}.`,
+          template.avatar,
+          'discovery'
+        );
+        return true;
+      },
+
+      toggleSpecialistDuty: (workerId) => {
+        const state = get();
+        const currentWorkers = state.specialistWorkers || createDefaultSpecialistWorkers();
+        const worker = currentWorkers[workerId];
+        if (!worker || !worker.isHired) return;
+        const template = LIVESTOCK_WORKER_ROSTER.find(t => t.id === workerId);
+
+        const newActive = !worker.isActive;
+        const updated = {
+          ...currentWorkers,
+          [workerId]: {
+            ...worker,
+            isActive: newActive,
+          },
+        };
+
+        playRapidTapSound(1);
+        set({ specialistWorkers: updated });
+
+        state.addNotification(
+          `${template?.name || 'Worker'} is now ${newActive ? '🟢 On Duty' : '⏸️ Resting'}.`,
+          newActive ? '🟢' : '⏸️',
+          'info'
+        );
+      },
+
+      dismissSpecialistWorker: (workerId) => {
+        const state = get();
+        const currentWorkers = state.specialistWorkers || createDefaultSpecialistWorkers();
+        const worker = currentWorkers[workerId];
+        if (!worker || !worker.isHired) return;
+        const template = LIVESTOCK_WORKER_ROSTER.find(t => t.id === workerId);
+
+        const updated = {
+          ...currentWorkers,
+          [workerId]: {
+            id: workerId,
+            isHired: false,
+            isActive: false,
+            isStriking: false,
+            hiredAt: null,
+            unpaidWages: 0,
+            totalWagesPaid: worker.totalWagesPaid || 0,
+          },
+        };
+
+        set({ specialistWorkers: updated });
+        state.addNotification(`${template?.name || 'Worker'} has been dismissed from farm contract.`, '👋', 'info');
+      },
+
+      paySpecialistBackPay: (workerId) => {
+        const state = get();
+        const currentWorkers = state.specialistWorkers || createDefaultSpecialistWorkers();
+        const worker = currentWorkers[workerId];
+        if (!worker || !worker.isHired) return false;
+        const backpay = worker.unpaidWages || 0;
+        if (backpay <= 0) return false;
+        if (state.coins < backpay) {
+          state.addNotification(`Need 🪙${backpay} to settle back pay for ${workerId}!`, '⚠️', 'info');
+          return false;
+        }
+        const template = LIVESTOCK_WORKER_ROSTER.find(t => t.id === workerId);
+
+        const updated = {
+          ...currentWorkers,
+          [workerId]: {
+            ...worker,
+            isStriking: false,
+            unpaidWages: 0,
+            totalWagesPaid: (worker.totalWagesPaid || 0) + backpay,
+          },
+        };
+
+        playCashRegisterSound();
+        set({
+          coins: state.coins - backpay,
+          specialistWorkers: updated,
+        });
+
+        state.addNotification(`💰 Settled back pay of 🪙${backpay}! ${template?.name || 'Worker'} returned to Active Duty!`, '🎉', 'coin');
+        return true;
+      },
+
       // Outfits
       equipOutfit: (farmhandId, outfitId) => {
         const state = get();
@@ -2348,17 +2492,33 @@ export const useGameStore = create<GameState>()(
           return false;
         }
 
-        // Roll tier based on parent tiers using probability engine
-        const offspringTier = rollBreedingTier(parent1.tier, parent2.tier);
+        const isTessaActive = Boolean(
+          state.specialistWorkers?.worker_wrangler_tessa?.isHired &&
+          state.specialistWorkers?.worker_wrangler_tessa?.isActive &&
+          !state.specialistWorkers?.worker_wrangler_tessa?.isStriking
+        );
+        const isElricActive = Boolean(
+          state.specialistWorkers?.worker_stablemaster_elric?.isHired &&
+          state.specialistWorkers?.worker_stablemaster_elric?.isActive &&
+          !state.specialistWorkers?.worker_stablemaster_elric?.isStriking
+        );
 
-        // 5% Mutation Chance for rare apex mutant tier variant
-        const isMutantRoll = Math.random() < 0.05;
+        // Roll tier based on parent tiers using probability engine (+10% mutation chance if Tessa is active!)
+        const bonusMutation = isTessaActive ? 10 : 0;
+        const offspringTier = rollBreedingTier(parent1.tier, parent2.tier, bonusMutation);
+
+        // 5% Mutation Chance for rare apex mutant tier variant (increased to 8% if Elric is active)
+        const mutantChance = isElricActive ? 0.08 : 0.05;
+        const isMutantRoll = Math.random() < mutantChance;
         const mutantDef = isMutantRoll ? MUTATION_VARIANTS[parent1.species] : null;
 
         const finalTier: Tier = mutantDef ? 'legendary' : offspringTier;
 
         const offspringBreedId = mutantDef ? mutantDef.id : `${parent1.species}_${finalTier}`;
-        const durationSec = INCUBATION_TIMES[finalTier] || 120;
+        let durationSec = INCUBATION_TIMES[finalTier] || 120;
+        if (isElricActive) {
+          durationSec = Math.max(10, Math.round(durationSec * 0.8)); // 20% timer cut from Master Elric
+        }
         const durationMs = durationSec * 1000;
 
         const breeding: ActiveBreeding = {
@@ -2377,8 +2537,9 @@ export const useGameStore = create<GameState>()(
         };
 
         // Decoupled Pipeline: Parents stay in pens and continue production/feeding unhindered.
-        // They only receive a temporary breeding cooldown (60 seconds).
-        const cooldownUntil = now + 60 * 1000;
+        // Genetic rest cooldown: 60s base, reduced by 25% (45s) if Elric is active!
+        const cooldownSec = isElricActive ? 45 : 60;
+        const cooldownUntil = now + cooldownSec * 1000;
 
         const newAnimals = state.animals.map(a => {
           if (a.id === parent1Id || a.id === parent2Id) {
@@ -3514,17 +3675,144 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Breeding incubation progress check & notification
-        let hasNewReadyEgg = false;
-        const newActiveBreedings = state.activeBreedings.map(b => {
-          if (now - b.startedAt >= b.durationMs && !b.notified) {
-            hasNewReadyEgg = true;
-            return { ...b, notified: true };
+        // --- Specialist Workers Daily Wage Deduction Loop (every 90s) ---
+        let updatedSpecialistWorkers = state.specialistWorkers ? { ...state.specialistWorkers } : createDefaultSpecialistWorkers();
+        let newLastSpecialistWageTime = state.lastSpecialistWageTime || now;
+        const WAGE_CYCLE_MS = 90000;
+
+        if (now - newLastSpecialistWageTime >= WAGE_CYCLE_MS) {
+          newLastSpecialistWageTime = now;
+          const activeHired = LIVESTOCK_WORKER_ROSTER.filter(t => {
+            const w = updatedSpecialistWorkers[t.id];
+            return w && w.isHired && w.isActive;
+          });
+
+          if (activeHired.length > 0) {
+            let totalWagesNeeded = 0;
+            activeHired.forEach(t => { totalWagesNeeded += t.dailyWageCoins; });
+
+            if (newCoins >= totalWagesNeeded) {
+              newCoins -= totalWagesNeeded;
+              activeHired.forEach(t => {
+                const w = updatedSpecialistWorkers[t.id];
+                updatedSpecialistWorkers[t.id] = {
+                  ...w,
+                  isStriking: false,
+                  totalWagesPaid: (w.totalWagesPaid || 0) + t.dailyWageCoins,
+                };
+              });
+            } else {
+              activeHired.forEach(t => {
+                const w = updatedSpecialistWorkers[t.id];
+                updatedSpecialistWorkers[t.id] = {
+                  ...w,
+                  isStriking: true,
+                  unpaidWages: (w.unpaidWages || 0) + t.dailyWageCoins,
+                };
+              });
+              state.addNotification(
+                '⚠️ Strike Notice: Not enough coins to pay specialist staff wages! Perks paused until back pay is settled.',
+                '⚠️',
+                'event'
+              );
+            }
           }
-          return b;
-        });
-        if (hasNewReadyEgg) {
-          state.addNotification('🥚 An incubator egg is ready to hatch! Visit your Incubator to reveal it!', '✨', 'discovery');
+        }
+
+        // --- Paddock Wrangler (Tessa) Auto-Feed Pass ---
+        const isTessaActive = Boolean(
+          updatedSpecialistWorkers.worker_wrangler_tessa?.isHired &&
+          updatedSpecialistWorkers.worker_wrangler_tessa?.isActive &&
+          !updatedSpecialistWorkers.worker_wrangler_tessa?.isStriking
+        );
+
+        if (isTessaActive) {
+          let feedAvailable = (newSilo.feed || 0) + (newBarn.feed || 0) + (newSilo.wheat || 0);
+          newAnimals = newAnimals.map(a => {
+            const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+            const isAnimalExhausted = Boolean(
+              (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
+              (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
+            );
+            if (a.fed || a.productReady || a.age === 'elder' || isAnimalExhausted) return a;
+            if (feedAvailable <= 0) return a;
+
+            if ((newSilo.feed || 0) > 0) {
+              newSilo.feed -= 1;
+            } else if ((newBarn.feed || 0) > 0) {
+              newBarn.feed -= 1;
+            } else if ((newSilo.wheat || 0) > 0) {
+              newSilo.wheat -= 1;
+            }
+            feedAvailable -= 1;
+            return {
+              ...a,
+              fed: true,
+              fedAt: now,
+            };
+          });
+        }
+
+        // --- Incubator & Stable Master (Elric) Auto-Hatch Pass ---
+        const isElricActive = Boolean(
+          updatedSpecialistWorkers.worker_stablemaster_elric?.isHired &&
+          updatedSpecialistWorkers.worker_stablemaster_elric?.isActive &&
+          !updatedSpecialistWorkers.worker_stablemaster_elric?.isStriking
+        );
+
+        let finalActiveBreedings = state.activeBreedings;
+        if (isElricActive) {
+          const readyBreedings = state.activeBreedings.filter(b => now - b.startedAt >= b.durationMs);
+          if (readyBreedings.length > 0) {
+            readyBreedings.forEach(rb => {
+              state.claimHatchedAnimal(rb.id);
+            });
+            finalActiveBreedings = get().activeBreedings;
+          }
+        } else {
+          let hasNewReadyEgg = false;
+          finalActiveBreedings = state.activeBreedings.map(b => {
+            if (now - b.startedAt >= b.durationMs && !b.notified) {
+              hasNewReadyEgg = true;
+              return { ...b, notified: true };
+            }
+            return b;
+          });
+          if (hasNewReadyEgg) {
+            state.addNotification('🥚 An incubator egg is ready to hatch! Visit your Incubator to reveal it!', '✨', 'discovery');
+          }
+        }
+
+        // --- Wilderness Caravaner (Orin) Auto-Haul from Reserve to Paddocks ---
+        const isOrinActive = Boolean(
+          updatedSpecialistWorkers.worker_caravaner_orin?.isHired &&
+          updatedSpecialistWorkers.worker_caravaner_orin?.isActive &&
+          !updatedSpecialistWorkers.worker_caravaner_orin?.isStriking
+        );
+
+        let finalReserve = [...(state.livestockReserve || [])];
+        if (isOrinActive && finalReserve.length > 0) {
+          const nextReserve: AnimalInstance[] = [];
+          let movedCount = 0;
+
+          for (const animal of finalReserve) {
+            const currentCount = newAnimals.filter(a => a.species === animal.species).length;
+            const maxCap = state.animalCapacity[animal.species] || ANIMALS[animal.species].capacity;
+            const currentTierCount = newAnimals.filter(a => a.tier === animal.tier).length;
+            const maxTierCap = animal.tier === 'common' ? 50 : 4;
+
+            if (currentCount < maxCap && currentTierCount < maxTierCap) {
+              newAnimals.push(animal);
+              movedCount++;
+            } else {
+              nextReserve.push(animal);
+            }
+          }
+
+          if (movedCount > 0) {
+            finalReserve = nextReserve;
+            state.addNotification(`🚜 Orin wheeled ${movedCount} crated beast(s) from Reserve to matching Pasture paddocks!`, '🚜', 'discovery');
+          }
         }
 
     // --- Expedition Processing ---
@@ -3632,9 +3920,27 @@ export const useGameStore = create<GameState>()(
               type: 'success',
             });
           } else {
+            // Orin / Livestock Reserve protects wild captures if pasture pens are full
+            const breedId = `${selected.species}_${selected.tier}`;
+            const breedDef = BREED_REGISTRY[breedId];
+            const maxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(selected.tier);
+            const newAnimal: AnimalInstance = {
+              id: generateId(),
+              species: selected.species,
+              tier: selected.tier,
+              breedId,
+              fed: false,
+              fedAt: null,
+              productReady: false,
+              age: 'adult',
+              maxCycles,
+              cyclesRemaining: maxCycles,
+              cyclesCompletedTotal: 0,
+            };
+            finalReserve.push(newAnimal);
             notificationsToAdd.push({
-              message: `${ANIMALS[selected.species].name} habitat full — animal released to wild.`,
-              emoji: '\u{1F4AB}',
+              message: `🚜 Orin wheeled crated ${selected.tier} ${ANIMALS[selected.species].name} safely into Livestock Reserve (paddock full)!`,
+              emoji: '🚜',
               type: 'info',
             });
           }
@@ -3848,7 +4154,10 @@ export const useGameStore = create<GameState>()(
           unifiedWorkers: unifiedWorkersModified ? updatedUnifiedWorkers : state.unifiedWorkers,
           activeEvent: newActiveEvent,
           lastEventTriggerTime: newLastEventTriggerTime,
-          activeBreedings: newActiveBreedings,
+          activeBreedings: finalActiveBreedings,
+          livestockReserve: finalReserve,
+          specialistWorkers: updatedSpecialistWorkers,
+          lastSpecialistWageTime: newLastSpecialistWageTime,
           parcels: parcelsChanged ? parcelsUpdated : state.parcels,
           activeFreightContract: updatedFreightContract,
           freightContractRefreshAt: updatedFreightRefreshAt,
@@ -5301,7 +5610,16 @@ export const useGameStore = create<GameState>()(
         }
 
         const streak = getDecayedStreak(current.lastOverclockAt, current.streakCount, now);
-        const cost = calculateOverclockCost(baseCost, tier, streak);
+        let cost = calculateOverclockCost(baseCost, tier, streak);
+
+        const isTessaActive = Boolean(
+          state.specialistWorkers?.worker_wrangler_tessa?.isHired &&
+          state.specialistWorkers?.worker_wrangler_tessa?.isActive &&
+          !state.specialistWorkers?.worker_wrangler_tessa?.isStriking
+        );
+        if (entityType === 'animal' && isTessaActive) {
+          cost = Math.max(1, Math.round(cost * 0.9)); // Tessa 10% animal overclock discount
+        }
 
         if (state.coins < cost) {
           state.addNotification(`Need ${cost} 🪙 for Overclock!`, '⚠️', 'info');
@@ -5670,6 +5988,8 @@ export const useGameStore = create<GameState>()(
           },
           autonomousWorkers: [],
           unifiedWorkers: initialUnifiedWorkers,
+          specialistWorkers: createDefaultSpecialistWorkers(),
+          lastSpecialistWageTime: Date.now(),
           activeEvent: null,
           lastEventTriggerTime: Date.now(),
           notifications: [],
@@ -5740,6 +6060,9 @@ export const useGameStore = create<GameState>()(
         fishery: state.fishery,
         autonomousWorkers: state.autonomousWorkers,
         unifiedWorkers: state.unifiedWorkers,
+        specialistWorkers: state.specialistWorkers,
+        lastSpecialistWageTime: state.lastSpecialistWageTime,
+        livestockReserve: state.livestockReserve,
         activeEvent: state.activeEvent,
         lastEventTriggerTime: state.lastEventTriggerTime,
         systemicEvent: state.systemicEvent,
@@ -5818,6 +6141,19 @@ export const useGameStore = create<GameState>()(
             }
           }
         }
+
+        if (!merged.specialistWorkers) {
+          merged.specialistWorkers = createDefaultSpecialistWorkers();
+        } else {
+          const defaultSpecialists = createDefaultSpecialistWorkers();
+          for (const sId of Object.keys(defaultSpecialists) as SpecialistWorkerId[]) {
+            if (!merged.specialistWorkers[sId]) {
+              merged.specialistWorkers[sId] = defaultSpecialists[sId];
+            }
+          }
+        }
+        if (!merged.lastSpecialistWageTime) merged.lastSpecialistWageTime = Date.now();
+        if (!merged.livestockReserve) merged.livestockReserve = [];
         if (!merged.activeEvent) merged.activeEvent = null;
         if (!merged.lastEventTriggerTime) merged.lastEventTriggerTime = Date.now();
         if (!merged.notifications) merged.notifications = [];
