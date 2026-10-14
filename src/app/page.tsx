@@ -74,7 +74,32 @@ export default function Home() {
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [relicsModalOpen, setRelicsModalOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<'left' | 'right'>('left');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const hydrated = useHydrated();
+
+  useEffect(() => {
+    const saved = localStorage.getItem('meadowlands_menu_pos');
+    if (saved === 'left' || saved === 'right') {
+      setMenuPosition(saved);
+    }
+    const savedCollapsed = localStorage.getItem('meadowlands_menu_collapsed');
+    if (savedCollapsed !== null) {
+      setIsSidebarCollapsed(savedCollapsed === 'true');
+    }
+  }, []);
+
+  const handleToggleMenuPosition = () => {
+    const next = menuPosition === 'left' ? 'right' : 'left';
+    setMenuPosition(next);
+    localStorage.setItem('meadowlands_menu_pos', next);
+  };
+
+  const handleToggleCollapse = () => {
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
+    localStorage.setItem('meadowlands_menu_collapsed', String(next));
+  };
 
   // Request browser storage persistence so IndexedDB is never evicted
   useEffect(() => {
@@ -147,48 +172,137 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <div className={`min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex flex-col md:flex-row ${menuPosition === 'right' ? 'md:flex-row-reverse' : ''}`}>
       {/* Sensory Alert Trigger (Visual Screen Edge Pulse & Micro-Shake) */}
       <EventEmergencyBanner />
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 p-3 pb-0">
-        <div className="w-full max-w-[1600px] mx-auto">
-          <HUD onOpenBackupModal={() => setBackupModalOpen(true)} onSelectTab={setActiveTab} />
+      {/* Side Navigation (Docked on Left or Right Side) */}
+      <aside
+        className={`w-full md:w-auto ${isSidebarCollapsed ? 'md:w-16' : 'md:w-56 lg:w-60'} flex-shrink-0 bg-white/95 dark:bg-stone-900/95 backdrop-blur-lg border-b md:border-b-0 ${
+          menuPosition === 'left' ? 'md:border-r border-stone-200 dark:border-stone-800' : 'md:border-l border-stone-200 dark:border-stone-800'
+        } z-40 md:sticky md:top-0 md:h-screen flex flex-col transition-all duration-300 shadow-md md:shadow-none`}
+      >
+        {/* Sidebar Brand & Side-Switcher Header */}
+        <div className="p-3 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <span className="text-2xl flex-shrink-0 animate-bounce">🌾</span>
+            {!isSidebarCollapsed && (
+              <div className="truncate">
+                <span className="font-extrabold text-sm text-stone-900 dark:text-gray-100 tracking-tight">Meadowlands</span>
+                <div className="text-[10px] text-stone-400 font-medium">Farmstead Hub</div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Collapse toggle (Desktop only) */}
+            <button
+              onClick={handleToggleCollapse}
+              className="hidden md:flex p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold transition-all"
+              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {isSidebarCollapsed ? (menuPosition === 'left' ? '▶' : '◀') : (menuPosition === 'left' ? '◀' : '▶')}
+            </button>
+            {/* Dock switch: Left / Right */}
+            <button
+              onClick={handleToggleMenuPosition}
+              className="p-1.5 rounded-lg text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-bold transition-all"
+              title={`Move navigation to ${menuPosition === 'left' ? 'Right' : 'Left'} side`}
+            >
+              {menuPosition === 'left' ? '➡️' : '⬅️'}
+            </button>
+          </div>
         </div>
-      </header>
 
-      <main className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 md:pb-6 min-h-[calc(100vh-80px)] flex flex-col transition-all">
-        {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
-        <EventTickingClock />
+        {/* Tab Items List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 flex md:flex-col flex-row overflow-x-auto md:overflow-x-hidden no-scrollbar">
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full py-2.5 px-3 rounded-xl flex items-center gap-3 transition-all duration-200 relative group flex-shrink-0 md:flex-shrink ${
+                  isActive
+                    ? `${tab.bgActive} ${tab.color} shadow-sm font-extrabold border-l-4 md:border-l-4 border-emerald-500`
+                    : `text-stone-600 dark:text-gray-400 ${tab.bgInactive} hover:text-stone-900 dark:hover:text-gray-100 font-medium`
+                }`}
+                title={tab.label}
+              >
+                <span className={`text-xl flex-shrink-0 transition-transform group-hover:scale-110 leading-none ${isActive ? 'scale-110' : ''}`}>
+                  {tab.emoji}
+                </span>
 
-        {/* Dynamic Long-Form Systemic Event Engine Banner */}
-        <EventTopBanner
-          onOpenDetail={() => setEventModalOpen(true)}
-          onOpenRelics={() => setRelicsModalOpen(true)}
-        />
+                {!isSidebarCollapsed && (
+                  <span className="text-xs tracking-tight truncate flex-1 text-left">
+                    {tab.label}
+                  </span>
+                )}
 
-        {/* Legacy Hourly Event Banner */}
-        {activeTab !== 'animals' && <EventBanner />}
-
-        {/* Tab Content */}
-        <div className={activeTab === 'animals' ? 'flex-1 min-h-0' : 'min-h-[400px]'}>
-          {activeTab === 'farm' && <FarmGrid onSelectTab={setActiveTab} />}
-          {activeTab === 'animals' && <AnimalsTab />}
-          {activeTab === 'production' && <ProductionPanel />}
-          {activeTab === 'orders' && <OrderBoard />}
-          {activeTab === 'shop' && <ShopPanel />}
-          {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
-          {activeTab === 'farmhands' && (
-            <WorkersHubPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />
-          )}
-          {activeTab === 'fishery' && <FisheryPanel />}
-          {activeTab === 'wilderness' && <WildernessPanel />}
-          {activeTab === 'territory' && <TerritoryMapView />}
-          {activeTab === 'market' && <LivestockMarketPanel />}
-          {activeTab === 'guide' && <GuidePanel />}
+                {tab.id === 'animals' && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-stone-950 shadow-sm leading-none border border-white dark:border-stone-800 ${isSidebarCollapsed ? 'absolute -top-1 -right-1' : ''}`}>
+                    {animals.length}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
-      </main>
+
+        {/* Sidebar Footer with Quick Switch Action */}
+        <div className="p-2.5 border-t border-stone-200 dark:border-stone-800 hidden md:flex flex-col gap-1.5 text-xs text-stone-500 dark:text-gray-400">
+          <button
+            onClick={handleToggleMenuPosition}
+            className="w-full py-1.5 px-2 rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 font-bold text-[11px] transition-colors flex items-center justify-center gap-1.5"
+            title="Toggle Menu Side"
+          >
+            <span>↔️</span>
+            {!isSidebarCollapsed && <span>Dock: {menuPosition === 'left' ? 'Switch to Right' : 'Switch to Left'}</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header HUD */}
+        <header className="sticky top-0 z-30 p-3 pb-0">
+          <div className="w-full max-w-[1600px] mx-auto">
+            <HUD onOpenBackupModal={() => setBackupModalOpen(true)} onSelectTab={setActiveTab} />
+          </div>
+        </header>
+
+        <main className="w-full max-w-[1600px] mx-auto px-3 sm:px-6 lg:px-8 pt-3 pb-16 min-h-[calc(100vh-80px)] flex flex-col transition-all">
+          {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
+          <EventTickingClock />
+
+          {/* Dynamic Long-Form Systemic Event Engine Banner */}
+          <EventTopBanner
+            onOpenDetail={() => setEventModalOpen(true)}
+            onOpenRelics={() => setRelicsModalOpen(true)}
+          />
+
+          {/* Legacy Hourly Event Banner */}
+          {activeTab !== 'animals' && <EventBanner />}
+
+          {/* Tab Content */}
+          <div className={activeTab === 'animals' ? 'flex-1 min-h-0' : 'min-h-[400px]'}>
+            {activeTab === 'farm' && <FarmGrid onSelectTab={setActiveTab} />}
+            {activeTab === 'animals' && <AnimalsTab />}
+            {activeTab === 'production' && <ProductionPanel />}
+            {activeTab === 'orders' && <OrderBoard />}
+            {activeTab === 'shop' && <ShopPanel />}
+            {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
+            {activeTab === 'farmhands' && (
+              <WorkersHubPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />
+            )}
+            {activeTab === 'fishery' && <FisheryPanel />}
+            {activeTab === 'wilderness' && <WildernessPanel />}
+            {activeTab === 'territory' && <TerritoryMapView />}
+            {activeTab === 'market' && <LivestockMarketPanel />}
+            {activeTab === 'guide' && <GuidePanel />}
+          </div>
+        </main>
+      </div>
 
       {/** Modals & Overlays **/}
       <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
@@ -211,40 +325,6 @@ export default function Home() {
 
       {/** Floating Notifications */}
       <FloatingNumbers />
-
-      {/* Bottom Tab Bar - Compact 2-row grid on mobile, sleek full row on desktop */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-gray-900/95 backdrop-blur-lg border-t border-stone-200 dark:border-gray-700 safe-bottom">
-        <div className="w-full max-w-[1600px] mx-auto grid grid-cols-6 md:grid-cols-12 gap-1 px-2 sm:px-6 lg:px-8 pt-1 pb-1.5 md:py-2">
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-1.5 md:py-2 px-1 rounded-lg flex flex-col items-center gap-0.5 transition-all duration-200 relative ${
-                  isActive
-                    ? `${tab.bgActive} ${tab.color} shadow-sm`
-                    : `text-stone-400 dark:text-gray-500 ${tab.bgInactive}`
-                }`}
-              >
-                <div className="relative leading-none">
-                  <span className={`transition-transform duration-200 leading-none ${isActive ? 'text-xl' : 'text-lg'}`}>
-                    {tab.emoji}
-                  </span>
-                  {tab.id === 'animals' && (
-                    <span className="absolute -top-1 -right-2.5 px-1 py-0.2 rounded-full text-[8px] font-black bg-amber-500 text-stone-950 shadow-2xs leading-none border border-white dark:border-stone-800">
-                      {animals.length}
-                    </span>
-                  )}
-                </div>
-                <span className={`text-[9px] md:text-[11px] leading-tight truncate w-full text-center ${isActive ? 'font-bold' : 'font-medium'}`}>
-                  {tab.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
     </div>
   );
 }
