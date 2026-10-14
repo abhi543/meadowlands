@@ -9,6 +9,12 @@ import {
   FOOD_CATEGORY_INFO,
 } from '@/data/workerUpkeep';
 
+import {
+  getWorkerScheduleTelemetry,
+  type ShiftType,
+  SHIFT_DEFINITIONS,
+} from '@/game/shiftEngine';
+
 interface SpecialistWorkersSectionProps {
   onSelectTab?: (tab: string) => void;
 }
@@ -20,15 +26,24 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
     unifiedWorkers,
     payrollVaultCoins,
     staffPantry,
+    farmEpochStart,
+    bunkhouse,
     hireSpecialistWorker,
     toggleSpecialistDuty,
     dismissSpecialistWorker,
     paySpecialistBackPay,
+    assignWorkerShift,
+    callEmergencyOvertime,
     wranglerPolicy,
     updateWranglerPolicy,
   } = useGameStore();
 
   const [tessaDrawerOpen, setTessaDrawerOpen] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const telemetry = calculateStaffUpkeep(
     unifiedWorkers,
@@ -86,6 +101,15 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
           const unpaidWages = state.unpaidWages || 0;
           const canAffordBackpay = coins >= unpaidWages;
 
+          const schedule = getWorkerScheduleTelemetry({
+            worker: state,
+            roleOrId: worker.id,
+            baseDailyWage: worker.dailyWageCoins,
+            timestamp: now,
+            epochStart: farmEpochStart,
+            bunkhouseLevel: bunkhouse?.level || 1,
+          });
+
           return (
             <div
               key={worker.id}
@@ -122,14 +146,22 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/40 text-red-300 border border-red-500/40 animate-pulse">
                             ⚠️ Strike
                           </span>
-                        ) : isActive ? (
+                        ) : schedule.isOvertime ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 border border-amber-500/40 animate-pulse">
+                            ☕ Overtime
+                          </span>
+                        ) : schedule.phase === 'on_shift' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-500/40">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
                             On Duty
                           </span>
+                        ) : schedule.phase === 'sleeping' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-900/40 text-indigo-300 border border-indigo-500/40">
+                            🌙 Asleep
+                          </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-800 text-stone-400 border border-stone-700">
-                            ⏸️ Resting
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 border border-amber-500/40">
+                            ☕ Off-Duty
                           </span>
                         )
                       ) : (
@@ -154,6 +186,60 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                     </div>
                   </div>
                 </div>
+
+                {/* Shift Selector & Telemetry Banner for Hired Workers */}
+                {isHired && (
+                  <div className="mt-2.5 p-2 rounded-lg bg-stone-950/80 border border-stone-800 space-y-1.5">
+                    <div className="flex items-center justify-between gap-1 flex-wrap text-[10px]">
+                      <span className="text-stone-400 font-semibold flex items-center gap-1">
+                        <span>🕒</span> Shift Roster:
+                      </span>
+                      <select
+                        value={schedule.shiftType}
+                        onChange={(e) => assignWorkerShift(worker.id, e.target.value as ShiftType)}
+                        className="bg-stone-900 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/30 text-[10px] cursor-pointer"
+                        title="Reassign shift (initiates 1-day adjustment period)"
+                      >
+                        <option value="morning">🌅 Morning (06:00-14:00)</option>
+                        <option value="evening">☀️ Evening (14:00-22:00)</option>
+                        <option value="night">🌙 Night (22:00-06:00)</option>
+                      </select>
+                    </div>
+
+                    {/* Operational Phase & Time Remaining */}
+                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-stone-800/80">
+                      <span className={`px-1.5 py-0.5 rounded font-black border text-[9px] ${schedule.phaseColorClass}`}>
+                        {schedule.phaseBadgeText}
+                      </span>
+                      {schedule.isWellRested && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          ✨ Well-Rested (+15%)
+                        </span>
+                      )}
+                      {schedule.isExhausted && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40 animate-pulse">
+                          ⚠️ Exhausted (60%)
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Stamina Meter */}
+                    <div className="space-y-0.5 pt-1">
+                      <div className="flex items-center justify-between text-[9px] text-stone-400">
+                        <span>⚡ Stamina: <b className={schedule.stamina >= 100 ? 'text-emerald-400' : 'text-amber-400'}>{schedule.stamina}%</b></span>
+                        <span className="italic">{schedule.phase === 'sleeping' ? 'Resting in Bunkhouse' : schedule.isOnDuty ? 'Active Duty' : 'Off-Duty'}</span>
+                      </div>
+                      <div className="w-full h-1 bg-stone-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            schedule.stamina >= 100 ? 'bg-emerald-400' : 'bg-amber-400'
+                          }`}
+                          style={{ width: `${schedule.stamina}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Upkeep Metric Badge & Status Pills */}
                 {(() => {
@@ -403,6 +489,18 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                           {canAffordBackpay ? `Settle Back Pay (🪙 ${unpaidWages})` : `Need 🪙 ${unpaidWages} to Settle`}
                         </button>
                       </div>
+                    )}
+
+                    {/* Emergency Overtime Callout */}
+                    {schedule.canCallOvertime && (
+                      <button
+                        onClick={() => callEmergencyOvertime(worker.id)}
+                        className="w-full py-1.5 px-3 rounded-xl text-xs font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                        title={`Wake worker for a 4-hour rush shift (-🪙${schedule.overtimeCostCoins} + snack)`}
+                      >
+                        <span>☕</span>
+                        <span>Call Emergency Overtime (-🪙{schedule.overtimeCostCoins})</span>
+                      </button>
                     )}
 
                     {/* Duty Controls */}

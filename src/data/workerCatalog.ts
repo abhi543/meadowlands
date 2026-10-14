@@ -131,6 +131,15 @@ export interface SpecialistWorkerState {
   missedCycles?: number;
   lastFedAt?: number;
   lastPaidAt?: number;
+  shiftType?: 'morning' | 'evening' | 'night';
+  shiftAdjustingUntil?: number | null;
+  overtimeUntil?: number | null;
+  lastOvertimeDay?: number;
+  isExhausted?: boolean;
+  exhaustedUntil?: number | null;
+  wellRested?: boolean;
+  stamina?: number;
+  lastClockOutDay?: number;
 }
 
 export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, SpecialistWorkerState> {
@@ -145,6 +154,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       totalWagesPaid: 0,
       moraleTier: 'content',
       missedCycles: 0,
+      shiftType: 'evening',
+      stamina: 100,
     },
     worker_wrangler_tessa: {
       id: 'worker_wrangler_tessa',
@@ -156,6 +167,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       totalWagesPaid: 0,
       moraleTier: 'content',
       missedCycles: 0,
+      shiftType: 'morning',
+      stamina: 100,
     },
     worker_stablemaster_elric: {
       id: 'worker_stablemaster_elric',
@@ -167,6 +180,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       totalWagesPaid: 0,
       moraleTier: 'content',
       missedCycles: 0,
+      shiftType: 'night',
+      stamina: 100,
     },
     worker_feedmaster_barnaby: {
       id: 'worker_feedmaster_barnaby',
@@ -178,6 +193,8 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       totalWagesPaid: 0,
       moraleTier: 'content',
       missedCycles: 0,
+      shiftType: 'night',
+      stamina: 100,
     },
   };
 }

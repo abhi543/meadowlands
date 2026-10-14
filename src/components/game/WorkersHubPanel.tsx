@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGameStore } from '@/game/store';
 import {
   WORKER_REGISTRY, WORKER_DIVISIONS, WORKER_MAX_LEVEL,
@@ -13,6 +13,13 @@ import {
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { SpecialistWorkersSection } from './SpecialistWorkersSection';
 import { StaffCommissaryCommandCard } from './StaffCommissaryCommandCard';
+import { FarmClockBanner } from './FarmClockBanner';
+import { BunkhouseFacilityPanel } from './BunkhouseFacilityPanel';
+import {
+  getWorkerScheduleTelemetry,
+  type ShiftType,
+  SHIFT_DEFINITIONS,
+} from '@/game/shiftEngine';
 import {
   WORKER_UPKEEP_ROSTER,
   calculateStaffUpkeep,
@@ -104,16 +111,26 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     staffPantry,
     coins,
     level,
+    farmEpochStart,
+    bunkhouse,
     hireUnifiedWorker,
     bulkUpgradeUnifiedWorker,
     toggleUnifiedWorkerMode,
     togglePauseUnifiedWorker,
     togglePauseAllWorkers,
+    assignWorkerShift,
+    callEmergencyOvertime,
     isAllWorkersPaused,
   } = useGameStore();
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
-  const now = Date.now();
+  const [shiftFilter, setShiftFilter] = useState<ShiftType | 'all'>('all');
+
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const telemetry = calculateStaffUpkeep(
     unifiedWorkers,
@@ -178,8 +195,17 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
         </div>
       )}
 
+      {/* Master Farm Clock & Shift Timeline (Top Banner) */}
+      <FarmClockBanner
+        selectedShiftFilter={shiftFilter}
+        onSelectShiftFilter={setShiftFilter}
+      />
+
       {/* Unified Executive Management Header: Staff Commissary & Payroll Vault Command Card */}
       <StaffCommissaryCommandCard />
+
+      {/* Dedicated Living Accommodations: Bunkhouse Facility Panel */}
+      <BunkhouseFacilityPanel />
 
       {/* Prominent Dedicated Specialist Workers Section */}
       <SpecialistWorkersSection onSelectTab={onSelectTab} />
@@ -270,6 +296,20 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const isGrumbling = morale === 'grumbling';
           const isInspired = morale === 'inspired';
 
+          const schedule = getWorkerScheduleTelemetry({
+            worker,
+            roleOrId: role,
+            baseDailyWage: upkeep?.baseDailyWage || 15,
+            timestamp: now,
+            epochStart: farmEpochStart,
+            bunkhouseLevel: bunkhouse?.level || 1,
+          });
+
+          // Filter by shift if shiftFilter is active
+          if (shiftFilter !== 'all' && worker.isHired && schedule.shiftType !== shiftFilter) {
+            return null;
+          }
+
           return (
             <div
               key={role}
@@ -326,6 +366,66 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
 
                   {/* Description */}
                   <p className="text-xs text-stone-500 dark:text-gray-400 mt-0.5">{cfg.description}</p>
+
+                  {/* Shift Assignment Dropdown Pill & Real-time Labor Telemetry */}
+                  {worker.isHired && (
+                    <div className="mt-2 p-2 rounded-lg bg-stone-100 dark:bg-stone-950/80 border border-stone-200 dark:border-stone-800 space-y-1.5">
+                      <div className="flex items-center justify-between gap-1 flex-wrap text-[10px]">
+                        <span className="text-stone-500 dark:text-stone-400 font-semibold flex items-center gap-1">
+                          <span>🕒</span> Shift Roster:
+                        </span>
+                        <select
+                          value={schedule.shiftType}
+                          onChange={(e) => assignWorkerShift(role, e.target.value as ShiftType)}
+                          className="bg-white dark:bg-stone-900 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded border border-stone-300 dark:border-amber-500/30 text-[10px] cursor-pointer"
+                          title="Click to reassign shift (initiates 1-day adjustment period)"
+                        >
+                          <option value="morning">🌅 Morning (06:00-14:00)</option>
+                          <option value="evening">☀️ Evening (14:00-22:00)</option>
+                          <option value="night">🌙 Night (22:00-06:00)</option>
+                        </select>
+                      </div>
+
+                      {/* Operational Phase Badge */}
+                      <div className="flex items-center justify-between gap-1 flex-wrap text-[10px] pt-1 border-t border-stone-200 dark:border-stone-800">
+                        <span className={`px-1.5 py-0.5 rounded font-black border text-[9px] ${schedule.phaseColorClass}`}>
+                          {schedule.phaseBadgeText}
+                        </span>
+                        {schedule.isWellRested && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
+                            ✨ Well-Rested (+15% Spd)
+                          </span>
+                        )}
+                        {schedule.isExhausted && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/40 animate-pulse">
+                            ⚠️ Exhausted (60% Spd)
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Stamina Meter */}
+                      <div className="space-y-0.5 pt-0.5">
+                        <div className="flex items-center justify-between text-[9px] text-stone-500 dark:text-stone-400">
+                          <span>⚡ Stamina: <b className={schedule.stamina >= 100 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}>{schedule.stamina}%</b></span>
+                          <span className="italic">{schedule.phase === 'sleeping' ? 'Restoring in Bunkhouse' : schedule.isOnDuty ? 'Active Field Duty' : 'Off-Duty'}</span>
+                        </div>
+                        <div className="w-full h-1 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              schedule.stamina >= 100 ? 'bg-emerald-400' : 'bg-amber-400'
+                            }`}
+                            style={{ width: `${schedule.stamina}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {schedule.dialogueSnippet && !schedule.isOnDuty && (
+                        <div className="text-[10px] text-stone-500 dark:text-stone-400 italic pt-1 border-t border-stone-200 dark:border-stone-800/80">
+                          {schedule.dialogueSnippet}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Upkeep Metric Badge & Status Pills */}
                   {upkeep && (
@@ -611,6 +711,16 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                       >
                         <span>{worker.isPaused ? '▶️' : '⏸️'}</span>
                         <span>{worker.isPaused ? 'Resume' : 'Pause'}</span>
+                      </button>
+                    )}
+                    {worker.isHired && schedule.canCallOvertime && (
+                      <button
+                        onClick={() => callEmergencyOvertime(role)}
+                        className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-700 dark:text-amber-300 border border-amber-500/40 transition-all flex items-center gap-1 cursor-pointer shadow-xs active:scale-95"
+                        title={`Wake worker for a 4-hour rush shift (-🪙${schedule.overtimeCostCoins} + 1 snack)`}
+                      >
+                        <span>☕</span>
+                        <span>Call Overtime (-🪙{schedule.overtimeCostCoins})</span>
                       </button>
                     )}
                     {worker.isHired && (

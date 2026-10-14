@@ -132,6 +132,23 @@ import {
   calculateStaffUpkeep,
   processUpkeepSettlement,
 } from '@/data/workerUpkeep';
+import {
+  type ShiftType,
+  type CircadianClockInfo,
+  type WorkerScheduleTelemetry,
+  type BunkhouseTierMeta,
+  DAY_CYCLE_MS,
+  DAY_CYCLE_SEC,
+  OVERTIME_DURATION_MS,
+  SHIFT_ADJUST_DURATION_MS,
+  BUNKHOUSE_TIERS,
+  getCircadianClock,
+  getWorkerScheduleTelemetry,
+  getDefaultWorkerShift,
+  hasWorkerReachedClockOut,
+  processSingleWorkerClockOut,
+  processOfflineShiftCycles,
+} from './shiftEngine';
 
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
@@ -364,6 +381,15 @@ export interface UnifiedWorkerInstance {
   missedCycles?: number;
   lastFedAt?: number;
   lastPaidAt?: number;
+  shiftType?: ShiftType;
+  shiftAdjustingUntil?: number | null;
+  overtimeUntil?: number | null;
+  lastOvertimeDay?: number;
+  isExhausted?: boolean;
+  exhaustedUntil?: number | null;
+  wellRested?: boolean;
+  stamina?: number;
+  lastClockOutDay?: number;
 }
 
 // Hourly Events
@@ -473,6 +499,13 @@ export interface GameState {
   payrollVaultCoins: number;
   staffPantry: Record<string, number>;
   lastSettlementTimestamp: number;
+
+  // Diurnal Labor Cycle & Bunkhouse Accommodations (v3.0)
+  farmEpochStart: number;
+  bunkhouse: {
+    level: number;
+    capacity: number;
+  };
 
   // Worker Feeding Automation & Barn Lock Policies
   wranglerPolicy: WranglerPolicyConfig;
@@ -599,6 +632,12 @@ export interface GameState {
   transferToStaffPantry: (itemId: string, quantity: number) => boolean;
   returnFromStaffPantry: (itemId: string, quantity: number) => boolean;
   processSettlementCycle: () => void;
+
+  // Diurnal Shift & Bunkhouse Actions (v3.0)
+  assignWorkerShift: (roleOrId: string, shift: ShiftType) => void;
+  callEmergencyOvertime: (roleOrId: string) => { success: boolean; message: string };
+  upgradeBunkhouse: () => { success: boolean; message: string };
+  expandBunkhouseCapacity: () => { success: boolean; message: string };
 
   // Wrangler Feed Policy & Automation Controls
   updateWranglerPolicy: (policy: Partial<WranglerPolicyConfig>) => void;
@@ -807,6 +846,8 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
       stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
       moraleTier: 'content',
       missedCycles: 0,
+      shiftType: getDefaultWorkerShift(role),
+      stamina: 100,
     };
   }
   return workers as Record<WorkerRole, UnifiedWorkerInstance>;
@@ -1069,6 +1110,13 @@ export const useGameStore = create<GameState>()(
       payrollVaultCoins: 0,
       staffPantry: {},
       lastSettlementTimestamp: Date.now(),
+
+      // Diurnal Labor Cycle & Bunkhouse Accommodations (v3.0)
+      farmEpochStart: Date.now() - (Date.now() % DAY_CYCLE_MS),
+      bunkhouse: {
+        level: 1,
+        capacity: 8,
+      },
 
       // Wrangler Feeding Automation & Barn Lock Policies
       wranglerPolicy: DEFAULT_WRANGLER_POLICY,
@@ -2724,6 +2772,266 @@ export const useGameStore = create<GameState>()(
         }
       },
 
+      // Diurnal Shift & Bunkhouse Actions (v3.0)
+      assignWorkerShift: (roleOrId: string, shift: ShiftType) => {
+        const state = get();
+        const now = Date.now();
+        const clock = getCircadianClock(now, state.farmEpochStart);
+        const shiftDef = SHIFT_DEFINITIONS[shift];
+
+        if (state.unifiedWorkers?.[roleOrId as WorkerRole]) {
+          const w = state.unifiedWorkers[roleOrId as WorkerRole];
+          if (!w.isHired) return;
+          const updatedWorkers = {
+            ...state.unifiedWorkers,
+            [roleOrId]: {
+              ...w,
+              shiftType: shift,
+              shiftAdjustingUntil: now + SHIFT_ADJUST_DURATION_MS,
+            },
+          };
+          playRapidTapSound(1);
+          set({ unifiedWorkers: updatedWorkers });
+          state.addNotification(
+            `🔄 Shift Reassigned: ${WORKER_REGISTRY[roleOrId as WorkerRole]?.name || roleOrId} assigned to ${shiftDef.name}. 1-day adjustment rest initiated.`,
+            shiftDef.icon,
+            'info'
+          );
+        } else if (state.specialistWorkers?.[roleOrId as SpecialistWorkerId]) {
+          const sp = state.specialistWorkers[roleOrId as SpecialistWorkerId];
+          if (!sp.isHired) return;
+          const updatedSpecialists = {
+            ...state.specialistWorkers,
+            [roleOrId]: {
+              ...sp,
+              shiftType: shift,
+              shiftAdjustingUntil: now + SHIFT_ADJUST_DURATION_MS,
+            },
+          };
+          playRapidTapSound(1);
+          set({ specialistWorkers: updatedSpecialists });
+          const template = LIVESTOCK_WORKER_ROSTER.find(r => r.id === roleOrId);
+          state.addNotification(
+            `🔄 Shift Reassigned: ${template?.name || roleOrId} assigned to ${shiftDef.name}. 1-day adjustment rest initiated.`,
+            shiftDef.icon,
+            'info'
+          );
+        }
+      },
+
+      callEmergencyOvertime: (roleOrId: string) => {
+        const state = get();
+        const now = Date.now();
+        const clock = getCircadianClock(now, state.farmEpochStart);
+        const config = WORKER_UPKEEP_ROSTER[roleOrId];
+        const baseWage = config?.baseDailyWage || 15;
+        const workerName = config?.name || roleOrId;
+
+        // Check if unified worker
+        const isUnified = Boolean(state.unifiedWorkers?.[roleOrId as WorkerRole]);
+        const workerObj = isUnified
+          ? state.unifiedWorkers[roleOrId as WorkerRole]
+          : state.specialistWorkers?.[roleOrId as SpecialistWorkerId];
+
+        if (!workerObj || !workerObj.isHired) {
+          return { success: false, message: 'Worker is not hired.' };
+        }
+        if (workerObj.isStriking || workerObj.moraleTier === 'striking' || workerObj.moraleTier === 'deserted') {
+          return { success: false, message: `${workerName} is currently on strike and refuses overtime requests!` };
+        }
+        if (workerObj.isExhausted || (workerObj.exhaustedUntil && now < workerObj.exhaustedUntil)) {
+          return { success: false, message: `${workerName} is completely exhausted and refuses all overtime until rested!` };
+        }
+        if (workerObj.overtimeUntil && now < workerObj.overtimeUntil) {
+          return { success: false, message: `${workerName} is already working an emergency overtime shift!` };
+        }
+
+        // Overtime wage: 1.5x hourly equivalent for 4 hours = 0.75 * baseDailyWage
+        const activeCount = Object.values(state.unifiedWorkers || {}).filter(w => w.isHired).length +
+          Object.values(state.specialistWorkers || {}).filter(w => w.isHired).length;
+        const taxRate = getGuildTaxRate(activeCount);
+        const overtimeWage = Math.max(1, Math.round(baseWage * 0.75 * (1 + taxRate)));
+
+        let newVaultCoins = state.payrollVaultCoins || 0;
+        let newPurseCoins = state.coins;
+        let deductedFrom = 'Payroll Vault';
+
+        if (newVaultCoins >= overtimeWage) {
+          newVaultCoins -= overtimeWage;
+        } else if (newPurseCoins >= overtimeWage) {
+          newPurseCoins -= overtimeWage;
+          deductedFrom = 'Farmer Purse';
+        } else {
+          return {
+            success: false,
+            message: `Need 🪙${overtimeWage} coins in Payroll Vault or Purse to fund emergency overtime!`,
+          };
+        }
+
+        // Pantry snack deduction
+        const updatedPantry = { ...(state.staffPantry || {}) };
+        let snackDeducted: string | null = null;
+        for (const [fId, qty] of Object.entries(updatedPantry)) {
+          if (qty > 0) {
+            updatedPantry[fId] = qty - 1;
+            if (updatedPantry[fId] === 0) delete updatedPantry[fId];
+            snackDeducted = COMMISSARY_FOOD_ITEMS[fId]?.name || fId;
+            break;
+          }
+        }
+
+        // Consecutive overtime check
+        const wasOvertimeYesterday = workerObj.lastOvertimeDay === clock.currentDay - 1;
+        let becameExhausted = false;
+        let exhaustedUntilTime: number | null = null;
+
+        if (wasOvertimeYesterday) {
+          becameExhausted = true;
+          exhaustedUntilTime = now + (16 * SEC_PER_IN_GAME_HOUR * 1000); // 16 in-game hours = 20 real minutes
+        }
+
+        const updatedWorkerData = {
+          ...workerObj,
+          overtimeUntil: now + OVERTIME_DURATION_MS,
+          lastOvertimeDay: clock.currentDay,
+          isExhausted: becameExhausted,
+          exhaustedUntil: exhaustedUntilTime,
+          wellRested: false, // overtime interrupts sleep and forfeits buff
+        };
+
+        playCashRegisterSound();
+
+        if (isUnified) {
+          set({
+            payrollVaultCoins: newVaultCoins,
+            coins: newPurseCoins,
+            staffPantry: updatedPantry,
+            unifiedWorkers: {
+              ...state.unifiedWorkers,
+              [roleOrId]: updatedWorkerData,
+            },
+          });
+        } else {
+          set({
+            payrollVaultCoins: newVaultCoins,
+            coins: newPurseCoins,
+            staffPantry: updatedPantry,
+            specialistWorkers: {
+              ...state.specialistWorkers,
+              [roleOrId]: updatedWorkerData,
+            },
+          });
+        }
+
+        const snackText = snackDeducted ? ` consumed 1x ${snackDeducted} from Pantry` : '';
+        state.addNotification(
+          `☕ Emergency Overtime: Called ${workerName} into field for 4h shift (-🪙${overtimeWage} from ${deductedFrom}${snackText})!`,
+          '☕',
+          'info'
+        );
+
+        if (becameExhausted) {
+          state.addNotification(
+            `⚠️ Fatigue Warning: ${workerName} called 2 days in a row and is now Exhausted (-40% speed, refusing future overtime until full sleep)!`,
+            '😫',
+            'event'
+          );
+        }
+
+        return {
+          success: true,
+          message: `Called ${workerName} for emergency overtime! Paid 🪙${overtimeWage} from ${deductedFrom}.`,
+        };
+      },
+
+      upgradeBunkhouse: () => {
+        const state = get();
+        const currentLevel = state.bunkhouse?.level || 1;
+        if (currentLevel >= 3) {
+          return { success: false, message: 'Bunkhouse is already at maximum Master Lodgings level!' };
+        }
+
+        const nextTier = BUNKHOUSE_TIERS[currentLevel + 1];
+        if (!nextTier) return { success: false, message: 'Invalid bunkhouse tier.' };
+
+        if (state.coins < nextTier.coinCost) {
+          return {
+            success: false,
+            message: `Need 🪙${nextTier.coinCost.toLocaleString()} coins to upgrade Bunkhouse to Level ${currentLevel + 1}!`,
+          };
+        }
+
+        // Material requirement check
+        let updatedBarn = { ...state.barn };
+        if (nextTier.materialCostItem && nextTier.materialCostQty) {
+          const avail = updatedBarn[nextTier.materialCostItem] || 0;
+          if (avail < nextTier.materialCostQty) {
+            const matName = ITEM_CATALOG_META[nextTier.materialCostItem]?.name || nextTier.materialCostItem;
+            return {
+              success: false,
+              message: `Need ${nextTier.materialCostQty}x ${matName} in Barn to upgrade Bunkhouse (have ${avail})!`,
+            };
+          }
+          updatedBarn[nextTier.materialCostItem] = avail - nextTier.materialCostQty;
+          if (updatedBarn[nextTier.materialCostItem] === 0) delete updatedBarn[nextTier.materialCostItem];
+        }
+
+        playCashRegisterSound();
+        set({
+          coins: state.coins - nextTier.coinCost,
+          barn: updatedBarn,
+          bunkhouse: {
+            ...state.bunkhouse,
+            level: currentLevel + 1,
+            capacity: Math.max(state.bunkhouse?.capacity || 8, (currentLevel + 1) * 6),
+          },
+        });
+
+        state.addNotification(
+          `🛏️ Bunkhouse Upgraded to Level ${currentLevel + 1} (${nextTier.name})! ${nextTier.perkDescription}`,
+          '✨',
+          'discovery'
+        );
+
+        return {
+          success: true,
+          message: `Upgraded Bunkhouse to Level ${currentLevel + 1} (${nextTier.name})!`,
+        };
+      },
+
+      expandBunkhouseCapacity: () => {
+        const state = get();
+        const currentCap = state.bunkhouse?.capacity || 8;
+        const cost = Math.round(currentCap * 250);
+
+        if (state.coins < cost) {
+          return {
+            success: false,
+            message: `Need 🪙${cost.toLocaleString()} coins to expand Bunkhouse capacity!`,
+          };
+        }
+
+        playCashRegisterSound();
+        set({
+          coins: state.coins - cost,
+          bunkhouse: {
+            ...state.bunkhouse,
+            capacity: currentCap + 2,
+          },
+        });
+
+        state.addNotification(
+          `🛏️ Bunkhouse Expanded: +2 Beds added! Total Capacity is now ${currentCap + 2} beds.`,
+          '🛏️',
+          'info'
+        );
+
+        return {
+          success: true,
+          message: `Added +2 beds to Bunkhouse! New capacity: ${currentCap + 2}`,
+        };
+      },
+
       // Wrangler Feed Policy & Automation Controls
       updateWranglerPolicy: (policyUpdate) => {
         const state = get();
@@ -4115,6 +4423,33 @@ export const useGameStore = create<GameState>()(
           return w;
         });
 
+        // --- Diurnal Labor Cycle & Circadian Clock Setup ---
+        const clock = getCircadianClock(now, state.farmEpochStart || now);
+        let updatedSpecialistWorkers = state.specialistWorkers ? { ...state.specialistWorkers } : createDefaultSpecialistWorkers();
+        let newPayrollVaultCoins = state.payrollVaultCoins || 0;
+        let newStaffPantry = state.staffPantry ? { ...state.staffPantry } : {};
+
+        // Offline Catch-Up (process sequential 30-min shifts for elapsed time)
+        if (state.lastTick && now - state.lastTick >= DAY_CYCLE_MS) {
+          const elapsedCycles = Math.min(Math.floor((now - state.lastTick) / DAY_CYCLE_MS), 24);
+          const offlineRes = processOfflineShiftCycles({
+            unifiedWorkers: state.unifiedWorkers,
+            specialistWorkers: updatedSpecialistWorkers,
+            payrollVaultCoins: newPayrollVaultCoins,
+            staffPantry: newStaffPantry,
+            elapsedCycles,
+          });
+          newPayrollVaultCoins = offlineRes.payrollVaultCoins;
+          newStaffPantry = offlineRes.staffPantry;
+          Object.assign(state.unifiedWorkers, offlineRes.updatedUnifiedWorkers);
+          Object.assign(updatedSpecialistWorkers, offlineRes.updatedSpecialistWorkers);
+          if (offlineRes.desertedWorkers.length > 0) {
+            state.addNotification(`🚨 Desertion Notice: ${offlineRes.desertedWorkers.join(', ')} deserted during extended absence!`, '⚠️', 'event');
+          } else if (offlineRes.settledShiftsCount > 0) {
+            state.addNotification(`🌅 Offline Shifts: Settled ${offlineRes.settledShiftsCount} shifts across ${elapsedCycles} elapsed days from Vault & Pantry!`, '📋', 'info');
+          }
+        }
+
         // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
         let unifiedWorkersModified = false;
         const updatedUnifiedWorkers = { ...state.unifiedWorkers };
@@ -4148,10 +4483,57 @@ export const useGameStore = create<GameState>()(
             const moraleMultiplier = getMoraleSpeedMultiplier(morale);
 
             const cfg = WORKER_REGISTRY[role];
+            const schedule = getWorkerScheduleTelemetry({
+              worker,
+              roleOrId: role,
+              baseDailyWage: WORKER_UPKEEP_ROSTER[role]?.baseDailyWage || 15,
+              timestamp: now,
+              epochStart: state.farmEpochStart || now,
+              bunkhouseLevel: state.bunkhouse?.level || 1,
+            });
+
+            // Update real-time stamina
+            worker.stamina = schedule.stamina;
+
+            // Bunkhouse stamina recovery & well-rested perk
+            if (schedule.phase === 'sleeping' && schedule.stamina >= 100 && (state.bunkhouse?.level || 1) >= 2) {
+              worker.wellRested = true;
+            }
+
+            // Scheduled Clock-Out Settlement at the end of the 8-hour shift
+            if (hasWorkerReachedClockOut(schedule.shiftType, clock.cycleElapsedSeconds) && worker.lastClockOutDay !== clock.currentDay) {
+              const clockOutRes = processSingleWorkerClockOut({
+                workerName: cfg.name,
+                roleOrId: role,
+                currentMissedCycles: worker.missedCycles || 0,
+                payrollVaultCoins: newPayrollVaultCoins,
+                staffPantry: newStaffPantry,
+                activeWorkersCount: Object.values(updatedUnifiedWorkers).filter(w => w.isHired).length,
+              });
+              newPayrollVaultCoins = clockOutRes.newPayrollCoins;
+              newStaffPantry = clockOutRes.newStaffPantry;
+              worker.missedCycles = clockOutRes.newMissedCycles;
+              worker.moraleTier = clockOutRes.newMoraleTier;
+              worker.lastClockOutDay = clock.currentDay;
+              worker.wellRested = false; // completed shift consumes the rest buff
+              unifiedWorkersModified = true;
+
+              if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
+                state.addNotification(clockOutRes.notificationMessage, clockOutRes.isStriking ? '🛑' : '🪙', 'coin');
+              }
+            }
+
+            // Chores immediately pause the moment the worker transitions into off-duty rest!
+            if (!schedule.isOnDuty) {
+              worker.lastActionTimestamp = now;
+              continue;
+            }
+
+            const shiftSpeedMultiplier = schedule.speedMultiplier;
             // Outfit bonus for herder
             const hasHerderOutfit = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder' && fh.equippedOutfit === 'herders_chaps');
             const outfitSpeed = hasHerderOutfit ? 0.7 : 1.0;
-            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / (wMultiplier * moraleMultiplier);
+            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier);
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -4562,41 +4944,44 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // --- Unified Commissary & Payroll Vault Settlement Loop (every 90s) ---
-        let updatedSpecialistWorkers = state.specialistWorkers ? { ...state.specialistWorkers } : createDefaultSpecialistWorkers();
-        let newPayrollVaultCoins = state.payrollVaultCoins || 0;
-        let newStaffPantry = state.staffPantry ? { ...state.staffPantry } : {};
-        let newLastSettlementTime = state.lastSettlementTimestamp || now;
-        const SETTLEMENT_CYCLE_MS = 90000;
+        // --- Specialist Workers Diurnal Labor Telemetry & Clock-Out Settlement ---
+        for (const spId of Object.keys(updatedSpecialistWorkers) as SpecialistWorkerId[]) {
+          const sp = updatedSpecialistWorkers[spId];
+          if (!sp || !sp.isHired) continue;
 
-        if (now - newLastSettlementTime >= SETTLEMENT_CYCLE_MS) {
-          const elapsedCycles = Math.min(Math.floor((now - newLastSettlementTime) / SETTLEMENT_CYCLE_MS), 20);
-          newLastSettlementTime = now;
+          const spSchedule = getWorkerScheduleTelemetry({
+            worker: sp,
+            roleOrId: spId,
+            baseDailyWage: WORKER_UPKEEP_ROSTER[spId]?.baseDailyWage || 20,
+            timestamp: now,
+            epochStart: state.farmEpochStart || now,
+            bunkhouseLevel: state.bunkhouse?.level || 1,
+          });
 
-          for (let cycle = 0; cycle < elapsedCycles; cycle++) {
-            const settlementRes = processUpkeepSettlement({
-              unifiedWorkers: updatedUnifiedWorkers,
-              specialistWorkers: updatedSpecialistWorkers,
+          sp.stamina = spSchedule.stamina;
+          if (spSchedule.phase === 'sleeping' && spSchedule.stamina >= 100 && (state.bunkhouse?.level || 1) >= 2) {
+            sp.wellRested = true;
+          }
+
+          if (hasWorkerReachedClockOut(spSchedule.shiftType, clock.cycleElapsedSeconds) && sp.lastClockOutDay !== clock.currentDay) {
+            const spClockOutRes = processSingleWorkerClockOut({
+              workerName: WORKER_UPKEEP_ROSTER[spId]?.name || spId,
+              roleOrId: spId,
+              currentMissedCycles: sp.missedCycles || 0,
               payrollVaultCoins: newPayrollVaultCoins,
               staffPantry: newStaffPantry,
+              activeWorkersCount: Object.values(updatedSpecialistWorkers).filter(w => w.isHired).length,
             });
+            newPayrollVaultCoins = spClockOutRes.newPayrollCoins;
+            newStaffPantry = spClockOutRes.newStaffPantry;
+            sp.missedCycles = spClockOutRes.newMissedCycles;
+            sp.moraleTier = spClockOutRes.newMoraleTier;
+            sp.isStriking = spClockOutRes.isStriking;
+            sp.lastClockOutDay = clock.currentDay;
+            sp.wellRested = false;
 
-            newPayrollVaultCoins = settlementRes.payrollVaultCoins;
-            newStaffPantry = settlementRes.staffPantry;
-            Object.assign(updatedUnifiedWorkers, settlementRes.updatedUnifiedWorkers);
-            Object.assign(updatedSpecialistWorkers, settlementRes.updatedSpecialistWorkers);
-            unifiedWorkersModified = true;
-
-            if (cycle === elapsedCycles - 1) {
-              if (settlementRes.desertedWorkers.length > 0) {
-                state.addNotification(`🚨 Desertion Notice: ${settlementRes.desertedWorkers.join(', ')} left the farm contract after 4 unpaid cycles!`, '⚠️', 'event');
-              } else if (settlementRes.strikeCount > 0) {
-                state.addNotification(`⚠️ Strike Alert: ${settlementRes.strikeCount} staff halted work due to empty staging buffers!`, '🛑', 'event');
-              } else if (settlementRes.grumblingCount > 0) {
-                state.addNotification(`🟡 Grumbling Alert: ${settlementRes.grumblingCount} staff running at 50% speed from supply shortage.`, '⚠️', 'event');
-              } else if (settlementRes.paidCount > 0) {
-                state.addNotification(`✅ Settlement Cleared: Paid & fed ${settlementRes.paidCount} staff from Payroll Vault & Pantry! (${settlementRes.inspiredCount} inspired)`, '🎉', 'coin');
-              }
+            if (spClockOutRes.notificationMessage && (spClockOutRes.isStriking || spClockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
+              state.addNotification(spClockOutRes.notificationMessage, spClockOutRes.isStriking ? '🛑' : '🪙', 'coin');
             }
           }
         }
@@ -4606,7 +4991,15 @@ export const useGameStore = create<GameState>()(
           !areWorkersPaused &&
           updatedSpecialistWorkers.worker_wrangler_tessa?.isHired &&
           updatedSpecialistWorkers.worker_wrangler_tessa?.isActive &&
-          !updatedSpecialistWorkers.worker_wrangler_tessa?.isStriking
+          !updatedSpecialistWorkers.worker_wrangler_tessa?.isStriking &&
+          getWorkerScheduleTelemetry({
+            worker: updatedSpecialistWorkers.worker_wrangler_tessa,
+            roleOrId: 'worker_wrangler_tessa',
+            baseDailyWage: 20,
+            timestamp: now,
+            epochStart: state.farmEpochStart || now,
+            bunkhouseLevel: state.bunkhouse?.level || 1,
+          }).isOnDuty
         );
 
         const currentWranglerPolicy = state.wranglerPolicy || DEFAULT_WRANGLER_POLICY;
@@ -4686,7 +5079,15 @@ export const useGameStore = create<GameState>()(
           !areWorkersPaused &&
           updatedSpecialistWorkers.worker_stablemaster_elric?.isHired &&
           updatedSpecialistWorkers.worker_stablemaster_elric?.isActive &&
-          !updatedSpecialistWorkers.worker_stablemaster_elric?.isStriking
+          !updatedSpecialistWorkers.worker_stablemaster_elric?.isStriking &&
+          getWorkerScheduleTelemetry({
+            worker: updatedSpecialistWorkers.worker_stablemaster_elric,
+            roleOrId: 'worker_stablemaster_elric',
+            baseDailyWage: 25,
+            timestamp: now,
+            epochStart: state.farmEpochStart || now,
+            bunkhouseLevel: state.bunkhouse?.level || 1,
+          }).isOnDuty
         );
 
         let finalActiveBreedings = state.activeBreedings;
@@ -4717,7 +5118,15 @@ export const useGameStore = create<GameState>()(
           !areWorkersPaused &&
           updatedSpecialistWorkers.worker_caravaner_orin?.isHired &&
           updatedSpecialistWorkers.worker_caravaner_orin?.isActive &&
-          !updatedSpecialistWorkers.worker_caravaner_orin?.isStriking
+          !updatedSpecialistWorkers.worker_caravaner_orin?.isStriking &&
+          getWorkerScheduleTelemetry({
+            worker: updatedSpecialistWorkers.worker_caravaner_orin,
+            roleOrId: 'worker_caravaner_orin',
+            baseDailyWage: 30,
+            timestamp: now,
+            epochStart: state.farmEpochStart || now,
+            bunkhouseLevel: state.bunkhouse?.level || 1,
+          }).isOnDuty
         );
 
         let finalReserve = [...(state.livestockReserve || [])];
@@ -7061,6 +7470,8 @@ export const useGameStore = create<GameState>()(
               if (merged.unifiedWorkers[r].isPaused === undefined) merged.unifiedWorkers[r].isPaused = false;
               if (merged.unifiedWorkers[r].moraleTier === undefined) merged.unifiedWorkers[r].moraleTier = 'content';
               if (merged.unifiedWorkers[r].missedCycles === undefined) merged.unifiedWorkers[r].missedCycles = 0;
+              if (!merged.unifiedWorkers[r].shiftType) merged.unifiedWorkers[r].shiftType = getDefaultWorkerShift(r);
+              if (merged.unifiedWorkers[r].stamina === undefined) merged.unifiedWorkers[r].stamina = 100;
             }
           }
         }
@@ -7078,9 +7489,13 @@ export const useGameStore = create<GameState>()(
                 merged.specialistWorkers[sId].moraleTier = merged.specialistWorkers[sId].isStriking ? 'striking' : 'content';
               }
               if (merged.specialistWorkers[sId].missedCycles === undefined) merged.specialistWorkers[sId].missedCycles = 0;
+              if (!merged.specialistWorkers[sId].shiftType) merged.specialistWorkers[sId].shiftType = getDefaultWorkerShift(sId);
+              if (merged.specialistWorkers[sId].stamina === undefined) merged.specialistWorkers[sId].stamina = 100;
             }
           }
         }
+        if (merged.farmEpochStart === undefined) merged.farmEpochStart = Date.now() - (Date.now() % DAY_CYCLE_MS);
+        if (!merged.bunkhouse) merged.bunkhouse = { level: 1, capacity: 8 };
         if (merged.payrollVaultCoins === undefined) merged.payrollVaultCoins = 0;
         if (!merged.staffPantry) merged.staffPantry = {};
         if (!merged.lastSettlementTimestamp) merged.lastSettlementTimestamp = Date.now();
