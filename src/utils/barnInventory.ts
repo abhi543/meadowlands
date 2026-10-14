@@ -70,6 +70,14 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   horn_shavings: { id: 'horn_shavings', name: 'Horn Shavings', icon: '🪨', category: 'animal_product', baseValue: 12, isEdibleFeed: false },
   lanolin_balm: { id: 'lanolin_balm', name: 'Lanolin Balm', icon: '🧴', category: 'animal_product', baseValue: 20, isEdibleFeed: false },
   ancient_coin: { id: 'ancient_coin', name: 'Ancient Coin', icon: '🪙', category: 'animal_product', baseValue: 50, isEdibleFeed: false },
+
+  // Frontier Expedition Materials
+  scrap_timber: { id: 'scrap_timber', name: 'Scrap Timber', icon: '🪵', category: 'forage', baseValue: 120, isEdibleFeed: false },
+  wild_herbs: { id: 'wild_herbs', name: 'Wild Herbs', icon: '🌿', category: 'forage', baseValue: 180, isEdibleFeed: true },
+  river_pearl: { id: 'river_pearl', name: 'River Pearl', icon: '🦪', category: 'forage', baseValue: 350, isEdibleFeed: false },
+  mountain_slate: { id: 'mountain_slate', name: 'Mountain Slate', icon: '🪨', category: 'forage', baseValue: 450, isEdibleFeed: false },
+  fossil_bark: { id: 'fossil_bark', name: 'Fossil Bark', icon: '🍂', category: 'forage', baseValue: 750, isEdibleFeed: false },
+  mythical_ore: { id: 'mythical_ore', name: 'Mythical Ore', icon: '🔮', category: 'forage', baseValue: 1800, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {

@@ -34,6 +34,28 @@ import {
   type AnimalTier,
 } from '@/utils/breedingLogic';
 import {
+  type ExpeditionPresetId,
+  type ExpeditionPresetDef,
+  type FrontierMaterialDef,
+  type CratedBeast,
+  type ExpeditionSpoils,
+  type ActiveExpedition,
+  type WildernessState,
+  EXPEDITION_PRESETS,
+  FRONTIER_MATERIALS,
+  createDefaultWilderness,
+  generateCratedBeast,
+} from '@/types/expeditions';
+export type {
+  ExpeditionPresetId,
+  ExpeditionPresetDef,
+  FrontierMaterialDef,
+  CratedBeast,
+  ExpeditionSpoils,
+  ActiveExpedition,
+  WildernessState,
+};
+import {
   SYSTEMIC_EVENTS, FAIR_ITEM_SCORES, getEligibleRandomEvents,
   type SystemicEventId, type SystemicEventPhase, type SystemicEventDef,
 } from './eventsData';
@@ -377,22 +399,6 @@ export interface HatchRevealData {
   storedInReserve?: boolean;
 }
 
-export interface ActiveExpedition {
-  id: string;
-  biomeId: BiomeId;
-  farmhandId: string;
-  lureId: LureTypeId;
-  startedAt: number;
-  durationMs: number;
-  midpointResolved: boolean;
-  pendingChoice: {
-    prompt: string;
-    safeLabel: string;
-    riskyLabel: string;
-  } | null;
-  riskyChosen: boolean | null; // null = not yet chosen
-}
-
 export interface GameState {
   // Player
   coins: number;
@@ -460,11 +466,9 @@ export interface GameState {
   activeBreedings: ActiveBreeding[];
   hatchReveal: HatchRevealData | null;
 
-  // Wilderness Expeditions
-  wilderness: {
-    unlockedBiomes: Record<BiomeId, boolean>;
-    activeExpeditions: ActiveExpedition[];
-  };
+  // Wilderness Expeditions & Isolated Outpost
+  wilderness: WildernessState;
+  stagingWagonProvisions: Record<string, number>;
 
   // Habitat Upgrades
   habitatUpgradeSteps: Record<AnimalSpecies, number>;
@@ -590,9 +594,22 @@ export interface GameState {
   moveToReserve: (animalId: string) => boolean;
   sellReserveAnimal: (animalId: string) => void;
 
-  // Wilderness
+  // Wilderness Expeditions & Outpost Storage
   launchExpedition: (biomeId: BiomeId, farmhandId: string, lureId: LureTypeId) => void;
   resolveExpeditionChoice: (expeditionId: string, chooseRisky: boolean) => void;
+  packWagonItem: (itemId: string, qty: number) => boolean;
+  unpackWagonItem: (itemId: string, qty: number) => boolean;
+  clearWagonStaging: () => void;
+  launchLongExpedition: (presetId: ExpeditionPresetId, provisions: Record<string, number>, farmhandId?: string) => boolean;
+  recallExpeditionEarly: (expeditionId: string) => boolean;
+  claimExpeditionSpoils: (expeditionId: string) => void;
+  shipFrontierMaterialToBarn: (materialId: string, qty?: number) => void;
+  shipAllFrontierMaterialsToBarn: () => void;
+  transferCratedBeastToPasture: (beastId: string) => { success: boolean; message: string };
+  stationCratedBeastAtOutpost: (beastId: string) => void;
+  unstationBeastFromOutpost: (beastId: string) => void;
+  releaseCratedBeastToWild: (beastId: string) => number;
+  returnLeftoverRationsToBarn: (expeditionId: string) => void;
 
   // Habitat
   upgradeHabitat: (species: AnimalSpecies) => void;
@@ -956,10 +973,8 @@ export const useGameStore = create<GameState>()(
       activeBreedings: [],
       hatchReveal: null,
 
-      wilderness: {
-        unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
-        activeExpeditions: [],
-      },
+      wilderness: createDefaultWilderness(),
+      stagingWagonProvisions: {},
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -2996,11 +3011,14 @@ export const useGameStore = create<GameState>()(
 
         const newExpedition: ActiveExpedition = {
           id: generateId(),
+          presetId: '1h',
           biomeId,
           farmhandId,
           lureId,
           startedAt: Date.now(),
           durationMs,
+          provisions: {},
+          status: 'active',
           midpointResolved: false,
           pendingChoice: null,
           riskyChosen: null,
@@ -3036,6 +3054,477 @@ export const useGameStore = create<GameState>()(
             ...state.wilderness,
             activeExpeditions: updatedExpeditions,
           },
+        });
+      },
+      
+      packWagonItem: (itemId: string, qty: number) => {
+        if (qty <= 0) return false;
+        const state = get();
+        const isCrop = isCropItem(itemId);
+        const storage = isCrop ? state.silo : state.barn;
+        const available = storage[itemId] || 0;
+        if (available < qty) return false;
+
+        const currentStaged = state.stagingWagonProvisions || {};
+        const currentItemStaged = currentStaged[itemId] || 0;
+
+        if (isCrop) {
+          set({
+            silo: { ...state.silo, [itemId]: available - qty },
+            stagingWagonProvisions: { ...currentStaged, [itemId]: currentItemStaged + qty },
+            isDirty: true,
+          });
+        } else {
+          set({
+            barn: { ...state.barn, [itemId]: available - qty },
+            stagingWagonProvisions: { ...currentStaged, [itemId]: currentItemStaged + qty },
+            isDirty: true,
+          });
+        }
+        playRapidTapSound(1);
+        return true;
+      },
+
+      unpackWagonItem: (itemId: string, qty: number) => {
+        if (qty <= 0) return false;
+        const state = get();
+        const currentStaged = state.stagingWagonProvisions || {};
+        const stagedQty = currentStaged[itemId] || 0;
+        if (stagedQty <= 0) return false;
+
+        const returnQty = Math.min(qty, stagedQty);
+        const nextStagedQty = stagedQty - returnQty;
+        const updatedStaged = { ...currentStaged };
+        if (nextStagedQty <= 0) {
+          delete updatedStaged[itemId];
+        } else {
+          updatedStaged[itemId] = nextStagedQty;
+        }
+
+        const isCrop = isCropItem(itemId);
+        if (isCrop) {
+          set({
+            silo: { ...state.silo, [itemId]: (state.silo[itemId] || 0) + returnQty },
+            stagingWagonProvisions: updatedStaged,
+            isDirty: true,
+          });
+        } else {
+          set({
+            barn: { ...state.barn, [itemId]: (state.barn[itemId] || 0) + returnQty },
+            stagingWagonProvisions: updatedStaged,
+            isDirty: true,
+          });
+        }
+        playRapidTapSound(1);
+        return true;
+      },
+
+      clearWagonStaging: () => {
+        const state = get();
+        const staged = state.stagingWagonProvisions || {};
+        const entries = Object.entries(staged);
+        if (entries.length === 0) return;
+
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+
+        for (const [itemId, qty] of entries) {
+          if (qty <= 0) continue;
+          if (isCropItem(itemId)) {
+            newSilo[itemId] = (newSilo[itemId] || 0) + qty;
+          } else {
+            newBarn[itemId] = (newBarn[itemId] || 0) + qty;
+          }
+        }
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          stagingWagonProvisions: {},
+          isDirty: true,
+        });
+      },
+
+      launchLongExpedition: (presetId: ExpeditionPresetId, provisions: Record<string, number>, farmhandId?: string) => {
+        const state = get();
+        const preset = EXPEDITION_PRESETS[presetId];
+        if (!preset) return false;
+
+        const totalRations = Object.values(provisions).reduce((sum, q) => sum + q, 0);
+        if (totalRations < preset.minRations) {
+          state.addNotification(`Need at least ${preset.minRations} rations packed in wagon!`, '⚠️', 'info');
+          return false;
+        }
+
+        // Relic: Smuggler's compass grants -20% expedition duration
+        const compassMultiplier = state.relics?.smugglersCompass ? 0.8 : 1.0;
+        // Stationed beast swift_runner trait gives +15% speed (-15% duration)
+        const hasSwiftRunner = (state.wilderness.stationedBeasts || []).some(b => b.trait?.toLowerCase().includes('scout'));
+        const beastSpeedMultiplier = hasSwiftRunner ? 0.85 : 1.0;
+        const effectiveDurationMs = Math.round(preset.durationMs * compassMultiplier * beastSpeedMultiplier);
+
+        const newExpedition: ActiveExpedition = {
+          id: generateId(),
+          presetId,
+          startedAt: Date.now(),
+          durationMs: effectiveDurationMs,
+          provisions: { ...provisions },
+          farmhandId,
+          status: 'active',
+        };
+
+        const currentWild = state.wilderness || createDefaultWilderness();
+        const updatedWild: WildernessState = {
+          ...currentWild,
+          activeExpeditions: [...(currentWild.activeExpeditions || []), newExpedition],
+        };
+
+        playGoldRushFanfare();
+        state.addNotification(`🧭 Supply Wagon departed for ${preset.name}! (${preset.label} trek started)`, '🚚', 'discovery');
+
+        set({
+          wilderness: updatedWild,
+          stagingWagonProvisions: {},
+          isDirty: true,
+        });
+        return true;
+      },
+
+      recallExpeditionEarly: (expeditionId: string) => {
+        const state = get();
+        const exp = (state.wilderness.activeExpeditions || []).find(e => e.id === expeditionId);
+        if (!exp || exp.status !== 'active') return false;
+
+        const now = Date.now();
+        const elapsed = Math.max(1000, now - exp.startedAt);
+        const progressRatio = Math.min(0.95, Math.max(0.1, elapsed / exp.durationMs));
+
+        const preset = EXPEDITION_PRESETS[exp.presetId || '1h'];
+
+        // Calculate partial materials proportional to progress
+        const materials: Record<string, number> = {};
+        if (preset) {
+          for (const [matId, [min, max]] of Object.entries(preset.yieldRanges)) {
+            const fullQty = Math.floor(min + Math.random() * (max - min + 1));
+            const partialQty = Math.max(1, Math.floor(fullQty * progressRatio));
+            materials[matId] = partialQty;
+          }
+        }
+
+        // Beast capture chance scaled by progress
+        const cratedBeasts: CratedBeast[] = [];
+        if (preset && Math.random() <= (preset.beastChance * progressRatio)) {
+          cratedBeasts.push(generateCratedBeast(exp.presetId || '1h', preset.tierPool));
+        }
+
+        // Return unconsumed rations (more rations returned if recalled early!)
+        const leftoverRations: Record<string, number> = {};
+        for (const [itemId, qty] of Object.entries(exp.provisions || {})) {
+          const unconsumedRatio = Math.max(0.2, 1 - (progressRatio * 0.8));
+          const unused = Math.max(1, Math.floor(qty * unconsumedRatio));
+          leftoverRations[itemId] = unused;
+        }
+
+        const spoils: ExpeditionSpoils = {
+          materials,
+          cratedBeast: cratedBeasts[0] || null,
+          cratedBeasts,
+          leftoverRations,
+          coins: Math.round(progressRatio * (preset ? (preset.coinRewardRange[0] + preset.coinRewardRange[1]) / 2 : 500)),
+          gems: Math.round(progressRatio * (preset ? preset.gemRewardRange[0] : 1)),
+          recalledEarly: true,
+          completionPct: Math.round(progressRatio * 100),
+          claimed: false,
+        };
+
+        // Deposit materials into frontier cache & crated beasts into camp holding pens
+        const currentWild = state.wilderness;
+        const newFrontierCache = { ...(currentWild.frontierCache || {}) };
+        for (const [mId, mQty] of Object.entries(materials)) {
+          newFrontierCache[mId] = (newFrontierCache[mId] || 0) + mQty;
+        }
+        const newHoldingPens = [...(currentWild.campHoldingPens || []), ...cratedBeasts];
+
+        const updatedExpeditions = currentWild.activeExpeditions.map(e => {
+          if (e.id === expeditionId) {
+            return {
+              ...e,
+              status: 'recalled' as const,
+              spoils,
+            };
+          }
+          return e;
+        });
+
+        playCrisisAlarm();
+        state.addNotification(`📯 Recall Horn sounded! Wagon turned back. Salvaged partial spoils & unconsumed rations.`, '📯', 'event');
+
+        set({
+          wilderness: {
+            ...currentWild,
+            activeExpeditions: updatedExpeditions,
+            frontierCache: newFrontierCache,
+            campHoldingPens: newHoldingPens,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      claimExpeditionSpoils: (expeditionId: string) => {
+        const state = get();
+        const currentWild = state.wilderness;
+        const updatedExpeditions = (currentWild.activeExpeditions || []).filter(e => e.id !== expeditionId);
+        set({
+          wilderness: {
+            ...currentWild,
+            activeExpeditions: updatedExpeditions,
+          },
+          isDirty: true,
+        });
+        playVictoryChime();
+      },
+
+      shipFrontierMaterialToBarn: (materialId: string, qty?: number) => {
+        const state = get();
+        const cache = state.wilderness.frontierCache || {};
+        const available = cache[materialId] || 0;
+        if (available <= 0) return;
+
+        const shipAmount = qty ? Math.min(qty, available) : available;
+        const nextCache = { ...cache };
+        if (shipAmount >= available) {
+          delete nextCache[materialId];
+        } else {
+          nextCache[materialId] = available - shipAmount;
+        }
+
+        const matDef = FRONTIER_MATERIALS[materialId];
+        const matName = matDef?.name || materialId;
+
+        playCashRegisterSound();
+        state.addNotification(`🚚 Shipped ${shipAmount}x ${matName} from Frontier Cache to Home Barn!`, matDef?.emoji || '📦', 'info');
+
+        set({
+          wilderness: {
+            ...state.wilderness,
+            frontierCache: nextCache,
+          },
+          barn: {
+            ...state.barn,
+            [materialId]: (state.barn[materialId] || 0) + shipAmount,
+          },
+          isDirty: true,
+        });
+      },
+
+      shipAllFrontierMaterialsToBarn: () => {
+        const state = get();
+        const cache = state.wilderness.frontierCache || {};
+        const entries = Object.entries(cache);
+        if (entries.length === 0) return;
+
+        const newBarn = { ...state.barn };
+        let totalCount = 0;
+        for (const [matId, qty] of entries) {
+          if (qty > 0) {
+            newBarn[matId] = (newBarn[matId] || 0) + qty;
+            totalCount += qty;
+          }
+        }
+
+        playCashRegisterSound();
+        state.addNotification(`🚚 Shipped all ${totalCount} items from Frontier Cache to Home Barn!`, '📦', 'event');
+
+        set({
+          wilderness: {
+            ...state.wilderness,
+            frontierCache: {},
+          },
+          barn: newBarn,
+          isDirty: true,
+        });
+      },
+
+      transferCratedBeastToPasture: (beastId: string) => {
+        const state = get();
+        const wild = state.wilderness;
+        const beast = (wild.campHoldingPens || []).find(b => b.id === beastId);
+        if (!beast) {
+          return { success: false, message: 'Beast not found in Holding Pens.' };
+        }
+
+        // Check destination pasture capacity gate
+        const currentCount = state.animals.filter(a => a.species === beast.species).length;
+        const maxCap = state.animalCapacity[beast.species] || ANIMALS[beast.species].capacity;
+
+        if (currentCount >= maxCap) {
+          playDefeatSound();
+          const msg = `⚠️ Cannot transfer: ${ANIMALS[beast.species].name} Pasture is at max capacity (${currentCount}/${maxCap})! Upgrade the ${ANIMALS[beast.species].name} sector first.`;
+          state.addNotification(msg, '⚠️', 'info');
+          return { success: false, message: msg };
+        }
+
+        // Convert crated beast to AnimalInstance
+        const newAnimal: AnimalInstance = {
+          id: generateId(),
+          species: beast.species,
+          tier: beast.tier,
+          breedId: beast.breedId,
+          fed: false,
+          fedAt: null,
+          productReady: false,
+          age: 'adult',
+          maxCycles: beast.maxCycles || 20,
+          cyclesRemaining: beast.maxCycles || 20,
+          cyclesCompletedTotal: 0,
+        };
+
+        const newHoldingPens = (wild.campHoldingPens || []).filter(b => b.id !== beastId);
+        const updatedCodex = { ...state.codex, [beast.breedId]: true };
+
+        playVictoryChime();
+        const successMsg = `🎉 Transferred ${beast.name} from Camp Holding Pens to ${ANIMALS[beast.species].name} Pasture!`;
+        state.addNotification(successMsg, beast.emoji || beast.avatar || '🐾', 'discovery');
+
+        set({
+          animals: [...state.animals, newAnimal],
+          codex: updatedCodex,
+          wilderness: {
+            ...wild,
+            campHoldingPens: newHoldingPens,
+          },
+          isDirty: true,
+        });
+
+        return { success: true, message: successMsg };
+      },
+
+      stationCratedBeastAtOutpost: (beastId: string) => {
+        const state = get();
+        const wild = state.wilderness;
+        const beast = (wild.campHoldingPens || []).find(b => b.id === beastId);
+        if (!beast) return;
+
+        const newHoldingPens = (wild.campHoldingPens || []).filter(b => b.id !== beastId);
+        const newStationed = [...(wild.stationedBeasts || []), beast];
+
+        playVictoryChime();
+        state.addNotification(`🏕️ Stationed ${beast.name} at Basecamp! Providing passive expedition perks.`, beast.emoji || beast.avatar || '🐾', 'event');
+
+        set({
+          wilderness: {
+            ...wild,
+            campHoldingPens: newHoldingPens,
+            stationedBeasts: newStationed,
+          },
+          isDirty: true,
+        });
+      },
+
+      unstationBeastFromOutpost: (beastId: string) => {
+        const state = get();
+        const wild = state.wilderness;
+        const beast = (wild.stationedBeasts || []).find(b => b.id === beastId);
+        if (!beast) return;
+
+        const newStationed = (wild.stationedBeasts || []).filter(b => b.id !== beastId);
+        const newHoldingPens = [...(wild.campHoldingPens || []), beast];
+
+        set({
+          wilderness: {
+            ...wild,
+            stationedBeasts: newStationed,
+            campHoldingPens: newHoldingPens,
+          },
+          isDirty: true,
+        });
+      },
+
+      releaseCratedBeastToWild: (beastId: string) => {
+        const state = get();
+        const wild = state.wilderness;
+        const beast = (wild.campHoldingPens || []).find(b => b.id === beastId);
+        if (!beast) return 0;
+
+        const baseRenown: Record<Tier, number> = {
+          common: 50,
+          uncommon: 150,
+          rare: 400,
+          legendary: 1200,
+        };
+        let renown = baseRenown[beast.tier] || 50;
+        if (beast.trait?.toLowerCase().includes('vitality')) {
+          renown *= 2;
+        }
+
+        const newHoldingPens = (wild.campHoldingPens || []).filter(b => b.id !== beastId);
+        const updatedRenown = (wild.campRenown || 0) + renown;
+
+        playGoldRushFanfare();
+        state.addNotification(`🌿 Released ${beast.name} into the wild! Gained +${renown} Camp Renown.`, '🌿', 'coin');
+
+        set({
+          wilderness: {
+            ...wild,
+            campHoldingPens: newHoldingPens,
+            campRenown: updatedRenown,
+          },
+          isDirty: true,
+        });
+
+        return renown;
+      },
+
+      returnLeftoverRationsToBarn: (expeditionId: string) => {
+        const state = get();
+        const wild = state.wilderness;
+        const exp = (wild.activeExpeditions || []).find(e => e.id === expeditionId);
+        if (!exp || !exp.spoils?.leftoverRations) return;
+
+        const leftovers = exp.spoils.leftoverRations;
+        const entries = Object.entries(leftovers);
+        if (entries.length === 0) return;
+
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let count = 0;
+
+        for (const [itemId, qty] of entries) {
+          if (qty > 0) {
+            count += qty;
+            if (isCropItem(itemId)) {
+              newSilo[itemId] = (newSilo[itemId] || 0) + qty;
+            } else {
+              newBarn[itemId] = (newBarn[itemId] || 0) + qty;
+            }
+          }
+        }
+
+        const updatedExpeditions = wild.activeExpeditions.map(e => {
+          if (e.id === expeditionId && e.spoils) {
+            return {
+              ...e,
+              spoils: {
+                ...e.spoils,
+                leftoverRations: {},
+              },
+            };
+          }
+          return e;
+        });
+
+        playCashRegisterSound();
+        state.addNotification(`🍞 Returned ${count} leftover rations safely to home storage!`, '🍞', 'info');
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          wilderness: {
+            ...wild,
+            activeExpeditions: updatedExpeditions,
+          },
+          isDirty: true,
         });
       },
 
@@ -4068,21 +4557,84 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-    // --- Expedition Processing ---
-    const currentWilderness = get().wilderness;
-    let expeditionsToUpdate = [...currentWilderness.activeExpeditions];
-    let animalsToAdd: AnimalInstance[] = [];
-    let gemBonuses = 0;
-    let codexUpdates: Record<string, boolean> = {};
+    // --- Expedition Processing (Isolated Frontier Cache & Camp Holding Pens) ---
+    const currentWilderness = get().wilderness || createDefaultWilderness();
+    let frontierCache = { ...(currentWilderness.frontierCache || {}) };
+    let campHoldingPens = [...(currentWilderness.campHoldingPens || [])];
+    let stationedBeasts = [...(currentWilderness.stationedBeasts || [])];
+    let expeditionsToUpdate = [...(currentWilderness.activeExpeditions || [])];
     let notificationsToAdd: { message: string; emoji: string; type: string }[] = [];
-    let coinsFromExpeditions = 0;
     const stateForExpedition = get();
 
     expeditionsToUpdate = expeditionsToUpdate.map(expedition => {
-      const elapsed = now - expedition.startedAt;
+      // Long-duration expedition (1h, 4h, 8h, 12h)
+      if (expedition.presetId) {
+        if (expedition.status === 'active') {
+          const elapsed = now - expedition.startedAt;
+          if (elapsed >= expedition.durationMs) {
+            const preset = EXPEDITION_PRESETS[expedition.presetId];
+            const materials: Record<string, number> = {};
 
-      // 1. Trigger midpoint encounter
-      if (elapsed >= expedition.durationMs * 0.5 && !expedition.midpointResolved && !expedition.pendingChoice) {
+            // Stationed beast keen_forager trait bonus
+            const hasForager = stationedBeasts.some(b => b.trait?.toLowerCase().includes('forager'));
+            const bonusRoll = hasForager ? 2 : 0;
+
+            if (preset) {
+              for (const [matId, [min, max]] of Object.entries(preset.yieldRanges)) {
+                const qty = Math.floor(min + Math.random() * (max - min + 1)) + bonusRoll;
+                if (qty > 0) materials[matId] = qty;
+              }
+            }
+
+            const cratedBeasts: CratedBeast[] = [];
+            if (preset && Math.random() <= preset.beastChance) {
+              cratedBeasts.push(generateCratedBeast(expedition.presetId, preset.tierPool));
+              if (expedition.presetId === '12h' && Math.random() < 0.5) {
+                cratedBeasts.push(generateCratedBeast(expedition.presetId, preset.tierPool));
+              }
+            }
+
+            const leftoverRations: Record<string, number> = {};
+            for (const [itemId, qty] of Object.entries(expedition.provisions || {})) {
+              const unused = Math.floor(qty * 0.25);
+              if (unused > 0) leftoverRations[itemId] = unused;
+            }
+
+            // Deposit materials into Frontier Cache & beasts into Camp Holding Pens
+            for (const [mId, mQty] of Object.entries(materials)) {
+              frontierCache[mId] = (frontierCache[mId] || 0) + mQty;
+            }
+            campHoldingPens.push(...cratedBeasts);
+
+            notificationsToAdd.push({
+              message: `🏕️ Caravan arrived from ${preset?.name || 'Wilderness'}! Materials cached in Frontier Cache & beasts crated in Camp Holding Pens.`,
+              emoji: '📦',
+              type: 'discovery',
+            });
+
+            return {
+              ...expedition,
+              status: 'completed' as const,
+              spoils: {
+                materials,
+                cratedBeast: cratedBeasts[0] || null,
+                cratedBeasts,
+                leftoverRations,
+                coins: preset ? Math.floor((preset.coinRewardRange[0] + preset.coinRewardRange[1]) / 2) : 1000,
+                gems: preset ? preset.gemRewardRange[0] : 2,
+                recalledEarly: false,
+                completionPct: 100,
+                claimed: false,
+              },
+            };
+          }
+        }
+        return expedition;
+      }
+
+      // Legacy expedition handling
+      const elapsed = now - expedition.startedAt;
+      if (expedition.biomeId && elapsed >= (expedition.durationMs || 0) * 0.5 && !expedition.midpointResolved && !expedition.pendingChoice) {
         const encounter = TRAIL_ENCOUNTERS[Math.floor(Math.random() * TRAIL_ENCOUNTERS.length)];
         return {
           ...expedition,
@@ -4094,26 +4646,17 @@ export const useGameStore = create<GameState>()(
         };
       }
 
-      // 2. Resolve completed expedition
-      if (elapsed >= expedition.durationMs && expedition.midpointResolved) {
+      if (expedition.biomeId && elapsed >= (expedition.durationMs || 0) && expedition.midpointResolved) {
         const biome = BIOMES[expedition.biomeId];
-        const lure = LURES[expedition.lureId];
-        
-        // Determine outcome based on midpoint choice
+        const lure = expedition.lureId ? LURES[expedition.lureId] : null;
         let success = true;
         let tierBoost = 0;
-        
         if (expedition.riskyChosen) {
-          // Risky path: 40% chance of failure
-          if (Math.random() < 0.4) {
-            success = false;
-          } else {
-            tierBoost = 0.15; // boost rare/legendary chances
-          }
+          if (Math.random() < 0.4) success = false;
+          else tierBoost = 0.15;
         }
 
-        if (success) {
-          // Weighted random selection from biome species pool
+        if (success && biome && lure) {
           const pool = biome.speciesPool;
           const totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
           let roll = Math.random() * totalWeight;
@@ -4122,8 +4665,6 @@ export const useGameStore = create<GameState>()(
             roll -= p.weight;
             if (roll <= 0) { selected = p; break; }
           }
-
-          // Apply lure rare/legendary boost - possibly upgrade tier
           const rareChance = lure.rareBoost + tierBoost;
           const legendaryChance = lure.legendaryBoost + (tierBoost * 0.5);
           if (selected.tier === 'common' && Math.random() < rareChance) {
@@ -4135,126 +4676,55 @@ export const useGameStore = create<GameState>()(
             selected = { ...selected, tier: 'legendary' };
           }
 
-          // Check habitat capacity
-          const currentCount = stateForExpedition.animals.filter(a => a.species === selected.species).length;
-          const maxCapacity = stateForExpedition.animalCapacity[selected.species] || ANIMALS[selected.species].capacity;
-
-          if (currentCount < maxCapacity) {
-            const breedId = `${selected.species}_${selected.tier}`;
-            const breedDef = BREED_REGISTRY[breedId];
-            const maxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(selected.tier);
-            const newAnimal: AnimalInstance = {
-              id: generateId(),
-              species: selected.species,
-              tier: selected.tier,
-              breedId,
-              fed: false,
-              fedAt: null,
-              productReady: false,
-              age: 'adult',
-              maxCycles,
-              cyclesRemaining: maxCycles,
-              cyclesCompletedTotal: 0,
-            };
-            animalsToAdd.push(newAnimal);
-
-            // Codex + gems
-            const codexKey = breedId;
-            if (!stateForExpedition.codex[codexKey]) {
-              codexUpdates[codexKey] = true;
-              const gemBonus = breedDef ? breedDef.codexGemReward : (selected.tier === 'legendary' ? 50 : selected.tier === 'rare' ? 20 : 5);
-              gemBonuses += gemBonus;
-            }
-
-            const animalName = ANIMALS[selected.species].name;
-            notificationsToAdd.push({
-              message: `Rescued ${selected.tier} ${animalName} from ${biome.name}!`,
-              emoji: ANIMALS[selected.species].emoji,
-              type: 'success',
-            });
-          } else {
-            // Orin / Livestock Reserve protects wild captures if pasture pens are full
-            const breedId = `${selected.species}_${selected.tier}`;
-            const breedDef = BREED_REGISTRY[breedId];
-            const maxCycles = breedDef ? breedDef.maxCycles : randomMaxCycles(selected.tier);
-            const newAnimal: AnimalInstance = {
-              id: generateId(),
-              species: selected.species,
-              tier: selected.tier,
-              breedId,
-              fed: false,
-              fedAt: null,
-              productReady: false,
-              age: 'adult',
-              maxCycles,
-              cyclesRemaining: maxCycles,
-              cyclesCompletedTotal: 0,
-            };
-            finalReserve.push(newAnimal);
-            notificationsToAdd.push({
-              message: `🚜 Orin wheeled crated ${selected.tier} ${ANIMALS[selected.species].name} safely into Livestock Reserve (paddock full)!`,
-              emoji: '🚜',
-              type: 'info',
-            });
-          }
-        } else {
-          // Failed risky path
+          const breedId = `${selected.species}_${selected.tier}`;
+          const crated: CratedBeast = {
+            id: generateId(),
+            species: selected.species,
+            tier: selected.tier,
+            breedId,
+            name: `${TIER_LABELS[selected.tier]} ${ANIMALS[selected.species].name}`,
+            avatar: ANIMALS[selected.species].emoji,
+            emoji: ANIMALS[selected.species].emoji,
+            capturedAt: Date.now(),
+            originPreset: '1h',
+            maxCycles: 20,
+            trait: 'Wild Instincts',
+            traitDescription: 'Hardened by wilderness survival',
+            statBonus: '+10% Resilience',
+          };
+          campHoldingPens.push(crated);
           notificationsToAdd.push({
-            message: `Expedition to ${biome.name} failed — lure was lost!`,
-            emoji: '\u{1F4A8}',
-            type: 'warning',
+            message: `Rescued ${selected.tier} ${ANIMALS[selected.species].name} from ${biome.name}! Stored in Camp Holding Pens.`,
+            emoji: ANIMALS[selected.species].emoji,
+            type: 'success',
           });
         }
-
-        // Mark as completed (return null to filter out)
         return null as any;
       }
 
       return expedition;
     }).filter(Boolean);
 
-    // Apply expedition results
-    if (animalsToAdd.length > 0 || gemBonuses > 0 || Object.keys(codexUpdates).length > 0 || notificationsToAdd.length > 0) {
-      const currentState = get();
-      // Unlock biomes based on level
-      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
-      for (const [biomeId, biome] of Object.entries(BIOMES)) {
-        if (currentState.level >= biome.unlockLevel) {
-          unlockedBiomes[biomeId as BiomeId] = true;
-        }
+    const unlockedBiomes = { ...currentWilderness.unlockedBiomes };
+    for (const [biomeId, biome] of Object.entries(BIOMES)) {
+      if (stateForExpedition.level >= biome.unlockLevel) {
+        unlockedBiomes[biomeId as BiomeId] = true;
       }
-      
-      set({
-        animals: [...currentState.animals, ...animalsToAdd],
-        gems: currentState.gems + gemBonuses,
-        codex: { ...currentState.codex, ...codexUpdates },
-        wilderness: {
-          unlockedBiomes,
-          activeExpeditions: expeditionsToUpdate,
-        },
-      });
+    }
 
-      for (const n of notificationsToAdd) {
-        currentState.addNotification(n.message, n.emoji, n.type as any);
-      }
-    } else {
-      // Still need to update expedition state (midpoint choices, biome unlocks)
-      const currentState = get();
-      const unlockedBiomes = { ...currentState.wilderness.unlockedBiomes };
-      for (const [biomeId, biome] of Object.entries(BIOMES)) {
-        if (currentState.level >= biome.unlockLevel) {
-          unlockedBiomes[biomeId as BiomeId] = true;
-        }
-      }
-      
-      if (expeditionsToUpdate !== currentWilderness.activeExpeditions || unlockedBiomes !== currentWilderness.unlockedBiomes) {
-        set({
-          wilderness: {
-            unlockedBiomes,
-            activeExpeditions: expeditionsToUpdate,
-          },
-        });
-      }
+    set({
+      wilderness: {
+        ...currentWilderness,
+        unlockedBiomes,
+        activeExpeditions: expeditionsToUpdate,
+        frontierCache,
+        campHoldingPens,
+        stationedBeasts,
+      },
+    });
+
+    for (const n of notificationsToAdd) {
+      stateForExpedition.addNotification(n.message, n.emoji, n.type as any);
     }
 
         // --- Territory Expansion Tick ---
@@ -6251,10 +6721,8 @@ export const useGameStore = create<GameState>()(
           notifications: [],
           breedingSlots: 1,
           activeBreedings: [],
-          wilderness: {
-            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
-            activeExpeditions: [],
-          },
+          wilderness: createDefaultWilderness(),
+          stagingWagonProvisions: {},
           habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
           parcels: createInitialParcels(),
           activeFreightContract: null,
@@ -6336,6 +6804,7 @@ export const useGameStore = create<GameState>()(
         breedingSlots: state.breedingSlots,
         activeBreedings: state.activeBreedings,
         wilderness: state.wilderness,
+        stagingWagonProvisions: state.stagingWagonProvisions,
         habitatUpgradeSteps: state.habitatUpgradeSteps,
         parcels: state.parcels,
         activeFreightContract: state.activeFreightContract,
@@ -6470,11 +6939,15 @@ export const useGameStore = create<GameState>()(
 
         // Migration: wilderness state
         if (!merged.wilderness) {
-          merged.wilderness = {
-            unlockedBiomes: { biome_woods: false, biome_ridge: false, biome_caves: false, biome_peaks: false },
-            activeExpeditions: [],
-          };
+          merged.wilderness = createDefaultWilderness();
+        } else {
+          if (!merged.wilderness.frontierCache) merged.wilderness.frontierCache = {};
+          if (!merged.wilderness.campHoldingPens) merged.wilderness.campHoldingPens = [];
+          if (!merged.wilderness.stationedBeasts) merged.wilderness.stationedBeasts = [];
+          if (merged.wilderness.campRenown === undefined) merged.wilderness.campRenown = 0;
+          if (merged.wilderness.outpostLevel === undefined) merged.wilderness.outpostLevel = 1;
         }
+        if (!merged.stagingWagonProvisions) merged.stagingWagonProvisions = {};
 
         // Migration: farmhands with missing equippedOutfit
         if (merged.farmhands) {
