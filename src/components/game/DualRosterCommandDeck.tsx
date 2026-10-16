@@ -67,7 +67,7 @@ export function DualRosterCommandDeck() {
       if (sp?.isHired) {
         const meta = LIVESTOCK_WORKER_ROSTER.find(r => r.id === sId);
         const upkeep = WORKER_UPKEEP_ROSTER[sId];
-        const rawShift = sp.shiftType || 'night';
+        const rawShift = sp.shiftType || 'morning';
         const shift: ShiftType = rawShift === 'morning' ? 'morning' : 'night';
         hiredWorkers.push({
           id: sId,
@@ -148,7 +148,7 @@ export function DualRosterCommandDeck() {
             </span>
           </div>
           <p className="text-xs text-stone-400 mt-1 max-w-2xl leading-relaxed">
-            Two balanced 15-minute shifts (Morning 06:00–18:00 and Night 18:00–06:00) lock payroll into the 0% surcharge bracket, preserving Staff Pantry food runway.
+            All workers labor during the 10-minute Morning Shift (06:00–14:00) and rest in the Bunkhouse during the 20-minute Night Shift (14:00–06:00) to restore full stamina.
           </p>
         </div>
 
@@ -179,7 +179,7 @@ export function DualRosterCommandDeck() {
               <div>
                 <div className="text-[10px] uppercase font-black tracking-wider text-amber-400 flex items-center gap-1">
                   <span>☀️ Slot A:</span>
-                  <span>Morning Shift (06:00 – 18:00 · 15m)</span>
+                  <span>Morning Shift (06:00 – 14:00 · 10m Work)</span>
                 </div>
                 <h4 className="font-bold text-sm text-stone-100 mt-0.5">
                   {slotA ? slotA.name : 'No Morning Worker Assigned'}
@@ -240,7 +240,7 @@ export function DualRosterCommandDeck() {
               <div>
                 <div className="text-[10px] uppercase font-black tracking-wider text-indigo-400 flex items-center gap-1">
                   <span>🌙 Slot B:</span>
-                  <span>Night Watch (18:00 – 06:00 · 15m)</span>
+                  <span>Night Shift (14:00 – 06:00 · 20m Rest)</span>
                 </div>
                 <h4 className="font-bold text-sm text-stone-100 mt-0.5">
                   {slotB ? slotB.name : 'No Night Worker Assigned'}
@@ -282,7 +282,7 @@ export function DualRosterCommandDeck() {
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
                   <span>🌙</span>
-                  <span>Sleeping in Bunkhouse (Wakes at 18:00)</span>
+                  <span>Sleeping in Bunkhouse (Wakes at 06:00)</span>
                 </span>
               )
             ) : (
@@ -297,7 +297,7 @@ export function DualRosterCommandDeck() {
         <div className="p-3 bg-stone-950/95 rounded-xl border border-amber-500/40 space-y-2 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-amber-300">
-              Select Personnel for {reassignModalSlot === 'morning' ? '☀️ Morning Shift (06:00-18:00 · 15m)' : '🌙 Night Watch (18:00-06:00 · 15m)'}:
+              Select Personnel for {reassignModalSlot === 'morning' ? '☀️ Morning Work Shift (06:00-14:00 · 10m)' : '🌙 Night Rest Shift (14:00-06:00 · 20m)'}:
             </span>
             <button
               onClick={() => setReassignModalSlot(null)}

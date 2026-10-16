@@ -7485,7 +7485,7 @@ export const useGameStore = create<GameState>()(
               if (currentW.isPaused === undefined) currentW.isPaused = false;
               if (currentW.moraleTier === undefined) currentW.moraleTier = 'content';
               if (currentW.missedCycles === undefined) currentW.missedCycles = 0;
-              if (!currentW.shiftType) currentW.shiftType = getDefaultWorkerShift(r);
+              currentW.shiftType = 'morning';
               if (currentW.stamina === undefined) currentW.stamina = 100;
             }
           }
@@ -7513,7 +7513,7 @@ export const useGameStore = create<GameState>()(
                 currentSp.moraleTier = currentSp.isStriking ? 'striking' : 'content';
               }
               if (currentSp.missedCycles === undefined) currentSp.missedCycles = 0;
-              if (!currentSp.shiftType) currentSp.shiftType = getDefaultWorkerShift(sId);
+              currentSp.shiftType = 'morning';
               if (currentSp.stamina === undefined) currentSp.stamina = 100;
             }
           }

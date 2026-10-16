@@ -60,7 +60,7 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     for (const sp of Object.values(specialistWorkers)) {
       if (sp?.isHired) {
         totalHired++;
-        const shift: ShiftType = sp.shiftType || 'night';
+        const shift: ShiftType = sp.shiftType || 'morning';
         const isShiftActive = clock.activeShift === shift;
         if (isShiftActive && sp.isActive && !isAllWorkersPaused && !sp.isStriking) {
           onDutyCount++;
