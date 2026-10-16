@@ -10,6 +10,7 @@ import {
 } from '@/data/workerUpkeep';
 
 import {
+  getCircadianClock,
   getWorkerScheduleTelemetry,
   type ShiftType,
   SHIFT_DEFINITIONS,
@@ -52,6 +53,7 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
     staffPantry
   );
 
+  const clock = getCircadianClock(now, farmEpochStart);
 
   return (
     <div className="bg-gradient-to-b from-stone-900/90 to-stone-950/95 dark:from-gray-900 dark:to-black rounded-2xl border border-amber-500/30 p-5 shadow-xl shadow-amber-950/20 backdrop-blur-md space-y-4">
@@ -72,12 +74,25 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
           </p>
         </div>
 
-        {/* Global summary badge */}
-        <div className="flex items-center gap-2 text-xs bg-stone-800/80 border border-stone-700/60 px-3 py-1.5 rounded-xl self-start sm:self-auto">
-          <span className="text-stone-400 font-medium">Hired Specialists:</span>
-          <span className="font-bold text-amber-400">
-            {Object.values(specialistWorkers || {}).filter(w => w.isHired).length} / {LIVESTOCK_WORKER_ROSTER.length}
-          </span>
+        {/* Global summary badge & Workers Shift Timing on Top */}
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <div className="flex items-center gap-2 text-xs bg-stone-950/90 border border-amber-500/30 px-3 py-1.5 rounded-xl shadow-xs">
+            <span className="text-amber-400 font-extrabold flex items-center gap-1">
+              <span>{clock.activeShiftDef.icon}</span>
+              <span>{clock.activeShiftDef.shortName} Shift</span>
+            </span>
+            <span className="text-stone-600">•</span>
+            <span className="font-mono text-stone-300 font-bold">{clock.inGameTime24}</span>
+            <span className="text-stone-600">•</span>
+            <span className="font-mono text-amber-300 font-black">⏳ {clock.nextShiftChangeFormatted}</span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs bg-stone-800/80 border border-stone-700/60 px-3 py-1.5 rounded-xl">
+            <span className="text-stone-400 font-medium">Hired Specialists:</span>
+            <span className="font-bold text-amber-400">
+              {Object.values(specialistWorkers || {}).filter(w => w.isHired).length} / {LIVESTOCK_WORKER_ROSTER.length}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -207,9 +222,13 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                     </div>
 
                     {/* Operational Phase & Time Remaining */}
-                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-stone-800/80">
+                    <div className="flex items-center justify-between text-[10px] pt-1 border-t border-stone-800/80 gap-1 flex-wrap">
                       <span className={`px-1.5 py-0.5 rounded font-black border text-[9px] ${schedule.phaseColorClass}`}>
                         {schedule.phaseBadgeText}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-amber-300 flex items-center gap-1">
+                        <span>⏳</span>
+                        <span>{schedule.timeRemainingFormatted}</span>
                       </span>
                       {schedule.isWellRested && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">

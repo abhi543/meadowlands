@@ -3,6 +3,8 @@
 import { useGameStore } from '@/game/store';
 import { xpForLevel } from '@/game/data';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
+import { getCircadianClock, type ShiftType } from '@/game/shiftEngine';
+import { useState, useEffect } from 'react';
 
 interface HUDProps {
   onOpenBackupModal?: () => void;
@@ -22,7 +24,50 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     resetGame,
     animals = [],
     livestockReserve = [],
+    farmEpochStart,
+    unifiedWorkers,
+    specialistWorkers,
+    isAllWorkersPaused,
   } = useGameStore();
+
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const clock = getCircadianClock(now, farmEpochStart);
+
+  // Count active/hired workforce
+  let totalHired = 0;
+  let onDutyCount = 0;
+
+  if (unifiedWorkers) {
+    for (const w of Object.values(unifiedWorkers)) {
+      if (w?.isHired) {
+        totalHired++;
+        const shift: ShiftType = w.shiftType || 'morning';
+        const isShiftActive = clock.activeShift === shift;
+        const isStriking = w.moraleTier === 'striking';
+        if (isShiftActive && !w.isPaused && !isAllWorkersPaused && !isStriking) {
+          onDutyCount++;
+        }
+      }
+    }
+  }
+
+  if (specialistWorkers) {
+    for (const sp of Object.values(specialistWorkers)) {
+      if (sp?.isHired) {
+        totalHired++;
+        const shift: ShiftType = sp.shiftType || 'evening';
+        const isShiftActive = clock.activeShift === shift;
+        if (isShiftActive && sp.isActive && !isAllWorkersPaused && !sp.isStriking) {
+          onDutyCount++;
+        }
+      }
+    }
+  }
 
   const xpNeeded = xpForLevel(level);
   const xpPercent = Math.min(100, (xp / xpNeeded) * 100);
@@ -74,6 +119,39 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
           </button>
         )}
 
+        {/* Workers Timing Display Widget (On Top Header) */}
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('farmhands')}
+          className="bg-white/20 hover:bg-white/30 active:scale-95 transition-all backdrop-blur-sm rounded-xl px-2.5 py-1 text-xs flex items-center gap-2 cursor-pointer shadow-xs border border-white/25 group select-none"
+          title={`Farm Circadian Shift Clock: Day ${clock.currentDay}, ${clock.inGameTimeFormatted} (${clock.activeShiftDef.name}) · Next Shift Change in ${clock.nextShiftChangeFormatted} · ${onDutyCount} workers active · Click to open Workers`}
+        >
+          <div className="flex items-center gap-1.5 font-bold">
+            <span className="text-base leading-none animate-pulse">{clock.activeShiftDef.icon}</span>
+            <span className="font-mono text-amber-200 tracking-tight font-extrabold">{clock.inGameTime24}</span>
+            <span className="text-[10px] uppercase font-black px-1.5 py-0.5 rounded bg-black/30 text-amber-300">
+              {clock.activeShiftDef.shortName}
+            </span>
+          </div>
+          <div className="h-3.5 w-px bg-white/25" />
+          <div className="flex items-center gap-1.5 text-[11px]">
+            <span className="text-amber-100 font-mono font-medium flex items-center gap-0.5" title="Time to next shift change">
+              <span>⏳</span>
+              <span>{clock.nextShiftChangeFormatted}</span>
+            </span>
+            {isAllWorkersPaused ? (
+              <span className="text-[9px] bg-red-500/90 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
+                ⏸️ Paused
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold text-emerald-200 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-ping" />
+                <span>{onDutyCount > 0 ? `${onDutyCount} Active` : `${totalHired} Hired`}</span>
+              </span>
+            )}
+          </div>
+        </button>
+
         {/* Currency */}
         <div className="flex items-center gap-2 ml-auto">
           <div className="bg-white/20 backdrop-blur-sm rounded-lg px-2.5 py-1 flex items-center gap-1.5">
@@ -88,6 +166,16 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
 
         {/* Storage & Animals Pills */}
         <div className="flex items-center gap-2 w-full sm:w-auto mt-1 sm:mt-0 flex-wrap">
+          <button
+            type="button"
+            onClick={() => onSelectTab?.('farmhands')}
+            className="bg-white/15 hover:bg-white/25 active:scale-95 transition-all backdrop-blur-sm rounded-lg px-2 py-0.5 text-xs flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/15"
+            title="Automated Workforce & Shift Telemetry (Tap to open Workers)"
+          >
+            <span>👷</span>
+            <span className="font-bold">{onDutyCount}/{totalHired}</span>
+            <span className="text-[10px] opacity-80">({clock.nextShiftChangeFormatted})</span>
+          </button>
           <button
             type="button"
             onClick={() => onSelectTab?.('barn')}

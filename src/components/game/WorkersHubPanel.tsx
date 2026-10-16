@@ -364,6 +364,48 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     </div>
                   </div>
 
+                  {/* WORKER TIMING DISPLAY (ON TOP) */}
+                  {worker.isHired && (
+                    <div className="mt-2 p-2 rounded-lg bg-emerald-500/10 dark:bg-stone-950/90 border border-emerald-500/30 dark:border-stone-800 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-semibold gap-1 flex-wrap">
+                        <span className="flex items-center gap-1.5 text-stone-700 dark:text-stone-200">
+                          <span className="text-xs">⏱️</span>
+                          {worker.isPaused ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-bold">⏸️ Operation Paused</span>
+                          ) : isStriking ? (
+                            <span className="text-red-500 dark:text-red-400 font-bold">🛑 Production Halted (Strike)</span>
+                          ) : isGrumbling ? (
+                            <span className="text-amber-600 dark:text-amber-400 font-medium">🐢 Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (Half-Speed)</span>
+                          ) : isInspired ? (
+                            <span className="text-yellow-600 dark:text-yellow-400 font-bold">✨ Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (+20% Speed)</span>
+                          ) : (
+                            <span>Next: <b className="text-emerald-600 dark:text-emerald-400 font-mono">{Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s</b></span>
+                          )}
+                        </span>
+                        <span className="text-[10px] font-mono text-stone-500 dark:text-stone-400 flex items-center gap-1">
+                          <span>🕒 Shift:</span>
+                          <span className="font-bold text-amber-600 dark:text-amber-400">{schedule.timeRemainingFormatted}</span>
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-200 ${
+                            worker.isPaused
+                              ? 'bg-amber-400 dark:bg-amber-500 opacity-60'
+                              : isStriking
+                              ? 'bg-red-500 opacity-40'
+                              : isGrumbling
+                              ? 'bg-amber-500'
+                              : isInspired
+                              ? 'bg-gradient-to-r from-amber-400 to-yellow-300'
+                              : 'bg-emerald-500'
+                          }`}
+                          style={{ width: `${(worker.isPaused || isStriking ? 0.35 : progress) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Description */}
                   <p className="text-xs text-stone-500 dark:text-gray-400 mt-0.5">{cfg.description}</p>
 
@@ -386,10 +428,14 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                         </select>
                       </div>
 
-                      {/* Operational Phase Badge */}
+                      {/* Operational Phase Badge & Time Remaining */}
                       <div className="flex items-center justify-between gap-1 flex-wrap text-[10px] pt-1 border-t border-stone-200 dark:border-stone-800">
                         <span className={`px-1.5 py-0.5 rounded font-black border text-[9px] ${schedule.phaseColorClass}`}>
                           {schedule.phaseBadgeText}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <span>⏳</span>
+                          <span>{schedule.timeRemainingFormatted}</span>
                         </span>
                         {schedule.isWellRested && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40">
@@ -541,42 +587,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     </>
                   )}
 
-                  {/* Progress Bar (production timer) */}
-                  {worker.isHired && (
-                    <div className="mt-1.5">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="text-[10px] text-stone-500 dark:text-gray-400">
-                          {worker.isPaused ? (
-                            <span className="text-amber-600 dark:text-amber-400 font-medium">⏸️ Operation Paused</span>
-                          ) : isStriking ? (
-                            <span className="text-red-500 dark:text-red-400 font-bold">🛑 Production Halted (On Strike)</span>
-                          ) : isGrumbling ? (
-                            <span className="text-amber-600 dark:text-amber-400 font-medium">🐢 Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (Half-Speed)</span>
-                          ) : isInspired ? (
-                            <span className="text-yellow-600 dark:text-yellow-400 font-bold">✨ Next: {Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s (+20% Speed)</span>
-                          ) : (
-                            `Next: ${Math.max(0, Math.ceil((effectiveInterval - elapsed) / 1000))}s`
-                          )}
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            worker.isPaused
-                              ? 'bg-amber-400 dark:bg-amber-500 opacity-60'
-                              : isStriking
-                              ? 'bg-red-500 opacity-40'
-                              : isGrumbling
-                              ? 'bg-amber-500'
-                              : isInspired
-                              ? 'bg-gradient-to-r from-amber-400 to-yellow-300'
-                              : 'bg-emerald-400 dark:bg-emerald-500'
-                          }`}
-                          style={{ width: `${(worker.isPaused || isStriking ? 0.35 : progress) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* Stats Row */}
                   {worker.isHired && (
