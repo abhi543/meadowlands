@@ -148,7 +148,7 @@ export function DualRosterCommandDeck() {
             </span>
           </div>
           <p className="text-xs text-stone-400 mt-1 max-w-2xl leading-relaxed">
-            Staggered 2-shift cadence locks payroll into the 0% surcharge bracket, preserving Staff Pantry food runway while passive systems advance during the Twilight Gap.
+            Two balanced 15-minute shifts (Morning 06:00–18:00 and Night 18:00–06:00) lock payroll into the 0% surcharge bracket, preserving Staff Pantry food runway.
           </p>
         </div>
 
@@ -179,7 +179,7 @@ export function DualRosterCommandDeck() {
               <div>
                 <div className="text-[10px] uppercase font-black tracking-wider text-amber-400 flex items-center gap-1">
                   <span>☀️ Slot A:</span>
-                  <span>Morning Crew (06:00 – 14:00)</span>
+                  <span>Morning Shift (06:00 – 18:00 · 15m)</span>
                 </div>
                 <h4 className="font-bold text-sm text-stone-100 mt-0.5">
                   {slotA ? slotA.name : 'No Morning Worker Assigned'}
@@ -240,7 +240,7 @@ export function DualRosterCommandDeck() {
               <div>
                 <div className="text-[10px] uppercase font-black tracking-wider text-indigo-400 flex items-center gap-1">
                   <span>🌙 Slot B:</span>
-                  <span>Night Watch (22:00 – 06:00)</span>
+                  <span>Night Watch (18:00 – 06:00 · 15m)</span>
                 </div>
                 <h4 className="font-bold text-sm text-stone-100 mt-0.5">
                   {slotB ? slotB.name : 'No Night Worker Assigned'}
@@ -282,7 +282,7 @@ export function DualRosterCommandDeck() {
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
                   <span>🌙</span>
-                  <span>Sleeping in Bunkhouse (Wakes at 22:00)</span>
+                  <span>Sleeping in Bunkhouse (Wakes at 18:00)</span>
                 </span>
               )
             ) : (
@@ -292,53 +292,12 @@ export function DualRosterCommandDeck() {
         </div>
       </div>
 
-      {/* Section 4.C: Twilight Gap Telemetry & Emergency Override */}
-      {clock.isTwilightGap && (
-        <div className="rounded-xl border border-slate-600/60 bg-gradient-to-r from-slate-900/90 via-slate-800/90 to-stone-900/95 p-4 space-y-3 shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="text-3xl animate-pulse flex-shrink-0">☕</span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs uppercase font-black tracking-wider px-2 py-0.5 rounded-full bg-slate-700/80 text-amber-300 border border-slate-500">
-                    Twilight Gap Active (14:00 – 22:00)
-                  </span>
-                  <span className="text-xs font-mono font-bold text-amber-300">
-                    Ends in {clock.nextShiftChangeFormatted}
-                  </span>
-                </div>
-                <p className="text-xs text-stone-300 mt-1 leading-relaxed">
-                  Farm in passive cycle. Artisan machines running. Field chores resume at 22:00. Zero wage burn rate during this window.
-                </p>
-              </div>
-            </div>
-
-            {/* Emergency Call-Out Button */}
-            {selectedOvertimeWorker && (
-              <div className="flex flex-col gap-1 sm:items-end shrink-0">
-                <button
-                  onClick={handleTriggerOvertime}
-                  className="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-                  title="Wake standby worker for a 4-hour temporary rush shift"
-                >
-                  <span>☕</span>
-                  <span>Summon Standby Worker ({selectedOvertimeWorker.name})</span>
-                </button>
-                <span className="text-[10px] text-amber-300/90 font-mono">
-                  Deducts 1.5x Hourly Wage (-🪙{Math.max(1, Math.round(selectedOvertimeWorker.baseWage * 0.75))}) + 1 Snack from Pantry
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Personnel Reassignment Modal / Selector Drawer */}
       {reassignModalSlot && (
         <div className="p-3 bg-stone-950/95 rounded-xl border border-amber-500/40 space-y-2 animate-in fade-in duration-150">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-amber-300">
-              Select Personnel for {reassignModalSlot === 'morning' ? '☀️ Morning Crew (06:00-14:00)' : '🌙 Night Watch (22:00-06:00)'}:
+              Select Personnel for {reassignModalSlot === 'morning' ? '☀️ Morning Shift (06:00-18:00 · 15m)' : '🌙 Night Watch (18:00-06:00 · 15m)'}:
             </span>
             <button
               onClick={() => setReassignModalSlot(null)}

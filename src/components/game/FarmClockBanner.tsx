@@ -100,7 +100,7 @@ export function FarmClockBanner({
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-3xl sm:text-4xl filter drop-shadow-md animate-pulse">
-              {clock.isTwilightGap ? '☕' : clock.periodEmoji}
+              {clock.periodEmoji}
             </span>
             <div>
               <div className="flex items-baseline gap-2">
@@ -110,17 +110,15 @@ export function FarmClockBanner({
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-stone-800 border border-stone-700 text-stone-300">
                   Day {clock.currentDay}
                 </span>
-                {clock.isTwilightGap && (
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-200 border border-slate-600">
-                    ☕ Twilight Gap
-                  </span>
-                )}
+                <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {clock.activeShift === 'morning' ? '☀️ Morning (15m)' : '🌙 Night (15m)'}
+                </span>
               </div>
               <div className="text-[11px] font-medium text-stone-400 flex items-center gap-1.5 mt-0.5">
-                <span className={`inline-block w-2 h-2 rounded-full ${clock.isTwilightGap ? 'bg-amber-400' : 'bg-emerald-400'} animate-ping`} />
+                <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                 <span>{clock.periodLabel}</span>
                 <span className="text-stone-600">•</span>
-                <span className="text-stone-400">Dual-Roster Cadence (0% Tax)</span>
+                <span className="text-stone-400">Two 15-Minute Shifts (0% Tax)</span>
               </div>
             </div>
           </div>
@@ -130,17 +128,17 @@ export function FarmClockBanner({
         <div className="flex items-center gap-3 self-start md:self-auto flex-wrap">
           <div className="px-3 py-2 rounded-xl bg-stone-900/90 border border-stone-800 text-right shadow-inner">
             <div className="text-[10px] uppercase font-bold tracking-wider text-stone-400">
-              {clock.isTwilightGap ? 'Farm Operational State' : 'Active Shift'}
+              Active Shift (15 Min)
             </div>
-            <div className={`text-sm font-extrabold flex items-center gap-1.5 justify-end ${clock.isTwilightGap ? 'text-slate-300' : clock.activeShiftDef.color}`}>
-              <span>{clock.isTwilightGap ? '☕' : clock.activeShiftDef.icon}</span>
-              <span>{clock.isTwilightGap ? 'Twilight Gap (Unstaffed)' : clock.activeShiftDef.name.split(' (')[0]}</span>
+            <div className={`text-sm font-extrabold flex items-center gap-1.5 justify-end ${clock.activeShiftDef.color}`}>
+              <span>{clock.activeShiftDef.icon}</span>
+              <span>{clock.activeShiftDef.name.split(' (')[0]}</span>
             </div>
           </div>
 
           <div className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-right">
             <div className="text-[10px] uppercase font-bold tracking-wider text-amber-300/80">
-              {clock.isTwilightGap ? 'Night Watch In' : clock.activeShift === 'morning' ? 'Twilight Gap In' : 'Morning Shift In'}
+              {clock.activeShift === 'morning' ? 'Night Watch In' : 'Morning Shift In'}
             </div>
             <div className="text-sm font-black text-amber-300 flex items-center gap-1 justify-end font-mono">
               <span>⏳</span>
@@ -150,53 +148,40 @@ export function FarmClockBanner({
         </div>
       </div>
 
-      {/* Circadian Visual Dial & Timeline Band (Dual-Roster Visual Schedule Ribbon) */}
+      {/* Circadian Visual Dial & Timeline Band (Two 15-Minute Shifts: Morning + Night) */}
       <div className="mt-4 space-y-2">
         <div className="flex items-center justify-between text-[11px] font-bold text-stone-400">
           <span className="flex items-center gap-1 text-amber-400">
-            <span>☀️</span> 06:00 (Morning Shift)
-          </span>
-          <span className="flex items-center gap-1 text-slate-400">
-            <span>☕</span> 14:00 (Twilight Gap: Unstaffed)
+            <span>☀️</span> 06:00 (Morning Shift · 15m)
           </span>
           <span className="flex items-center gap-1 text-indigo-400">
-            <span>🌙</span> 22:00 (Night Watch)
+            <span>🌙</span> 18:00 (Night Watch · 15m)
           </span>
           <span className="flex items-center gap-1 text-amber-400">
             <span>☀️</span> 06:00
           </span>
         </div>
 
-        {/* Horizontal 24-Hour Timeline Bar with Markers (Band 1, Band 2, Band 3) */}
+        {/* Horizontal 24-Hour Timeline Bar with Two Equal 50% Bands */}
         <div className="relative w-full h-8 rounded-xl overflow-hidden border border-stone-700/60 bg-stone-950 p-1 flex shadow-inner">
-          {/* Band 1: Morning Shift (06:00 to 14:00 -> 33.3% / 600s) */}
+          {/* Band 1: Morning Shift (06:00 to 18:00 -> 50% / 900s / 15 real min) */}
           <div
             className="h-full bg-gradient-to-r from-amber-500/60 via-yellow-400/50 to-amber-500/60 rounded-l-lg border-r border-amber-400/60 flex items-center justify-center text-[10px] font-black text-amber-200 tracking-wider shadow-inner"
-            style={{ width: '33.333%' }}
-            title="Band 1 (06:00 – 14:00): [ ☀️ Morning Shift: Active Duty ]"
+            style={{ width: '50%' }}
+            title="Band 1 (06:00 – 18:00): [ ☀️ Morning Shift: Active Duty · 15 min ]"
           >
-            <span className="hidden sm:inline">☀️ MORNING SHIFT: ACTIVE DUTY (06:00-14:00)</span>
-            <span className="sm:hidden">☀️ MORNING</span>
+            <span className="hidden sm:inline">☀️ MORNING SHIFT: 15 MIN (06:00–18:00)</span>
+            <span className="sm:hidden">☀️ MORNING (15m)</span>
           </div>
 
-          {/* Band 2: Twilight Gap (14:00 to 22:00 -> 33.3% / 600s) */}
-          <div
-            className="h-full bg-gradient-to-r from-slate-800/90 via-slate-700/80 to-slate-800/90 border-r border-slate-600/60 flex items-center justify-center text-[10px] font-black text-slate-200 tracking-wider shadow-inner"
-            style={{ width: '33.333%' }}
-            title="Band 2 (14:00 – 22:00): [ ☕ Twilight Gap: Unstaffed / Machine Maturation ]"
-          >
-            <span className="hidden sm:inline">☕ TWILIGHT GAP: UNSTAFFED (14:00-22:00)</span>
-            <span className="sm:hidden">☕ GAP (PASSIVE)</span>
-          </div>
-
-          {/* Band 3: Night Shift (22:00 to 06:00 -> 33.3% / 600s) */}
+          {/* Band 2: Night Watch (18:00 to 06:00 -> 50% / 900s / 15 real min) */}
           <div
             className="h-full bg-gradient-to-r from-indigo-800/70 via-purple-700/60 to-indigo-900/70 rounded-r-lg flex items-center justify-center text-[10px] font-black text-indigo-200 tracking-wider shadow-inner"
-            style={{ width: '33.334%' }}
-            title="Band 3 (22:00 – 06:00): [ 🌙 Night Shift: Active Duty ]"
+            style={{ width: '50%' }}
+            title="Band 2 (18:00 – 06:00): [ 🌙 Night Watch: Active Duty · 15 min ]"
           >
-            <span className="hidden sm:inline">🌙 NIGHT SHIFT: ACTIVE DUTY (22:00-06:00)</span>
-            <span className="sm:hidden">🌙 NIGHT</span>
+            <span className="hidden sm:inline">🌙 NIGHT WATCH: 15 MIN (18:00–06:00)</span>
+            <span className="sm:hidden">🌙 NIGHT (15m)</span>
           </div>
 
           {/* Live Sun/Moon Clock Pin / Scrubber */}
@@ -210,7 +195,7 @@ export function FarmClockBanner({
             <div className="w-1.5 h-full bg-white rounded-full shadow-[0_0_8px_rgba(255,255,255,0.9)] animate-pulse" />
             <div className="absolute -top-1 px-2 py-0.5 rounded-full bg-white text-stone-900 text-[9px] font-black shadow-md border border-stone-200 whitespace-nowrap">
               {clock.inGameTime24}
-              {clock.isTwilightGap ? ' · ☕ Gap' : clock.activeShift === 'morning' ? ' · ☀️ Morn' : ' · 🌙 Night'}
+              {clock.activeShift === 'morning' ? ' · ☀️ Morn (15m)' : ' · 🌙 Night (15m)'}
             </div>
           </div>
         </div>
@@ -243,7 +228,7 @@ export function FarmClockBanner({
             }`}
           >
             <span>☀️</span>
-            <span>Morning Crew</span>
+            <span>Morning Crew (15m)</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-stone-800 text-stone-300 font-extrabold">
               {workersByShift.morning.length}
             </span>
@@ -262,7 +247,7 @@ export function FarmClockBanner({
             }`}
           >
             <span>🌙</span>
-            <span>Night Watch</span>
+            <span>Night Watch (15m)</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-stone-800 text-stone-300 font-extrabold">
               {workersByShift.night.length}
             </span>
@@ -274,8 +259,8 @@ export function FarmClockBanner({
 
         {/* Dual-Roster 0% Tax Protection Badge */}
         <div className="text-[11px] text-stone-400 flex items-center gap-1.5">
-          <span className="text-emerald-400 font-bold">🛡️ Dual-Roster Standard:</span>
-          <span className="text-stone-300">0% Guild Overhead Tax (2 Concurrent Slots Cap)</span>
+          <span className="text-emerald-400 font-bold">🛡️ Two 15-Minute Shifts:</span>
+          <span className="text-stone-300">0% Guild Overhead Tax (Morning & Night)</span>
         </div>
       </div>
     </div>
