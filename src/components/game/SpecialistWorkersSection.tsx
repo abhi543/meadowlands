@@ -215,9 +215,11 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                         className="bg-stone-900 text-amber-300 font-bold px-2 py-0.5 rounded border border-amber-500/30 text-[10px] cursor-pointer"
                         title="Reassign shift (initiates 1-day adjustment period)"
                       >
-                        <option value="morning">🌅 Morning (06:00-14:00)</option>
-                        <option value="evening">☀️ Evening (14:00-22:00)</option>
-                        <option value="night">🌙 Night (22:00-06:00)</option>
+                        <option value="morning">☀️ Morning Duty (06:00-14:00)</option>
+                        <option value="night">🌙 Night Watch (22:00-06:00)</option>
+                        {schedule.shiftType === 'evening' && (
+                          <option value="evening">☕ Legacy Evening (Migrate to Morning/Night)</option>
+                        )}
                       </select>
                     </div>
 

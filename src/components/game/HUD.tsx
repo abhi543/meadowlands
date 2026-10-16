@@ -60,7 +60,7 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     for (const sp of Object.values(specialistWorkers)) {
       if (sp?.isHired) {
         totalHired++;
-        const shift: ShiftType = sp.shiftType || 'evening';
+        const shift: ShiftType = sp.shiftType || 'night';
         const isShiftActive = clock.activeShift === shift;
         if (isShiftActive && sp.isActive && !isAllWorkersPaused && !sp.isStriking) {
           onDutyCount++;
@@ -142,6 +142,10 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             {isAllWorkersPaused ? (
               <span className="text-[9px] bg-red-500/90 text-white font-extrabold px-1.5 py-0.5 rounded shadow-2xs">
                 ⏸️ Paused
+              </span>
+            ) : clock.isTwilightGap && onDutyCount === 0 ? (
+              <span className="text-[10px] font-bold text-slate-200 bg-slate-800/80 px-1.5 py-0.5 rounded border border-slate-600/60">
+                ☕ Passive Gap
               </span>
             ) : (
               <span className="text-[10px] font-bold text-emerald-200 flex items-center gap-1">

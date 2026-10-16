@@ -15,6 +15,7 @@ import { SpecialistWorkersSection } from './SpecialistWorkersSection';
 import { StaffCommissaryCommandCard } from './StaffCommissaryCommandCard';
 import { FarmClockBanner } from './FarmClockBanner';
 import { BunkhouseFacilityPanel } from './BunkhouseFacilityPanel';
+import { DualRosterCommandDeck } from './DualRosterCommandDeck';
 import {
   getWorkerScheduleTelemetry,
   type ShiftType,
@@ -200,6 +201,9 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
         selectedShiftFilter={shiftFilter}
         onSelectShiftFilter={setShiftFilter}
       />
+
+      {/* Dual-Roster Command Deck (Slot A Morning Specialist, Slot B Night Specialist & Twilight Telemetry) */}
+      <DualRosterCommandDeck />
 
       {/* Unified Executive Management Header: Staff Commissary & Payroll Vault Command Card */}
       <StaffCommissaryCommandCard />
@@ -422,9 +426,11 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                           className="bg-white dark:bg-stone-900 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded border border-stone-300 dark:border-amber-500/30 text-[10px] cursor-pointer"
                           title="Click to reassign shift (initiates 1-day adjustment period)"
                         >
-                          <option value="morning">🌅 Morning (06:00-14:00)</option>
-                          <option value="evening">☀️ Evening (14:00-22:00)</option>
-                          <option value="night">🌙 Night (22:00-06:00)</option>
+                          <option value="morning">☀️ Morning Duty (06:00-14:00)</option>
+                          <option value="night">🌙 Night Watch (22:00-06:00)</option>
+                          {schedule.shiftType === 'evening' && (
+                            <option value="evening">☕ Legacy Evening (Migrate to Morning/Night)</option>
+                          )}
                         </select>
                       </div>
 

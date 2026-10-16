@@ -154,7 +154,7 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       totalWagesPaid: 0,
       moraleTier: 'content',
       missedCycles: 0,
-      shiftType: 'evening',
+      shiftType: 'night',
       stamina: 100,
     },
     worker_wrangler_tessa: {

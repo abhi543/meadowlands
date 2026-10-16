@@ -17,12 +17,12 @@ import {
  *   - Phase 4: Bunkhouse Sleep (12 In-Game Hours = 15 Real Minutes = 900 Real Seconds).
  */
 
-export type ShiftType = 'morning' | 'evening' | 'night';
+export type ShiftType = 'morning' | 'night' | 'evening'; // 'evening' retained as legacy alias mapped to night/gap
 
 export type OperationalPhase = 'on_shift' | 'recreation' | 'sleeping';
 
 export interface ShiftDefinition {
-  type: ShiftType;
+  type: ShiftType | 'twilight_gap';
   name: string;
   shortName: string;
   timeRange: string;
@@ -46,13 +46,30 @@ export const MS_PER_IN_GAME_HOUR = 75000;
 export const SHIFT_WORK_SEC = 600; // 10 real minutes (8 in-game hours)
 export const SHIFT_RECREATION_SEC = 300; // 5 real minutes (4 in-game hours)
 export const SHIFT_SLEEP_SEC = 900; // 15 real minutes (12 in-game hours)
+export const TWILIGHT_GAP_SEC = 600; // 10 real minutes (8 in-game hours: 14:00 - 22:00)
 export const OVERTIME_DURATION_MS = 300000; // 5 real minutes = 4 in-game hours
 export const SHIFT_ADJUST_DURATION_MS = 1800000; // 1 full day (30 real minutes)
+
+export const TWILIGHT_GAP_DEFINITION: ShiftDefinition = {
+  type: 'twilight_gap',
+  name: 'Twilight Gap (Unstaffed / Machine Maturation)',
+  shortName: 'Twilight Gap',
+  timeRange: '14:00 – 22:00',
+  startInGameHour: 14,
+  endInGameHour: 22,
+  cycleWorkStartSec: 600,
+  cycleWorkEndSec: 1200,
+  recreationEndSec: 1200,
+  responsibilities: 'Passive maturation cycle. Artisan machines, fermentation, and crop timers advance undisturbed without payroll burn.',
+  icon: '☕',
+  color: 'text-stone-300',
+  bgGradient: 'from-stone-800/40 via-stone-900 to-stone-950',
+};
 
 export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
   morning: {
     type: 'morning',
-    name: 'Morning Shift (The Early Riser)',
+    name: 'Morning Shift (The Sunrise Crew)',
     shortName: 'Morning',
     timeRange: '06:00 – 14:00',
     startInGameHour: 6,
@@ -60,29 +77,14 @@ export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
     cycleWorkStartSec: 0,
     cycleWorkEndSec: 600,
     recreationEndSec: 900,
-    responsibilities: 'Field irrigation, seed planting, morning livestock milking, and egg harvesting.',
-    icon: '🌅',
+    responsibilities: 'Morning plot irrigation, seed planting, day-cycle livestock care, and primary artisan loading.',
+    icon: '☀️',
     color: 'text-amber-400',
     bgGradient: 'from-amber-500/20 to-yellow-500/10',
   },
-  evening: {
-    type: 'evening',
-    name: 'Evening Shift (The Midday Relay)',
-    shortName: 'Evening',
-    timeRange: '14:00 – 22:00',
-    startInGameHour: 14,
-    endInGameHour: 22,
-    cycleWorkStartSec: 600,
-    cycleWorkEndSec: 1200,
-    recreationEndSec: 1500,
-    responsibilities: 'Artisan machine operation (cheese presses, smokers, grain mills) and wild cart hauling.',
-    icon: '☀️',
-    color: 'text-orange-400',
-    bgGradient: 'from-orange-500/20 to-amber-500/10',
-  },
   night: {
     type: 'night',
-    name: 'Night Shift (The Night Watch)',
+    name: 'Night Watch (The Nocturnal Guard)',
     shortName: 'Night',
     timeRange: '22:00 – 06:00',
     startInGameHour: 22,
@@ -90,7 +92,23 @@ export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
     cycleWorkStartSec: 1200,
     cycleWorkEndSec: 1800,
     recreationEndSec: 300,
-    responsibilities: 'Tending nocturnal wild beasts, security against wildlife crop theft, and late-night baking.',
+    responsibilities: 'Tending nocturnal wild beasts, emptying finished artisan machines, pest defense, and sunrise plot prep.',
+    icon: '🌙',
+    color: 'text-indigo-400',
+    bgGradient: 'from-indigo-500/20 to-purple-500/10',
+  },
+  evening: {
+    // Legacy fallback redirecting to Night Watch
+    type: 'night',
+    name: 'Night Watch (The Nocturnal Guard)',
+    shortName: 'Night',
+    timeRange: '22:00 – 06:00',
+    startInGameHour: 22,
+    endInGameHour: 6,
+    cycleWorkStartSec: 1200,
+    cycleWorkEndSec: 1800,
+    recreationEndSec: 300,
+    responsibilities: 'Tending nocturnal wild beasts, emptying finished artisan machines, and sunrise plot prep.',
     icon: '🌙',
     color: 'text-indigo-400',
     bgGradient: 'from-indigo-500/20 to-purple-500/10',
@@ -111,12 +129,19 @@ export interface CircadianClockInfo {
   cycleProgressPct: number; // 0..100
   secondsToNextShiftChange: number;
   nextShiftChangeFormatted: string; // "MM:SS"
-  activeShift: ShiftType;
+  activeShift: ShiftType | null; // null during Twilight Gap
   activeShiftDef: ShiftDefinition;
+  isTwilightGap: boolean;
+  twilightSecondsRemaining: number;
+  twilightFormattedRemaining: string;
 }
 
 /**
  * Calculates in-game clock and circadian time based on absolute epoch timestamp.
+ * Enforces Dual-Roster Cadence:
+ * - [0..600s): Morning Shift (06:00 - 14:00)
+ * - [600..1200s): Twilight Gap (14:00 - 22:00) — Unstaffed passive maturation
+ * - [1200..1800s): Night Watch (22:00 - 06:00)
  */
 export function getCircadianClock(timestamp: number, epochStart: number = 0): CircadianClockInfo {
   const safeEpoch = epochStart > 0 ? epochStart : 0;
@@ -141,38 +166,57 @@ export function getCircadianClock(timestamp: number, epochStart: number = 0): Ci
   const hour12 = inGameHour % 12 === 0 ? 12 : inGameHour % 12;
   const inGameTimeFormatted = `${hour12}:${paddedMinute} ${isPM ? 'PM' : 'AM'}`;
 
-  // Period: Day (06:00 - 18:00), Dusk (18:00 - 22:00), Night (22:00 - 06:00)
+  // Period: Day (06:00 - 14:00), Dusk/Twilight (14:00 - 22:00), Night (22:00 - 06:00)
   let currentPeriod: 'day' | 'dusk' | 'night' = 'day';
-  let periodLabel = 'Day (Sunlit Fields)';
+  let periodLabel = 'Day (Sunlit Morning Shift)';
   let periodEmoji = '☀️';
   let periodThemeColor = '#f59e0b'; // Gold
 
-  if (inGameHour >= 18 && inGameHour < 22) {
+  if (inGameHour >= 14 && inGameHour < 22) {
     currentPeriod = 'dusk';
-    periodLabel = 'Dusk (Twilight Glow)';
+    periodLabel = 'Twilight Gap (Unstaffed Processing)';
     periodEmoji = '🌇';
-    periodThemeColor = '#ea580c'; // Amber
+    periodThemeColor = '#64748b'; // Slate
   } else if (inGameHour >= 22 || inGameHour < 6) {
     currentPeriod = 'night';
-    periodLabel = 'Night (Starry Quiet)';
+    periodLabel = 'Night Watch (Starry Quiet)';
     periodEmoji = '🌙';
     periodThemeColor = '#6366f1'; // Deep Indigo
   }
 
-  // Next shift change boundary: 0s (Morning), 600s (Evening), 1200s (Night)
-  const secIntoShiftWindow = cycleElapsedSeconds % 600;
-  const secondsToNextShiftChange = 600 - secIntoShiftWindow;
+  // Dual-Roster Boundary Mapping:
+  // [0..600s) -> Morning Shift
+  // [600..1200s) -> Twilight Gap
+  // [1200..1800s) -> Night Watch
+  let activeShift: ShiftType | null = null;
+  let activeShiftDef: ShiftDefinition = TWILIGHT_GAP_DEFINITION;
+  let isTwilightGap = false;
+  let secondsToNextShiftChange = 0;
+  let twilightSecondsRemaining = 0;
+
+  if (cycleElapsedSeconds < 600) {
+    activeShift = 'morning';
+    activeShiftDef = SHIFT_DEFINITIONS.morning;
+    secondsToNextShiftChange = 600 - cycleElapsedSeconds;
+  } else if (cycleElapsedSeconds >= 600 && cycleElapsedSeconds < 1200) {
+    activeShift = null;
+    activeShiftDef = TWILIGHT_GAP_DEFINITION;
+    isTwilightGap = true;
+    secondsToNextShiftChange = 1200 - cycleElapsedSeconds;
+    twilightSecondsRemaining = 1200 - cycleElapsedSeconds;
+  } else {
+    activeShift = 'night';
+    activeShiftDef = SHIFT_DEFINITIONS.night;
+    secondsToNextShiftChange = 1800 - cycleElapsedSeconds;
+  }
+
   const nextMin = Math.floor(secondsToNextShiftChange / 60);
   const nextSec = secondsToNextShiftChange % 60;
   const nextShiftChangeFormatted = `${nextMin.toString().padStart(2, '0')}:${nextSec.toString().padStart(2, '0')}`;
 
-  // Currently active shift
-  let activeShift: ShiftType = 'morning';
-  if (cycleElapsedSeconds >= 600 && cycleElapsedSeconds < 1200) {
-    activeShift = 'evening';
-  } else if (cycleElapsedSeconds >= 1200) {
-    activeShift = 'night';
-  }
+  const twilMin = Math.floor(twilightSecondsRemaining / 60);
+  const twilSec = twilightSecondsRemaining % 60;
+  const twilightFormattedRemaining = `${twilMin.toString().padStart(2, '0')}:${twilSec.toString().padStart(2, '0')}`;
 
   return {
     currentDay,
@@ -189,7 +233,10 @@ export function getCircadianClock(timestamp: number, epochStart: number = 0): Ci
     secondsToNextShiftChange,
     nextShiftChangeFormatted,
     activeShift,
-    activeShiftDef: SHIFT_DEFINITIONS[activeShift],
+    activeShiftDef,
+    isTwilightGap,
+    twilightSecondsRemaining,
+    twilightFormattedRemaining,
   };
 }
 
@@ -287,45 +334,20 @@ export function getWorkerScheduleTelemetry(params: {
         const sleepProgress = (cycleSec - 900) / 900;
         stamina = Math.min(100, Math.round(sleepProgress * 100));
       }
-    } else if (shiftType === 'evening') {
-      if (cycleSec >= 600 && cycleSec < 1200) {
-        // [600..1200): Work Phase
-        phase = 'on_shift';
-        timeRemainingSeconds = 1200 - cycleSec;
-        const workProgress = (cycleSec - 600) / 600;
-        stamina = Math.max(5, Math.round((1 - workProgress) * 100));
-      } else if (cycleSec >= 1200 && cycleSec < 1500) {
-        // [1200..1500): Recreation Phase
-        phase = 'recreation';
-        timeRemainingSeconds = 1500 - cycleSec;
-        stamina = 15;
-      } else {
-        // [1500..1800) and [0..600): Sleep Phase (900 seconds total)
-        phase = 'sleeping';
-        if (cycleSec >= 1500) {
-          timeRemainingSeconds = (1800 - cycleSec) + 600;
-          const sleepProgress = (cycleSec - 1500) / 900;
-          stamina = Math.min(100, Math.round(sleepProgress * 100));
-        } else {
-          timeRemainingSeconds = 600 - cycleSec;
-          const sleepProgress = (300 + cycleSec) / 900;
-          stamina = Math.min(100, Math.round(sleepProgress * 100));
-        }
-      }
-    } else if (shiftType === 'night') {
+    } else if (shiftType === 'evening' || shiftType === 'night') {
       if (cycleSec >= 1200) {
-        // [1200..1800): Work Phase
+        // [1200..1800): Work Phase (Night Watch 22:00 - 06:00)
         phase = 'on_shift';
         timeRemainingSeconds = 1800 - cycleSec;
         const workProgress = (cycleSec - 1200) / 600;
         stamina = Math.max(5, Math.round((1 - workProgress) * 100));
       } else if (cycleSec < 300) {
-        // [0..300): Recreation Phase
+        // [0..300): Recreation Phase (06:00 - 10:00 wind down)
         phase = 'recreation';
         timeRemainingSeconds = 300 - cycleSec;
         stamina = 15;
       } else {
-        // [300..1200): Sleep Phase (900 seconds total)
+        // [300..1200): Sleep Phase (10:00 - 22:00 resting through daylight and twilight gap)
         phase = 'sleeping';
         timeRemainingSeconds = 1200 - cycleSec;
         const sleepProgress = (cycleSec - 300) / 900;
@@ -357,18 +379,24 @@ export function getWorkerScheduleTelemetry(params: {
     phaseBadgeText = `🔄 Adapting to New Shift — Ready in ${timeRemainingFormatted}`;
     phaseBadgeEmoji = '🔄';
     phaseColorClass = 'text-blue-400 bg-blue-500/15 border-blue-500/30';
-    dialogueSnippet = 'Resting and resetting internal rhythm for the new roster.';
+    dialogueSnippet = 'Resting and resetting internal rhythm for the dual-roster schedule.';
   } else if (phase === 'on_shift') {
-    phaseLabel = 'On Shift';
-    phaseBadgeText = `🟢 Active on Duty — Shift ends in ${timeRemainingFormatted}`;
-    phaseBadgeEmoji = '🟢';
-    phaseColorClass = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+    phaseLabel = shiftType === 'morning' ? 'Morning Shift' : 'Night Watch';
+    phaseBadgeText = shiftType === 'morning'
+      ? `☀️ Morning Duty — Shift ends in ${timeRemainingFormatted}`
+      : `🌙 Night Watch — Shift ends in ${timeRemainingFormatted}`;
+    phaseBadgeEmoji = shiftType === 'morning' ? '☀️' : '🌙';
+    phaseColorClass = shiftType === 'morning'
+      ? 'text-amber-300 bg-amber-500/15 border-amber-500/40'
+      : 'text-indigo-300 bg-indigo-500/15 border-indigo-500/40';
     dialogueSnippet = isWellRested
       ? 'Feeling well-rested and energized (+15% speed)!'
-      : 'Working hard on assigned duties.';
+      : shiftType === 'morning'
+      ? 'Tending morning crops and day livestock milking.'
+      : 'Guarding night plots, tending nocturnal beasts, and clearing machines.';
   } else if (phase === 'recreation') {
     phaseLabel = 'Off-Duty (Recreation)';
-    phaseBadgeText = `☕ Off-Duty (Communal Area) — Rest begins in ${timeRemainingFormatted}`;
+    phaseBadgeText = `☕ Off-Duty Rest — Bunkhouse sleep in ${timeRemainingFormatted}`;
     phaseBadgeEmoji = '☕';
     phaseColorClass = 'text-amber-300 bg-amber-500/10 border-amber-500/30';
     dialogueSnippet = worker?.moraleTier === 'inspired'
@@ -376,12 +404,14 @@ export function getWorkerScheduleTelemetry(params: {
       : 'Off duty, enjoying warm tea and campfire conversation.';
   } else if (phase === 'sleeping') {
     phaseLabel = 'Asleep in Bunkhouse';
-    phaseBadgeText = `🌙 Asleep in Bunkhouse — Wakes in ${timeRemainingFormatted}`;
+    phaseBadgeText = shiftType === 'morning'
+      ? `🌙 Asleep in Bunkhouse — Wakes at 06:00 (${timeRemainingFormatted})`
+      : `🌙 Asleep in Bunkhouse — Wakes at 22:00 (${timeRemainingFormatted})`;
     phaseBadgeEmoji = '🌙';
     phaseColorClass = 'text-indigo-300 bg-indigo-500/10 border-indigo-500/30';
     dialogueSnippet = bunkhouseLevel >= 2
       ? 'Sleeping soundly on feather mattresses, restoring vigor!'
-      : 'Asleep in the bunkhouse, recovering stamina for next shift.';
+      : 'Asleep in the bunkhouse, recovering stamina for the next watch.';
   }
 
   // Speed multiplier
@@ -437,7 +467,8 @@ export function getWorkerScheduleTelemetry(params: {
 }
 
 /**
- * Returns default shift assignment for each worker role to ensure balanced 24h coverage.
+ * Returns default shift assignment for each worker role in the Dual-Roster Model.
+ * Morning (06:00-14:00) vs Night Watch (22:00-06:00).
  */
 export function getDefaultWorkerShift(roleOrId: string): ShiftType {
   const morningRoles = new Set([
@@ -448,19 +479,10 @@ export function getDefaultWorkerShift(roleOrId: string): ShiftType {
     'auto_fisherman',
     'beekeeper',
     'worker_wrangler_tessa',
-  ]);
-
-  const eveningRoles = new Set([
-    'lumberjack',
-    'artisan',
-    'feed_miller_carrot',
-    'forager',
-    'merchant',
-    'worker_caravaner_orin',
+    'worker_feedmaster_barnaby',
   ]);
 
   if (morningRoles.has(roleOrId)) return 'morning';
-  if (eveningRoles.has(roleOrId)) return 'evening';
   return 'night';
 }
 
@@ -511,18 +533,17 @@ export const BUNKHOUSE_TIERS: Record<number, BunkhouseTierMeta> = {
 
 /**
  * Returns true if the worker's shift has reached its clock-out boundary within the current cycle.
+ * - Morning Shift: Reaches clock-out at 600s (14:00 in-game).
+ * - Night Shift: Reaches clock-out at 1800s / 0s (06:00 in-game).
  */
 export function hasWorkerReachedClockOut(shiftType: ShiftType, cycleSeconds: number): boolean {
   if (shiftType === 'morning') {
-    // Shift ends at 600s (14:00)
+    // Morning Shift ends at 600s (14:00)
     return cycleSeconds >= 600;
   }
-  if (shiftType === 'evening') {
-    // Shift ends at 1200s (22:00)
-    return cycleSeconds >= 1200;
-  }
-  if (shiftType === 'night') {
-    // Shift ends at 1800s / 0s (06:00)
+  if (shiftType === 'night' || shiftType === 'evening') {
+    // Night Watch ends at 1800s / 0s (06:00)
+    // From 0s to 1200s, shift is settled for the new day
     return cycleSeconds < 1200;
   }
   return false;
