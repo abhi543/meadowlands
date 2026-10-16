@@ -149,6 +149,24 @@ import {
   processSingleWorkerClockOut,
   processOfflineShiftCycles,
 } from './shiftEngine';
+import {
+  PLOT_SOIL_TIERS,
+  getSoilTier,
+  getPlotUnlockCost,
+  MAX_FARM_PLOTS,
+  BASE_UNLOCKED_PLOTS,
+  MAX_PLOT_SOIL_LEVEL,
+  type PlotSoilTierInfo,
+} from './plotUpgrades';
+export {
+  PLOT_SOIL_TIERS,
+  getSoilTier,
+  getPlotUnlockCost,
+  MAX_FARM_PLOTS,
+  BASE_UNLOCKED_PLOTS,
+  MAX_PLOT_SOIL_LEVEL,
+  type PlotSoilTierInfo,
+};
 
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
@@ -221,6 +239,7 @@ export interface PlotState {
   ready: boolean;
   isWatered?: boolean;
   wateredUntil?: number | null;
+  level?: number;
 }
 
 export interface AnimalInstance {
@@ -739,6 +758,9 @@ export interface GameState {
   upgradeWell: () => boolean;
   waterPlot: (plotId: number) => boolean;
   waterAllPlots: () => void;
+  upgradePlotLevel: (plotId: number) => boolean;
+  upgradeAllPlots: () => boolean;
+  unlockNextPlot: () => boolean;
 
   // Active Radar Crisis Actions (Step 1)
   triggerCrisis: (type?: CrisisType) => void;
@@ -807,13 +829,14 @@ function generateId(): string {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const initialPlots: PlotState[] = Array.from({ length: 20 }, (_, i) => ({
+const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) => ({
   id: i,
   crop: null,
   plantedAt: null,
   ready: false,
   isWatered: false,
   wateredUntil: null,
+  level: 1,
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -1148,14 +1171,17 @@ export const useGameStore = create<GameState>()(
         if (cropDef.seedCost > 0) {
           set({ coins: state.coins - cropDef.seedCost });
         }
+        const pLevel = plot.level || 1;
+        const soilTier = getSoilTier(pLevel);
         const newPlots = [...state.plots];
         newPlots[plotId] = {
           id: plotId,
           crop: cropId,
           plantedAt: Date.now(),
           ready: false,
-          isWatered: plot.isWatered || false,
+          isWatered: soilTier.autoHydrate || plot.isWatered || false,
           wateredUntil: plot.wateredUntil || null,
+          level: pLevel,
         };
         set({ plots: newPlots });
       },
@@ -1166,20 +1192,29 @@ export const useGameStore = create<GameState>()(
         if (!plot || !plot.crop || !plot.ready) return;
         const cropDef = CROPS[plot.crop];
 
+        const pLevel = plot.level || 1;
+        const soilTier = getSoilTier(pLevel);
         const plotOverclock = state.entityOverclocks?.[`plot_${plotId}`];
         const bonusYield = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
-        const totalYield = cropDef.yieldCount + bonusYield;
+        const isDoubleProc = Math.random() < soilTier.doubleProcChance;
+        const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield;
+        const totalYield = isDoubleProc ? baseTotalYield * 2 : baseTotalYield;
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
         const newPlots = [...state.plots];
-        // Harvest resets soil hydration so next crops require fresh watering
+        // Harvest resets soil hydration UNLESS soil is level 5 (autoHydrate)
         newPlots[plotId] = {
           id: plotId,
           crop: null,
           plantedAt: null,
           ready: false,
-          isWatered: false,
+          isWatered: soilTier.autoHydrate ? true : false,
           wateredUntil: null,
+          level: pLevel,
         };
+
+        if (isDoubleProc) {
+          state.addNotification(`🌋 Volcanic Double Yield proc! +${totalYield} ${cropDef.name}!`, '✨', 'info');
+        }
 
         let updatedOverclocks = state.entityOverclocks;
         if (plotOverclock?.isOverclocked) {
@@ -1224,7 +1259,8 @@ export const useGameStore = create<GameState>()(
         }
 
         const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
-        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * xpMultiplier), state.level);
+        const earnedXp = Math.round((3 + soilTier.bonusXp) * xpMultiplier);
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + earnedXp, state.level);
         set({
           silo: newSilo,
           plots: newPlots,
@@ -1256,13 +1292,16 @@ export const useGameStore = create<GameState>()(
         // Deduct cost and plant all
         const newPlots = [...state.plots];
         for (const pid of emptyPlotIds) {
+          const pLevel = state.plots[pid]?.level || 1;
+          const soilTier = getSoilTier(pLevel);
           newPlots[pid] = {
             id: pid,
             crop: cropId,
             plantedAt: now,
             ready: false,
-            isWatered: state.plots[pid]?.isWatered || false,
+            isWatered: soilTier.autoHydrate || state.plots[pid]?.isWatered || false,
             wateredUntil: state.plots[pid]?.wateredUntil || null,
+            level: pLevel,
           };
         }
         set({
@@ -1287,15 +1326,21 @@ export const useGameStore = create<GameState>()(
             const cropDef = CROPS[plot.crop];
             const plotOverclock = updatedOverclocks[`plot_${i}`];
             const bonus = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
-            totalBonusYield += bonus;
-            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + cropDef.yieldCount + bonus;
+            const pLevel = plot.level || 1;
+            const soilTier = getSoilTier(pLevel);
+            const isDoubleProc = Math.random() < soilTier.doubleProcChance;
+            const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield;
+            const plotYield = isDoubleProc ? singleYield * 2 : singleYield;
+            totalBonusYield += (bonus + soilTier.bonusYield);
+            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + plotYield;
             newPlots[i] = {
               id: i,
               crop: null,
               plantedAt: null,
               ready: false,
-              isWatered: false,
+              isWatered: soilTier.autoHydrate ? true : false,
               wateredUntil: null,
+              level: pLevel,
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -4214,10 +4259,13 @@ export const useGameStore = create<GameState>()(
             if (isPlotExhausted) {
               return p; // Growth halted during soil exhaustion
             }
+            const pLevel = p.level || 1;
+            const soilTier = getSoilTier(pLevel);
+            const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
             const plotMultiplier = (plotOverclock?.isOverclocked && !p.ready) ? plotOverclock.speedMultiplier : 1.0;
             const elapsed = (now - p.plantedAt) / 1000;
-            const waterBoost = p.isWatered ? 2.0 : 1.0;
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier;
+            const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -5556,7 +5604,11 @@ export const useGameStore = create<GameState>()(
         const newPlots = state.plots.map(p => {
           if (p.crop && p.plantedAt && !p.ready) {
             const cropDef = CROPS[p.crop];
-            const growMs = cropDef.growTimeSec * 1000 * auraMultiplier;
+            const pLevel = p.level || 1;
+            const soilTier = getSoilTier(pLevel);
+            const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
+            const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
+            const growMs = (cropDef.growTimeSec * 1000 * auraMultiplier) / (soilSpeedMultiplier * waterBoost);
             if (now - p.plantedAt >= growMs) {
               return { ...p, ready: true };
             }
@@ -6377,6 +6429,101 @@ export const useGameStore = create<GameState>()(
             isDirty: true,
           });
         }
+      },
+
+      upgradePlotLevel: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots) return false;
+        const currentLvl = plot.level || 1;
+        if (currentLvl >= MAX_PLOT_SOIL_LEVEL) {
+          state.addNotification(`Plot #${plotId + 1} is already at Maximum Tier (Celestial Soil)! ✨`, '⭐', 'info');
+          return false;
+        }
+        const nextLvl = currentLvl + 1;
+        const nextTier = getSoilTier(nextLvl);
+        if (state.coins < nextTier.upgradeCostCoins) {
+          state.addNotification(`Insufficient coins! Upgrading Plot #${plotId + 1} to Level ${nextLvl} (${nextTier.name}) requires 🪙${nextTier.upgradeCostCoins}.`, '💰', 'info');
+          return false;
+        }
+
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          level: nextLvl,
+          isWatered: nextTier.autoHydrate ? true : plot.isWatered,
+        };
+
+        playCashRegisterSound();
+        state.addNotification(`🌟 Upgraded Plot #${plotId + 1} to Level ${nextLvl} (${nextTier.name})! ${nextTier.description}`, '✨', 'event');
+        set({
+          coins: state.coins - nextTier.upgradeCostCoins,
+          plots: newPlots,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      upgradeAllPlots: () => {
+        const state = get();
+        const visiblePlots = state.plots.slice(0, state.unlockedPlots);
+        const minLvl = Math.min(...visiblePlots.map(p => p.level || 1));
+        if (minLvl >= MAX_PLOT_SOIL_LEVEL) {
+          state.addNotification('All plots are already at Maximum Tier (Level 5)! 🌟', '⭐', 'info');
+          return false;
+        }
+        const targetPlots = visiblePlots.filter(p => (p.level || 1) === minLvl);
+        const nextLvl = minLvl + 1;
+        const nextTier = getSoilTier(nextLvl);
+        const totalCost = targetPlots.length * nextTier.upgradeCostCoins;
+
+        if (state.coins < totalCost) {
+          state.addNotification(`Need 🪙${totalCost} to upgrade ${targetPlots.length} plots to Level ${nextLvl} (${nextTier.name})!`, '💰', 'info');
+          return false;
+        }
+
+        const newPlots = state.plots.map(p => {
+          if (p.id < state.unlockedPlots && (p.level || 1) === minLvl) {
+            return {
+              ...p,
+              level: nextLvl,
+              isWatered: nextTier.autoHydrate ? true : p.isWatered,
+            };
+          }
+          return p;
+        });
+
+        playCashRegisterSound();
+        state.addNotification(`🎉 Batch Upgraded ${targetPlots.length} plots to Level ${nextLvl} (${nextTier.name})!`, '✨', 'event');
+        set({
+          coins: state.coins - totalCost,
+          plots: newPlots,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      unlockNextPlot: () => {
+        const state = get();
+        if (state.unlockedPlots >= state.plots.length || state.unlockedPlots >= MAX_FARM_PLOTS) {
+          state.addNotification(`Maximum farm plots (${MAX_FARM_PLOTS}) already unlocked! 🌾`, '⭐', 'info');
+          return false;
+        }
+        const cost = getPlotUnlockCost(state.unlockedPlots);
+        if (state.coins < cost) {
+          state.addNotification(`Need 🪙${cost} to unlock Plot #${state.unlockedPlots + 1}!`, '💰', 'info');
+          return false;
+        }
+
+        const newUnlocked = state.unlockedPlots + 1;
+        playCashRegisterSound();
+        state.addNotification(`🔓 Unlocked Plot #${newUnlocked}! Farm expanded to ${newUnlocked} plots!`, '🌾', 'event');
+        set({
+          coins: state.coins - cost,
+          unlockedPlots: newUnlocked,
+          isDirty: true,
+        });
+        return true;
       },
 
       // Active Radar Crisis Actions (Step 1)
@@ -7518,6 +7665,31 @@ export const useGameStore = create<GameState>()(
             }
           }
         }
+        // Ensure plots array is hydrated with levels and capacity
+        if (!merged.plots || !Array.isArray(merged.plots)) {
+          merged.plots = initialPlots;
+        } else {
+          for (const p of merged.plots) {
+            if (!p.level) p.level = 1;
+          }
+          if (merged.plots.length < MAX_FARM_PLOTS) {
+            for (let i = merged.plots.length; i < MAX_FARM_PLOTS; i++) {
+              merged.plots.push({
+                id: i,
+                crop: null,
+                plantedAt: null,
+                ready: false,
+                isWatered: false,
+                wateredUntil: null,
+                level: 1,
+              });
+            }
+          }
+        }
+        if (merged.unlockedPlots === undefined || merged.unlockedPlots < BASE_UNLOCKED_PLOTS) {
+          merged.unlockedPlots = BASE_UNLOCKED_PLOTS;
+        }
+
         if (merged.farmEpochStart === undefined) merged.farmEpochStart = Date.now() - (Date.now() % DAY_CYCLE_MS);
         if (!merged.bunkhouse) merged.bunkhouse = { level: 1, capacity: 8 };
 

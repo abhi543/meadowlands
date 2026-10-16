@@ -5,6 +5,8 @@ import { CROPS, type CropId } from '@/game/data';
 import { useState } from 'react';
 import { FarmWell } from './FarmWell';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { PlotUpgradeModal } from './PlotUpgradeModal';
+import { getSoilTier, getPlotUnlockCost } from '@/game/plotUpgrades';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 
 const CROP_LIST = Object.values(CROPS);
@@ -36,10 +38,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     resolveCrisisDefense,
     entityOverclocks,
     cureEntityExhaustion,
+    unlockNextPlot,
     animals = [],
     livestockReserve = [],
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
 
   const visiblePlots = plots.slice(0, unlockedPlots);
 
@@ -275,6 +280,21 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             {waterLevel}/{effectiveMaxWater}💧
           </span>
         </button>
+
+        {/* Upgrade Plots with Coins */}
+        <button
+          onClick={() => {
+            setSelectedPlotForUpgrade(null);
+            setIsUpgradeModalOpen(true);
+          }}
+          className="col-span-2 sm:col-span-4 lg:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-500 hover:to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/20 cursor-pointer"
+        >
+          <span className="text-base sm:text-lg">{'🌱'}</span>
+          <span>Upgrade Soil</span>
+          <span className="bg-black/25 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold text-amber-200">
+            🪙 L1–5
+          </span>
+        </button>
       </div>
 
       {/* Farm Grid */}
@@ -303,8 +323,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             ? Math.max(0, Math.ceil((plotOverclock.exhaustedUntil - Date.now()) / 1000))
             : 0;
 
+          const plotLevel = plot.level || 1;
+          const soilTier = getSoilTier(plotLevel);
+          const soilSpeedMult = 1 + (soilTier.speedBonusPct / 100);
+          const waterMult = (isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
+
           const progress = plot.crop && plot.plantedAt && !plot.ready
-            ? Math.min(1, (Date.now() - plot.plantedAt) / (CROPS[plot.crop].growTimeSec * 1000))
+            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
 
           // Soil styling classes
@@ -489,11 +514,43 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                       </span>
                     </div>
                   )}
+
+                  {/* Soil Tier Badge (Click to upgrade with coins) */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPlotForUpgrade(plot.id);
+                      setIsUpgradeModalOpen(true);
+                    }}
+                    className={`absolute bottom-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[8px] font-black border z-10 transition-transform hover:scale-110 cursor-pointer ${soilTier.badgeColor}`}
+                    title={`Plot #${plot.id + 1} Soil: ${soilTier.name} (Level ${plotLevel}) · Click to upgrade with coins`}
+                  >
+                    <span>{soilTier.emoji}</span>
+                    <span>L{plotLevel}</span>
+                  </button>
                 </>
               )}
             </div>
           );
         })}
+
+        {/* Next Locked Plot Card in the grid */}
+        {unlockedPlots < plots.length && (
+          <button
+            onClick={() => unlockNextPlot()}
+            className="relative aspect-square rounded-xl border-2 border-dashed border-amber-500/60 hover:border-amber-400 bg-amber-950/20 hover:bg-amber-950/40 transition-all flex flex-col items-center justify-center text-center p-1.5 group cursor-pointer active:scale-95 shadow-inner"
+            title={`Unlock Plot #${unlockedPlots + 1} for 🪙${getPlotUnlockCost(unlockedPlots)}`}
+          >
+            <span className="text-xl sm:text-2xl group-hover:scale-110 transition-transform">🔒</span>
+            <span className="text-[9px] font-mono font-bold text-amber-300 mt-0.5">
+              Plot #{unlockedPlots + 1}
+            </span>
+            <span className="text-[8px] font-bold bg-amber-500/20 text-amber-200 border border-amber-500/40 px-1 py-0.2 rounded mt-0.5">
+              🪙{getPlotUnlockCost(unlockedPlots)}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Silo summary */}
@@ -505,6 +562,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </span>
         ))}
       </div>
+
+      {/* Plot Upgrade Modal */}
+      <PlotUpgradeModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => setIsUpgradeModalOpen(false)}
+        selectedPlotId={selectedPlotForUpgrade}
+      />
     </div>
   );
 }

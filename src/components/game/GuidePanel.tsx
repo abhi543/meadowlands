@@ -294,6 +294,8 @@ function FarmGuide() {
           <li><strong>Planting:</strong> Select a crop seed selector at the top, then tap an empty plot, or click <strong>Plant All</strong> to plant every empty plot in a single click.</li>
           <li><strong>Growth Progress:</strong> Each plot has an animated real-time progress bar. Once filled, the crop sparkles and displays a <strong>Harvest</strong> button.</li>
           <li><strong>Batch Harvesting:</strong> Use <strong>Harvest All</strong> to collect all ready crops simultaneously and gain instant player XP.</li>
+          <li><strong>🌱 Soil Quality Upgrades (🪙 Coins):</strong> Upgrade individual or all plots through 5 persistent soil tiers (Basic &rarr; Enriched Loam &rarr; Fertilized Humus &rarr; Volcanic Bed &rarr; Celestial Soil). Higher tiers award up to <strong>+75% Growth Speed, +3 Bonus Yields</strong>, 35% double-harvest chance, and permanent self-watering!</li>
+          <li><strong>🗺️ Plot Expansion (🪙 Coins):</strong> Expand your farm from 12 up to <strong>24 plots</strong> using coins! Click the locked plot slot or the <strong>Upgrade Soil</strong> button to clear and till more land.</li>
           <li><strong>Instant Harvest Chance:</strong> Regional Sovereign Territory aura provides a 10% chance for instant maturity right after planting!</li>
         </ul>
       </div>
