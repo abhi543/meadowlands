@@ -65,6 +65,11 @@ import {
   generateDeliveryOrder, getItemBaseValue, ITEM_UNLOCK_LEVELS,
 } from './deliveryData';
 import { calculateMasterSettlement, type ContractEconomicTier } from './pricingEngine';
+import {
+  validateCaravanCargo,
+  calculateCaravanSettlement,
+  getBulkVolumeTierInfo,
+} from './caravanLogistics';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
   type ActiveEventInstance,
@@ -633,6 +638,14 @@ export interface GameState {
   collectProductionAll: (buildingId: BuildingId) => void;
   fulfillOrder: (orderId: string) => void;
   fulfillDeliveryOrder: (orderId: string, route?: 'safe' | 'wild') => { success: boolean; hazardEncountered?: boolean; message?: string };
+  dispatchBulkCaravan: (orderIds: string[], route?: 'safe' | 'wild') => {
+    success: boolean;
+    ordersCount: number;
+    netCoins: number;
+    message: string;
+    hazardEncountered?: boolean;
+    rareDropsWon: string[];
+  };
   trashOrder: (orderId: string) => void;
   sellItem: (itemId: string, qty: number) => void;
   sellAllOfItem: (itemId: string) => void;
@@ -2218,6 +2231,190 @@ export const useGameStore = create<GameState>()(
         });
 
         return { success: true, hazardEncountered, message: routeNotice };
+      },
+
+      dispatchBulkCaravan: (orderIds: string[], route: 'safe' | 'wild' = 'safe') => {
+        const state = get();
+        if (!orderIds || orderIds.length === 0) {
+          return { success: false, ordersCount: 0, netCoins: 0, message: 'No orders selected for caravan dispatch', rareDropsWon: [] };
+        }
+
+        const orderIdSet = new Set(orderIds);
+        const matchedOrders = state.orders.filter(o => orderIdSet.has(o.id));
+        if (matchedOrders.length === 0) {
+          return { success: false, ordersCount: 0, netCoins: 0, message: 'Selected orders not found on order board', rareDropsWon: [] };
+        }
+
+        // Aggregate Inventory Validation (Anti-cannibalization)
+        const cargoValidation = validateCaravanCargo(matchedOrders, state.silo, state.barn);
+        if (!cargoValidation.isValidCargo) {
+          const firstDeficit = cargoValidation.conflictingItems[0];
+          const errReason = firstDeficit
+            ? `Insufficient stock for ${firstDeficit.name} (have ${firstDeficit.availableStock}, need ${firstDeficit.totalRequired})`
+            : 'Combined cargo exceeds available barn/silo stock';
+          return { success: false, ordersCount: 0, netCoins: 0, message: errReason, rareDropsWon: [] };
+        }
+
+        const now = Date.now();
+        // Trade Velocity Streak (resets if inactive > 45 mins)
+        const streakValid = Boolean(state.lastTradeStreakTimestamp && (now - state.lastTradeStreakTimestamp <= 45 * 60 * 1000));
+        const currentStreak = streakValid ? (state.tradeStreak || 0) : 0;
+
+        // Daily payroll burn rate for coverage calculation
+        const telemetry = calculateStaffUpkeep(state.unifiedWorkers, state.specialistWorkers, state.payrollVaultCoins, state.staffPantry);
+        const dailyBurnRate = telemetry.baseDailyPayroll;
+
+        const settlement = calculateCaravanSettlement({
+          orders: matchedOrders,
+          currentStreak,
+          now,
+          clientReputation: state.clientReputation,
+          relics: state.relics,
+          dailyPayrollRate: dailyBurnRate,
+        });
+
+        // Deduct aggregated requirements from Silo and Barn
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        for (const demand of cargoValidation.demands) {
+          if (demand.storageType === 'silo') {
+            newSilo[demand.itemId] = Math.max(0, (newSilo[demand.itemId] || 0) - demand.totalRequired);
+          } else {
+            newBarn[demand.itemId] = Math.max(0, (newBarn[demand.itemId] || 0) - demand.totalRequired);
+          }
+        }
+
+        let finalCoins = settlement.totalNetProceeds;
+        let hazardEncountered = false;
+        let routeNotice = '';
+
+        if (route === 'wild') {
+          const clientRep = state.clientReputation || DEFAULT_CLIENT_REPUTATION;
+          const captainLevel = clientRep.captain_sterling?.level || 1;
+          const captainReduc = captainLevel >= 3 ? 0.12 : 0;
+          const riskRate = Math.max(0.08, 0.25 - captainReduc);
+
+          if (Math.random() < riskRate) {
+            hazardEncountered = true;
+            const jedLevel = clientRep.old_man_jed?.level || 1;
+            const tollPercent = jedLevel >= 3 ? 0.08 : 0.15;
+            const lossCoins = Math.floor(finalCoins * tollPercent);
+            finalCoins = Math.max(1, finalCoins - lossCoins);
+            routeNotice = `⚠️ Road Ambush: Caravan paid ${lossCoins}c toll on the mountain pass.`;
+            playDefeatSound();
+          } else {
+            const wildBounty = Math.round(finalCoins * 0.25);
+            finalCoins += wildBounty;
+            routeNotice = `🌲 Wild Shortcut Conquered! +${wildBounty}c Hazard Logistics Bonus!`;
+            playGoldRushFanfare();
+          }
+        }
+
+        // Grant rare frontier drops if any
+        const rareDropsWon: string[] = [];
+        for (const drop of settlement.rareFrontierDrops) {
+          newBarn[drop.itemId] = (newBarn[drop.itemId] || 0) + drop.qty;
+          rareDropsWon.push(`${drop.qty}x ${drop.name}`);
+        }
+
+        // Update Client Reputation for each contributing client
+        let updatedClientRep = { ...(state.clientReputation || DEFAULT_CLIENT_REPUTATION) };
+        let updatedGlobalRep = state.globalReputation || createInitialGlobalReputation();
+        let clientsMap = { ...updatedGlobalRep.clients };
+        let addedSpendableFavor = 0;
+
+        for (const [cKey, repGain] of Object.entries(settlement.clientRepGains)) {
+          const cDef = CLIENT_DEFINITIONS[cKey] || CLIENT_DEFINITIONS.mayor_barnaby;
+          const cState = updatedClientRep[cKey] || { level: 1, xp: 0 };
+          const newXpTotal = cState.xp + repGain;
+          const repInfo = getReputationInfo(newXpTotal, cDef);
+
+          updatedClientRep[cKey] = {
+            level: repInfo.level,
+            xp: newXpTotal,
+          };
+
+          const existingClientData = clientsMap[cKey] || createInitialClientData(cKey, cDef.name, cDef.title, cDef.avatar);
+          const updatedGlobalClientXp = existingClientData.currentXp + repGain;
+          const clientLvlInfo = getClientLevelFromXp(updatedGlobalClientXp, existingClientData.tiers);
+
+          clientsMap[cKey] = {
+            ...existingClientData,
+            currentXp: updatedGlobalClientXp,
+            currentLevel: clientLvlInfo.level,
+          };
+          addedSpendableFavor += repGain;
+
+          if (clientLvlInfo.level > existingClientData.currentLevel || repInfo.level > cState.level) {
+            playVictoryChime();
+            state.addNotification(
+              `⭐ CLIENT PROMOTION! ${cDef.name} reached Reputation Level ${clientLvlInfo.level}! Perk Unlocked: ${clientLvlInfo.currentTier.perkTitle}!`,
+              cDef.avatar,
+              'event'
+            );
+          }
+        }
+
+        const updatedUnlockedPerks = computeUnlockedPerks(clientsMap);
+        updatedGlobalRep = {
+          ...updatedGlobalRep,
+          spendableFavor: (updatedGlobalRep.spendableFavor || 0) + addedSpendableFavor,
+          clients: clientsMap,
+          unlockedPerks: updatedUnlockedPerks,
+        };
+
+        // Captain Sterling charter perk
+        const sterlingLevel = updatedClientRep.captain_sterling?.level || 1;
+        if (sterlingLevel >= 5 && Math.random() < 0.35) {
+          const bonusItem = Math.random() < 0.5 ? 'Expansion Deed' : 'Nail';
+          rareDropsWon.push(`1x ${bonusItem} (Naval Charter)`);
+          newBarn[bonusItem === 'Expansion Deed' ? 'expansion_deed' : 'nail'] =
+            (newBarn[bonusItem === 'Expansion Deed' ? 'expansion_deed' : 'nail'] || 0) + 1;
+        }
+
+        // XP & Leveling
+        const xpBonus = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
+        const { xp: newXp, level: newLevel } = levelUpCheck(
+          state.xp + Math.round(settlement.totalXp * xpBonus),
+          state.level
+        );
+
+        // Replace all fulfilled orders with fresh contracts
+        const newOrders = state.orders.map(o => (orderIdSet.has(o.id) ? generateDeliveryOrder(newLevel) : o));
+
+        playGoldRushFanfare();
+        const dropText = rareDropsWon.length > 0 ? ` 🎁 Frontier Rare Drops: ${rareDropsWon.join(', ')}!` : '';
+        const streakText = settlement.streakLeapAchieved ? ` ⚡ ${settlement.streakLeapNotice}` : ` Streak: ${settlement.advancedStreak}!`;
+
+        state.addNotification(
+          `🚚 CARAVAN DISPATCHED: ${matchedOrders.length} Contracts Hauled! +${finalCoins} Coins (+${settlement.totalBonusGoldEarned} bonus), +${settlement.totalXp} XP.${streakText}${dropText} ${routeNotice}`,
+          '🚚',
+          'event'
+        );
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          coins: state.coins + finalCoins,
+          gems: state.gems + settlement.totalGems,
+          xp: newXp,
+          level: newLevel,
+          clientReputation: updatedClientRep,
+          globalReputation: updatedGlobalRep,
+          orders: newOrders,
+          tradeStreak: settlement.advancedStreak,
+          lastTradeStreakTimestamp: now,
+          isDirty: true,
+        });
+
+        return {
+          success: true,
+          ordersCount: matchedOrders.length,
+          netCoins: finalCoins,
+          message: `Caravan hauled ${matchedOrders.length} contracts for ${finalCoins} coins!`,
+          hazardEncountered,
+          rareDropsWon,
+        };
       },
 
       fulfillOrder: (orderId) => {

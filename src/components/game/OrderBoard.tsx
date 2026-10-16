@@ -26,6 +26,12 @@ import {
 } from '@/game/pricingEngine';
 import { calculateStaffUpkeep } from '@/data/workerUpkeep';
 import { FavorShopView } from '@/components/game/FavorShopView';
+import { CaravanManifestBar } from './CaravanManifestBar';
+import {
+  canAddOrderToCaravan,
+  validateCaravanCargo,
+  getBulkVolumeTierInfo,
+} from '@/game/caravanLogistics';
 import { playClockTickSound, playCashRegisterSound, playDefeatSound } from '@/lib/soundEffects';
 
 /** Source hint helper for missing items */
@@ -90,7 +96,41 @@ export function OrderBoard() {
   const [selectedOrderForRoute, setSelectedOrderForRoute] = useState<DeliveryOrder | null>(null);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [dispatchResult, setDispatchResult] = useState<{ id: string; message: string; hazard: boolean } | null>(null);
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [, setTick] = useState(0);
+
+  // Automatically deselect orders that were fulfilled or rerolled
+  useEffect(() => {
+    setSelectedOrderIds(prev => prev.filter(id => orders.some(o => o.id === id)));
+  }, [orders]);
+
+  const selectedOrders = orders.filter(o => selectedOrderIds.includes(o.id));
+
+  const toggleOrderInCaravan = (orderId: string) => {
+    if (selectedOrderIds.includes(orderId)) {
+      setSelectedOrderIds(prev => prev.filter(id => id !== orderId));
+    } else {
+      const candidate = orders.find(o => o.id === orderId);
+      if (!candidate) return;
+      const check = canAddOrderToCaravan(candidate, selectedOrders, silo, barn);
+      if (check.canAdd) {
+        setSelectedOrderIds(prev => [...prev, orderId]);
+      }
+    }
+  };
+
+  const handlePackAllFulfillable = () => {
+    let currentPacked: DeliveryOrder[] = [];
+    const packedIds: string[] = [];
+    for (const order of orders) {
+      const check = canAddOrderToCaravan(order, currentPacked, silo, barn);
+      if (check.canAdd) {
+        currentPacked.push(order);
+        packedIds.push(order.id);
+      }
+    }
+    setSelectedOrderIds(packedIds);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -531,22 +571,56 @@ export function OrderBoard() {
 
       {/* Main Delivery Contracts Board */}
       {(activeTab === 'all' || activeTab === 'local' || activeTab === 'merchant' || activeTab === 'noble' || activeTab === 'timed') && (
-        <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="font-black text-xs uppercase tracking-wider text-stone-600 dark:text-stone-400">
-            Active Delivery Contracts
-          </h4>
-          <span className="text-xs text-stone-500 dark:text-stone-400">
-            {fulfillableCount > 0 ? (
-              <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                {fulfillableCount} ready to dispatch
-              </span>
-            ) : (
-              <span>0 ready</span>
-            )}
-            {' • '}{displayedOrders.length} contracts
-          </span>
-        </div>
+        <div className="space-y-3">
+          {/* Contracts Header & Bulk Caravan Staging Controls */}
+          <div className="bg-stone-900/80 border border-stone-750 p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-sm">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-xl p-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30">🚚</span>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-white">
+                    Bulk Caravan Staging:
+                  </h4>
+                  <span className="text-xs font-mono font-bold text-amber-300">
+                    {selectedOrderIds.length} {selectedOrderIds.length === 1 ? 'Contract' : 'Contracts'} Packed
+                  </span>
+                  {selectedOrderIds.length > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      +{getBulkVolumeTierInfo(selectedOrderIds.length).bonusPercent}% Volume Bonus
+                    </span>
+                  )}
+                  <span className="text-xs text-stone-500">
+                    ({fulfillableCount} ready · {displayedOrders.length} active)
+                  </span>
+                </div>
+                <p className="text-[11px] text-stone-400">
+                  Select contracts below to stack cargo into a single outgoing merchant caravan with compounding batch bonuses.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start md:self-auto flex-wrap">
+              <button
+                onClick={handlePackAllFulfillable}
+                disabled={fulfillableCount === 0}
+                className="px-3 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 disabled:opacity-40 disabled:from-stone-700 disabled:to-stone-800 text-white transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                title="Automatically pack all non-conflicting ready orders into the caravan"
+              >
+                <span>📦</span>
+                <span>Auto-Pack Ready ({fulfillableCount})</span>
+              </button>
+
+              {selectedOrderIds.length > 0 && (
+                <button
+                  onClick={() => setSelectedOrderIds([])}
+                  className="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer active:scale-95"
+                  title="Clear all staged caravan orders"
+                >
+                  Clear ({selectedOrderIds.length})
+                </button>
+              )}
+            </div>
+          </div>
 
         {displayedOrders.length === 0 && (
           <div className="text-center py-8 bg-stone-50 dark:bg-stone-900/40 rounded-2xl border border-stone-200 dark:border-stone-800">
@@ -599,9 +673,17 @@ export function OrderBoard() {
               dailyPayrollBurnRate
             );
 
+            const isPacked = selectedOrderIds.includes(order.id);
+            const otherSelected = selectedOrders.filter(o => o.id !== order.id);
+            const addCheck = canAddOrderToCaravan(order, otherSelected, silo, barn);
+            const canAdd = addCheck.canAdd;
+            const conflictReason = addCheck.conflictReason;
+
             // Theme border styling per order type and tier
             let cardBorder = 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900';
-            if (isRushActive) {
+            if (isPacked) {
+              cardBorder = 'border-emerald-500 bg-emerald-950/20 shadow-md shadow-emerald-950/30 ring-2 ring-emerald-500/80';
+            } else if (isRushActive) {
               cardBorder = isCritical
                 ? 'border-red-500 bg-red-950/20 shadow-md shadow-red-500/20 ring-1 ring-red-400'
                 : 'border-amber-500/80 bg-amber-950/10 shadow-md shadow-amber-500/10 ring-1 ring-amber-400/30';
@@ -619,6 +701,49 @@ export function OrderBoard() {
                 className={`rounded-2xl border-2 p-3 transition-all flex flex-col justify-between ${cardBorder}`}
               >
                 <div>
+                  {/* Bulk Caravan Staging Selector Toggle */}
+                  <div className="pb-2 mb-2 border-b border-stone-100 dark:border-stone-800">
+                    <button
+                      type="button"
+                      onClick={() => toggleOrderInCaravan(order.id)}
+                      disabled={!isPacked && !canAdd}
+                      className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-black flex items-center justify-between gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95 ${
+                        isPacked
+                          ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-emerald-500/20 ring-1 ring-emerald-400'
+                          : canAdd
+                          ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30 hover:border-amber-500/60'
+                          : 'bg-stone-100 dark:bg-stone-850 text-stone-400 border border-stone-200 dark:border-stone-800 cursor-not-allowed opacity-60'
+                      }`}
+                      title={
+                        isPacked
+                          ? 'Click to remove this contract from the staged caravan'
+                          : canAdd
+                          ? 'Click to pack this contract into the bulk caravan'
+                          : conflictReason || 'Exceeds available barn stock alongside previously packed contracts'
+                      }
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="text-sm font-black">{isPacked ? '✔' : canAdd ? '◻' : '🔒'}</span>
+                        <span className="truncate">
+                          {isPacked
+                            ? 'Packed in Caravan'
+                            : canAdd
+                            ? 'Pack into Caravan'
+                            : conflictReason || 'Exceeds Available Barn Stock'}
+                        </span>
+                      </div>
+                      {isPacked ? (
+                        <span className="text-[9px] bg-black/40 text-emerald-200 px-1.5 py-0.2 rounded-full font-mono shrink-0">
+                          STAGED
+                        </span>
+                      ) : canAdd ? (
+                        <span className="text-[10px] text-amber-500 dark:text-amber-300 font-mono shrink-0">
+                          +Stack
+                        </span>
+                      ) : null}
+                    </button>
+                  </div>
+
                   {/* Client & Contract Type Header */}
                   <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-100 dark:border-stone-800">
                     <div className="flex items-center gap-2 min-w-0">
@@ -828,6 +953,12 @@ export function OrderBoard() {
         </div>
       </div>
       )}
+
+      {/* Docked Bulk Freight Caravan Manifest Bar */}
+      <CaravanManifestBar
+        selectedOrders={selectedOrders}
+        onClearSelection={() => setSelectedOrderIds([])}
+      />
     </div>
   );
 }
