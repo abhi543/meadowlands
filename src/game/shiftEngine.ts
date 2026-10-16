@@ -623,10 +623,10 @@ export function processSingleWorkerClockOut(params: {
       isStriking = true;
       notificationMessage = `🛑 Strike Alert: ${workerName} clocked out into strike due to consecutive missed upkeep!`;
     } else if (newMissedCycles >= 4) {
-      newMoraleTier = 'deserted';
+      newMoraleTier = 'striking';
       isStriking = true;
-      isDeserted = true;
-      notificationMessage = `🚨 Desertion: ${workerName} abandoned contract after 4 unpaid shifts!`;
+      isDeserted = false; // Workers never desert or get unhired!
+      notificationMessage = `🛑 Work Stoppage: ${workerName} has halted tasks due to unpaid upkeep! Fund Payroll Vault or Staff Pantry to resume.`;
     }
   }
 
@@ -699,12 +699,11 @@ export function processOfflineShiftCycles(params: {
         ...worker,
         missedCycles: res.newMissedCycles,
         moraleTier: res.newMoraleTier,
-        isHired: !res.isDeserted,
+        isHired: worker.isHired,
         stamina: 100,
-        wellRested: !res.isStriking && !res.isDeserted,
+        wellRested: !res.isStriking,
       };
       settledShiftsCount++;
-      if (res.isDeserted) desertedWorkers.push(WORKER_UPKEEP_ROSTER[role]?.name || role);
     }
 
     // Process each hired specialist worker
@@ -726,12 +725,11 @@ export function processOfflineShiftCycles(params: {
         missedCycles: res.newMissedCycles,
         moraleTier: res.newMoraleTier,
         isStriking: res.isStriking,
-        isHired: !res.isDeserted,
+        isHired: worker.isHired,
         stamina: 100,
-        wellRested: !res.isStriking && !res.isDeserted,
+        wellRested: !res.isStriking,
       };
       settledShiftsCount++;
-      if (res.isDeserted) desertedWorkers.push(WORKER_UPKEEP_ROSTER[id]?.name || id);
     }
   }
 

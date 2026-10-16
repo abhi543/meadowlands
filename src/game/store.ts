@@ -7426,6 +7426,13 @@ export const useGameStore = create<GameState>()(
         crisisShields: state.crisisShields,
         freeOverclocks: state.freeOverclocks,
         bonusStorageCapacity: state.bonusStorageCapacity,
+        // Worker Commissary & Dual-Roster Upkeep persistence
+        payrollVaultCoins: state.payrollVaultCoins,
+        staffPantry: state.staffPantry,
+        lastSettlementTimestamp: state.lastSettlementTimestamp,
+        farmEpochStart: state.farmEpochStart,
+        bunkhouse: state.bunkhouse,
+        lastTick: state.lastTick,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
@@ -7466,11 +7473,20 @@ export const useGameStore = create<GameState>()(
             if (!merged.unifiedWorkers[r]) {
               merged.unifiedWorkers[r] = defaultWorkers[r];
             } else {
-              if (merged.unifiedWorkers[r].isPaused === undefined) merged.unifiedWorkers[r].isPaused = false;
-              if (merged.unifiedWorkers[r].moraleTier === undefined) merged.unifiedWorkers[r].moraleTier = 'content';
-              if (merged.unifiedWorkers[r].missedCycles === undefined) merged.unifiedWorkers[r].missedCycles = 0;
-              if (!merged.unifiedWorkers[r].shiftType) merged.unifiedWorkers[r].shiftType = getDefaultWorkerShift(r);
-              if (merged.unifiedWorkers[r].stamina === undefined) merged.unifiedWorkers[r].stamina = 100;
+              // Resilience Auto-Recovery: if worker has any level progress or accumulated stats, preserve hired state!
+              const currentW = merged.unifiedWorkers[r];
+              if (currentW.level > 1 || (currentW.stats?.totalItemsProduced || 0) > 0 || (currentW.stats?.totalCoinsEarned || 0) > 0) {
+                currentW.isHired = true;
+                if (currentW.moraleTier === 'deserted') {
+                  currentW.moraleTier = 'content';
+                  currentW.missedCycles = 0;
+                }
+              }
+              if (currentW.isPaused === undefined) currentW.isPaused = false;
+              if (currentW.moraleTier === undefined) currentW.moraleTier = 'content';
+              if (currentW.missedCycles === undefined) currentW.missedCycles = 0;
+              if (!currentW.shiftType) currentW.shiftType = getDefaultWorkerShift(r);
+              if (currentW.stamina === undefined) currentW.stamina = 100;
             }
           }
         }
@@ -7484,21 +7500,50 @@ export const useGameStore = create<GameState>()(
             if (!merged.specialistWorkers[sId]) {
               merged.specialistWorkers[sId] = defaultSpecialists[sId];
             } else {
-              if (merged.specialistWorkers[sId].moraleTier === undefined) {
-                merged.specialistWorkers[sId].moraleTier = merged.specialistWorkers[sId].isStriking ? 'striking' : 'content';
+              const currentSp = merged.specialistWorkers[sId];
+              if (currentSp.totalWagesPaid > 0 || currentSp.isStriking) {
+                currentSp.isHired = true;
+                if (currentSp.moraleTier === 'deserted') {
+                  currentSp.moraleTier = 'content';
+                  currentSp.missedCycles = 0;
+                  currentSp.isStriking = false;
+                }
               }
-              if (merged.specialistWorkers[sId].missedCycles === undefined) merged.specialistWorkers[sId].missedCycles = 0;
-              if (!merged.specialistWorkers[sId].shiftType) merged.specialistWorkers[sId].shiftType = getDefaultWorkerShift(sId);
-              if (merged.specialistWorkers[sId].stamina === undefined) merged.specialistWorkers[sId].stamina = 100;
+              if (currentSp.moraleTier === undefined) {
+                currentSp.moraleTier = currentSp.isStriking ? 'striking' : 'content';
+              }
+              if (currentSp.missedCycles === undefined) currentSp.missedCycles = 0;
+              if (!currentSp.shiftType) currentSp.shiftType = getDefaultWorkerShift(sId);
+              if (currentSp.stamina === undefined) currentSp.stamina = 100;
             }
           }
         }
         if (merged.farmEpochStart === undefined) merged.farmEpochStart = Date.now() - (Date.now() % DAY_CYCLE_MS);
         if (!merged.bunkhouse) merged.bunkhouse = { level: 1, capacity: 8 };
-        if (merged.payrollVaultCoins === undefined) merged.payrollVaultCoins = 0;
-        if (!merged.staffPantry) merged.staffPantry = {};
+
+        // Upkeep & Pantry Auto-Recovery: Restore missing funds/food if previously lost
+        if (merged.payrollVaultCoins === undefined || merged.payrollVaultCoins === null) {
+          merged.payrollVaultCoins = 0;
+        }
+        if (!merged.staffPantry) {
+          merged.staffPantry = {};
+        }
+
+        // If the player has active hired staff but vault or pantry was wiped, grant emergency restoration stipend
+        const anyStaffHired = (merged.unifiedWorkers && Object.values(merged.unifiedWorkers).some(w => w?.isHired)) ||
+                             (merged.specialistWorkers && Object.values(merged.specialistWorkers).some(sp => sp?.isHired));
+        if (anyStaffHired) {
+          if (merged.payrollVaultCoins < 200) {
+            merged.payrollVaultCoins = Math.max(500, merged.payrollVaultCoins);
+          }
+          if (Object.keys(merged.staffPantry).length === 0) {
+            merged.staffPantry = { bread: 10, cheese: 10, apple_pie: 5, stew: 5, vegetable_soup: 5 };
+          }
+        }
+
         if (!merged.lastSettlementTimestamp) merged.lastSettlementTimestamp = Date.now();
         if (!merged.lastSpecialistWageTime) merged.lastSpecialistWageTime = Date.now();
+        if (!merged.lastTick) merged.lastTick = Date.now();
         if (!merged.wranglerPolicy) merged.wranglerPolicy = DEFAULT_WRANGLER_POLICY;
         if (!merged.barnItemLocks) merged.barnItemLocks = {};
         if (!merged.livestockReserve) merged.livestockReserve = [];
