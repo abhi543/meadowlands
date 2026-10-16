@@ -2,7 +2,7 @@ import { WorkerRole } from '@/game/data';
 import { SpecialistWorkerId } from '@/data/workerCatalog';
 
 export type FoodCategory = 'crop' | 'dairy' | 'protein' | 'meal';
-export type MoraleTier = 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted';
+export type MoraleTier = 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted' | 'sabbatical';
 
 export interface WorkerUpkeepConfig {
   roleOrId: string;

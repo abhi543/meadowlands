@@ -15,12 +15,14 @@ import {
   type ShiftType,
   SHIFT_DEFINITIONS,
 } from '@/game/shiftEngine';
+import { GrievanceResolutionModal } from './GrievanceResolutionModal';
 
 interface SpecialistWorkersSectionProps {
   onSelectTab?: (tab: string) => void;
+  onOpenArbitration?: (workerId: string) => void;
 }
 
-export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSectionProps) {
+export function SpecialistWorkersSection({ onSelectTab, onOpenArbitration }: SpecialistWorkersSectionProps) {
   const {
     coins,
     specialistWorkers,
@@ -40,6 +42,18 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
   } = useGameStore();
 
   const [tessaDrawerOpen, setTessaDrawerOpen] = useState(false);
+  const [localArbitrationOpen, setLocalArbitrationOpen] = useState(false);
+  const [selectedSpecialistId, setSelectedSpecialistId] = useState<string | null>(null);
+
+  const handleOpenArbitration = (workerId: string) => {
+    if (onOpenArbitration) {
+      onOpenArbitration(workerId);
+    } else {
+      setSelectedSpecialistId(workerId);
+      setLocalArbitrationOpen(true);
+    }
+  };
+
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -157,9 +171,17 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                       <h4 className="font-bold text-sm text-stone-100 truncate">{worker.name}</h4>
                       {/* Status Tag */}
                       {isHired ? (
-                        isStriking ? (
+                        isStriking || state.moraleTier === 'striking' ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-900/40 text-red-300 border border-red-500/40 animate-pulse">
                             ⚠️ Strike
+                          </span>
+                        ) : state.moraleTier === 'sabbatical' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 border border-sky-500/40">
+                            🛑 Sabbatical
+                          </span>
+                        ) : state.appreciatedUntil && state.appreciatedUntil > now ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/40 text-emerald-300 border border-emerald-500/40">
+                            🤝 Appreciated
                           </span>
                         ) : schedule.isOvertime ? (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-300 border border-amber-500/40 animate-pulse">
@@ -322,6 +344,12 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                         <div className="mt-2 p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-bold flex items-center gap-1.5">
                           <span>⚠️</span>
                           <span>Grumbling — Operating at 50% Speed</span>
+                        </div>
+                      )}
+                      {isHired && state.appreciatedUntil && state.appreciatedUntil > now && (
+                        <div className="mt-2 p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1.5">
+                          <span>🤝</span>
+                          <span>Appreciated Staff (+10% Speed Boost active)</span>
                         </div>
                       )}
                     </>
@@ -492,22 +520,42 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
                   </button>
                 ) : (
                   <div className="space-y-2">
-                    {/* Strike Warning & Settle Back Pay */}
-                    {isStriking && (
-                      <div className="bg-red-950/50 border border-red-500/40 rounded-lg p-2 space-y-1.5">
-                        <div className="text-[11px] text-red-300 font-medium">
-                          Unpaid Wages: <span className="font-bold text-amber-400">🪙 {unpaidWages}</span>
+                    {/* Strike Warning & Grievance Arbitration */}
+                    {(isStriking || state.moraleTier === 'striking') && (
+                      <div className="bg-red-950/60 border border-red-500/40 rounded-lg p-2.5 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-red-200">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <span className="animate-bounce">🛑</span> ON STRIKE
+                          </span>
+                          <span className="text-[11px] font-mono">
+                            Owed: <b className="text-amber-400">🪙 {unpaidWages}</b>
+                          </span>
                         </div>
                         <button
-                          onClick={() => paySpecialistBackPay(worker.id)}
-                          disabled={!canAffordBackpay}
-                          className={`w-full py-1.5 px-2 rounded-lg text-xs font-bold transition-all ${
-                            canAffordBackpay
-                              ? 'bg-red-600 hover:bg-red-500 text-white shadow-sm'
-                              : 'bg-stone-800 text-stone-500 cursor-not-allowed'
-                          }`}
+                          onClick={() => handleOpenArbitration(worker.id)}
+                          className="w-full py-2 px-2.5 rounded-lg bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-xs font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                          {canAffordBackpay ? `Settle Back Pay (🪙 ${unpaidWages})` : `Need 🪙 ${unpaidWages} to Settle`}
+                          <span>⚖️</span>
+                          <span>Arbitrate Dispute (Accord · Sabbatical · Severance)</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* On Sabbatical Box */}
+                    {state.moraleTier === 'sabbatical' && (
+                      <div className="bg-sky-950/60 border border-sky-500/40 rounded-lg p-2.5 space-y-2">
+                        <div className="flex items-center justify-between text-xs text-sky-200">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <span>🛑</span> ON SABBATICAL
+                          </span>
+                          <span className="text-[10px] text-sky-300">0 Burn · Desertion Frozen</span>
+                        </div>
+                        <button
+                          onClick={() => handleOpenArbitration(worker.id)}
+                          className="w-full py-1.5 px-2.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-black transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          <span>🛑</span>
+                          <span>Manage / Recall from Sabbatical</span>
                         </button>
                       </div>
                     )}
@@ -562,6 +610,13 @@ export function SpecialistWorkersSection({ onSelectTab }: SpecialistWorkersSecti
           );
         })}
       </div>
+
+      {/* Local Guild Grievance Arbitration Dossier Modal */}
+      <GrievanceResolutionModal
+        isOpen={localArbitrationOpen}
+        onClose={() => setLocalArbitrationOpen(false)}
+        initialWorkerId={selectedSpecialistId}
+      />
     </div>
   );
 }

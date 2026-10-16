@@ -16,6 +16,8 @@ import { StaffCommissaryCommandCard } from './StaffCommissaryCommandCard';
 import { FarmClockBanner } from './FarmClockBanner';
 import { BunkhouseFacilityPanel } from './BunkhouseFacilityPanel';
 import { DualRosterCommandDeck } from './DualRosterCommandDeck';
+import { PicketAlertBanner } from './PicketAlertBanner';
+import { GrievanceResolutionModal } from './GrievanceResolutionModal';
 import {
   getWorkerScheduleTelemetry,
   type ShiftType,
@@ -126,6 +128,8 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
   const [shiftFilter, setShiftFilter] = useState<ShiftType | 'all'>('all');
+  const [arbitrationWorkerId, setArbitrationWorkerId] = useState<string | null>(null);
+  const [isArbitrationOpen, setIsArbitrationOpen] = useState(false);
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -196,6 +200,9 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
         </div>
       )}
 
+      {/* Picket Alert Banner for Labor Disputes */}
+      <PicketAlertBanner />
+
       {/* Master Farm Clock & Shift Timeline (Top Banner) */}
       <FarmClockBanner
         selectedShiftFilter={shiftFilter}
@@ -212,7 +219,13 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
       <BunkhouseFacilityPanel />
 
       {/* Prominent Dedicated Specialist Workers Section */}
-      <SpecialistWorkersSection onSelectTab={onSelectTab} />
+      <SpecialistWorkersSection
+        onSelectTab={onSelectTab}
+        onOpenArbitration={(workerId) => {
+          setArbitrationWorkerId(workerId);
+          setIsArbitrationOpen(true);
+        }}
+      />
 
       {/* Division Tabs */}
       <div className="flex gap-1 bg-stone-100 dark:bg-gray-800 rounded-lg p-1">
@@ -343,6 +356,16 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                       {worker.isHired && isStriking && (
                         <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-500/25 text-red-600 dark:text-red-300 border border-red-500/50 whitespace-nowrap animate-pulse">
                           🛑 On Strike
+                        </span>
+                      )}
+                      {worker.isHired && worker.moraleTier === 'sabbatical' && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-sky-500/25 text-sky-600 dark:text-sky-300 border border-sky-500/50 whitespace-nowrap">
+                          🛑 Sabbatical
+                        </span>
+                      )}
+                      {worker.isHired && worker.appreciatedUntil && worker.appreciatedUntil > now && (
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 whitespace-nowrap">
+                          🤝 Appreciated (+10%)
                         </span>
                       )}
                       {worker.isHired && isGrumbling && (
@@ -522,18 +545,58 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     </div>
                   )}
 
-                  {/* Strike and Grumbling alerts */}
+                  {/* Strike, Sabbatical, Grumbling & Morale alerts */}
                   {worker.isHired && (
-                    <div className="mt-1.5">
+                    <div className="mt-1.5 space-y-1.5">
                       {isStriking && (
-                        <div className="p-2 rounded-lg bg-red-500/15 border border-red-500/40 text-red-700 dark:text-red-300 text-xs font-bold flex items-center gap-1.5">
-                          <span className="text-base animate-bounce">🛑</span>
-                          <div>
-                            <div>ON STRIKE — Work Halted!</div>
-                            <div className="text-[10px] font-normal opacity-90">
-                              Missed {worker.missedCycles || 2} cycles upkeep. Restock vault & pantry to resume.
+                        <div className="p-2.5 rounded-lg bg-red-500/15 border border-red-500/40 text-red-700 dark:text-red-300 text-xs font-bold space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg animate-bounce">🛑</span>
+                            <div>
+                              <div className="font-black text-xs text-red-600 dark:text-red-300">ON STRIKE — Work Halted!</div>
+                              <div className="text-[10px] font-normal opacity-90">
+                                Missed {worker.missedCycles || 2} cycles upkeep. Restock vault & pantry to resume.
+                              </div>
                             </div>
                           </div>
+                          <button
+                            onClick={() => {
+                              setArbitrationWorkerId(role);
+                              setIsArbitrationOpen(true);
+                            }}
+                            className="w-full py-1.5 px-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+                          >
+                            <span>⚖️</span>
+                            <span>Arbitrate Strike Grievance</span>
+                          </button>
+                        </div>
+                      )}
+                      {worker.moraleTier === 'sabbatical' && (
+                        <div className="p-2 rounded-lg bg-sky-500/15 border border-sky-500/40 text-sky-700 dark:text-sky-300 text-xs font-bold flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base">🛑</span>
+                            <div>
+                              <div className="font-bold text-sky-600 dark:text-sky-300">ON SABBATICAL (Furloughed)</div>
+                              <div className="text-[10px] font-normal opacity-90">
+                                Zero daily burn. Desertion clock frozen.
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setArbitrationWorkerId(role);
+                              setIsArbitrationOpen(true);
+                            }}
+                            className="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] transition-all cursor-pointer shadow-xs active:scale-95 shrink-0"
+                          >
+                            Manage / Recall
+                          </button>
+                        </div>
+                      )}
+                      {worker.appreciatedUntil && worker.appreciatedUntil > now && (
+                        <div className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold flex items-center gap-1.5">
+                          <span>🤝</span>
+                          <span>Appreciated Staff (+10% Speed Boost active)</span>
                         </div>
                       )}
                       {isGrumbling && (
@@ -758,6 +821,13 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           );
         })}
       </div>
+
+      {/* Guild Grievance Arbitration Dossier Modal */}
+      <GrievanceResolutionModal
+        isOpen={isArbitrationOpen}
+        onClose={() => setIsArbitrationOpen(false)}
+        initialWorkerId={arbitrationWorkerId}
+      />
     </div>
   );
 }

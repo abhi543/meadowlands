@@ -28,6 +28,7 @@ import { TerritoryMapView } from '@/components/game/TerritoryMapView';
 import { FloatingNumbers } from '@/components/game/FloatingNumbers';
 import { BackupModal } from '@/components/game/BackupModal';
 import { BarnTab } from '@/components/game/BarnTab';
+import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -280,6 +281,11 @@ export default function Home() {
             onOpenDetail={() => setEventModalOpen(true)}
             onOpenRelics={() => setRelicsModalOpen(true)}
           />
+
+          {/* Labor Strike & Grievance Dispute Alert Ribbon */}
+          <div className="mb-2">
+            <PicketAlertBanner />
+          </div>
 
           {/* Legacy Hourly Event Banner */}
           {activeTab !== 'animals' && <EventBanner />}

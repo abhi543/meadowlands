@@ -362,6 +362,26 @@ export function getWorkerScheduleTelemetry(params: {
     dialogueSnippet = worker?.moraleTier === 'inspired'
       ? 'Loved the meal! Relaxing by the fire with fellow hands.'
       : 'Off duty, enjoying warm tea and campfire conversation.';
+  } else if (worker?.moraleTier === 'sabbatical') {
+    phase = 'recreation';
+    phaseLabel = 'On Sabbatical (Furloughed)';
+    phaseBadgeText = '🛑 On Sabbatical — Contract Frozen (0 Wages/Food)';
+    phaseBadgeEmoji = '🛑';
+    phaseColorClass = 'text-blue-300 bg-blue-500/15 border-blue-500/40';
+    dialogueSnippet = 'On unpaid sabbatical resting in the village inn. Contract expenses frozen.';
+  } else if (worker?.moraleTier === 'striking' || worker?.isStriking) {
+    phase = 'recreation';
+    phaseLabel = 'On Strike (Picket)';
+    const desertionRemainingSec = worker?.desertionDeadline
+      ? Math.max(0, Math.ceil((worker.desertionDeadline - timestamp) / 1000))
+      : 7200;
+    const dH = Math.floor(desertionRemainingSec / 3600);
+    const dM = Math.floor((desertionRemainingSec % 3600) / 60);
+    const dS = desertionRemainingSec % 60;
+    phaseBadgeText = `🪧 On Strike — Desertion in ${dH.toString().padStart(2, '0')}:${dM.toString().padStart(2, '0')}:${dS.toString().padStart(2, '0')}`;
+    phaseBadgeEmoji = '🪧';
+    phaseColorClass = 'text-rose-400 bg-rose-500/20 border-rose-500/40';
+    dialogueSnippet = 'Refusing to work until back-wages and pantry rations are settled by the Labor Guild!';
   } else if (phase === 'sleeping') {
     phaseLabel = 'Asleep in Bunkhouse';
     phaseBadgeText = `🌙 Asleep in Bunkhouse — Wakes at 06:00 (${timeRemainingFormatted})`;
@@ -380,13 +400,18 @@ export function getWorkerScheduleTelemetry(params: {
   if (isWellRested && phase === 'on_shift') {
     speedMultiplier *= 1.15; // +15% well-rested perk
   }
+  const isAppreciated = Boolean(worker?.appreciatedUntil && timestamp < worker.appreciatedUntil);
+  if (isAppreciated && phase === 'on_shift') {
+    speedMultiplier *= 1.10; // +10% Appreciated Staff modifier
+  }
 
   const isOnDuty = Boolean(
     (phase === 'on_shift' || isOvertime) &&
     !isAdjusting &&
     !worker?.isPaused &&
     worker?.moraleTier !== 'striking' &&
-    worker?.moraleTier !== 'deserted'
+    worker?.moraleTier !== 'deserted' &&
+    worker?.moraleTier !== 'sabbatical'
   );
 
   const canCallOvertime = Boolean(
@@ -396,7 +421,8 @@ export function getWorkerScheduleTelemetry(params: {
     !isAdjusting &&
     worker?.isHired &&
     worker?.moraleTier !== 'striking' &&
-    worker?.moraleTier !== 'deserted'
+    worker?.moraleTier !== 'deserted' &&
+    worker?.moraleTier !== 'sabbatical'
   );
 
   return {
@@ -509,6 +535,7 @@ export function processSingleWorkerClockOut(params: {
   workerName: string;
   roleOrId: string;
   currentMissedCycles: number;
+  currentMoraleTier?: MoraleTier;
   payrollVaultCoins: number;
   staffPantry: Record<string, number>;
   activeWorkersCount: number;
@@ -517,10 +544,29 @@ export function processSingleWorkerClockOut(params: {
     workerName,
     roleOrId,
     currentMissedCycles,
+    currentMoraleTier,
     payrollVaultCoins,
     staffPantry,
     activeWorkersCount,
   } = params;
+
+  // Sabbatical workers do not burn wages or pantry rations
+  if (currentMoraleTier === 'sabbatical') {
+    return {
+      paidWage: true,
+      fedRation: true,
+      isInspired: false,
+      wageCost: 0,
+      consumedFoodId: null,
+      newPayrollCoins: payrollVaultCoins,
+      newStaffPantry: staffPantry,
+      newMissedCycles: currentMissedCycles,
+      newMoraleTier: 'sabbatical',
+      isStriking: false,
+      isDeserted: false,
+      notificationMessage: null,
+    };
+  }
 
   const config = WORKER_UPKEEP_ROSTER[roleOrId];
   const baseWage = config?.baseDailyWage || 15;
@@ -580,15 +626,10 @@ export function processSingleWorkerClockOut(params: {
     if (newMissedCycles === 1) {
       newMoraleTier = 'grumbling';
       notificationMessage = `🟡 Missed Upkeep: ${workerName} clocked out without complete rations (Grumbling -50% speed).`;
-    } else if (newMissedCycles >= 2 && newMissedCycles < 4) {
+    } else if (newMissedCycles >= 2) {
       newMoraleTier = 'striking';
       isStriking = true;
-      notificationMessage = `🛑 Strike Alert: ${workerName} clocked out into strike due to consecutive missed upkeep!`;
-    } else if (newMissedCycles >= 4) {
-      newMoraleTier = 'striking';
-      isStriking = true;
-      isDeserted = false; // Workers never desert or get unhired!
-      notificationMessage = `🛑 Work Stoppage: ${workerName} has halted tasks due to unpaid upkeep! Fund Payroll Vault or Staff Pantry to resume.`;
+      notificationMessage = `🛑 Strike Alert: ${workerName} has halted tasks due to unpaid upkeep! Open Grievance Dossier to arbitrate.`;
     }
   }
 

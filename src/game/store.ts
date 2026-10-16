@@ -167,6 +167,18 @@ export {
   MAX_PLOT_SOIL_LEVEL,
   type PlotSoilTierInfo,
 };
+import {
+  calculateGrievanceDossier,
+  DESERTION_DURATION_SEC,
+  APPRECIATED_DURATION_MS,
+  type StrikeGrievanceDossier,
+} from './strikeResolution';
+export {
+  calculateGrievanceDossier,
+  DESERTION_DURATION_SEC,
+  APPRECIATED_DURATION_MS,
+  type StrikeGrievanceDossier,
+};
 
 
 // ---- Dynamic Event Engine & Relics Types (v2.3) ----
@@ -409,6 +421,13 @@ export interface UnifiedWorkerInstance {
   wellRested?: boolean;
   stamina?: number;
   lastClockOutDay?: number;
+  strikeStartedAt?: number | null;
+  desertionDeadline?: number | null;
+  appreciatedUntil?: number | null;
+  sabbaticalGrantedAt?: number | null;
+  sabbaticalLockedDebtCoins?: number | null;
+  sabbaticalLockedFoodUnits?: number | null;
+  sabbaticalRemainingDesertionSec?: number | null;
 }
 
 // Hourly Events
@@ -761,6 +780,12 @@ export interface GameState {
   upgradePlotLevel: (plotId: number) => boolean;
   upgradeAllPlots: () => boolean;
   unlockNextPlot: () => boolean;
+
+  // Worker Strike Resolution & Sabbatical Actions
+  resolveWorkerStrikeAccord: (workerId: string) => boolean;
+  grantWorkerSabbatical: (workerId: string) => boolean;
+  terminateWorkerWithSeverance: (workerId: string) => boolean;
+  recallWorkerFromSabbatical: (workerId: string) => boolean;
 
   // Active Radar Crisis Actions (Step 1)
   triggerCrisis: (type?: CrisisType) => void;
@@ -4554,6 +4579,7 @@ export const useGameStore = create<GameState>()(
                 workerName: cfg.name,
                 roleOrId: role,
                 currentMissedCycles: worker.missedCycles || 0,
+                currentMoraleTier: worker.moraleTier,
                 payrollVaultCoins: newPayrollVaultCoins,
                 staffPantry: newStaffPantry,
                 activeWorkersCount: Object.values(updatedUnifiedWorkers).filter(w => w.isHired).length,
@@ -4566,8 +4592,34 @@ export const useGameStore = create<GameState>()(
               worker.wellRested = false; // completed shift consumes the rest buff
               unifiedWorkersModified = true;
 
+              if (clockOutRes.isStriking) {
+                if (!worker.strikeStartedAt) {
+                  worker.strikeStartedAt = now;
+                  worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
+                }
+              }
+
               if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
                 state.addNotification(clockOutRes.notificationMessage, clockOutRes.isStriking ? '🛑' : '🪙', 'coin');
+              }
+            }
+
+            // Desertion Hard Deadline Check (2 Real-World Hours on Strike)
+            if (worker.moraleTier === 'striking') {
+              if (!worker.strikeStartedAt) {
+                worker.strikeStartedAt = now;
+                worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
+                unifiedWorkersModified = true;
+              } else if (worker.desertionDeadline && now >= worker.desertionDeadline) {
+                worker.isHired = false;
+                worker.moraleTier = 'deserted';
+                worker.strikeStartedAt = null;
+                worker.desertionDeadline = null;
+                worker.level = 1;
+                unifiedWorkersModified = true;
+                playDefeatSound();
+                state.addNotification(`🪧 Worker Desertion: ${cfg.name} waited 2 hours with unresolved grievances and has permanently abandoned the farm! 🚪`, '🚪', 'event');
+                continue;
               }
             }
 
@@ -5016,6 +5068,7 @@ export const useGameStore = create<GameState>()(
               workerName: WORKER_UPKEEP_ROSTER[spId]?.name || spId,
               roleOrId: spId,
               currentMissedCycles: sp.missedCycles || 0,
+              currentMoraleTier: sp.moraleTier,
               payrollVaultCoins: newPayrollVaultCoins,
               staffPantry: newStaffPantry,
               activeWorkersCount: Object.values(updatedSpecialistWorkers).filter(w => w.isHired).length,
@@ -5028,8 +5081,35 @@ export const useGameStore = create<GameState>()(
             sp.lastClockOutDay = clock.currentDay;
             sp.wellRested = false;
 
+            if (spClockOutRes.isStriking) {
+              if (!sp.strikeStartedAt) {
+                sp.strikeStartedAt = now;
+                sp.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
+              }
+            }
+
             if (spClockOutRes.notificationMessage && (spClockOutRes.isStriking || spClockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
               state.addNotification(spClockOutRes.notificationMessage, spClockOutRes.isStriking ? '🛑' : '🪙', 'coin');
+            }
+          }
+
+          // Desertion Hard Deadline Check for Specialists
+          if (sp.moraleTier === 'striking') {
+            if (!sp.strikeStartedAt) {
+              sp.strikeStartedAt = now;
+              sp.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
+              specialistWorkersModified = true;
+            } else if (sp.desertionDeadline && now >= sp.desertionDeadline) {
+              sp.isHired = false;
+              sp.isActive = false;
+              sp.isStriking = false;
+              sp.moraleTier = 'deserted';
+              sp.strikeStartedAt = null;
+              sp.desertionDeadline = null;
+              sp.unpaidWages = 0;
+              specialistWorkersModified = true;
+              playDefeatSound();
+              state.addNotification(`🪧 Worker Desertion: ${WORKER_UPKEEP_ROSTER[spId]?.name || spId} waited 2 hours with unresolved grievances and has permanently departed! 🚪`, '🚪', 'event');
             }
           }
         }
@@ -6524,6 +6604,286 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         return true;
+      },
+
+      resolveWorkerStrikeAccord: (workerId: string) => {
+        const state = get();
+        const isSpecialist = Boolean(state.specialistWorkers?.[workerId as SpecialistWorkerId]);
+        const workerObj = isSpecialist
+          ? state.specialistWorkers?.[workerId as SpecialistWorkerId]
+          : state.unifiedWorkers?.[workerId as WorkerRole];
+
+        if (!workerObj || !workerObj.isHired) return false;
+
+        const dossier = calculateGrievanceDossier({
+          workerId,
+          workerObj,
+          coins: state.coins,
+          payrollVaultCoins: state.payrollVaultCoins || 0,
+          staffPantry: state.staffPantry || {},
+          silo: state.silo || {},
+          barn: state.barn || {},
+        });
+
+        if (!dossier.canSignAccord) {
+          state.addNotification(`Cannot sign accord! Need 🪙${dossier.totalSettleCoins} and ${dossier.rationsDemandedTotal}x ${dossier.dietaryCategoryLabel}.`, '⚠️', 'info');
+          return false;
+        }
+
+        // 1. Deduct currency: Vault first, remainder from main wallet
+        let remainingToDeduct = dossier.totalSettleCoins;
+        let newVault = state.payrollVaultCoins || 0;
+        let newCoins = state.coins;
+
+        const vaultDeduct = Math.min(newVault, remainingToDeduct);
+        newVault -= vaultDeduct;
+        remainingToDeduct -= vaultDeduct;
+
+        if (remainingToDeduct > 0) {
+          newCoins -= remainingToDeduct;
+        }
+
+        // 2. Deduct food rations: Staff Pantry first, remainder from Silo (crops) or Barn (dairy/protein/meal)
+        let rationsNeeded = dossier.rationsDemandedTotal;
+        const newPantry = { ...state.staffPantry };
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+
+        for (const fItem of dossier.availableFoodItems) {
+          if (rationsNeeded <= 0) break;
+          const inPantry = newPantry[fItem.id] || 0;
+          if (inPantry > 0) {
+            const take = Math.min(inPantry, rationsNeeded);
+            newPantry[fItem.id] -= take;
+            if (newPantry[fItem.id] === 0) delete newPantry[fItem.id];
+            rationsNeeded -= take;
+          }
+          if (rationsNeeded <= 0) break;
+          if (dossier.dietaryCategory === 'crop') {
+            const inSilo = newSilo[fItem.id] || 0;
+            if (inSilo > 0) {
+              const take = Math.min(inSilo, rationsNeeded);
+              newSilo[fItem.id] -= take;
+              rationsNeeded -= take;
+            }
+          } else {
+            const inBarn = newBarn[fItem.id] || 0;
+            if (inBarn > 0) {
+              const take = Math.min(inBarn, rationsNeeded);
+              newBarn[fItem.id] -= take;
+              rationsNeeded -= take;
+            }
+          }
+        }
+
+        const now = Date.now();
+        // 3. Update worker state
+        if (isSpecialist) {
+          const sId = workerId as SpecialistWorkerId;
+          const currentSp = state.specialistWorkers[sId];
+          set({
+            coins: newCoins,
+            payrollVaultCoins: newVault,
+            staffPantry: newPantry,
+            silo: newSilo,
+            barn: newBarn,
+            specialistWorkers: {
+              ...state.specialistWorkers,
+              [sId]: {
+                ...currentSp,
+                isStriking: false,
+                moraleTier: 'content',
+                missedCycles: 0,
+                strikeStartedAt: null,
+                desertionDeadline: null,
+                sabbaticalGrantedAt: null,
+                sabbaticalLockedDebtCoins: null,
+                sabbaticalLockedFoodUnits: null,
+                sabbaticalRemainingDesertionSec: null,
+                appreciatedUntil: now + APPRECIATED_DURATION_MS,
+              },
+            },
+            isDirty: true,
+          });
+        } else {
+          const r = workerId as WorkerRole;
+          const currentW = state.unifiedWorkers[r];
+          set({
+            coins: newCoins,
+            payrollVaultCoins: newVault,
+            staffPantry: newPantry,
+            silo: newSilo,
+            barn: newBarn,
+            unifiedWorkers: {
+              ...state.unifiedWorkers,
+              [r]: {
+                ...currentW,
+                moraleTier: 'content',
+                missedCycles: 0,
+                strikeStartedAt: null,
+                desertionDeadline: null,
+                sabbaticalGrantedAt: null,
+                sabbaticalLockedDebtCoins: null,
+                sabbaticalLockedFoodUnits: null,
+                sabbaticalRemainingDesertionSec: null,
+                appreciatedUntil: now + APPRECIATED_DURATION_MS,
+              },
+            },
+            isDirty: true,
+          });
+        }
+
+        playVictoryChime();
+        state.addNotification(`🤝 Full Accord Signed! ${dossier.workerName} returned to active duty with +10% Appreciated Staff speed boost!`, '🤝', 'event');
+        return true;
+      },
+
+      grantWorkerSabbatical: (workerId: string) => {
+        const state = get();
+        const isSpecialist = Boolean(state.specialistWorkers?.[workerId as SpecialistWorkerId]);
+        const workerObj = isSpecialist
+          ? state.specialistWorkers?.[workerId as SpecialistWorkerId]
+          : state.unifiedWorkers?.[workerId as WorkerRole];
+
+        if (!workerObj || !workerObj.isHired) return false;
+
+        const dossier = calculateGrievanceDossier({
+          workerId,
+          workerObj,
+          coins: state.coins,
+          payrollVaultCoins: state.payrollVaultCoins || 0,
+          staffPantry: state.staffPantry || {},
+          silo: state.silo || {},
+          barn: state.barn || {},
+        });
+
+        const now = Date.now();
+        if (isSpecialist) {
+          const sId = workerId as SpecialistWorkerId;
+          const currentSp = state.specialistWorkers[sId];
+          set({
+            specialistWorkers: {
+              ...state.specialistWorkers,
+              [sId]: {
+                ...currentSp,
+                isStriking: false,
+                moraleTier: 'sabbatical',
+                sabbaticalGrantedAt: now,
+                sabbaticalLockedDebtCoins: dossier.totalSettleCoins,
+                sabbaticalLockedFoodUnits: dossier.rationsDemandedTotal,
+                sabbaticalRemainingDesertionSec: dossier.desertionRemainingSeconds,
+                desertionDeadline: null,
+              },
+            },
+            isDirty: true,
+          });
+        } else {
+          const r = workerId as WorkerRole;
+          const currentW = state.unifiedWorkers[r];
+          set({
+            unifiedWorkers: {
+              ...state.unifiedWorkers,
+              [r]: {
+                ...currentW,
+                moraleTier: 'sabbatical',
+                sabbaticalGrantedAt: now,
+                sabbaticalLockedDebtCoins: dossier.totalSettleCoins,
+                sabbaticalLockedFoodUnits: dossier.rationsDemandedTotal,
+                sabbaticalRemainingDesertionSec: dossier.desertionRemainingSeconds,
+                desertionDeadline: null,
+              },
+            },
+            isDirty: true,
+          });
+        }
+
+        playClockTickSound();
+        state.addNotification(`🛑 Unpaid Sabbatical: ${dossier.workerName} is on furlough at the village inn. Daily wages and food burn frozen to 0! Desertion timer paused.`, '🛑', 'event');
+        return true;
+      },
+
+      terminateWorkerWithSeverance: (workerId: string) => {
+        const state = get();
+        const isSpecialist = Boolean(state.specialistWorkers?.[workerId as SpecialistWorkerId]);
+        const workerObj = isSpecialist
+          ? state.specialistWorkers?.[workerId as SpecialistWorkerId]
+          : state.unifiedWorkers?.[workerId as WorkerRole];
+
+        if (!workerObj || !workerObj.isHired) return false;
+
+        const dossier = calculateGrievanceDossier({
+          workerId,
+          workerObj,
+          coins: state.coins,
+          payrollVaultCoins: state.payrollVaultCoins || 0,
+          staffPantry: state.staffPantry || {},
+          silo: state.silo || {},
+          barn: state.barn || {},
+        });
+
+        if (state.coins < dossier.severanceFeeCoins) {
+          state.addNotification(`Need 🪙${dossier.severanceFeeCoins} to pay Guild Severance fine!`, '💰', 'info');
+          return false;
+        }
+
+        if (isSpecialist) {
+          const sId = workerId as SpecialistWorkerId;
+          const currentSp = state.specialistWorkers[sId];
+          set({
+            coins: state.coins - dossier.severanceFeeCoins,
+            specialistWorkers: {
+              ...state.specialistWorkers,
+              [sId]: {
+                ...currentSp,
+                isHired: false,
+                isActive: false,
+                isStriking: false,
+                unpaidWages: 0,
+                moraleTier: 'content',
+                missedCycles: 0,
+                strikeStartedAt: null,
+                desertionDeadline: null,
+                sabbaticalGrantedAt: null,
+                sabbaticalLockedDebtCoins: null,
+                sabbaticalLockedFoodUnits: null,
+                sabbaticalRemainingDesertionSec: null,
+              },
+            },
+            isDirty: true,
+          });
+        } else {
+          const r = workerId as WorkerRole;
+          const currentW = state.unifiedWorkers[r];
+          set({
+            coins: state.coins - dossier.severanceFeeCoins,
+            unifiedWorkers: {
+              ...state.unifiedWorkers,
+              [r]: {
+                ...currentW,
+                isHired: false,
+                level: 1,
+                isPaused: false,
+                moraleTier: 'content',
+                missedCycles: 0,
+                strikeStartedAt: null,
+                desertionDeadline: null,
+                sabbaticalGrantedAt: null,
+                sabbaticalLockedDebtCoins: null,
+                sabbaticalLockedFoodUnits: null,
+                sabbaticalRemainingDesertionSec: null,
+              },
+            },
+            isDirty: true,
+          });
+        }
+
+        playCashRegisterSound();
+        state.addNotification(`📜 Contract Severed: Paid 🪙${dossier.severanceFeeCoins} severance to Labor Guild. All debt forgiven and bunkhouse capacity freed!`, '📜', 'event');
+        return true;
+      },
+
+      recallWorkerFromSabbatical: (workerId: string) => {
+        return get().resolveWorkerStrikeAccord(workerId);
       },
 
       // Active Radar Crisis Actions (Step 1)

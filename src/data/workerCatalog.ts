@@ -126,8 +126,7 @@ export interface SpecialistWorkerState {
   isStriking: boolean; // true if wage couldn't be paid
   hiredAt: number | null;
   unpaidWages: number;
-  totalWagesPaid: number;
-  moraleTier?: 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted';
+  moraleTier?: 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted' | 'sabbatical';
   missedCycles?: number;
   lastFedAt?: number;
   lastPaidAt?: number;
@@ -140,6 +139,13 @@ export interface SpecialistWorkerState {
   wellRested?: boolean;
   stamina?: number;
   lastClockOutDay?: number;
+  strikeStartedAt?: number | null;
+  desertionDeadline?: number | null;
+  appreciatedUntil?: number | null;
+  sabbaticalGrantedAt?: number | null;
+  sabbaticalLockedDebtCoins?: number | null;
+  sabbaticalLockedFoodUnits?: number | null;
+  sabbaticalRemainingDesertionSec?: number | null;
 }
 
 export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, SpecialistWorkerState> {
