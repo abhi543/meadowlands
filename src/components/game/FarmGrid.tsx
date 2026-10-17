@@ -573,9 +573,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     <div className="flex flex-col items-center">
                       <span className="text-xl">{CROPS[plot.crop].emoji}</span>
                       <span className={`text-[10px] font-semibold mt-0.5 ${
-                        isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
+                        plot.isFrostbitten
+                          ? 'text-sky-300 font-bold'
+                          : plot.isHeatWilted
+                          ? 'text-orange-400 font-bold'
+                          : isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
                       }`}>
-                        {Math.round(progress * 100)}%
+                        {plot.isFrostbitten ? '🧊 Frostbitten' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
                       </span>
                     </div>
                   )}
@@ -587,6 +591,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         {'✂️'} Harvest
                       </span>
                     </div>
+                  )}
+
+                  {/* Climate-Driven Phenology Badge */}
+                  {plot.crop && plot.phenologyBadgeEmoji && (
+                    <span
+                      className="absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold bg-stone-900/90 border border-stone-700/80 text-amber-200 z-10 backdrop-blur-xs shadow-xs"
+                      title={plot.phenologyBadgeText || ''}
+                    >
+                      <span>{plot.phenologyBadgeEmoji}</span>
+                      <span className="truncate max-w-[60px] hidden xs:inline">{plot.phenologyBadgeText?.split('(')[0]?.trim()}</span>
+                    </span>
                   )}
 
                   {/* Soil Tier Badge (Click to upgrade with coins) */}

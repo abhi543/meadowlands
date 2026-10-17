@@ -7,6 +7,33 @@
  */
 
 import { type CircadianClockInfo } from '@/game/shiftEngine';
+import {
+  WEATHER_PROFILES,
+  type WeatherProfileId,
+  type WeatherCategoryId,
+  type AtmosphericWeatherState,
+  createDefaultWeatherState,
+  calculateThermodynamicEvaporationRatePctPerMin,
+  rollNextNaturalWeather,
+  CROP_PHENOLOGY_REGISTRY,
+  evaluateCropPhenology,
+  type CropPhenologyResult,
+  type CropPhenologyMeta,
+} from '@/game/weatherEngine';
+
+export {
+  WEATHER_PROFILES,
+  type WeatherProfileId,
+  type WeatherCategoryId,
+  type AtmosphericWeatherState,
+  createDefaultWeatherState,
+  calculateThermodynamicEvaporationRatePctPerMin,
+  rollNextNaturalWeather,
+  CROP_PHENOLOGY_REGISTRY,
+  evaluateCropPhenology,
+  type CropPhenologyResult,
+  type CropPhenologyMeta,
+};
 
 // --- Physical Conversion Constants ---
 export const LITERS_PER_PERCENT_MOISTURE_PER_PLOT = 2.5; // 1% moisture on 1 plot = 2.5 Liters of water
@@ -33,7 +60,8 @@ export const WEATHER_INFLOW_RATES = {
   downpour: 120, // or storm
 } as const;
 
-export type HydrologyWeatherCondition = keyof typeof WEATHER_INFLOW_RATES;
+export type HydrologyWeatherCondition = WeatherProfileId | keyof typeof WEATHER_INFLOW_RATES;
+
 
 // --- Canal Progression (4 Tiers) ---
 export type CanalTier = 1 | 2 | 3 | 4;
@@ -237,12 +265,23 @@ export function getDiurnalEvaporationRatePctPerMin(
 export const DESICCATION_WITHER_DURATION_SEC = 1800; // 30 real minutes (1 in-game day)
 export const ROOT_ROT_HAZARD_DURATION_SEC = 240; // 4 real minutes (standing water)
 
+export function resolveWeatherProfileId(condition: HydrologyWeatherCondition | undefined): WeatherProfileId {
+  if (!condition || condition === 'clear') return 'sunny';
+  if (condition === 'light_rain') return 'drizzle';
+  if (condition === 'downpour') return 'rain';
+  if (condition in WEATHER_PROFILES) return condition as WeatherProfileId;
+  return 'sunny';
+}
+
 // --- Hydrology State Interface ---
 export interface HydrologyState {
   // A. Surface Rain Cistern & Retention Basin
   cisternLiters: number;
   cisternMaxLiters: number;
   weatherCondition: HydrologyWeatherCondition;
+  weatherState?: AtmosphericWeatherState;
+  isRainbowActive?: boolean;
+  isSluiceFrozen?: boolean;
   
   // B. Deep Subterranean Aquifer
   aquiferLiters: number;
@@ -273,7 +312,10 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
   return {
     cisternLiters: Math.round(cisternMax * 0.6), // Start 60% full
     cisternMaxLiters: cisternMax,
-    weatherCondition: 'clear',
+    weatherCondition: 'sunny',
+    weatherState: createDefaultWeatherState('sunny'),
+    isRainbowActive: false,
+    isSluiceFrozen: false,
     
     aquiferLiters: 2760, // 92% table depth of 3000L
     aquiferCapacityLiters: AQUIFER_CAPACITY,
@@ -353,19 +395,62 @@ export function stepHydrologySimulation(params: {
   let totalDischarged = hydrology.totalWaterDischargedLiters;
   let totalPercolated = hydrology.totalPercolatedLiters;
 
-  // Weather determination
-  let weatherCondition: HydrologyWeatherCondition = isRainstormActive ? 'downpour' : hydrology.weatherCondition;
-  const weatherInflowRateLPerMin = WEATHER_INFLOW_RATES[weatherCondition];
+  // Weather determination & Multi-variable Profile sync
+  let activeProfileId: WeatherProfileId = resolveWeatherProfileId(hydrology.weatherCondition);
+  if (isRainstormActive && activeProfileId !== 'monsoon' && activeProfileId !== 'thunderstorm' && activeProfileId !== 'cyclone') {
+    activeProfileId = 'thunderstorm';
+  }
+  const weatherProfile = WEATHER_PROFILES[activeProfileId] || WEATHER_PROFILES.sunny;
 
-  // 2. Natural Precipitation Catchment into Rain Cistern
-  if (weatherInflowRateLPerMin > 0) {
-    const rainLitersGained = (weatherInflowRateLPerMin / 60) * dt;
-    currentCistern = Math.min(effectiveCisternMax, currentCistern + rainLitersGained);
+  // Sync atmospheric weather state
+  const currentAtmosphere: AtmosphericWeatherState = (!hydrology.weatherState || (hydrology.weatherState.profileId || hydrology.weatherState.currentWeather) !== activeProfileId)
+    ? createDefaultWeatherState(activeProfileId)
+    : {
+        ...hydrology.weatherState,
+        ticksElapsed: (hydrology.weatherState.ticksElapsed || 0) + 1,
+      };
+
+  // Sluice Gate Freezing Rule: Under 'frost' or 'snow', Tier 1 earthen furrows freeze solid!
+  let isSluiceFrozen = false;
+  if ((activeProfileId === 'frost' || activeProfileId === 'snow') && effectiveTier === 1) {
+    isSluiceFrozen = true;
+    if (sluiceGatesOpen) {
+      sluiceGatesOpen = false;
+      notifications.push({
+        text: '🧊 Sluice Frozen Solid: Earthen furrows froze in sub-zero frost! Upgrade to Tier 2 clay canals to unlock winter irrigation.',
+        icon: '🧊',
+        type: 'event',
+      });
+    }
   }
 
-  // 3. Subterranean Aquifer Baseline Natural Recharge (+8 L/min)
-  const aquiferRechargeLiters = (AQUIFER_NATURAL_RECHARGE_RATE_L_MIN / 60) * dt;
-  currentAquifer = Math.min(hydrology.aquiferCapacityLiters, currentAquifer + aquiferRechargeLiters);
+  // 2. Closed-Loop Precipitation Catchment into Rain Cistern & Cistern Overflow
+  const precipInflowLPerMin = activeProfileId === 'snow' ? 0 : weatherProfile.precipitationInflowLPerMin;
+  if (precipInflowLPerMin > 0) {
+    const rainLitersGained = (precipInflowLPerMin / 60) * dt;
+    const prospectiveCistern = currentCistern + rainLitersGained;
+    if (prospectiveCistern >= effectiveCisternMax) {
+      currentCistern = effectiveCisternMax;
+      // Overflow Rule: When Volume >= Max (10,000L), excess water automatically recharges the Deep Groundwater Aquifer at +20 L/min
+      const overflowRecharge = (20.0 / 60) * dt;
+      currentAquifer = Math.min(hydrology.aquiferCapacityLiters, currentAquifer + overflowRecharge);
+    } else {
+      currentCistern = prospectiveCistern;
+    }
+  }
+
+  // Cistern Heatwave Evaporation Loss: Uncovered cisterns lose 10 L/min to thermal boiling/evaporation
+  if (activeProfileId === 'heatwave') {
+    const heatwaveEvapLiters = (10.0 / 60) * dt;
+    currentCistern = Math.max(0, currentCistern - heatwaveEvapLiters);
+  }
+
+  // 3. Subterranean Aquifer Baseline Natural Recharge (+8 L/min, drops to 0 in Drought)
+  const baseRechargeRate = activeProfileId === 'drought' ? 0.0 : AQUIFER_NATURAL_RECHARGE_RATE_L_MIN;
+  if (baseRechargeRate > 0) {
+    const aquiferRechargeLiters = (baseRechargeRate / 60) * dt;
+    currentAquifer = Math.min(hydrology.aquiferCapacityLiters, currentAquifer + aquiferRechargeLiters);
+  }
 
   // Aquifer Stress state check: stressed if table drops below 25% (750L)
   const aquiferDepthPct = (currentAquifer / hydrology.aquiferCapacityLiters) * 100;
@@ -547,24 +632,31 @@ export function stepHydrologySimulation(params: {
     totalPercolated += percolatedLiters;
   }
 
-  // 7. Diurnal Thermal Evaporation & Soil Saturation Ticking on All Plots
-  const evapInfo = getDiurnalEvaporationRatePctPerMin(cycleElapsedSeconds, effectiveTier);
-  const evapRatePctPerSec = evapInfo.ratePctPerMin / 60;
+  // 7. Continuous Thermodynamic Soil Moisture Decay & Precipitation Wetting Formula
+  // EvaporativeLoss = E_base * (1 + (T - 20) / 25) * (1.0 - (H * 0.7)) * (1 - InfraDamping)
+  const thermoEvap = calculateThermodynamicEvaporationRatePctPerMin({
+    temperatureC: currentAtmosphere.temperatureC,
+    relativeHumidityPct: currentAtmosphere.relativeHumidityPct,
+    cycleElapsedSeconds,
+    canalTier: effectiveTier,
+  });
+  const evapRatePctPerSec = thermoEvap.evapRatePctPerMin / 60;
   const evapDeltaPct = evapRatePctPerSec * dt;
 
-  // Rain moisture bonus directly to open soil if storm/rain
-  const directRainMoistureGainPct = isRainstormActive
-    ? 0.05 * dt // +3.0% / min during storm
-    : weatherCondition === 'light_rain'
-    ? 0.02 * dt
-    : 0;
+  // Direct soil wetting from rain / condensation
+  // Foggy: ground condensation adds +0.3% moisture / min
+  // Active precipitation: from weatherProfile.plotDirectMoistureGainPctPerMin (e.g. Drizzle +1.0%, Rain +3.0%, Monsoon +6.0%, Hail +1.0%, Sunshower +1.5%)
+  const rainGainPctPerMin = activeProfileId === 'foggy'
+    ? 0.3
+    : weatherProfile.plotDirectMoistureGainPctPerMin;
+  const directRainMoistureGainPct = (rainGainPctPerMin / 60) * dt;
 
   for (let i = 0; i < newPlots.length; i++) {
     const p = newPlots[i];
     if (!p) continue;
     let m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
 
-    // Apply direct evaporation and rain wetting
+    // Apply continuous thermodynamic decay and precipitation inflow
     m = Math.max(0.0, Math.min(tierConfig.maxSaturationCapPct, m - evapDeltaPct + directRainMoistureGainPct));
 
     let desiccatedSec = p.desiccatedSeconds || 0;
@@ -614,12 +706,38 @@ export function stepHydrologySimulation(params: {
     };
   }
 
+  // 8. Severe Convective Hazard: Thunderstorm Lightning Strike (2% check per flash)
+  if (activeProfileId === 'thunderstorm' && Math.random() < 0.02 * (dt / 3.0)) {
+    const plantedIndices = newPlots
+      .map((p, idx) => (p && p.crop && !p.isWithered && !p.ready ? idx : -1))
+      .filter((idx) => idx !== -1);
+    if (plantedIndices.length > 0) {
+      const strikeIdx = plantedIndices[Math.floor(Math.random() * plantedIndices.length)];
+      const struckPlot = newPlots[strikeIdx];
+      newPlots[strikeIdx] = {
+        ...struckPlot,
+        crop: null,
+        plantedAt: null,
+        ready: false,
+        isWithered: false,
+      };
+      notifications.push({
+        text: `⚡ Convective Lightning Bolt! Struck Plot #${strikeIdx + 1}, incinerating the crop into Alchemical Ash!`,
+        icon: '⚡',
+        type: 'event',
+      });
+    }
+  }
+
   return {
     updatedHydrology: {
       ...hydrology,
       cisternLiters: Math.round(currentCistern * 10) / 10,
       cisternMaxLiters: effectiveCisternMax,
-      weatherCondition,
+      weatherCondition: activeProfileId,
+      weatherState: currentAtmosphere,
+      isRainbowActive: activeProfileId === 'sunshower',
+      isSluiceFrozen,
       aquiferLiters: Math.round(currentAquifer * 10) / 10,
       aquiferCapacityLiters: hydrology.aquiferCapacityLiters,
       isAquiferStressed,
@@ -714,7 +832,11 @@ export function simulateOfflineHydrology(params: {
  * Calculates crop quality upon harvest:
  * Optimal moisture (40.1% to 80.0%) without Root Rot unlocks eligibility for Silver, Gold, and Prismatic rolls!
  */
-export function rollCropQuality(hasRootRot: boolean, moistureLevel: number = 60.0): {
+export function rollCropQuality(
+  hasRootRot: boolean,
+  moistureLevel: number = 60.0,
+  bonusPrismaticChance: number = 0
+): {
   quality: 'standard' | 'silver' | 'gold' | 'prismatic';
   yieldMultiplier: number;
   priceMultiplier: number;
@@ -734,8 +856,9 @@ export function rollCropQuality(hasRootRot: boolean, moistureLevel: number = 60.
   // Check if within Optimal Capillary Zone (40.1% to 80.0%)
   if (moistureLevel >= 40.1 && moistureLevel <= 80.0) {
     const roll = Math.random();
-    if (roll < 0.02) {
-      // 2% Prismatic
+    const effectivePrismaticChance = 0.02 + Math.max(0, bonusPrismaticChance);
+    if (roll < effectivePrismaticChance) {
+      // Prismatic / Mythic Quality (2% base + bonus from Sunshower rainbow)
       return {
         quality: 'prismatic',
         yieldMultiplier: 2.0,
@@ -744,7 +867,7 @@ export function rollCropQuality(hasRootRot: boolean, moistureLevel: number = 60.
         badgeText: 'PRISMATIC (+200%)',
       };
     }
-    if (roll < 0.10) {
+    if (roll < effectivePrismaticChance + 0.08) {
       // 8% Gold
       return {
         quality: 'gold',
@@ -754,7 +877,7 @@ export function rollCropQuality(hasRootRot: boolean, moistureLevel: number = 60.
         badgeText: 'GOLD (+100%)',
       };
     }
-    if (roll < 0.30) {
+    if (roll < effectivePrismaticChance + 0.08 + 0.20) {
       // 20% Silver
       return {
         quality: 'silver',

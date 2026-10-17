@@ -41,6 +41,12 @@ import {
   ELEVATED_TOWER_CAPACITY,
   AQUIFER_CAPACITY,
   getCisternCapacity,
+  resolveWeatherProfileId,
+  WEATHER_PROFILES,
+  type WeatherProfileId,
+  evaluateCropPhenology,
+  type CropPhenologyResult,
+  createDefaultWeatherState,
 } from '@/game/hydrologyEngine';
 import {
   rollBreedingTier,
@@ -280,6 +286,12 @@ export interface PlotState {
   waterloggedSeconds?: number;
   hasRootRot?: boolean;
   quality?: 'standard' | 'silver' | 'gold' | 'prismatic';
+  // Climate-Driven Crop Phenology & Thermal Taxonomy
+  phenologyBadgeEmoji?: string;
+  phenologyBadgeText?: string;
+  isFrostbitten?: boolean;
+  isHeatWilted?: boolean;
+  isDormant?: boolean;
 }
 
 export interface AnimalInstance {
@@ -831,7 +843,7 @@ export interface GameState {
   clearWitheredCrop: (plotId: number) => boolean;
   deSiltCanals: () => void;
   deployDewScreens: () => boolean;
-  setHydrologyWeather: (weather: 'clear' | 'light_rain' | 'downpour') => void;
+  setHydrologyWeather: (weather: WeatherProfileId | 'clear' | 'light_rain' | 'downpour') => void;
 
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
@@ -1288,9 +1300,20 @@ export const useGameStore = create<GameState>()(
         const plotOverclock = state.entityOverclocks?.[`plot_${plotId}`];
         const bonusYield = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
         const isDoubleProc = Math.random() < soilTier.doubleProcChance;
-        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0);
-        const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield;
-        const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier));
+
+        // Climate-Driven Crop Phenology & Weather Hazard modifiers
+        const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(state.hydrology?.weatherCondition);
+        const pheno = evaluateCropPhenology({
+          cropId: plot.crop,
+          weather: activeWeatherId,
+          moistureLevel: plot.moistureLevel ?? 60.0,
+          isProtectedByGreenhouse: false,
+        });
+
+        const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
+        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic);
+        const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity;
+        const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
         const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
         const newPlots = [...state.plots];
@@ -1308,14 +1331,27 @@ export const useGameStore = create<GameState>()(
           waterloggedSeconds: 0,
           isWithered: false,
           hasRootRot: false,
+          phenologyBadgeEmoji: undefined,
+          phenologyBadgeText: undefined,
+          isFrostbitten: false,
+          isHeatWilted: false,
+          isDormant: false,
         };
 
         if (qualityRoll.quality !== 'standard') {
           state.addNotification(`${qualityRoll.badgeEmoji} ${qualityRoll.badgeText} Harvest! +${totalYield} ${cropDef.name}!`, qualityRoll.badgeEmoji, 'event');
         } else if (plot.hasRootRot) {
           state.addNotification(`🪱 Root Rot Penalty: ${cropDef.name} yield halved (+${totalYield})!`, '🪱', 'info');
+        } else if (pheno.yieldMultiplier < 1.0) {
+          state.addNotification(`🌨️ Hazard Lodging: Severe weather reduced harvest yield by ${Math.round((1 - pheno.yieldMultiplier) * 100)}%!`, '🧊', 'event');
+        } else if (pheno.extraQuantity > 0) {
+          state.addNotification(`🎃 Vine Swell: Muggy air produced +${pheno.extraQuantity} extra fruit!`, '🎃', 'info');
         } else if (isDoubleProc) {
           state.addNotification(`🌋 Volcanic Double Yield proc! +${totalYield} ${cropDef.name}!`, '✨', 'info');
+        }
+
+        if (pheno.priceMultiplier > 1.0) {
+          state.addNotification(`❄️ Cold-Sweetened Starch Conversion: +${Math.round((pheno.priceMultiplier - 1.0) * 100)}% market value bonus!`, '❄️', 'info');
         }
 
         let updatedOverclocks = state.entityOverclocks;
@@ -1451,11 +1487,22 @@ export const useGameStore = create<GameState>()(
             const pLevel = plot.level || 1;
             const soilTier = getSoilTier(pLevel);
             const isDoubleProc = Math.random() < soilTier.doubleProcChance;
-            const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0);
+
+            // Climate-Driven Crop Phenology & Weather Hazard modifiers
+            const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(state.hydrology?.weatherCondition);
+            const pheno = evaluateCropPhenology({
+              cropId: plot.crop,
+              weather: activeWeatherId,
+              moistureLevel: plot.moistureLevel ?? 60.0,
+              isProtectedByGreenhouse: false,
+            });
+
+            const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
+            const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic);
             if (qualityRoll.quality !== 'standard') qualityCropsCount++;
 
-            const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield;
-            const qualityAdjusted = Math.max(1, Math.round(singleYield * qualityRoll.yieldMultiplier));
+            const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity;
+            const qualityAdjusted = Math.max(1, Math.round(singleYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
             const plotYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (bonus + soilTier.bonusYield);
             newSilo[plot.crop] = (newSilo[plot.crop] || 0) + plotYield;
@@ -1472,6 +1519,11 @@ export const useGameStore = create<GameState>()(
               waterloggedSeconds: 0,
               isWithered: false,
               hasRootRot: false,
+              phenologyBadgeEmoji: undefined,
+              phenologyBadgeText: undefined,
+              isFrostbitten: false,
+              isHeatWilted: false,
+              isDormant: false,
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -4602,8 +4654,10 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Update plots
+        // Update plots with Hydrology & Atmospheric Crop Phenology Dynamics
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
+        const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydroSimResult.updatedHydrology.weatherCondition);
+
         const newPlots = hydroSimResult.updatedPlots.map((p: any) => {
           if (p.crop && p.plantedAt && !p.ready) {
             // Under barn_fire, unwatered/burning plots are frozen
@@ -4618,6 +4672,27 @@ export const useGameStore = create<GameState>()(
             if (p.isWithered) {
               return p; // Growth halted if crop withered from prolonged desiccation
             }
+
+            // Direct Atmospheric Crop Phenology evaluation
+            const pheno = evaluateCropPhenology({
+              cropId: p.crop,
+              weather: activeWeatherId,
+              moistureLevel: p.moistureLevel !== undefined ? p.moistureLevel : 60.0,
+              isProtectedByGreenhouse: false,
+            });
+
+            // Growth halted if crop is thermal-wilted, frostbitten, or in winter dormancy
+            if (pheno.isWilted || pheno.isFrostbitten || pheno.isDormant) {
+              return {
+                ...p,
+                phenologyBadgeEmoji: pheno.badgeEmoji,
+                phenologyBadgeText: pheno.badgeText,
+                isFrostbitten: pheno.isFrostbitten,
+                isHeatWilted: pheno.isWilted,
+                isDormant: pheno.isDormant,
+              };
+            }
+
             const pLevel = p.level || 1;
             const soilTier = getSoilTier(pLevel);
             const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
@@ -4628,14 +4703,32 @@ export const useGameStore = create<GameState>()(
             // Soil Moisture Zone Multipliers (0x Desiccated, 0.6x Parched, 1.15x Optimal Sweet Spot)
             const mZone = getMoistureZone(p.moistureLevel !== undefined ? p.moistureLevel : 60.0);
             const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
+            const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
             if (effectiveElapsed >= growTime) {
-              return { ...p, ready: true };
+              return {
+                ...p,
+                ready: true,
+                phenologyBadgeEmoji: pheno.badgeEmoji,
+                phenologyBadgeText: pheno.badgeText,
+                isFrostbitten: false,
+                isHeatWilted: false,
+                isDormant: false,
+              };
             }
+
+            return {
+              ...p,
+              phenologyBadgeEmoji: pheno.badgeEmoji,
+              phenologyBadgeText: pheno.badgeText,
+              isFrostbitten: false,
+              isHeatWilted: false,
+              isDormant: false,
+            };
           }
           return p;
         });
@@ -7149,18 +7242,22 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
-      setHydrologyWeather: (weather: 'clear' | 'light_rain' | 'downpour') => {
+      setHydrologyWeather: (weather: WeatherProfileId | 'clear' | 'light_rain' | 'downpour') => {
         const state = get();
+        const profileId = resolveWeatherProfileId(weather);
+        const profileDef = WEATHER_PROFILES[profileId] || WEATHER_PROFILES.sunny;
         const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const newAtmosphere = createDefaultWeatherState(profileId);
         set({
           hydrology: {
             ...currentHydro,
-            weatherCondition: weather,
+            weatherCondition: profileId,
+            weatherState: newAtmosphere,
+            isRainbowActive: profileId === 'sunshower',
           },
           isDirty: true,
         });
-        const label = weather === 'clear' ? '☀️ Clear' : weather === 'light_rain' ? '🌦️ Light Rain' : '⛈️ Downpour';
-        state.addNotification(`Atmospheric Conditions Shifted: ${label} active.`, '🌤️', 'info');
+        state.addNotification(`Atmospheric Conditions Shifted: ${profileDef.emoji} ${profileDef.name} active.`, profileDef.emoji, 'info');
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {

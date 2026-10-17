@@ -4,17 +4,16 @@ import React, { useState, useEffect } from 'react';
 import { useGameStore } from '@/game/store';
 import { getCircadianClock } from '@/game/shiftEngine';
 import {
-  getDiurnalEvaporationRatePctPerMin,
   CANAL_TIER_CONFIGS,
-  WEATHER_INFLOW_RATES,
+  WEATHER_PROFILES,
+  resolveWeatherProfileId,
+  calculateThermodynamicEvaporationRatePctPerMin,
 } from '@/game/hydrologyEngine';
 
 export function EstateHydrologyGauge() {
   const {
     hydrology,
     farmEpochStart,
-    level,
-    activeEvent,
     setSluiceModalOpen,
   } = useGameStore();
 
@@ -27,7 +26,25 @@ export function EstateHydrologyGauge() {
   const clock = getCircadianClock(now, farmEpochStart);
   const canalTier = hydrology?.canalTier || 1;
   const tierDef = CANAL_TIER_CONFIGS[canalTier];
-  const evapInfo = getDiurnalEvaporationRatePctPerMin(clock.cycleElapsedSeconds, canalTier);
+
+  const weatherProfileId = resolveWeatherProfileId(hydrology?.weatherCondition);
+  const activeProfile = WEATHER_PROFILES[weatherProfileId] || WEATHER_PROFILES.sunny;
+  const atmos = hydrology?.weatherState || {
+    profileId: weatherProfileId,
+    temperatureC: activeProfile.defaultTempC,
+    relativeHumidityPct: activeProfile.defaultHumidityPct,
+    precipitationInflowLPerMin: activeProfile.precipitationInflowLPerMin,
+    windSpeedKmH: activeProfile.windSpeedKmH,
+    cloudCoverPct: activeProfile.cloudCoverPct,
+    barometricPressureHPa: activeProfile.barometricPressureHPa,
+  };
+
+  const evapInfo = calculateThermodynamicEvaporationRatePctPerMin({
+    temperatureC: atmos.temperatureC,
+    relativeHumidityPct: atmos.relativeHumidityPct,
+    cycleElapsedSeconds: clock.cycleElapsedSeconds,
+    canalTier,
+  });
 
   const cisternLiters = Math.round(hydrology?.cisternLiters ?? 900);
   const cisternMax = hydrology?.cisternMaxLiters ?? 1500;
@@ -41,12 +58,11 @@ export function EstateHydrologyGauge() {
   const towerLiters = Math.round(hydrology?.towerLiters ?? 650);
   const towerMax = hydrology?.towerCapacityLiters ?? 800;
 
-  const isRain = activeEvent?.type === 'rainstorm' || hydrology?.weatherCondition === 'downpour';
-  const isLightRain = hydrology?.weatherCondition === 'light_rain';
-  const inflowRate = isRain ? WEATHER_INFLOW_RATES.downpour : isLightRain ? WEATHER_INFLOW_RATES.light_rain : 0;
-
+  const inflowRate = activeProfile.precipitationInflowLPerMin;
   const gatesOpen = Boolean(hydrology?.sluiceGatesOpen);
+  const isFrozen = Boolean(hydrology?.isSluiceFrozen);
   const liveDischarge = hydrology?.liveDischargeLitersPerSec || 0;
+  const isRainbow = Boolean(hydrology?.isRainbowActive);
 
   return (
     <button
@@ -110,24 +126,48 @@ export function EstateHydrologyGauge() {
 
       <div className="h-4 w-px bg-stone-700/60 hidden md:block" />
 
-      {/* Atmospheric Weather & Diurnal Evaporation */}
+      {/* Multi-Variable Atmospheric Weather Telemetry */}
       <div className="hidden md:flex items-center gap-1.5 text-[10px]">
-        <span className="text-amber-300 text-xs">
-          {isRain ? '🌧️' : clock.currentPeriod === 'day' ? '☀️' : clock.currentPeriod === 'dusk' ? '⛅' : '🌙'}
+        <span className="text-sm">
+          {activeProfile.emoji}
         </span>
         <div>
-          <span className="font-semibold text-stone-200">
-            {isRain ? 'Downpour Inflow' : clock.currentPeriod === 'day' ? 'High Sun' : clock.currentPeriod === 'dusk' ? 'Twilight Warmth' : 'Night Condensation'}
-          </span>
-          <span className="text-[9px] text-cyan-300 block font-mono">
-            Evap: -{evapInfo.ratePctPerMin}%/min
-          </span>
+          <div className="flex items-center gap-1.5 font-semibold text-stone-200">
+            <span>{activeProfile.name.split('/')[0].trim()}</span>
+            <span className="font-mono text-[9px] text-amber-300">
+              {atmos.temperatureC}°C
+            </span>
+            <span className="font-mono text-[9px] text-cyan-300">
+              {atmos.relativeHumidityPct}% RH
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-[9px] font-mono">
+            <span className="text-cyan-300">
+              Evap: -{evapInfo.evapRatePctPerMin}%/m
+            </span>
+            <span className="text-stone-400">
+              • {atmos.windSpeedKmH} km/h
+            </span>
+          </div>
         </div>
       </div>
 
+      {/* Sunshower Rainbow Blessing Badge */}
+      {isRainbow && (
+        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-cyan-500/20 text-pink-300 border border-purple-400/50 animate-pulse shadow-xs">
+          <span>🌈</span>
+          <span>Prismatic +10%</span>
+        </span>
+      )}
+
       {/* Sluice Gate Status Pill */}
       <div className="ml-auto flex items-center gap-1.5">
-        {gatesOpen ? (
+        {isFrozen ? (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-400/60 shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-300 animate-pulse" />
+            <span>Furrows Frozen</span>
+          </span>
+        ) : gatesOpen ? (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 animate-pulse">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>Sluice Open ({liveDischarge} L/s)</span>

@@ -10,6 +10,10 @@ import {
   getCisternCapacity,
   WEATHER_INFLOW_RATES,
   type CanalTier,
+  WEATHER_PROFILES,
+  resolveWeatherProfileId,
+  type WeatherProfileId,
+  type WeatherCategoryId,
 } from '@/game/hydrologyEngine';
 
 export function SluiceGateControlModal() {
@@ -55,6 +59,21 @@ export function SluiceGateControlModal() {
   const isClogged = Boolean(hydro?.isCloggedWithDebris);
   const hasSediment = Boolean(hydro?.hasSedimentInLine);
   const isStressed = Boolean(hydro?.isAquiferStressed);
+  const isSluiceFrozen = Boolean(hydro?.isSluiceFrozen);
+  const isRainbow = Boolean(hydro?.isRainbowActive);
+
+  const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydro?.weatherCondition);
+  const activeProfile = WEATHER_PROFILES[activeWeatherId] || WEATHER_PROFILES.sunny;
+  const atmos = hydro?.weatherState || {
+    profileId: activeWeatherId,
+    temperatureC: activeProfile.defaultTempC,
+    relativeHumidityPct: activeProfile.defaultHumidityPct,
+    precipitationInflowLPerMin: activeProfile.precipitationInflowLPerMin,
+    windSpeedKmH: activeProfile.windSpeedKmH,
+    cloudCoverPct: activeProfile.cloudCoverPct,
+    barometricPressureHPa: activeProfile.barometricPressureHPa,
+  };
+  const inflowRate = activeProfile.precipitationInflowLPerMin;
 
   // Plot hydration statistics across estate (12 plots)
   const estatePlots = plots.slice(0, Math.min(12, unlockedPlots));
@@ -308,46 +327,28 @@ export function SluiceGateControlModal() {
 
               <div className="mt-3 flex flex-col gap-1.5">
                 <div className="flex items-center justify-between text-[11px] bg-black/30 p-2 rounded-lg border border-stone-800">
-                  <span className="text-stone-300">Weather Condition:</span>
-                  <span className="font-bold text-sky-300 uppercase font-mono">
-                    {hydro?.weatherCondition || 'Clear'}
+                  <span className="text-stone-300">Active Atmospheric Inflow:</span>
+                  <span className="font-bold text-sky-300 font-mono flex items-center gap-1">
+                    <span>{activeProfile.emoji}</span>
+                    <span>+{inflowRate} L/min</span>
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-1 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => setHydrologyWeather('clear')}
-                    className={`text-[9px] font-bold py-1 rounded border transition-all ${
-                      hydro?.weatherCondition === 'clear'
-                        ? 'bg-amber-500/20 text-amber-300 border-amber-400'
-                        : 'bg-stone-800/60 text-stone-400 border-stone-700'
-                    }`}
-                  >
-                    ☀️ Clear (0)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHydrologyWeather('light_rain')}
-                    className={`text-[9px] font-bold py-1 rounded border transition-all ${
-                      hydro?.weatherCondition === 'light_rain'
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
-                        : 'bg-stone-800/60 text-stone-400 border-stone-700'
-                    }`}
-                  >
-                    🌦️ Rain (+45)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHydrologyWeather('downpour')}
-                    className={`text-[9px] font-bold py-1 rounded border transition-all ${
-                      hydro?.weatherCondition === 'downpour'
-                        ? 'bg-blue-600/30 text-blue-200 border-blue-400'
-                        : 'bg-stone-800/60 text-stone-400 border-stone-700'
-                    }`}
-                  >
-                    ⛈️ Storm (+120)
-                  </button>
-                </div>
+
+                {cisternLiters >= cisternMax ? (
+                  <div className="text-[10px] font-bold text-cyan-300 bg-cyan-950/60 p-1.5 rounded border border-cyan-500/40 text-center flex items-center justify-center gap-1">
+                    <span>🌊</span>
+                    <span>Overflowing: +20 L/min recharging Deep Aquifer!</span>
+                  </div>
+                ) : activeWeatherId === 'heatwave' ? (
+                  <div className="text-[10px] font-bold text-rose-300 bg-rose-950/60 p-1.5 rounded border border-rose-500/40 text-center flex items-center justify-center gap-1">
+                    <span>🔥</span>
+                    <span>Thermal Boil: -10 L/min evaporating into dry air!</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-stone-400 text-center">
+                    Surface catchment ready • Closed-loop mass conservation
+                  </div>
+                )}
               </div>
             </div>
 
@@ -395,6 +396,151 @@ export function SluiceGateControlModal() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Unified Atmospheric Weather & Crop Phenology Console */}
+        <div className="mt-5 rounded-2xl bg-stone-900/90 border border-stone-800 p-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
+              <span>🌤️</span>
+              <span>Unified Atmospheric Weather & Climate Simulation</span>
+            </h3>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              16 Deterministic Meteorologic States
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Active Weather Dossier Card */}
+            <div className="lg:col-span-1 rounded-xl bg-black/40 border border-stone-800 p-3.5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-3xl">{activeProfile.emoji}</span>
+                    <div>
+                      <div className="text-sm font-black text-white">{activeProfile.name}</div>
+                      <div className="text-[10px] font-semibold text-amber-400">{activeProfile.categoryLabel}</div>
+                    </div>
+                  </div>
+                  {isRainbow && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-pink-950 border border-pink-500 text-pink-300 font-bold animate-pulse">
+                      🌈 Rainbow
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-stone-300 mt-2 leading-relaxed">
+                  {activeProfile.description}
+                </p>
+
+                {/* 6 Core Meteorologic Variables */}
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] font-mono bg-stone-900/80 p-2.5 rounded-lg border border-stone-800">
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">TEMPERATURE (T)</span>
+                    <span className="text-amber-300 font-bold text-xs">{atmos.temperatureC}°C</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">HUMIDITY (H)</span>
+                    <span className="text-cyan-300 font-bold text-xs">{atmos.relativeHumidityPct}%</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">PRECIPITATION (P)</span>
+                    <span className="text-blue-300 font-bold text-xs">{activeProfile.precipitationInflowLPerMin} L/m</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">WIND SPEED (W)</span>
+                    <span className="text-stone-200 font-bold text-xs">{atmos.windSpeedKmH} km/h</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">CLOUD COVER (C)</span>
+                    <span className="text-stone-300 font-bold text-xs">{atmos.cloudCoverPct}%</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[9px]">BAROMETER</span>
+                    <span className="text-emerald-300 font-bold text-xs">{atmos.barometricPressureHPa} hPa</span>
+                  </div>
+                </div>
+
+                {/* Agronomic Crop Reaction Callout */}
+                <div className="mt-3 p-2 rounded-lg bg-amber-950/30 border border-amber-500/30 text-[10px] text-amber-200">
+                  <span className="font-bold block text-[9px] uppercase tracking-wider text-amber-400 mb-0.5">🌾 Crop Reaction & Phenology:</span>
+                  {activeProfile.phenologyNotes}
+                </div>
+
+                {isSluiceFrozen && (
+                  <div className="mt-2 p-2 rounded-lg bg-rose-950/60 border border-rose-500/60 text-[10px] text-rose-200 font-bold flex items-center gap-1.5">
+                    <span>🧊</span>
+                    <span>Furrows Frozen Solid: Earthen sluice locked! Upgrade to Tier 2 clay canals.</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Weather State Selector across 5 Categories */}
+            <div className="lg:col-span-2 space-y-2.5">
+              {[
+                {
+                  id: 'clear_thermal' as WeatherCategoryId,
+                  title: 'Clear & Thermal Category',
+                  profiles: ['sunny', 'heatwave', 'drought'] as WeatherProfileId[],
+                },
+                {
+                  id: 'overcast_humid' as WeatherCategoryId,
+                  title: 'Overcast & High Humidity Category',
+                  profiles: ['cloudy', 'humid', 'foggy'] as WeatherProfileId[],
+                },
+                {
+                  id: 'precipitation' as WeatherCategoryId,
+                  title: 'Active Precipitation Category',
+                  profiles: ['drizzle', 'rain', 'monsoon', 'sunshower'] as WeatherProfileId[],
+                },
+                {
+                  id: 'severe_convective' as WeatherCategoryId,
+                  title: 'Severe Convective & Mechanical Hazards',
+                  profiles: ['gale', 'thunderstorm', 'hailstorm', 'cyclone'] as WeatherProfileId[],
+                },
+                {
+                  id: 'freezing_arid' as WeatherCategoryId,
+                  title: 'Freezing & Arid Category',
+                  profiles: ['frost', 'snow'] as WeatherProfileId[],
+                },
+              ].map((cat) => (
+                <div key={cat.id} className="rounded-xl bg-black/30 border border-stone-800 p-2">
+                  <div className="text-[10px] font-mono uppercase text-stone-400 font-bold mb-1.5 px-1">
+                    {cat.title}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {cat.profiles.map((pId) => {
+                      const pDef = WEATHER_PROFILES[pId];
+                      const isSel = activeWeatherId === pId;
+                      return (
+                        <button
+                          key={pId}
+                          type="button"
+                          onClick={() => setHydrologyWeather(pId)}
+                          className={`p-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                            isSel
+                              ? 'bg-cyan-500/25 border-cyan-400 text-white shadow-xs font-bold scale-[1.02]'
+                              : 'bg-stone-900/60 border-stone-800 text-stone-300 hover:bg-stone-800 hover:border-stone-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base">{pDef.emoji}</span>
+                            <div className="min-w-0">
+                              <div className="text-[11px] truncate font-bold">{pDef.name.split('/')[0].trim()}</div>
+                              <div className="text-[9px] font-mono text-stone-400">
+                                {pDef.defaultTempC}°C • {pDef.precipitationInflowLPerMin > 0 ? `+${pDef.precipitationInflowLPerMin}L` : `${pDef.defaultHumidityPct}%RH`}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
