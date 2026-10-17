@@ -29,6 +29,20 @@ import {
   TIER_LABELS,
 } from './data';
 import {
+  type HydrologyState,
+  type CanalTier,
+  createDefaultHydrologyState,
+  stepHydrologySimulation,
+  simulateOfflineHydrology,
+  rollCropQuality,
+  getMoistureZone,
+  CANAL_TIER_CONFIGS,
+  LITERS_PER_PERCENT_MOISTURE_PER_PLOT,
+  ELEVATED_TOWER_CAPACITY,
+  AQUIFER_CAPACITY,
+  getCisternCapacity,
+} from '@/game/hydrologyEngine';
+import {
   rollBreedingTier,
   INCUBATION_TIMES,
   type AnimalTier,
@@ -146,6 +160,8 @@ import {
   DAY_CYCLE_SEC,
   OVERTIME_DURATION_MS,
   SHIFT_ADJUST_DURATION_MS,
+  SHIFT_DEFINITIONS,
+  SEC_PER_IN_GAME_HOUR,
   BUNKHOUSE_TIERS,
   getCircadianClock,
   getWorkerScheduleTelemetry,
@@ -257,6 +273,13 @@ export interface PlotState {
   isWatered?: boolean;
   wateredUntil?: number | null;
   level?: number;
+  // Closed-Loop Hydrological Estate Simulation
+  moistureLevel?: number; // 0.0% to 100.0%
+  desiccatedSeconds?: number;
+  isWithered?: boolean;
+  waterloggedSeconds?: number;
+  hasRootRot?: boolean;
+  quality?: 'standard' | 'silver' | 'gold' | 'prismatic';
 }
 
 export interface AnimalInstance {
@@ -617,6 +640,10 @@ export interface GameState {
   wellLevel: number;
   lastWellAutoRefill: number | null;
 
+  // Closed-Loop Hydrological Estate Simulation
+  hydrology: HydrologyState;
+  isSluiceModalOpen: boolean;
+
   // Time
   lastTick: number;
 
@@ -794,6 +821,18 @@ export interface GameState {
   upgradeAllPlots: () => boolean;
   unlockNextPlot: () => boolean;
 
+  // Closed-Loop Hydrological Actions
+  setSluiceModalOpen: (open: boolean) => void;
+  toggleSluiceGates: (open?: boolean) => void;
+  setAutoShutoffMoisture: (thresholdPct: number) => void;
+  pumpAquiferToTower: (liters?: number) => boolean;
+  transferCisternToTower: (liters?: number) => boolean;
+  clearSedimentInLine: () => void;
+  clearWitheredCrop: (plotId: number) => boolean;
+  deSiltCanals: () => void;
+  deployDewScreens: () => boolean;
+  setHydrologyWeather: (weather: 'clear' | 'light_rain' | 'downpour') => void;
+
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
   grantWorkerSabbatical: (workerId: string) => boolean;
@@ -872,9 +911,14 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
   crop: null,
   plantedAt: null,
   ready: false,
-  isWatered: false,
+  isWatered: true,
   wateredUntil: null,
   level: 1,
+  moistureLevel: 65.0,
+  desiccatedSeconds: 0,
+  waterloggedSeconds: 0,
+  isWithered: false,
+  hasRootRot: false,
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -1163,6 +1207,10 @@ export const useGameStore = create<GameState>()(
       wellLevel: 1,
       lastWellAutoRefill: null,
 
+      // Closed-Loop Hydrological Estate Simulation
+      hydrology: createDefaultHydrologyState(1),
+      isSluiceModalOpen: false,
+
       // Specialist Workers (Livestock, Expeditions & Genetics)
       specialistWorkers: createDefaultSpecialistWorkers(),
       lastSpecialistWageTime: Date.now(),
@@ -1228,29 +1276,45 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const plot = state.plots[plotId];
         if (!plot || !plot.crop || !plot.ready) return;
-        const cropDef = CROPS[plot.crop];
 
+        if (plot.isWithered) {
+          state.clearWitheredCrop(plotId);
+          return;
+        }
+
+        const cropDef = CROPS[plot.crop];
         const pLevel = plot.level || 1;
         const soilTier = getSoilTier(pLevel);
         const plotOverclock = state.entityOverclocks?.[`plot_${plotId}`];
         const bonusYield = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
         const isDoubleProc = Math.random() < soilTier.doubleProcChance;
+        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0);
         const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield;
-        const totalYield = isDoubleProc ? baseTotalYield * 2 : baseTotalYield;
+        const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier));
+        const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
         const newPlots = [...state.plots];
-        // Harvest resets soil hydration UNLESS soil is level 5 (autoHydrate)
+        // Harvest resets soil crop while preserving moisture and quality tier
         newPlots[plotId] = {
           id: plotId,
           crop: null,
           plantedAt: null,
           ready: false,
-          isWatered: soilTier.autoHydrate ? true : false,
+          isWatered: soilTier.autoHydrate ? true : (plot.moistureLevel ? plot.moistureLevel >= 40 : false),
           wateredUntil: null,
           level: pLevel,
+          moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
+          desiccatedSeconds: 0,
+          waterloggedSeconds: 0,
+          isWithered: false,
+          hasRootRot: false,
         };
 
-        if (isDoubleProc) {
+        if (qualityRoll.quality !== 'standard') {
+          state.addNotification(`${qualityRoll.badgeEmoji} ${qualityRoll.badgeText} Harvest! +${totalYield} ${cropDef.name}!`, qualityRoll.badgeEmoji, 'event');
+        } else if (plot.hasRootRot) {
+          state.addNotification(`🪱 Root Rot Penalty: ${cropDef.name} yield halved (+${totalYield})!`, '🪱', 'info');
+        } else if (isDoubleProc) {
           state.addNotification(`🌋 Volcanic Double Yield proc! +${totalYield} ${cropDef.name}!`, '✨', 'info');
         }
 
@@ -1358,17 +1422,41 @@ export const useGameStore = create<GameState>()(
         let anyBurnout = false;
         let totalBonusYield = 0;
 
+        let qualityCropsCount = 0;
+
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
           if (plot && plot.crop && plot.ready) {
+            if (plot.isWithered) {
+              newPlots[i] = {
+                id: i,
+                crop: null,
+                plantedAt: null,
+                ready: false,
+                isWatered: false,
+                wateredUntil: null,
+                level: plot.level || 1,
+                moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 50.0,
+                desiccatedSeconds: 0,
+                waterloggedSeconds: 0,
+                isWithered: false,
+                hasRootRot: false,
+              };
+              continue;
+            }
+
             const cropDef = CROPS[plot.crop];
             const plotOverclock = updatedOverclocks[`plot_${i}`];
             const bonus = (plotOverclock?.isOverclocked && plotOverclock.bonusYield) ? plotOverclock.bonusYield : 0;
             const pLevel = plot.level || 1;
             const soilTier = getSoilTier(pLevel);
             const isDoubleProc = Math.random() < soilTier.doubleProcChance;
+            const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0);
+            if (qualityRoll.quality !== 'standard') qualityCropsCount++;
+
             const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield;
-            const plotYield = isDoubleProc ? singleYield * 2 : singleYield;
+            const qualityAdjusted = Math.max(1, Math.round(singleYield * qualityRoll.yieldMultiplier));
+            const plotYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (bonus + soilTier.bonusYield);
             newSilo[plot.crop] = (newSilo[plot.crop] || 0) + plotYield;
             newPlots[i] = {
@@ -1376,9 +1464,14 @@ export const useGameStore = create<GameState>()(
               crop: null,
               plantedAt: null,
               ready: false,
-              isWatered: soilTier.autoHydrate ? true : false,
+              isWatered: soilTier.autoHydrate ? true : (plot.moistureLevel ? plot.moistureLevel >= 40 : false),
               wateredUntil: null,
               level: pLevel,
+              moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
+              desiccatedSeconds: 0,
+              waterloggedSeconds: 0,
+              isWithered: false,
+              hasRootRot: false,
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -1397,6 +1490,9 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (harvestedCount === 0) return;
+        if (qualityCropsCount > 0) {
+          state.addNotification(`✨ Harvested ${qualityCropsCount} premium quality crops (Silver/Gold/Prismatic) from optimal capillary soil!`, '🌈', 'event');
+        }
         if (anyBurnout) {
           playDefeatSound();
           state.addNotification('⚠️ Soil Exhaustion: One or more plots burned out from overdrive! Revitalize soil or rest.', '🛑', 'event');
@@ -3103,7 +3199,7 @@ export const useGameStore = create<GameState>()(
         if (!workerObj || !workerObj.isHired) {
           return { success: false, message: 'Worker is not hired.' };
         }
-        if (workerObj.isStriking || workerObj.moraleTier === 'striking' || workerObj.moraleTier === 'deserted') {
+        if (('isStriking' in workerObj && workerObj.isStriking) || workerObj.moraleTier === 'striking' || workerObj.moraleTier === 'deserted') {
           return { success: false, message: `${workerName} is currently on strike and refuses overtime requests!` };
         }
         if (workerObj.isExhausted || (workerObj.exhaustedUntil && now < workerObj.exhaustedUntil)) {
@@ -4468,9 +4564,47 @@ export const useGameStore = create<GameState>()(
         );
         const weatherMultiplier = isFlashWeatherSlow ? 0.5 : 1.0;
 
+        // Closed-Loop Hydrological Estate Simulation Step
+        const deltaSeconds = state.lastTick ? Math.min(30, Math.max(0.1, (now - state.lastTick) / 1000)) : 1;
+        const currentClock = getCircadianClock(now, state.farmEpochStart || now);
+
+        // Worker hydrology shift duty checks
+        const fieldHandWorker = state.unifiedWorkers?.farmer;
+        const hasFieldHandMorningDuty = Boolean(
+          fieldHandWorker?.isHired &&
+          !fieldHandWorker?.isPaused &&
+          !state.isAllWorkersPaused &&
+          fieldHandWorker?.moraleTier !== 'striking' &&
+          fieldHandWorker?.moraleTier !== 'deserted'
+        );
+
+        const hasNightWatchDuty = Boolean(
+          Object.values(state.unifiedWorkers || {}).some(w => w.isHired && (w.shiftType === 'night') && !w.isPaused && !state.isAllWorkersPaused && w.moraleTier !== 'striking') ||
+          Object.values(state.specialistWorkers || {}).some(sp => sp.isHired && (sp.shiftType === 'night') && sp.isActive && !state.isAllWorkersPaused && !sp.isStriking)
+        );
+
+        const hydroSimResult = stepHydrologySimulation({
+          hydrology: state.hydrology || createDefaultHydrologyState(state.level),
+          plots: state.plots,
+          unlockedPlots: state.unlockedPlots,
+          farmLevel: state.level,
+          cycleElapsedSeconds: currentClock.cycleElapsedSeconds,
+          currentDay: currentClock.currentDay,
+          deltaSeconds,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          hasFieldHandMorningDuty,
+          hasNightWatchDuty,
+        });
+
+        if (hydroSimResult.notifications && hydroSimResult.notifications.length > 0) {
+          for (const notif of hydroSimResult.notifications) {
+            state.addNotification(notif.text, notif.icon, notif.type);
+          }
+        }
+
         // Update plots
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
-        const newPlots = state.plots.map(p => {
+        const newPlots = hydroSimResult.updatedPlots.map((p: any) => {
           if (p.crop && p.plantedAt && !p.ready) {
             // Under barn_fire, unwatered/burning plots are frozen
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
@@ -4481,13 +4615,21 @@ export const useGameStore = create<GameState>()(
             if (isPlotExhausted) {
               return p; // Growth halted during soil exhaustion
             }
+            if (p.isWithered) {
+              return p; // Growth halted if crop withered from prolonged desiccation
+            }
             const pLevel = p.level || 1;
             const soilTier = getSoilTier(pLevel);
             const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
             const plotMultiplier = (plotOverclock?.isOverclocked && !p.ready) ? plotOverclock.speedMultiplier : 1.0;
             const elapsed = (now - p.plantedAt) / 1000;
             const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier;
+
+            // Soil Moisture Zone Multipliers (0x Desiccated, 0.6x Parched, 1.15x Optimal Sweet Spot)
+            const mZone = getMoistureZone(p.moistureLevel !== undefined ? p.moistureLevel : 60.0);
+            const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
+
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -5295,7 +5437,6 @@ export const useGameStore = create<GameState>()(
             if (!sp.strikeStartedAt) {
               sp.strikeStartedAt = now;
               sp.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
-              specialistWorkersModified = true;
             } else if (sp.desertionDeadline && now >= sp.desertionDeadline) {
               sp.isHired = false;
               sp.isActive = false;
@@ -5304,7 +5445,6 @@ export const useGameStore = create<GameState>()(
               sp.strikeStartedAt = null;
               sp.desertionDeadline = null;
               sp.unpaidWages = 0;
-              specialistWorkersModified = true;
               playDefeatSound();
               state.addNotification(`🪧 Worker Desertion: ${WORKER_UPKEEP_ROSTER[spId]?.name || spId} waited 2 hours with unresolved grievances and has permanently departed! 🚪`, '🚪', 'event');
             }
@@ -5830,6 +5970,7 @@ export const useGameStore = create<GameState>()(
           xp: finalXp,
           level: finalLevel,
           entityOverclocks: updatedWorkerOverclocks,
+          hydrology: hydroSimResult.updatedHydrology,
           lastTick: now,
         });
       },
@@ -5916,8 +6057,22 @@ export const useGameStore = create<GameState>()(
           });
         }
 
-        set({
+        // 4. Advance Closed-Loop Hydrological Estate Simulation
+        const lastTickTime = state.lastTick || (now - elapsedMs);
+        const startClock = getCircadianClock(lastTickTime, state.farmEpochStart || lastTickTime);
+        const hydroOffline = simulateOfflineHydrology({
+          hydrology: state.hydrology || createDefaultHydrologyState(state.level),
           plots: newPlots,
+          unlockedPlots: state.unlockedPlots,
+          farmLevel: state.level,
+          startCycleElapsedSeconds: startClock.cycleElapsedSeconds,
+          startDay: startClock.currentDay,
+          totalElapsedSeconds: elapsedMs / 1000,
+        });
+
+        set({
+          plots: hydroOffline.updatedPlots,
+          hydrology: hydroOffline.updatedHydrology,
           animals: newAnimals,
           productionQueues: newQueues,
           lastTick: now,
@@ -6658,6 +6813,8 @@ export const useGameStore = create<GameState>()(
           isWatered: true,
           wateredUntil: Date.now() + 60000,
           plantedAt: newPlantedAt,
+          moistureLevel: Math.min(80.0, Math.max(50.0, (plot.moistureLevel ?? 40.0) + 30.0)),
+          desiccatedSeconds: 0,
         };
 
         set({
@@ -6693,6 +6850,8 @@ export const useGameStore = create<GameState>()(
               isWatered: true,
               wateredUntil: now + 60000,
               plantedAt: newPlantedAt,
+              moistureLevel: Math.min(80.0, Math.max(50.0, (plot.moistureLevel ?? 40.0) + 30.0)),
+              desiccatedSeconds: 0,
             };
             currentWater--;
             wateredCount++;
@@ -6801,6 +6960,207 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         return true;
+      },
+
+      // Closed-Loop Hydrological Actions
+      setSluiceModalOpen: (open: boolean) => {
+        set({ isSluiceModalOpen: open });
+      },
+
+      toggleSluiceGates: (open?: boolean) => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const newOpen = open !== undefined ? open : !currentHydro.sluiceGatesOpen;
+
+        if (newOpen) {
+          if (currentHydro.towerLiters <= 0) {
+            state.addNotification('🛑 Cannot Open Sluice: Elevated Gravity Tower is empty (0L)! Transfer or pump water first.', '🗼', 'info');
+            return;
+          }
+          if (currentHydro.isCloggedWithDebris) {
+            state.addNotification('🍂 Sluice Blocked: Canal grates are clogged with silt & debris! Clear canals first.', '🧹', 'event');
+            return;
+          }
+          state.addNotification(`🌊 Master Sluice Gates Opened! Gravity discharge feeding Plots 01–${Math.min(12, state.unlockedPlots)}.`, '🌊', 'info');
+        } else {
+          state.addNotification('🛑 Sluice Gates Closed: Canal flow secured.', '🔒', 'info');
+        }
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            sluiceGatesOpen: newOpen,
+          },
+          isDirty: true,
+        });
+      },
+
+      setAutoShutoffMoisture: (thresholdPct: number) => {
+        const state = get();
+        const clamped = Math.max(50, Math.min(95, Math.round(thresholdPct)));
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            autoShutoffMoisture: clamped,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`⚙️ Sluice Regulator Calibrated: Auto-shutoff target set to ${clamped}% moisture.`, '🎯', 'info');
+      },
+
+      pumpAquiferToTower: (liters = 200) => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const towerSpace = currentHydro.towerCapacityLiters - currentHydro.towerLiters;
+
+        if (towerSpace <= 0) {
+          state.addNotification('🗼 Elevated Gravity Tower is already at maximum capacity (800L)!', '🗼', 'info');
+          return false;
+        }
+        if (currentHydro.aquiferLiters < 10) {
+          state.addNotification('🚰 Aquifer Depleted: Ground water table too low to pump!', '⚠️', 'info');
+          return false;
+        }
+
+        const pumpMultiplier = currentHydro.isAquiferStressed || currentHydro.hasSedimentInLine ? 0.5 : 1.0;
+        const requested = liters * pumpMultiplier;
+        const transferAmount = Math.min(requested, currentHydro.aquiferLiters, towerSpace);
+
+        const newAquifer = Math.max(0, currentHydro.aquiferLiters - transferAmount);
+        const newTower = Math.min(currentHydro.towerCapacityLiters, currentHydro.towerLiters + transferAmount);
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            aquiferLiters: Math.round(newAquifer * 10) / 10,
+            towerLiters: Math.round(newTower * 10) / 10,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(1);
+        state.addNotification(`⛲ Deep Pump Activated: Transferred +${Math.round(transferAmount)}L from Aquifer to Elevated Tower!`, '⛲', 'info');
+        return true;
+      },
+
+      transferCisternToTower: (liters = 200) => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const towerSpace = currentHydro.towerCapacityLiters - currentHydro.towerLiters;
+
+        if (towerSpace <= 0) {
+          state.addNotification('🗼 Elevated Gravity Tower is already at maximum capacity (800L)!', '🗼', 'info');
+          return false;
+        }
+        if (currentHydro.cisternLiters <= 0) {
+          state.addNotification('🌧️ Rain Catchment Cistern is empty (0L)! Wait for rainstorm or night dew.', '💧', 'info');
+          return false;
+        }
+
+        const transferAmount = Math.min(liters, currentHydro.cisternLiters, towerSpace);
+        const newCistern = Math.max(0, currentHydro.cisternLiters - transferAmount);
+        const newTower = Math.min(currentHydro.towerCapacityLiters, currentHydro.towerLiters + transferAmount);
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            cisternLiters: Math.round(newCistern * 10) / 10,
+            towerLiters: Math.round(newTower * 10) / 10,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(1);
+        state.addNotification(`💧 Cistern Transfer: Shifted +${Math.round(transferAmount)}L rain reserve to Elevated Tower!`, '💧', 'info');
+        return true;
+      },
+
+      clearSedimentInLine: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            hasSedimentInLine: false,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🧹 Intake Line Cleared: Pump sediment purged. Full extraction velocity restored!', '🚰', 'info');
+      },
+
+      clearWitheredCrop: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot) return false;
+
+        const newPlots = [...state.plots];
+        const pLevel = plot.level || 1;
+        const soilTier = getSoilTier(pLevel);
+
+        newPlots[plotId] = {
+          id: plotId,
+          crop: null,
+          plantedAt: null,
+          ready: false,
+          isWatered: soilTier.autoHydrate ? true : false,
+          wateredUntil: null,
+          level: pLevel,
+          moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 50.0,
+          desiccatedSeconds: 0,
+          waterloggedSeconds: 0,
+          isWithered: false,
+          hasRootRot: false,
+        };
+
+        set({ plots: newPlots, isDirty: true });
+        state.addNotification(`🌾 Plot #${plotId + 1} Cleared: Removed withered crop debris with a hoe. Bed prepared for planting!`, '🧹', 'info');
+        return true;
+      },
+
+      deSiltCanals: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            isCloggedWithDebris: false,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🧹 Canal Grates De-Silted: Silt and leaf litter removed. Gravity channels fully restored!', '🌊', 'info');
+      },
+
+      deployDewScreens: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const maxCistern = currentHydro.cisternMaxLiters || getCisternCapacity(state.level);
+        const newCistern = Math.min(maxCistern, currentHydro.cisternLiters + 20);
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            cisternLiters: Math.round(newCistern * 10) / 10,
+            dewHarvestedToday: true,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🌙 Condensation Screens Deployed: Captured +20L of pure night dew into rain cistern!', '💧', 'info');
+        return true;
+      },
+
+      setHydrologyWeather: (weather: 'clear' | 'light_rain' | 'downpour') => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            weatherCondition: weather,
+          },
+          isDirty: true,
+        });
+        const label = weather === 'clear' ? '☀️ Clear' : weather === 'light_rain' ? '🌦️ Light Rain' : '⛈️ Downpour';
+        state.addNotification(`Atmospheric Conditions Shifted: ${label} active.`, '🌤️', 'info');
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {
@@ -8205,7 +8565,7 @@ export const useGameStore = create<GameState>()(
               merged.specialistWorkers[sId] = defaultSpecialists[sId];
             } else {
               const currentSp = merged.specialistWorkers[sId];
-              if (currentSp.totalWagesPaid > 0 || currentSp.isStriking) {
+              if ((currentSp.totalWagesPaid || 0) > 0 || currentSp.isStriking) {
                 currentSp.isHired = true;
                 if (currentSp.moraleTier === 'deserted') {
                   currentSp.moraleTier = 'content';

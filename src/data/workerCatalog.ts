@@ -8,6 +8,7 @@ export interface HireableWorkerTemplate {
   title: string;
   specialty: WorkerSpecialty;
   avatar: string;
+  emoji?: string;
   hireCostCoins: number;
   dailyWageCoins: number;
   description: string;
@@ -126,6 +127,7 @@ export interface SpecialistWorkerState {
   isStriking: boolean; // true if wage couldn't be paid
   hiredAt: number | null;
   unpaidWages: number;
+  totalWagesPaid?: number;
   moraleTier?: 'inspired' | 'content' | 'grumbling' | 'striking' | 'deserted' | 'sabbatical';
   missedCycles?: number;
   lastFedAt?: number;

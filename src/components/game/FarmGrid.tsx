@@ -8,6 +8,7 @@ import { OverclockActionMenu } from './OverclockActionMenu';
 import { PlotUpgradeModal } from './PlotUpgradeModal';
 import { getSoilTier, getPlotUnlockCost } from '@/game/plotUpgrades';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
+import { getMoistureZone } from '@/game/hydrologyEngine';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -39,6 +40,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     entityOverclocks,
     cureEntityExhaustion,
     unlockNextPlot,
+    hydrology,
+    setSluiceModalOpen,
+    clearWitheredCrop,
     animals = [],
     livestockReserve = [],
   } = useGameStore();
@@ -295,6 +299,23 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             🪙 L1–5
           </span>
         </button>
+
+        {/* Gravity Sluice Console Button */}
+        <button
+          onClick={() => setSluiceModalOpen(true)}
+          className="col-span-2 sm:col-span-4 lg:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-cyan-800 via-sky-800 to-blue-900 hover:from-cyan-700 hover:to-sky-700 text-white border-cyan-500 shadow-md shadow-cyan-950/40 cursor-pointer"
+          title="Open Estate Hydrological Sluice & Canal Console"
+        >
+          <span className="text-base sm:text-lg">{'🌊'}</span>
+          <span>Sluice</span>
+          <span className={`px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${
+            hydrology?.sluiceGatesOpen
+              ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400 animate-pulse'
+              : 'bg-black/25 text-stone-300 border-stone-600'
+          }`}>
+            {hydrology?.sluiceGatesOpen ? 'OPEN' : 'CLOSED'}
+          </span>
+        </button>
       </div>
 
       {/* Farm Grid */}
@@ -304,6 +325,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const isGrowing = plot.crop && !plot.ready;
           const isEmpty = !plot.crop;
           const isWatered = Boolean(plot.isWatered);
+          const isWithered = Boolean(plot.isWithered);
+          const hasRootRot = Boolean(plot.hasRootRot);
+
+          const moisturePct = plot.moistureLevel !== undefined ? plot.moistureLevel : (isWatered ? 70 : 35);
+          const moistureZone = getMoistureZone(moisturePct);
 
           const hasBlight = activeCrisis?.type === 'crop_blight' &&
             activeCrisis?.resolvedStatus === 'pending' &&
@@ -327,12 +353,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const soilTier = getSoilTier(plotLevel);
           const soilSpeedMult = 1 + (soilTier.speedBonusPct / 100);
           const waterMult = (isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
+          const moistureSpeedMult = isWithered ? 0 : moistureZone.growthSpeedMultiplier;
 
           const progress = plot.crop && plot.plantedAt && !plot.ready
-            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult) / (CROPS[plot.crop].growTimeSec * 1000))
+            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
 
-          // Soil styling classes
+          // Soil styling classes with hydrological dynamics
           let soilClasses = '';
           if (hasBlight) {
             soilClasses = 'bg-purple-950/70 border-purple-500 animate-pulse ring-2 ring-purple-400 shadow-lg shadow-purple-500/40 cursor-pointer text-white';
@@ -343,15 +370,27 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           } else if (isPlotExhausted) {
             // Burnout / exhausted soil
             soilClasses = 'bg-stone-900 border-rose-600/80 ring-2 ring-rose-500/40 shadow-rose-950/50 shadow-md cursor-pointer text-rose-200';
+          } else if (isWithered) {
+            // Withered desiccated crop: dry cracked soil with rose warning border
+            soilClasses = 'bg-stone-900 border-rose-600/90 ring-2 ring-rose-500/50 shadow-rose-950/60 shadow-md cursor-pointer text-rose-300';
+          } else if (hasRootRot) {
+            // Flooded / root rot soil: soggy blue-gray bed with warning glow
+            soilClasses = 'bg-blue-950/80 border-blue-400 animate-pulse ring-2 ring-blue-400/50 shadow-blue-950/60 shadow-md cursor-pointer text-blue-200';
           } else if (isReady) {
-            soilClasses = isWatered
-              ? 'bg-[#3d2817] dark:bg-[#2b1c10] border-emerald-400 ring-2 ring-cyan-400/50 hover:scale-105 shadow-lg shadow-emerald-500/20 cursor-pointer text-white'
+            soilClasses = moistureZone.id === 'optimal'
+              ? 'bg-[#3d2817] dark:bg-[#2b1c10] border-emerald-400 ring-2 ring-emerald-400/60 hover:scale-105 shadow-lg shadow-emerald-500/30 cursor-pointer text-white'
               : 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 hover:scale-105 shadow-green-200/50 shadow-lg cursor-pointer';
-          } else if (isWatered) {
-            // Watered soil: Dark, rich brown soil with blue sparkle badge
-            soilClasses = 'bg-[#3b2716] dark:bg-[#2c1d10] border-cyan-400/80 ring-2 ring-cyan-400/40 shadow-md shadow-cyan-950/40 text-stone-100 cursor-pointer';
+          } else if (moistureZone.id === 'optimal') {
+            // Optimal capillary loam: Rich dark chocolate soil with emerald/cyan aeration ring
+            soilClasses = 'bg-[#3b2716] dark:bg-[#2c1d10] border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-md shadow-emerald-950/40 text-stone-100 cursor-pointer';
+          } else if (moistureZone.id === 'waterlogged' || moistureZone.id === 'saturated') {
+            // Saturated soil
+            soilClasses = 'bg-[#2b2724] dark:bg-[#1e1c1b] border-cyan-400/70 ring-1 ring-cyan-400/40 text-cyan-200 cursor-pointer';
+          } else if (moistureZone.id === 'desiccated') {
+            // Desiccated earth: dusty cracked pale soil
+            soilClasses = 'bg-[#e8d5be] dark:bg-stone-900/80 border-rose-500/60 ring-1 ring-rose-400/40 text-rose-300 cursor-pointer';
           } else if (isGrowing) {
-            // Dry growing soil: Standard light-tan soil texture
+            // Parched growing soil: Standard light-tan soil texture
             soilClasses = 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
           } else {
             // Dry empty plot: Standard light-tan soil texture
@@ -359,7 +398,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           }
 
           const handlePlotClick = () => {
-            if (hasBlight) {
+            if (isWithered) {
+              clearWitheredCrop(plot.id);
+            } else if (hasBlight) {
               resolveCrisisDefense('quarantine', plot.id);
             } else if (isOnFire) {
               extinguishBrushfire(plot.id);
@@ -437,8 +478,41 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     🌱 Revitalize (20🪙)
                   </button>
                 </div>
+              ) : isWithered ? (
+                /* Withered Crop Overlay: Desiccated for 30 minutes */
+                <div className="flex flex-col items-center justify-center p-1" onClick={(e) => { e.stopPropagation(); clearWitheredCrop(plot.id); }}>
+                  <span className="text-2xl animate-pulse">🥀</span>
+                  <span className="text-[9px] font-black uppercase text-rose-300 bg-rose-950/95 px-1.5 py-0.5 rounded mt-0.5 border border-rose-500/60">
+                    Withered!
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => clearWitheredCrop(plot.id)}
+                    className="mt-1 px-1.5 py-0.5 text-[8px] font-black rounded bg-amber-500 hover:bg-amber-400 text-stone-950 shadow-xs cursor-pointer active:scale-95"
+                  >
+                    Clear (Hoe)
+                  </button>
+                </div>
               ) : (
                 <>
+                  {/* Soil Moisture Zone Pill & Root Rot Indicator */}
+                  <div className="absolute top-1 left-1 flex items-center gap-1 z-10 pointer-events-none">
+                    <span className={`px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-mono font-black border backdrop-blur-md ${
+                      moistureZone.id === 'optimal'
+                        ? 'bg-emerald-950/90 text-emerald-300 border-emerald-400 shadow-xs'
+                        : moistureZone.id === 'waterlogged'
+                        ? 'bg-blue-950/90 text-blue-300 border-blue-400 animate-pulse'
+                        : moistureZone.id === 'desiccated'
+                        ? 'bg-rose-950/90 text-rose-300 border-rose-500 animate-pulse'
+                        : 'bg-stone-900/80 text-amber-300 border-stone-700'
+                    }`} title={`${moistureZone.name}: ${Math.round(moisturePct)}% (${moistureZone.badgeText})`}>
+                      💧{Math.round(moisturePct)}%
+                    </span>
+                    {hasRootRot && (
+                      <span className="text-[9px] animate-pulse" title="Root Rot: Yield halved (-50%)!">🪱</span>
+                    )}
+                  </div>
+
                   {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
                   {isWatered && (
                     <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-cyan-600/90 text-white text-[8px] sm:text-[9px] font-black border border-cyan-300 shadow-sm animate-pulse z-10">

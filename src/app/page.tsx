@@ -29,6 +29,8 @@ import { FloatingNumbers } from '@/components/game/FloatingNumbers';
 import { BackupModal } from '@/components/game/BackupModal';
 import { BarnTab } from '@/components/game/BarnTab';
 import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
+import { EstateHydrologyGauge } from '@/components/game/EstateHydrologyGauge';
+import { SluiceGateControlModal } from '@/components/game/SluiceGateControlModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -276,6 +278,11 @@ export default function Home() {
           {/* Urgent High-Stakes Sudden Event Floating Ticking Clock HUD */}
           <EventTickingClock />
 
+          {/* Closed-Loop Hydrological Estate Gauge & Live Sluice Telemetry Ribbon */}
+          <div className="mb-2">
+            <EstateHydrologyGauge />
+          </div>
+
           {/* Dynamic Long-Form Systemic Event Engine Banner */}
           <EventTopBanner
             onOpenDetail={() => setEventModalOpen(true)}
@@ -328,6 +335,8 @@ export default function Home() {
         isOpen={relicsModalOpen}
         onClose={() => setRelicsModalOpen(false)}
       />
+      {/* Closed-Loop Hydrological Sluice & Canal Console Modal */}
+      <SluiceGateControlModal />
 
       {/** Floating Notifications */}
       <FloatingNumbers />
