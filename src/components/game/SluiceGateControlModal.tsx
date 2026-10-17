@@ -76,8 +76,8 @@ export function SluiceGateControlModal() {
   };
   const inflowRate = activeProfile.precipitationInflowLPerMin;
 
-  // Plot hydration statistics across estate (12 plots)
-  const estatePlots = plots.slice(0, Math.min(12, unlockedPlots));
+  // Plot hydration statistics across estate (all available unlocked plots)
+  const estatePlots = plots.slice(0, unlockedPlots || plots.length);
   const avgMoisture = estatePlots.length > 0
     ? Math.round(estatePlots.reduce((sum, p) => sum + (p.moistureLevel ?? 60), 0) / estatePlots.length)
     : 0;
@@ -164,7 +164,7 @@ export function SluiceGateControlModal() {
                 <div>
                   <div className="text-xs text-stone-400 font-medium">Flow Throughput</div>
                   <div className="text-base sm:text-lg font-mono font-extrabold text-cyan-300">
-                    {gatesOpen ? `Discharging ${liveDischarge} Liters/sec to Plots 01–12` : 'Static Canal Head (0 L/sec)'}
+                    {gatesOpen ? `Discharging ${liveDischarge} Liters/sec to Plots 01–${unlockedPlots}` : 'Static Canal Head (0 L/sec)'}
                   </div>
                   <div className="text-[10px] text-stone-400 mt-0.5">
                     {tierConfig.seepageLossFraction > 0
@@ -427,9 +427,15 @@ export function SluiceGateControlModal() {
               <span>🌤️</span>
               <span>Unified Atmospheric Weather & Climate Simulation</span>
             </h3>
-            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-              16 Deterministic Meteorologic States
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Auto-Cycles Every 3–5 Min
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                16 Deterministic Meteorologic States
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -500,6 +506,9 @@ export function SluiceGateControlModal() {
 
             {/* Weather State Selector across 5 Categories */}
             <div className="lg:col-span-2 space-y-2.5">
+              <div className="text-[11px] font-mono text-cyan-300/90 bg-cyan-950/40 border border-cyan-800/50 p-2 rounded-xl flex items-center justify-between gap-2">
+                <span>🔄 <strong>Autonomous Climate Engine:</strong> Shifts naturally every 3–5 minutes. Click any weather below for manual atmospheric test:</span>
+              </div>
               {[
                 {
                   id: 'clear_thermal' as WeatherCategoryId,

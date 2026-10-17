@@ -439,20 +439,74 @@ export function stepHydrologySimulation(params: {
   let totalDischarged = hydrology.totalWaterDischargedLiters;
   let totalPercolated = hydrology.totalPercolatedLiters;
 
-  // Weather determination & Multi-variable Profile sync
+  // 1. Weather determination & Automatic Dynamic Climate Front Progression
   let activeProfileId: WeatherProfileId = resolveWeatherProfileId(hydrology.weatherCondition);
   if (isRainstormActive && activeProfileId !== 'monsoon' && activeProfileId !== 'thunderstorm' && activeProfileId !== 'cyclone') {
     activeProfileId = 'thunderstorm';
   }
+
+  // Automatic Dynamic Weather Cycling:
+  // Weather shifts automatically across natural meteorological states every 180s - 300s (3 - 5 minutes).
+  let weatherStartedAt = hydrology.weatherState?.weatherStartedAt || Date.now();
+  let weatherDurationSec = hydrology.weatherState?.weatherDurationSec || 240; // ~4 minutes per weather pattern
+  let ticksElapsed = (hydrology.weatherState?.ticksElapsed || 0) + 1;
+  const elapsedWeatherSec = Math.max((Date.now() - weatherStartedAt) / 1000, ticksElapsed * dt);
+
+  // Auto-transition to next natural weather pattern when front duration expires
+  if (!isRainstormActive && elapsedWeatherSec >= weatherDurationSec) {
+    let nextWeatherId = rollNextNaturalWeather(activeProfileId);
+    // If Markov roll picked the same weather, cycle to another viable atmospheric neighbor
+    if (nextWeatherId === activeProfileId) {
+      const fallbackNeighbors: Record<WeatherProfileId, WeatherProfileId> = {
+        sunny: 'cloudy',
+        heatwave: 'humid',
+        drought: 'sunny',
+        cloudy: 'drizzle',
+        humid: 'rain',
+        foggy: 'drizzle',
+        drizzle: 'rain',
+        rain: 'cloudy',
+        monsoon: 'rain',
+        sunshower: 'sunny',
+        gale: 'thunderstorm',
+        thunderstorm: 'rain',
+        hailstorm: 'cloudy',
+        cyclone: 'monsoon',
+        frost: 'sunny',
+        snow: 'frost',
+      };
+      nextWeatherId = fallbackNeighbors[activeProfileId] || 'sunny';
+    }
+
+    activeProfileId = nextWeatherId;
+    weatherStartedAt = Date.now();
+    weatherDurationSec = 180 + Math.floor(Math.random() * 150); // 3 to 5.5 minutes
+    ticksElapsed = 0;
+    const nextDef = WEATHER_PROFILES[nextWeatherId];
+    notifications.push({
+      text: `🌤️ Dynamic Climate Shift: Atmospheric front transitioned into ${nextDef.emoji} ${nextDef.name}!`,
+      icon: nextDef.emoji,
+      type: 'info',
+    });
+  }
+
   const weatherProfile = WEATHER_PROFILES[activeProfileId] || WEATHER_PROFILES.sunny;
 
   // Sync atmospheric weather state
-  const currentAtmosphere: AtmosphericWeatherState = (!hydrology.weatherState || (hydrology.weatherState.profileId || hydrology.weatherState.currentWeather) !== activeProfileId)
-    ? createDefaultWeatherState(activeProfileId)
-    : {
-        ...hydrology.weatherState,
-        ticksElapsed: (hydrology.weatherState.ticksElapsed || 0) + 1,
-      };
+  const currentAtmosphere: AtmosphericWeatherState = {
+    ...(hydrology.weatherState || createDefaultWeatherState(activeProfileId)),
+    currentWeather: activeProfileId,
+    profileId: activeProfileId,
+    temperatureC: weatherProfile.defaultTempC,
+    relativeHumidityPct: weatherProfile.defaultHumidityPct,
+    precipitationInflowLPerMin: weatherProfile.precipitationInflowLPerMin,
+    windSpeedKmH: weatherProfile.windSpeedKmH,
+    cloudCoverPct: weatherProfile.cloudCoverPct,
+    barometricPressureHPa: weatherProfile.barometricPressureHPa,
+    weatherStartedAt,
+    weatherDurationSec,
+    ticksElapsed,
+  };
 
   // Sluice Gate Freezing Rule: Under 'frost' or 'snow', Tier 1 earthen furrows freeze solid!
   let isSluiceFrozen = false;
@@ -563,15 +617,16 @@ export function stepHydrologySimulation(params: {
 
   // 5. Canal Sluice Gate Gravity Discharge Math
   let liveDischargeLitersPerSec = 0;
-  const numEstatePlots = Math.min(FIXED_ESTATE_PLOTS_COUNT, unlockedPlots);
+  // Support ALL available unlocked plots on the estate (not artificially restricted to 12)
+  const numAvailablePlots = Math.max(1, unlockedPlots || plots.length);
   const targetMoisture = tierConfig.autoCutoffSupported ? hydrology.autoShutoffMoisture : 100;
   let newPlots = [...plots];
   let totalDeliveredLiters = 0;
 
-  // Check if Tier 4 Pressurized Brass Sprinklers need to auto-pulse (Bug 1 & Bug 4)
+  // Check if Tier 4 Pressurized Brass Sprinklers need to auto-pulse across all available plots
   // Prerequisite: tower must have sufficient volume; zero-pressure bypass strictly blocked!
   if (effectiveTier >= 4) {
-    for (let i = 0; i < numEstatePlots; i++) {
+    for (let i = 0; i < numAvailablePlots; i++) {
       const p = newPlots[i];
       if (!p) continue;
       const currentM = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
@@ -618,9 +673,9 @@ export function stepHydrologySimulation(params: {
         });
       }
     } else {
-      // Find plots eligible for water (moisture < targetMoisture)
+      // Find plots eligible for water across ALL available plots (moisture < targetMoisture)
       let thirstyPlotIndices: number[] = [];
-      for (let i = 0; i < numEstatePlots; i++) {
+      for (let i = 0; i < numAvailablePlots; i++) {
         const p = newPlots[i];
         if (!p) continue;
         const m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
@@ -631,7 +686,7 @@ export function stepHydrologySimulation(params: {
 
       // If all plots already reached targetMoisture, allow manual flow to saturate up to canal capacity (80%-100%)
       if (thirstyPlotIndices.length === 0) {
-        for (let i = 0; i < numEstatePlots; i++) {
+        for (let i = 0; i < numAvailablePlots; i++) {
           const p = newPlots[i];
           if (!p) continue;
           const m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
@@ -650,8 +705,9 @@ export function stepHydrologySimulation(params: {
           type: 'info',
         });
       } else {
-        // Discharge rate: 12 Liters / sec total across canal network
-        const flowRate = 12.0; // Liters / sec
+        // Discharge rate scales proportionally with available plot count (minimum 12 L/sec)
+        const baseFlowRate = 12.0; // Liters / sec base for 12 plots
+        const flowRate = Math.max(baseFlowRate, (numAvailablePlots / 12) * baseFlowRate);
         const requestedLiters = flowRate * dt;
         const actualDischargedLiters = Math.min(requestedLiters, currentTower);
         

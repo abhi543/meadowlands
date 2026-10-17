@@ -7072,7 +7072,7 @@ export const useGameStore = create<GameState>()(
             state.addNotification(`🛑 Sluice Gates Locked: ${check.reason}`, '🔒', 'info');
             return;
           }
-          state.addNotification(`🌊 Master Sluice Gates Opened! Gravity discharge feeding Plots 01–${Math.min(12, state.unlockedPlots)}.`, '🌊', 'info');
+          state.addNotification(`🌊 Master Sluice Gates Opened! Gravity discharge feeding Plots 01–${state.unlockedPlots}.`, '🌊', 'info');
         } else {
           state.addNotification('🛑 Sluice Gates Closed: Canal flow secured.', '🔒', 'info');
         }
