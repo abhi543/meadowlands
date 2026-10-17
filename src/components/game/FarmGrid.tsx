@@ -42,6 +42,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     unlockNextPlot,
     hydrology,
     setSluiceModalOpen,
+    toggleEmergencySpillway,
     clearWitheredCrop,
     animals = [],
     livestockReserve = [],
@@ -75,6 +76,39 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
   return (
     <div className="space-y-3.5">
+      {/* Flash Flood Crisis Warning Banner */}
+      {hydrology?.isFlashFloodActive && (
+        <div className="bg-gradient-to-r from-rose-950/95 via-red-950/90 to-amber-950/95 border-2 border-rose-500 rounded-2xl p-3 sm:p-4 text-white shadow-xl shadow-rose-950/80 animate-pulse flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-3xl animate-bounce">🌊</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-xs sm:text-sm tracking-wide uppercase text-rose-200">
+                  Flash Flood Crisis Active!
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold bg-rose-950 border border-rose-400 text-rose-300">
+                  ⏱️ {Math.ceil(hydrology.floodHazardRemainingSec || 180)}s to Root Rot
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-rose-200/80 mt-0.5 leading-snug">
+                Torrents breaching canal network! Open the Emergency Spillway to divert 120 L/sec runoff off-map and deposit rich Alluvial Silt.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleEmergencySpillway()}
+            className={`px-4 py-2.5 rounded-xl font-black text-xs sm:text-sm tracking-wide shadow-lg border-2 cursor-pointer active:scale-95 transition-all ${
+              hydrology.isSpillwayOpen
+                ? 'bg-teal-600 hover:bg-teal-500 text-white border-teal-300'
+                : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-300 animate-bounce'
+            }`}
+          >
+            {hydrology.isSpillwayOpen ? '🛑 Close Spillway (Draining)' : '🚨 Open Emergency Spillway'}
+          </button>
+        </div>
+      )}
+
       {/* Interactive Farm Well HUD */}
       <FarmWell />
 
@@ -354,9 +388,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const soilSpeedMult = 1 + (soilTier.speedBonusPct / 100);
           const waterMult = (isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
           const moistureSpeedMult = isWithered ? 0 : moistureZone.growthSpeedMultiplier;
+          const siltSpeedMult = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
           const progress = plot.crop && plot.plantedAt && !plot.ready
-            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000))
+            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult * siltSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
 
           // Soil styling classes with hydrological dynamics
@@ -601,6 +636,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     >
                       <span>{plot.phenologyBadgeEmoji}</span>
                       <span className="truncate max-w-[60px] hidden xs:inline">{plot.phenologyBadgeText?.split('(')[0]?.trim()}</span>
+                    </span>
+                  )}
+
+                  {/* Alluvial Silt Deposit Badge */}
+                  {Boolean(plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) && (
+                    <span
+                      className={`absolute ${plot.crop && plot.phenologyBadgeEmoji ? 'bottom-5' : 'bottom-1'} left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-black bg-amber-950/90 border border-amber-400 text-amber-300 z-10 backdrop-blur-xs shadow-xs animate-pulse`}
+                      title={`✨ Alluvial Silt Deposit: +20% Maturation Speed & Free Organic Fertilizer (${plot.alluvialSiltCyclesRemaining} crop cycles remaining)`}
+                    >
+                      <span>✨</span>
+                      <span>Silt +20%</span>
                     </span>
                   )}
 

@@ -63,6 +63,8 @@ export function EstateHydrologyGauge() {
   const isFrozen = Boolean(hydrology?.isSluiceFrozen);
   const liveDischarge = hydrology?.liveDischargeLitersPerSec || 0;
   const isRainbow = Boolean(hydrology?.isRainbowActive);
+  const isFlashFlood = Boolean(hydrology?.isFlashFloodActive);
+  const isSpillway = Boolean(hydrology?.isSpillwayOpen);
 
   return (
     <button
@@ -160,9 +162,19 @@ export function EstateHydrologyGauge() {
         </span>
       )}
 
-      {/* Sluice Gate Status Pill */}
+      {/* Sluice Gate / Flood Status Pill */}
       <div className="ml-auto flex items-center gap-1.5">
-        {isFrozen ? (
+        {isFlashFlood && !isSpillway ? (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white border border-rose-400 animate-pulse shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+            <span>🌊 Flood ({Math.ceil(hydrology?.floodHazardRemainingSec || 180)}s)</span>
+          </span>
+        ) : isSpillway ? (
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-500/20 text-teal-300 border border-teal-400 animate-pulse shadow-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+            <span>Spillway (120 L/s)</span>
+          </span>
+        ) : isFrozen ? (
           <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-950/80 text-sky-300 border border-sky-400/60 shadow-xs">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-300 animate-pulse" />
             <span>Furrows Frozen</span>

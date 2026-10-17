@@ -302,6 +302,14 @@ export interface HydrologyState {
   dewHarvestedToday: boolean;
   lastSluiceMorningDay: number;
   lastPumpMorningDay?: number;
+
+  // E. Flash Flood Crisis & Emergency Spillway Dynamics
+  isFlashFloodActive?: boolean;
+  isSpillwayOpen?: boolean;
+  spillwayDivertingLitersPerSec?: number;
+  floodHazardRemainingSec?: number;
+  wasFloodControlled?: boolean;
+  floodTriggeredAt?: number | null;
   
   // Telemetry
   totalWaterDischargedLiters: number;
@@ -334,6 +342,13 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     dewHarvestedToday: false,
     lastSluiceMorningDay: 0,
     lastPumpMorningDay: 0,
+
+    isFlashFloodActive: false,
+    isSpillwayOpen: false,
+    spillwayDivertingLitersPerSec: 0,
+    floodHazardRemainingSec: 180,
+    wasFloodControlled: false,
+    floodTriggeredAt: null,
     
     totalWaterDischargedLiters: 0,
     totalPercolatedLiters: 0,
@@ -438,6 +453,15 @@ export function stepHydrologySimulation(params: {
   let lastPumpMorningDay = hydrology.lastPumpMorningDay ?? 0;
   let totalDischarged = hydrology.totalWaterDischargedLiters;
   let totalPercolated = hydrology.totalPercolatedLiters;
+  let liveDischargeLitersPerSec = 0;
+
+  // Flash Flood & Emergency Spillway Dynamics
+  let isFlashFloodActive = Boolean(hydrology.isFlashFloodActive);
+  let isSpillwayOpen = Boolean(hydrology.isSpillwayOpen);
+  let floodHazardRemainingSec = hydrology.floodHazardRemainingSec !== undefined ? hydrology.floodHazardRemainingSec : 180;
+  let floodTriggeredAt = hydrology.floodTriggeredAt || null;
+  let wasFloodControlled = Boolean(hydrology.wasFloodControlled);
+  let spillwayDivertingLitersPerSec = isSpillwayOpen ? 120 : 0;
 
   // 1. Weather determination & Automatic Dynamic Climate Front Progression
   let activeProfileId: WeatherProfileId = resolveWeatherProfileId(hydrology.weatherCondition);
@@ -564,6 +588,61 @@ export function stepHydrologySimulation(params: {
     isAquiferStressed = false;
   }
 
+  // 3.5. Flash Flood Crisis Trigger Conditions & Inflow Dynamics
+  // Condition 1: Weather Intensity is Monsoon (+120 L/min) or Cyclone (+180 L/min)
+  // Condition 2: Surface Storage Saturation (Cistern >= effectiveCisternMax - 1.0)
+  // Condition 3: Subsoil Storage Saturation (Aquifer >= aquiferCapacityLiters - 1.0)
+  const isFloodWeather = activeProfileId === 'monsoon' || activeProfileId === 'cyclone';
+  const isCisternMaxed = currentCistern >= (effectiveCisternMax - 1.0);
+  const isAquiferMaxed = currentAquifer >= (hydrology.aquiferCapacityLiters - 1.0);
+
+  if (isFloodWeather && isCisternMaxed && isAquiferMaxed) {
+    if (!isFlashFloodActive) {
+      isFlashFloodActive = true;
+      floodTriggeredAt = Date.now();
+      floodHazardRemainingSec = 180;
+      wasFloodControlled = false;
+      notifications.push({
+        text: '🌊 FLASH FLOOD CRISIS! Torrential storm has breached all reservoirs! Open Emergency Spillway before Root Rot destroys crops (3m)!',
+        icon: '🌊',
+        type: 'event',
+      });
+    }
+  } else if (!isFloodWeather && isFlashFloodActive) {
+    // Storm has broken / dispersed
+    isFlashFloodActive = false;
+    floodTriggeredAt = null;
+    floodHazardRemainingSec = 180;
+    notifications.push({
+      text: '🌤️ Flood Receded: Extreme precipitation abated. Hydrological equilibrium restored.',
+      icon: '🌤️',
+      type: 'info',
+    });
+  }
+
+  // Morning Field Hand Protocol (Shift Automation):
+  // If Morning Shift (06:00 to 14:00, cycleElapsedSeconds < 600) worker is on duty when flood triggers:
+  // Drops chores, sprints to canal head and opens Emergency Spillway within 15 seconds!
+  if (isFlashFloodActive && !isSpillwayOpen && hasFieldHandMorningDuty && cycleElapsedSeconds < 600) {
+    const elapsedSinceFlood = floodTriggeredAt ? (Date.now() - floodTriggeredAt) : 16000;
+    if (elapsedSinceFlood >= 15000) {
+      isSpillwayOpen = true;
+      spillwayDivertingLitersPerSec = 120;
+      notifications.push({
+        text: '🚜 Field Hand Protocol: Morning worker sprinted to the canal head and OPENED the Emergency Spillway!',
+        icon: '🚜',
+        type: 'event',
+      });
+    }
+  }
+
+  // Canal Overflow Rule:
+  // Sluice gates are automatically overridden by water head pressure when flood is active and spillway closed
+  if (isFlashFloodActive && !isSpillwayOpen) {
+    sluiceGatesOpen = true;
+    liveDischargeLitersPerSec = 120;
+  }
+
   // 4. Shift-Based Worker Hydrology Routines
   // A. Morning Shift (06:00 to 14:00, cycleElapsedSeconds < 600)
   if (cycleElapsedSeconds < 600) {
@@ -616,7 +695,6 @@ export function stepHydrologySimulation(params: {
   }
 
   // 5. Canal Sluice Gate Gravity Discharge Math
-  let liveDischargeLitersPerSec = 0;
   // Support ALL available unlocked plots on the estate (not artificially restricted to 12)
   const numAvailablePlots = Math.max(1, unlockedPlots || plots.length);
   const targetMoisture = tierConfig.autoCutoffSupported ? hydrology.autoShutoffMoisture : 100;
@@ -787,6 +865,24 @@ export function stepHydrologySimulation(params: {
     let isWithered = Boolean(p.isWithered);
     let waterloggedSec = p.waterloggedSeconds || 0;
     let hasRootRot = Boolean(p.hasRootRot);
+    let wasFloodedToMax = Boolean(p.wasFloodedToMax);
+
+    // Flash Flood Inundation & Emergency Spillway Purge Mechanics
+    if (isFlashFloodActive) {
+      if (isSpillwayOpen) {
+        // While spillway open: diverts incoming runoff off-map and actively purges standing field water.
+        // Plots drain at -10.0% moisture / sec down to the target safe zone (70%).
+        m = Math.max(70.0, m - 10.0 * dt);
+      } else {
+        // While spillway closed: Inundation surge (+15.0% moisture / sec)
+        // Infrastructure Mitigation: Tier 3+ Raised Furrows & Swales caps moisture at 85.0% (immune to root rot)
+        const floodCap = effectiveTier >= 3 ? 85.0 : 100.0;
+        m = Math.min(floodCap, m + 15.0 * dt);
+        if (m >= 99.0) {
+          wasFloodedToMax = true;
+        }
+      }
+    }
 
     // Desiccation tracking (< 15.0%)
     if (m <= 15.0 && p.crop && !p.ready && !isWithered) {
@@ -806,10 +902,12 @@ export function stepHydrologySimulation(params: {
     // Waterlogging & Root Rot tracking (> 95.0%)
     if (m > 95.0 && p.crop && !p.ready && !hasRootRot) {
       waterloggedSec += dt;
-      if (waterloggedSec >= ROOT_ROT_HAZARD_DURATION_SEC) {
+      // In flash flood, the hard 180s countdown applies
+      const rotLimit = isFlashFloodActive ? 180 : ROOT_ROT_HAZARD_DURATION_SEC;
+      if (waterloggedSec >= rotLimit) {
         hasRootRot = true;
         notifications.push({
-          text: `⚠️ Root Rot Inflicted: Plot #${i + 1} flooded (>95%) for 4 minutes! Yield halved & quality disabled.`,
+          text: `⚠️ Root Rot Inflicted: Plot #${i + 1} flooded (>95%) for ${isFlashFloodActive ? '3' : '4'} minutes! Yield halved & quality disabled.`,
           icon: '🪱',
           type: 'event',
         });
@@ -825,9 +923,44 @@ export function stepHydrologySimulation(params: {
       isWithered,
       waterloggedSeconds: waterloggedSec,
       hasRootRot,
+      wasFloodedToMax,
       // Maintain backwards-compatible isWatered boolean
       isWatered: m >= 40.0,
     };
+  }
+
+  // Flash Flood Hazard Clock & Alluvial Silt Resolution
+  if (isFlashFloodActive && !isSpillwayOpen) {
+    floodHazardRemainingSec = Math.max(0, floodHazardRemainingSec - dt);
+  }
+
+  if (isSpillwayOpen) {
+    // Check if plots reached safe zone (<= 70%)
+    const avgMoisture = newPlots.slice(0, numAvailablePlots).reduce((sum, p) => sum + (p.moistureLevel ?? 60), 0) / numAvailablePlots;
+    if (avgMoisture <= 70.5) {
+      floodHazardRemainingSec = 180; // Hazard timer pauses and resets
+      let siltCount = 0;
+      for (let i = 0; i < newPlots.length; i++) {
+        if (newPlots[i].wasFloodedToMax) {
+          newPlots[i] = {
+            ...newPlots[i],
+            alluvialSiltCyclesRemaining: 2,
+            wasFloodedToMax: false,
+            waterloggedSeconds: 0,
+          };
+          siltCount++;
+        }
+      }
+      if (siltCount > 0 && isFlashFloodActive) {
+        isFlashFloodActive = false;
+        wasFloodControlled = true;
+        notifications.push({
+          text: `✨ Flood Averted! Emergency Spillway safely drained the inundation. Alluvial Silt deposited on ${siltCount} plots (+20% Growth Speed & Free Fertilizer for next 2 plantings)!`,
+          icon: '✨',
+          type: 'event',
+        });
+      }
+    }
   }
 
   // 8. Severe Convective Hazard: Thunderstorm Lightning Strike (2% check per flash)
@@ -871,11 +1004,20 @@ export function stepHydrologySimulation(params: {
       canalTier: effectiveTier,
       sluiceGatesOpen,
       autoShutoffMoisture: hydrology.autoShutoffMoisture,
-      liveDischargeLitersPerSec: sluiceGatesOpen ? liveDischargeLitersPerSec : 0,
+      liveDischargeLitersPerSec: isFlashFloodActive && !isSpillwayOpen ? 120 : (sluiceGatesOpen ? liveDischargeLitersPerSec : 0),
       isCloggedWithDebris: isClogged,
       dewHarvestedToday,
       lastSluiceMorningDay,
       lastPumpMorningDay,
+
+      // Flash Flood & Emergency Spillway Dynamics
+      isFlashFloodActive,
+      isSpillwayOpen,
+      spillwayDivertingLitersPerSec: isSpillwayOpen ? 120 : 0,
+      floodHazardRemainingSec: Math.round(floodHazardRemainingSec * 10) / 10,
+      wasFloodControlled,
+      floodTriggeredAt,
+
       totalWaterDischargedLiters: Math.round((totalDischarged + Number.EPSILON) * 10) / 10,
       totalPercolatedLiters: Math.round((totalPercolated + Number.EPSILON) * 10) / 10,
     },

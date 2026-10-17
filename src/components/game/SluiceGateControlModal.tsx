@@ -30,6 +30,9 @@ export function SluiceGateControlModal() {
     deSiltCanals,
     deployDewScreens,
     setHydrologyWeather,
+    toggleEmergencySpillway,
+    openEmergencySpillway,
+    closeEmergencySpillway,
     plots,
     unlockedPlots,
     level,
@@ -62,6 +65,11 @@ export function SluiceGateControlModal() {
   const isStressed = Boolean(hydro?.isAquiferStressed);
   const isSluiceFrozen = Boolean(hydro?.isSluiceFrozen);
   const isRainbow = Boolean(hydro?.isRainbowActive);
+
+  // Flash Flood & Spillway State
+  const isFlashFloodActive = Boolean(hydro?.isFlashFloodActive);
+  const isSpillwayOpen = Boolean(hydro?.isSpillwayOpen);
+  const floodHazardRemainingSec = hydro?.floodHazardRemainingSec ?? 180;
 
   const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydro?.weatherCondition);
   const activeProfile = WEATHER_PROFILES[activeWeatherId] || WEATHER_PROFILES.sunny;
@@ -164,7 +172,15 @@ export function SluiceGateControlModal() {
                 <div>
                   <div className="text-xs text-stone-400 font-medium">Flow Throughput</div>
                   <div className="text-base sm:text-lg font-mono font-extrabold text-cyan-300">
-                    {gatesOpen ? `Discharging ${liveDischarge} Liters/sec to Plots 01–${unlockedPlots}` : 'Static Canal Head (0 L/sec)'}
+                    {isFlashFloodActive && !isSpillwayOpen ? (
+                      <span className="text-rose-400 animate-pulse">RIVER BREACH OVERFLOW (+120 L/sec unchecked)</span>
+                    ) : isSpillwayOpen ? (
+                      <span className="text-teal-300 animate-pulse">Spillway Diverting 120 L/sec Off-Map (-10%/sec Purge)</span>
+                    ) : gatesOpen ? (
+                      `Discharging ${liveDischarge} Liters/sec to Plots 01–${unlockedPlots}`
+                    ) : (
+                      'Static Canal Head (0 L/sec)'
+                    )}
                   </div>
                   <div className="text-[10px] text-stone-400 mt-0.5">
                     {tierConfig.seepageLossFraction > 0
@@ -271,6 +287,121 @@ export function SluiceGateControlModal() {
 
             <div className="text-[10px] text-stone-400 bg-black/30 p-2 rounded-lg border border-stone-800/80">
               💡 <span className="text-stone-300 font-semibold">Optimal Capillary Band:</span> 40.1% to 80.0% grants +15% Maturation Speed and Gold/Prismatic quality rolls!
+            </div>
+          </div>
+        </div>
+
+        {/* EMERGENCY RUNOFF & SPILLWAY CONTROL PANEL */}
+        <div className={`mt-4 rounded-2xl border-2 p-4 transition-all ${
+          isFlashFloodActive && !isSpillwayOpen
+            ? 'bg-rose-950/60 border-rose-500 shadow-xl shadow-rose-950/80 animate-pulse'
+            : isSpillwayOpen
+            ? 'bg-amber-950/40 border-amber-500/80 shadow-lg shadow-amber-950/50'
+            : 'bg-stone-900/90 border-stone-800'
+        }`}>
+          {/* Header & Status Pill */}
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-stone-800/80">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{isFlashFloodActive ? '🌊' : '🛡️'}</span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-white tracking-wide uppercase">
+                  Emergency Runoff & Spillway Control
+                </h3>
+                <p className="text-[11px] text-stone-400">
+                  Surface bypass valve • Off-map fluid diversion • Alluvial silt recovery
+                </p>
+              </div>
+            </div>
+            <div>
+              {isFlashFloodActive && !isSpillwayOpen ? (
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-600 text-white border border-rose-400 flex items-center gap-1.5 animate-bounce">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  ⚠️ FLASH FLOOD IN PROGRESS ({Math.ceil(floodHazardRemainingSec)}s to Root Rot)
+                </span>
+              ) : isSpillwayOpen ? (
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-teal-500/20 text-teal-300 border border-teal-400 flex items-center gap-1.5 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-teal-400" />
+                  🚨 SPILLWAY DRAINING FIELD (-10%/sec)
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-stone-800 text-stone-400 border border-stone-700">
+                  STATUS: NORMAL
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Reservoir Saturation & Swale Status Row */}
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
+            <div className="p-2 rounded-xl bg-black/40 border border-stone-800">
+              <div className="text-[10px] text-stone-400 uppercase font-bold">Rain Cistern</div>
+              <div className="text-sm font-black text-cyan-300 mt-0.5">
+                {cisternLiters.toLocaleString()} / {cisternMax.toLocaleString()} L
+                {cisternLiters >= cisternMax - 1 && <span className="text-rose-400 ml-1 text-xs font-extrabold">(MAX)</span>}
+              </div>
+            </div>
+            <div className="p-2 rounded-xl bg-black/40 border border-stone-800">
+              <div className="text-[10px] text-stone-400 uppercase font-bold">Deep Aquifer</div>
+              <div className="text-sm font-black text-emerald-300 mt-0.5">
+                {aquiferLiters.toLocaleString()} / {aquiferCapacity.toLocaleString()} L
+                {aquiferLiters >= aquiferCapacity - 1 && <span className="text-rose-400 ml-1 text-xs font-extrabold">(MAX)</span>}
+              </div>
+            </div>
+            <div className="p-2 rounded-xl bg-black/40 border border-stone-800">
+              <div className="text-[10px] text-stone-400 uppercase font-bold">Drainage Swale</div>
+              <div className={`text-xs font-black mt-0.5 ${
+                canalTier >= 3
+                  ? 'text-emerald-400 font-bold'
+                  : isFlashFloodActive && !isSpillwayOpen
+                  ? 'text-rose-400 font-bold animate-pulse'
+                  : 'text-stone-300'
+              }`}>
+                {canalTier >= 3
+                  ? '🌿 Tier 3+ Swales Active (Cap: 85%)'
+                  : isFlashFloodActive && !isSpillwayOpen
+                  ? '⚠️ RIVER OVERFLOW'
+                  : 'CLEAR'}
+              </div>
+            </div>
+          </div>
+
+          {/* Master Emergency Spillway Button */}
+          <div className="mt-4 flex flex-col sm:flex-row items-center gap-3">
+            <button
+              type="button"
+              onClick={() => toggleEmergencySpillway()}
+              className={`w-full py-3.5 px-5 rounded-2xl font-black text-sm tracking-wide transition-all shadow-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+                isSpillwayOpen
+                  ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white border-2 border-teal-300 shadow-teal-950/60'
+                  : isFlashFloodActive
+                  ? 'bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white border-2 border-rose-300 shadow-rose-950/80 animate-pulse text-base'
+                  : 'bg-gradient-to-r from-rose-900 to-amber-900 hover:from-rose-800 hover:to-amber-800 text-stone-200 border-2 border-rose-700/60 shadow-md'
+              }`}
+            >
+              <span>{isSpillwayOpen ? '🛑' : isFlashFloodActive ? '🚨' : '⚠️'}</span>
+              <span>
+                {isSpillwayOpen
+                  ? 'CLOSE EMERGENCY SPILLWAY'
+                  : isFlashFloodActive
+                  ? '! OPEN EMERGENCY SPILLWAY !'
+                  : 'OPEN EMERGENCY SPILLWAY'}
+              </span>
+              <span className="text-xs font-normal opacity-90 hidden sm:inline">
+                {isSpillwayOpen
+                  ? '(Diverting 120 L/sec to Off-Map Creek · Draining Fields)'
+                  : '(Diverts 120 L/sec to Off-Map Creek)'}
+              </span>
+            </button>
+          </div>
+
+          {/* Information & Alluvial Silt Callout */}
+          <div className="mt-3 p-2.5 rounded-xl bg-black/30 border border-stone-800/80 text-[11px] text-stone-300 flex items-start gap-2">
+            <span className="text-base shrink-0">✨</span>
+            <div className="leading-relaxed">
+              <span className="font-bold text-amber-300">Alluvial Silt Protocol: </span>
+              Draining flooded fields before the 180s Root Rot timer expires deposits rich mineral river silt, granting{' '}
+              <span className="text-emerald-300 font-bold">+20% base maturation speed</span> and{' '}
+              <span className="text-cyan-300 font-bold">free organic fertilization</span> for the next 2 crop cycles!
             </div>
           </div>
         </div>

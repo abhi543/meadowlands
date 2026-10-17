@@ -293,6 +293,9 @@ export interface PlotState {
   isFrostbitten?: boolean;
   isHeatWilted?: boolean;
   isDormant?: boolean;
+  // Flash Flood & Alluvial Silt Mechanics
+  alluvialSiltCyclesRemaining?: number;
+  wasFloodedToMax?: boolean;
 }
 
 export interface AnimalInstance {
@@ -845,6 +848,9 @@ export interface GameState {
   deSiltCanals: () => void;
   deployDewScreens: () => boolean;
   setHydrologyWeather: (weather: WeatherProfileId | 'clear' | 'light_rain' | 'downpour') => void;
+  toggleEmergencySpillway: () => void;
+  openEmergencySpillway: () => void;
+  closeEmergencySpillway: () => void;
 
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
@@ -1274,6 +1280,7 @@ export const useGameStore = create<GameState>()(
         const soilTier = getSoilTier(pLevel);
         const newPlots = [...state.plots];
         newPlots[plotId] = {
+          ...plot,
           id: plotId,
           crop: cropId,
           plantedAt: Date.now(),
@@ -1281,6 +1288,8 @@ export const useGameStore = create<GameState>()(
           isWatered: soilTier.autoHydrate || plot.isWatered || false,
           wateredUntil: plot.wateredUntil || null,
           level: pLevel,
+          alluvialSiltCyclesRemaining: plot.alluvialSiltCyclesRemaining,
+          moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
         };
         set({ plots: newPlots });
       },
@@ -1312,12 +1321,14 @@ export const useGameStore = create<GameState>()(
         });
 
         const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
-        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic);
+        const hasSiltFertilizer = Boolean(plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0);
+        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0));
         const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity;
         const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
         const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
         const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
         const newPlots = [...state.plots];
+        const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
         // Harvest resets soil crop while preserving moisture and quality tier
         newPlots[plotId] = {
           id: plotId,
@@ -1332,6 +1343,7 @@ export const useGameStore = create<GameState>()(
           waterloggedSeconds: 0,
           isWithered: false,
           hasRootRot: false,
+          alluvialSiltCyclesRemaining: nextSiltCycles,
           phenologyBadgeEmoji: undefined,
           phenologyBadgeText: undefined,
           isFrostbitten: false,
@@ -1434,6 +1446,7 @@ export const useGameStore = create<GameState>()(
           const pLevel = state.plots[pid]?.level || 1;
           const soilTier = getSoilTier(pLevel);
           newPlots[pid] = {
+            ...state.plots[pid],
             id: pid,
             crop: cropId,
             plantedAt: now,
@@ -1441,6 +1454,8 @@ export const useGameStore = create<GameState>()(
             isWatered: soilTier.autoHydrate || state.plots[pid]?.isWatered || false,
             wateredUntil: state.plots[pid]?.wateredUntil || null,
             level: pLevel,
+            alluvialSiltCyclesRemaining: state.plots[pid]?.alluvialSiltCyclesRemaining,
+            moistureLevel: state.plots[pid]?.moistureLevel !== undefined ? state.plots[pid]?.moistureLevel : 60.0,
           };
         }
         set({
@@ -1499,7 +1514,8 @@ export const useGameStore = create<GameState>()(
             });
 
             const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
-            const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic);
+            const hasSiltFertilizer = Boolean(plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0);
+            const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0));
             if (qualityRoll.quality !== 'standard') qualityCropsCount++;
 
             const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity;
@@ -1507,6 +1523,7 @@ export const useGameStore = create<GameState>()(
             const plotYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (bonus + soilTier.bonusYield);
             newSilo[plot.crop] = (newSilo[plot.crop] || 0) + plotYield;
+            const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
             newPlots[i] = {
               id: i,
               crop: null,
@@ -1520,6 +1537,7 @@ export const useGameStore = create<GameState>()(
               waterloggedSeconds: 0,
               isWithered: false,
               hasRootRot: false,
+              alluvialSiltCyclesRemaining: nextSiltCycles,
               phenologyBadgeEmoji: undefined,
               phenologyBadgeText: undefined,
               isFrostbitten: false,
@@ -4705,8 +4723,9 @@ export const useGameStore = create<GameState>()(
             const mZone = getMoistureZone(p.moistureLevel !== undefined ? p.moistureLevel : 60.0);
             const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
+            const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -7263,6 +7282,55 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         state.addNotification(`Atmospheric Conditions Shifted: ${profileDef.emoji} ${profileDef.name} active.`, profileDef.emoji, 'info');
+      },
+
+      toggleEmergencySpillway: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const newSpillwayOpen = !currentHydro.isSpillwayOpen;
+        set({
+          hydrology: {
+            ...currentHydro,
+            isSpillwayOpen: newSpillwayOpen,
+            spillwayDivertingLitersPerSec: newSpillwayOpen ? 120 : 0,
+          },
+          isDirty: true,
+        });
+        if (newSpillwayOpen) {
+          state.addNotification('🚨 Emergency Spillway Opened! Diverting 120 L/sec runoff to off-map creek (-10%/sec field purge).', '🚨', 'event');
+        } else {
+          state.addNotification('🛑 Emergency Spillway Closed: Off-map runoff diversion secured.', '🛑', 'info');
+        }
+      },
+
+      openEmergencySpillway: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        if (currentHydro.isSpillwayOpen) return;
+        set({
+          hydrology: {
+            ...currentHydro,
+            isSpillwayOpen: true,
+            spillwayDivertingLitersPerSec: 120,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🚨 Emergency Spillway Opened! Diverting 120 L/sec runoff to off-map creek (-10%/sec field purge).', '🚨', 'event');
+      },
+
+      closeEmergencySpillway: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        if (!currentHydro.isSpillwayOpen) return;
+        set({
+          hydrology: {
+            ...currentHydro,
+            isSpillwayOpen: false,
+            spillwayDivertingLitersPerSec: 0,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🛑 Emergency Spillway Closed: Off-map runoff diversion secured.', '🛑', 'info');
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {
