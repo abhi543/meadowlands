@@ -301,6 +301,7 @@ export interface HydrologyState {
   isCloggedWithDebris: boolean;
   dewHarvestedToday: boolean;
   lastSluiceMorningDay: number;
+  lastPumpMorningDay?: number;
   
   // Telemetry
   totalWaterDischargedLiters: number;
@@ -332,6 +333,7 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     isCloggedWithDebris: false,
     dewHarvestedToday: false,
     lastSluiceMorningDay: 0,
+    lastPumpMorningDay: 0,
     
     totalWaterDischargedLiters: 0,
     totalPercolatedLiters: 0,
@@ -342,6 +344,70 @@ export interface HydrologySimulationResult {
   updatedHydrology: HydrologyState;
   updatedPlots: any[];
   notifications: Array<{ text: string; icon: string; type: 'info' | 'coin' | 'event' }>;
+}
+
+/**
+ * Validates whether the master canal sluice gates can be opened.
+ * Enforces tower volume prerequisites, debris blockage, freezing state,
+ * and the Safety Cut-Off Dial logic (triggering cutoff only when plots reach >= targetMoisture).
+ * CRITICAL: Wilted and low-moisture (<15%) plots MUST ALWAYS be allowed to open gates!
+ */
+export function canOpenGates(
+  hydrology: HydrologyState | undefined,
+  plots: any[] = [],
+  unlockedPlots: number = 12
+): { canOpen: boolean; reason?: string } {
+  if (!hydrology) return { canOpen: true };
+
+  // 1. Tower Volume Prerequisite
+  if ((hydrology.towerLiters ?? 0) <= 0) {
+    return {
+      canOpen: false,
+      reason: 'Elevated Gravity Tower is empty (0L)! Transfer from Rain Cistern or pump from Deep Aquifer first.',
+    };
+  }
+
+  // 2. Physical Canal Grate Blockages
+  if (hydrology.isCloggedWithDebris) {
+    return {
+      canOpen: false,
+      reason: 'Canal grates are clogged with silt & debris! Clear grates first.',
+    };
+  }
+
+  // 3. Sub-Zero Frost Freezing (Tier 1 earthen trenches)
+  if (hydrology.isSluiceFrozen) {
+    return {
+      canOpen: false,
+      reason: 'Earthen canal furrows are frozen solid! Upgrade to Tier 2 clay canals.',
+    };
+  }
+
+  // 4. Safety Cut-Off Dial Check (Tier 2+)
+  // Auto-cutoff ONLY triggers when all plots REACH or EXCEED target saturation (>= 75%).
+  // Low moisture (<15% desiccated or <40% parched) MUST NEVER lock the gates!
+  const effectiveTier = hydrology.canalTier || 1;
+  const tierConfig = CANAL_TIER_CONFIGS[effectiveTier];
+  if (tierConfig.autoCutoffSupported) {
+    const numEstatePlots = Math.min(FIXED_ESTATE_PLOTS_COUNT, unlockedPlots || plots.length);
+    const targetMoisture = hydrology.autoShutoffMoisture ?? 75;
+    if (numEstatePlots > 0) {
+      const estatePlots = plots.slice(0, numEstatePlots);
+      const allReachedCutoff = estatePlots.every(p => {
+        const m = p?.moistureLevel !== undefined ? p.moistureLevel : 60.0;
+        return m >= targetMoisture;
+      });
+
+      if (allReachedCutoff) {
+        return {
+          canOpen: false,
+          reason: `All estate plots have already reached or exceeded the ${targetMoisture}% safety cut-off target.`,
+        };
+      }
+    }
+  }
+
+  return { canOpen: true };
 }
 
 /**
@@ -392,6 +458,7 @@ export function stepHydrologySimulation(params: {
   let isClogged = hydrology.isCloggedWithDebris;
   let dewHarvestedToday = hydrology.dewHarvestedToday;
   let lastSluiceMorningDay = hydrology.lastSluiceMorningDay;
+  let lastPumpMorningDay = hydrology.lastPumpMorningDay ?? 0;
   let totalDischarged = hydrology.totalWaterDischargedLiters;
   let totalPercolated = hydrology.totalPercolatedLiters;
 
@@ -431,7 +498,7 @@ export function stepHydrologySimulation(params: {
     const prospectiveCistern = currentCistern + rainLitersGained;
     if (prospectiveCistern >= effectiveCisternMax) {
       currentCistern = effectiveCisternMax;
-      // Overflow Rule: When Volume >= Max (10,000L), excess water automatically recharges the Deep Groundwater Aquifer at +20 L/min
+      // Overflow Rule: When Volume >= Max, excess water automatically recharges Deep Aquifer at +20 L/min
       const overflowRecharge = (20.0 / 60) * dt;
       currentAquifer = Math.min(hydrology.aquiferCapacityLiters, currentAquifer + overflowRecharge);
     } else {
@@ -472,31 +539,24 @@ export function stepHydrologySimulation(params: {
     dewHarvestedToday = false; // Reset dew harvest flag for next night
 
     if (hasFieldHandMorningDuty) {
-      // Well pumping check: if elevated tower < 200L, pump from aquifer
-      if (currentTower < 200 && currentAquifer > 100) {
+      // Well pumping check: if elevated tower < 200L, pump from aquifer ONCE per day (atomic source deduction)
+      if (lastPumpMorningDay !== currentDay && currentTower < 200 && currentAquifer > 100) {
         const pumpSpeedMultiplier = isAquiferStressed ? 0.5 : 1.0;
         const pumpTransfer = Math.min(400 * pumpSpeedMultiplier, currentAquifer, hydrology.towerCapacityLiters - currentTower);
-        currentAquifer -= pumpTransfer;
-        currentTower += pumpTransfer;
-        notifications.push({
-          text: `👷 Field Hand Routine: Pumped ${Math.round(pumpTransfer)}L from Aquifer into Elevated Tower.`,
-          icon: '⛲',
-          type: 'info',
-        });
-      }
-
-      // Sluice routine: at shift start, if plots dry and gates closed, open sluice
-      if (lastSluiceMorningDay !== currentDay && (effectiveTier === 1 || effectiveTier === 2)) {
-        if (!sluiceGatesOpen && currentTower >= 50) {
-          sluiceGatesOpen = true;
-          lastSluiceMorningDay = currentDay;
+        if (pumpTransfer > 0) {
+          currentAquifer = Math.max(0, currentAquifer - pumpTransfer);
+          currentTower = Math.min(hydrology.towerCapacityLiters, currentTower + pumpTransfer);
+          lastPumpMorningDay = currentDay;
           notifications.push({
-            text: '👷 Field Hand Morning Routine: Opened canal sluice gates for 06:00 estate hydration!',
-            icon: '🌊',
+            text: `👷 Field Hand Routine: Pumped ${Math.round(pumpTransfer)}L from Aquifer into Elevated Tower.`,
+            icon: '⛲',
             type: 'info',
           });
         }
       }
+
+      // NOTE: Master Sluice Gates are STRICTLY manual/player-controlled or automated cut-off.
+      // Workers DO NOT forcibly open physical sluice gates without user command (Bug 3 fixed).
     }
   }
 
@@ -531,24 +591,31 @@ export function stepHydrologySimulation(params: {
   let newPlots = [...plots];
   let totalDeliveredLiters = 0;
 
-  // Check if Tier 4 Pressurized Brass Sprinklers need to auto-pulse
-  if (effectiveTier >= 4 && currentTower >= 30) {
+  // Check if Tier 4 Pressurized Brass Sprinklers need to auto-pulse (Bug 1 & Bug 4)
+  // Prerequisite: tower must have sufficient volume; zero-pressure bypass strictly blocked!
+  if (effectiveTier >= 4) {
     for (let i = 0; i < numEstatePlots; i++) {
       const p = newPlots[i];
       if (!p) continue;
-      const currentM = p.moistureLevel ?? 60.0;
-      if (currentM < 42.0 && currentTower >= 25) {
-        // Pulse to 75.0%
+      const currentM = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
+      if (currentM < 42.0) {
+        // Target pulse up to 75.0%
         const neededPct = Math.min(75.0 - currentM, 33.0);
-        const neededLiters = neededPct * LITERS_PER_PERCENT_MOISTURE_PER_PLOT;
-        const availableLiters = Math.min(neededLiters, currentTower);
-        currentTower -= availableLiters;
-        totalDischarged += availableLiters;
-        totalDeliveredLiters += availableLiters;
-        const addedPct = availableLiters / LITERS_PER_PERCENT_MOISTURE_PER_PLOT;
+        const neededLiters = neededPct * LITERS_PER_PERCENT_MOISTURE_PER_PLOT; // 2.5L per +1% moisture per plot
+
+        // Sprinkler Zero-Pressure Bypass Check: tower MUST have at least neededLiters to pulse!
+        if (currentTower < neededLiters || currentTower <= 0) {
+          // Insufficient tower pressure: skip pulse until tank is refilled
+          continue;
+        }
+
+        // Atomic deduction from Elevated Gravity Tower
+        currentTower = Math.max(0, currentTower - neededLiters);
+        totalDischarged += neededLiters;
+        totalDeliveredLiters += neededLiters;
         newPlots[i] = {
           ...p,
-          moistureLevel: Math.min(80.0, currentM + addedPct),
+          moistureLevel: Number(Math.min(80.0, currentM + neededPct).toFixed(4)),
         };
       }
     }
@@ -560,6 +627,7 @@ export function stepHydrologySimulation(params: {
       // Out of water or clogged
       sluiceGatesOpen = false;
       if (currentTower <= 0) {
+        currentTower = 0;
         notifications.push({
           text: '🛑 Sluice Gates Closed: Elevated Gravity Tower is empty (0L)!',
           icon: '🔴',
@@ -578,15 +646,15 @@ export function stepHydrologySimulation(params: {
       for (let i = 0; i < numEstatePlots; i++) {
         const p = newPlots[i];
         if (!p) continue;
-        const m = p.moistureLevel ?? 60.0;
+        const m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
         if (m < targetMoisture) {
           thirstyPlotIndices.push(i);
         }
       }
 
       if (thirstyPlotIndices.length === 0) {
-        // All plots reached target! Auto shut-off if Tier 2+
-        if (tierConfig.autoCutoffSupported) {
+        // All plots reached target! Auto shut-off only if Tier 2+
+        if (tierConfig.autoCutoffSupported && numEstatePlots > 0) {
           sluiceGatesOpen = false;
           notifications.push({
             text: `🟢 Automated Sluice Cut-Off: All plots reached ${targetMoisture}% target moisture. Gates secured!`,
@@ -599,9 +667,21 @@ export function stepHydrologySimulation(params: {
         const flowRate = 12.0; // Liters / sec
         const requestedLiters = flowRate * dt;
         const actualDischargedLiters = Math.min(requestedLiters, currentTower);
-        currentTower -= actualDischargedLiters;
+        
+        // Atomic deduction from Elevated Gravity Tower (2.5L per +1% moisture delivered)
+        currentTower = Math.max(0, currentTower - actualDischargedLiters);
         totalDischarged += actualDischargedLiters;
-        liveDischargeLitersPerSec = Math.round(actualDischargedLiters / dt);
+        liveDischargeLitersPerSec = dt > 0 ? Math.round(actualDischargedLiters / dt) : 0;
+
+        // Auto-close gates immediately if tower ran completely dry during this discharge tick
+        if (currentTower <= 0) {
+          sluiceGatesOpen = false;
+          notifications.push({
+            text: '🛑 Sluice Gates Closed: Elevated Gravity Tower ran dry (0L)!',
+            icon: '🔴',
+            type: 'info',
+          });
+        }
 
         // Seepage loss applied based on canal tier:
         // Tier 1: 35% seeps into turf, 65% reaches crop beds
@@ -614,11 +694,11 @@ export function stepHydrologySimulation(params: {
 
         for (const idx of thirstyPlotIndices) {
           const p = newPlots[idx];
-          const curM = p.moistureLevel ?? 60.0;
+          const curM = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
           const newM = Math.min(tierConfig.maxSaturationCapPct, curM + moisturePctIncrease);
           newPlots[idx] = {
             ...p,
-            moistureLevel: newM,
+            moistureLevel: Number(newM.toFixed(4)),
           };
         }
       }
@@ -632,7 +712,7 @@ export function stepHydrologySimulation(params: {
     totalPercolated += percolatedLiters;
   }
 
-  // 7. Continuous Thermodynamic Soil Moisture Decay & Precipitation Wetting Formula
+  // 7. Continuous Thermodynamic Soil Moisture Decay & Precipitation Wetting Formula (Bug 6)
   // EvaporativeLoss = E_base * (1 + (T - 20) / 25) * (1.0 - (H * 0.7)) * (1 - InfraDamping)
   const thermoEvap = calculateThermodynamicEvaporationRatePctPerMin({
     temperatureC: currentAtmosphere.temperatureC,
@@ -657,6 +737,7 @@ export function stepHydrologySimulation(params: {
     let m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
 
     // Apply continuous thermodynamic decay and precipitation inflow
+    // High-precision floating point decay (not truncated by premature 1-decimal rounding)
     m = Math.max(0.0, Math.min(tierConfig.maxSaturationCapPct, m - evapDeltaPct + directRainMoistureGainPct));
 
     let desiccatedSec = p.desiccatedSeconds || 0;
@@ -696,7 +777,7 @@ export function stepHydrologySimulation(params: {
 
     newPlots[i] = {
       ...p,
-      moistureLevel: Math.round(m * 10) / 10,
+      moistureLevel: Number(m.toFixed(4)),
       desiccatedSeconds: desiccatedSec,
       isWithered,
       waterloggedSeconds: waterloggedSec,
@@ -751,6 +832,7 @@ export function stepHydrologySimulation(params: {
       isCloggedWithDebris: isClogged,
       dewHarvestedToday,
       lastSluiceMorningDay,
+      lastPumpMorningDay,
       totalWaterDischargedLiters: Math.round((totalDischarged + Number.EPSILON) * 10) / 10,
       totalPercolatedLiters: Math.round((totalPercolated + Number.EPSILON) * 10) / 10,
     },

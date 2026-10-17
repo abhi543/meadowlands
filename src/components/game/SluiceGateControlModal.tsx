@@ -14,6 +14,7 @@ import {
   resolveWeatherProfileId,
   type WeatherProfileId,
   type WeatherCategoryId,
+  canOpenGates,
 } from '@/game/hydrologyEngine';
 
 export function SluiceGateControlModal() {
@@ -175,33 +176,52 @@ export function SluiceGateControlModal() {
             </div>
 
             {/* Master Toggle Lever */}
-            <div className="flex items-center gap-3 mt-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => toggleSluiceGates()}
-                className={`flex-1 py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
-                  gatesOpen
-                    ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40 border-2 border-rose-400'
-                    : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-900/40 border-2 border-emerald-400'
-                }`}
-              >
-                <span>{gatesOpen ? '🔴 Close Sluice Gates' : '🟢 Open Sluice Gates'}</span>
-                <span className="text-xs opacity-80">
-                  {gatesOpen ? '(Stop Flow)' : `(Draw from Tower: ${towerLiters}L)`}
-                </span>
-              </button>
+            {(() => {
+              const gateCheck = canOpenGates(hydro, plots, unlockedPlots);
+              const isLocked = !gatesOpen && !gateCheck.canOpen;
 
-              {isClogged && (
-                <button
-                  type="button"
-                  onClick={deSiltCanals}
-                  className="px-3 py-3 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500 text-amber-200 text-xs font-bold transition-all flex items-center gap-1.5"
-                >
-                  <span>🧹</span>
-                  <span>Clear Silt Debris</span>
-                </button>
-              )}
-            </div>
+              return (
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => toggleSluiceGates()}
+                      className={`flex-1 py-3 px-4 rounded-xl font-extrabold text-sm transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        gatesOpen
+                          ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40 border-2 border-rose-400'
+                          : isLocked
+                          ? 'bg-stone-800 text-stone-400 border-2 border-stone-700'
+                          : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-emerald-900/40 border-2 border-emerald-400 animate-pulse'
+                      }`}
+                    >
+                      <span>{gatesOpen ? '🔴 Close Sluice Gates' : isLocked ? '🔒 Gates Secured' : '🟢 Open Sluice Gates'}</span>
+                      <span className="text-xs opacity-80">
+                        {gatesOpen ? '(Stop Flow)' : `(Draw from Tower: ${towerLiters}L)`}
+                      </span>
+                    </button>
+
+                    {isClogged && (
+                      <button
+                        type="button"
+                        onClick={deSiltCanals}
+                        className="px-3 py-3 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500 text-amber-200 text-xs font-bold transition-all flex items-center gap-1.5"
+                      >
+                        <span>🧹</span>
+                        <span>Clear Silt Debris</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isLocked && gateCheck.reason && (
+                    <div className="text-[11px] text-amber-300/90 bg-amber-950/40 border border-amber-500/30 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                      <span>ℹ️</span>
+                      <span>{gateCheck.reason}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Safety Cut-Off Dial (Tier 2+) */}

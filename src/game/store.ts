@@ -36,6 +36,7 @@ import {
   simulateOfflineHydrology,
   rollCropQuality,
   getMoistureZone,
+  canOpenGates,
   CANAL_TIER_CONFIGS,
   LITERS_PER_PERCENT_MOISTURE_PER_PLOT,
   ELEVATED_TOWER_CAPACITY,
@@ -7066,12 +7067,9 @@ export const useGameStore = create<GameState>()(
         const newOpen = open !== undefined ? open : !currentHydro.sluiceGatesOpen;
 
         if (newOpen) {
-          if (currentHydro.towerLiters <= 0) {
-            state.addNotification('🛑 Cannot Open Sluice: Elevated Gravity Tower is empty (0L)! Transfer or pump water first.', '🗼', 'info');
-            return;
-          }
-          if (currentHydro.isCloggedWithDebris) {
-            state.addNotification('🍂 Sluice Blocked: Canal grates are clogged with silt & debris! Clear canals first.', '🧹', 'event');
+          const check = canOpenGates(currentHydro, state.plots, state.unlockedPlots);
+          if (!check.canOpen) {
+            state.addNotification(`🛑 Sluice Gates Locked: ${check.reason}`, '🔒', 'info');
             return;
           }
           state.addNotification(`🌊 Master Sluice Gates Opened! Gravity discharge feeding Plots 01–${Math.min(12, state.unlockedPlots)}.`, '🌊', 'info');
@@ -7111,15 +7109,17 @@ export const useGameStore = create<GameState>()(
           state.addNotification('🗼 Elevated Gravity Tower is already at maximum capacity (800L)!', '🗼', 'info');
           return false;
         }
-        if (currentHydro.aquiferLiters < 10) {
-          state.addNotification('🚰 Aquifer Depleted: Ground water table too low to pump!', '⚠️', 'info');
+        if (currentHydro.aquiferLiters <= 0) {
+          state.addNotification('🚰 Aquifer Depleted: Ground water table is dry (0L)!', '⚠️', 'info');
           return false;
         }
 
         const pumpMultiplier = currentHydro.isAquiferStressed || currentHydro.hasSedimentInLine ? 0.5 : 1.0;
         const requested = liters * pumpMultiplier;
         const transferAmount = Math.min(requested, currentHydro.aquiferLiters, towerSpace);
+        if (transferAmount <= 0) return false;
 
+        // Atomic deduction from Deep Aquifer source reservoir (Bug 5)
         const newAquifer = Math.max(0, currentHydro.aquiferLiters - transferAmount);
         const newTower = Math.min(currentHydro.towerCapacityLiters, currentHydro.towerLiters + transferAmount);
 
@@ -7152,6 +7152,9 @@ export const useGameStore = create<GameState>()(
         }
 
         const transferAmount = Math.min(liters, currentHydro.cisternLiters, towerSpace);
+        if (transferAmount <= 0) return false;
+
+        // Atomic deduction from Rain Cistern source reservoir (Bug 5)
         const newCistern = Math.max(0, currentHydro.cisternLiters - transferAmount);
         const newTower = Math.min(currentHydro.towerCapacityLiters, currentHydro.towerLiters + transferAmount);
 
@@ -7254,6 +7257,8 @@ export const useGameStore = create<GameState>()(
             weatherCondition: profileId,
             weatherState: newAtmosphere,
             isRainbowActive: profileId === 'sunshower',
+            // CRITICAL: Weather change MUST NEVER alter manual sluice gate state (Bug 3)
+            sluiceGatesOpen: currentHydro.sluiceGatesOpen,
           },
           isDirty: true,
         });
