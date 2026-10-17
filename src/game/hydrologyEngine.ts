@@ -383,30 +383,7 @@ export function canOpenGates(
     };
   }
 
-  // 4. Safety Cut-Off Dial Check (Tier 2+)
-  // Auto-cutoff ONLY triggers when all plots REACH or EXCEED target saturation (>= 75%).
-  // Low moisture (<15% desiccated or <40% parched) MUST NEVER lock the gates!
-  const effectiveTier = hydrology.canalTier || 1;
-  const tierConfig = CANAL_TIER_CONFIGS[effectiveTier];
-  if (tierConfig.autoCutoffSupported) {
-    const numEstatePlots = Math.min(FIXED_ESTATE_PLOTS_COUNT, unlockedPlots || plots.length);
-    const targetMoisture = hydrology.autoShutoffMoisture ?? 75;
-    if (numEstatePlots > 0) {
-      const estatePlots = plots.slice(0, numEstatePlots);
-      const allReachedCutoff = estatePlots.every(p => {
-        const m = p?.moistureLevel !== undefined ? p.moistureLevel : 60.0;
-        return m >= targetMoisture;
-      });
-
-      if (allReachedCutoff) {
-        return {
-          canOpen: false,
-          reason: `All estate plots have already reached or exceeded the ${targetMoisture}% safety cut-off target.`,
-        };
-      }
-    }
-  }
-
+  // Player manual control ALWAYS permits opening gates when tower has water and channels are clear!
   return { canOpen: true };
 }
 
@@ -640,9 +617,8 @@ export function stepHydrologySimulation(params: {
           type: 'event',
         });
       }
-    } else {
       // Find plots eligible for water (moisture < targetMoisture)
-      const thirstyPlotIndices: number[] = [];
+      let thirstyPlotIndices: number[] = [];
       for (let i = 0; i < numEstatePlots; i++) {
         const p = newPlots[i];
         if (!p) continue;
@@ -652,16 +628,26 @@ export function stepHydrologySimulation(params: {
         }
       }
 
+      // If all plots already reached targetMoisture, allow manual flow to saturate up to canal capacity (80%-100%)
       if (thirstyPlotIndices.length === 0) {
-        // All plots reached target! Auto shut-off only if Tier 2+
-        if (tierConfig.autoCutoffSupported && numEstatePlots > 0) {
-          sluiceGatesOpen = false;
-          notifications.push({
-            text: `🟢 Automated Sluice Cut-Off: All plots reached ${targetMoisture}% target moisture. Gates secured!`,
-            icon: '🛑',
-            type: 'info',
-          });
+        for (let i = 0; i < numEstatePlots; i++) {
+          const p = newPlots[i];
+          if (!p) continue;
+          const m = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
+          if (m < tierConfig.maxSaturationCapPct) {
+            thirstyPlotIndices.push(i);
+          }
         }
+      }
+
+      if (thirstyPlotIndices.length === 0) {
+        // All plots reached maximum capacity! Auto shut-off gates
+        sluiceGatesOpen = false;
+        notifications.push({
+          text: `🟢 Sluice Gates Secured: All plots reached maximum hydration capacity (${tierConfig.maxSaturationCapPct}%).`,
+          icon: '🛑',
+          type: 'info',
+        });
       } else {
         // Discharge rate: 12 Liters / sec total across canal network
         const flowRate = 12.0; // Liters / sec

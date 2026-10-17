@@ -651,11 +651,19 @@ export function evaluateCropPhenology(params: {
       badgeText = 'Cold-Sweetened (+25% Price)';
       description = 'Freezing temperatures convert root starches into pure natural sugars!';
     } else if (weather === 'heatwave') {
-      isWilted = true;
-      speedMult = 0.0;
-      badgeEmoji = '🥀';
-      badgeText = 'Heat Wilted (0x)';
-      description = 'Cool-season greens cannot tolerate extreme thermal heat. Growth halted!';
+      if (moistureLevel >= 70.0) {
+        // High soil moisture & canal hydration provides evaporative cooling
+        speedMult *= 0.85;
+        badgeEmoji = '💧';
+        badgeText = 'Canal Cooled (0.85x)';
+        description = 'Abundant canal moisture (≥70%) evaporatively cools root beds, shielding greens from heat collapse!';
+      } else {
+        isWilted = true;
+        speedMult = 0.0;
+        badgeEmoji = '🥀';
+        badgeText = 'Heat Wilted (0x)';
+        description = 'Cool-season greens scorched by heatwave! Irrigate to ≥70% moisture or switch weather.';
+      }
     } else if (weather === 'foggy') {
       speedMult *= 1.25;
       badgeEmoji = '🌁';
@@ -674,10 +682,17 @@ export function evaluateCropPhenology(params: {
       badgeText = 'Sunshower Burst (+15%)';
       description = 'Perfect balance of moisture and sunlight stimulates berry ripening!';
     } else if (weather === 'heatwave') {
-      speedMult *= 0.50;
-      badgeEmoji = '☀️';
-      badgeText = 'Heat Stressed (-50%)';
-      description = 'Berry bushes suffer leaf scorch during intense heatwaves.';
+      if (moistureLevel >= 65.0) {
+        speedMult *= 1.0;
+        badgeEmoji = '🫐';
+        badgeText = 'Hydrated Berry (1.0x)';
+        description = 'Plentiful soil moisture shields berry foliage from solar scorching.';
+      } else {
+        speedMult *= 0.50;
+        badgeEmoji = '☀️';
+        badgeText = 'Heat Stressed (-50%)';
+        description = 'Berry bushes suffer leaf scorch during intense heatwaves. Irrigate to relieve stress.';
+      }
     }
   }
 
