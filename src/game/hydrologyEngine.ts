@@ -617,6 +617,7 @@ export function stepHydrologySimulation(params: {
           type: 'event',
         });
       }
+    } else {
       // Find plots eligible for water (moisture < targetMoisture)
       let thirstyPlotIndices: number[] = [];
       for (let i = 0; i < numEstatePlots; i++) {
