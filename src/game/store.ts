@@ -2977,15 +2977,15 @@ export const useGameStore = create<GameState>()(
         playRapidTapSound(2);
         if (isDepletedNow) {
           state.addNotification(
-            `🎣 Reeled in ${fishDef.name} ${fishDef.emoji}! ⚠️ ${zone.name} is now EXHAUSTED (0/${eco.maxStock} fish) and recharging!`,
+            `🎣 Hand Catch: Reeled in ${fishDef.name} ${fishDef.emoji}! (${zone.name} reached 0/${eco.maxStock} fish, recharging naturally)`,
             fishDef.emoji,
-            'event'
+            'info'
           );
         } else {
           state.addNotification(
-            `🎣 Hand Catch! Reeled in ${fishDef.name} ${fishDef.emoji} from ${zone.name}! (${nextStock}/${eco.maxStock} fish remaining)`,
+            `🎣 Hand Catch: Reeled in ${fishDef.name} ${fishDef.emoji}! (${nextStock}/${eco.maxStock} fish remaining in ${zone.name})`,
             fishDef.emoji,
-            'discovery'
+            'info'
           );
         }
         return true;
@@ -5164,9 +5164,6 @@ export const useGameStore = create<GameState>()(
                 isDepleted: remainingStock <= 0,
               };
 
-              if (remainingStock <= 0) {
-                state.addNotification(`⚠️ Population Depleted: ${zone.name} fish stock emptied (0/${zoneEco.maxStock})! Natural recharge commenced.`, '🐟', 'event');
-              }
 
               // Roll burnout on catch cycle completion
               if (isFisheryOverclocked && Math.random() < fOverclock.burnoutChance) {
@@ -6372,6 +6369,9 @@ export const useGameStore = create<GameState>()(
           level: finalLevel,
           entityOverclocks: updatedWorkerOverclocks,
           hydrology: hydroSimResult.updatedHydrology,
+          notifications: state.notifications.filter(
+            n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
+          ),
           lastTick: now,
         });
       },
