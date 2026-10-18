@@ -59,6 +59,11 @@ import {
   calculateActiveCatchIntervalMs,
   ZONE_ECOSYSTEM_CONFIGS,
   POND_HYDROLOGY,
+  type ZoneUpgradeTier,
+  getZoneUpgradeDef,
+  getZoneStockCap,
+  getZoneBaseCatchIntervalSec,
+  getZoneBaseSpawnTickSec,
 } from './aquaticEcosystem';
 import {
   rollBreedingTier,
@@ -713,6 +718,7 @@ export interface GameState {
   // Fishery
   unlockFisheryZone: (zoneId: WaterZoneId) => void;
   upgradeFishingRod: () => void;
+  upgradeWaterZoneTier: (zoneId: WaterZoneId) => boolean;
   refillPondFromTower: () => boolean;
   manualCatchFish: (zoneId: WaterZoneId) => boolean;
 
@@ -2816,6 +2822,77 @@ export const useGameStore = create<GameState>()(
           coins: state.coins - nextDef.costCoins,
           fishery: { ...state.fishery, rodTier: nextTier },
         });
+      },
+
+      upgradeWaterZoneTier: (zoneId) => {
+        const state = get();
+        if (!state.fishery.unlockedZones.includes(zoneId)) return false;
+        const currentEcosystem = state.fishery.zoneEcosystem || createDefaultZoneEcosystem();
+        const eco = currentEcosystem[zoneId] || {
+          currentStock: 30,
+          maxStock: 30,
+          spawnProgressSec: 0,
+          isDepleted: false,
+          tier: 1,
+        };
+
+        const currentTier = (eco.tier || 1) as ZoneUpgradeTier;
+        if (currentTier >= 5) {
+          state.addNotification(`★ Max Tier: ${WATER_ZONES[zoneId].name} has already attained Maximum Tier 5 Mastery!`, '🌟', 'info');
+          return false;
+        }
+
+        const nextTier = (currentTier + 1) as ZoneUpgradeTier;
+        const nextDef = getZoneUpgradeDef(zoneId, nextTier);
+
+        if (state.coins < nextDef.costCoins) {
+          playDefeatSound();
+          state.addNotification(`Need ${nextDef.costCoins.toLocaleString()} 🪙 to upgrade ${WATER_ZONES[zoneId].name} to Tier ${nextTier}!`, '⚠️', 'info');
+          return false;
+        }
+
+        // Tower water deduction for Pond Tier 3 if applicable
+        let currentHydro = state.hydrology;
+        if (nextDef.towerLitersCost && currentHydro?.towerLiters) {
+          const newTower = Math.max(0, currentHydro.towerLiters - nextDef.towerLitersCost);
+          currentHydro = { ...currentHydro, towerLiters: Math.round(newTower * 10) / 10 };
+        }
+
+        // Capacity Preservation: increment currentStock by newly added capacity so player does not wait for refill
+        const oldMaxStock = getZoneStockCap(zoneId, currentTier);
+        const newMaxStock = nextDef.stockCap;
+        const capacityGain = Math.max(0, newMaxStock - oldMaxStock);
+        const newCurrentStock = Math.min(newMaxStock, (eco.currentStock || 0) + capacityGain);
+        const isDepletedNow = isZoneFishingPaused(newCurrentStock, newMaxStock, eco.isDepleted);
+
+        const updatedEcosystem = {
+          ...currentEcosystem,
+          [zoneId]: {
+            ...eco,
+            tier: nextTier,
+            maxStock: newMaxStock,
+            currentStock: newCurrentStock,
+            isDepleted: isDepletedNow,
+          },
+        };
+
+        set({
+          coins: state.coins - nextDef.costCoins,
+          hydrology: currentHydro,
+          fishery: {
+            ...state.fishery,
+            zoneEcosystem: updatedEcosystem,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(3);
+        state.addNotification(
+          `🎉 Water Zone Upgraded: ${WATER_ZONES[zoneId].name} reached Tier ${nextTier} (${nextDef.name})! Cap: ${newMaxStock} Fish (+${capacityGain}), Catch: ${nextDef.catchIntervalSec.toFixed(1)}s.`,
+          '🏆',
+          'discovery'
+        );
+        return true;
       },
 
       refillPondFromTower: () => {
@@ -5076,37 +5153,41 @@ export const useGameStore = create<GameState>()(
             maxStock: cfg.stockCap,
             spawnProgressSec: 0,
             isDepleted: false,
+            tier: 1,
           };
 
+          const zTier = (eco.tier || 1) as ZoneUpgradeTier;
+          const targetMaxStock = getZoneStockCap(zoneId, zTier);
           let curStock = eco.currentStock;
           let spawnSec = eco.spawnProgressSec;
 
-          if (curStock < eco.maxStock) {
+          if (curStock < targetMaxStock) {
             const { activeSpawnTickSec, isFrozen } = calculateActiveSpawnInterval(
               zoneId,
               currentTemp,
-              zoneId === 'zone_pond' ? currentPondVolume : undefined
+              zoneId === 'zone_pond' ? currentPondVolume : undefined,
+              zTier
             );
 
             if (!isFrozen && activeSpawnTickSec < Infinity && activeSpawnTickSec > 0) {
               spawnSec += deltaSeconds;
-              while (spawnSec >= activeSpawnTickSec && curStock < eco.maxStock) {
+              while (spawnSec >= activeSpawnTickSec && curStock < targetMaxStock) {
                 curStock += 1;
                 spawnSec -= activeSpawnTickSec;
               }
-              if (curStock >= eco.maxStock) {
-                curStock = eco.maxStock;
+              if (curStock >= targetMaxStock) {
+                curStock = targetMaxStock;
                 spawnSec = 0;
               }
             }
           }
 
-          const isNowDepleted = isZoneFishingPaused(curStock, eco.maxStock, eco.isDepleted);
+          const isNowDepleted = isZoneFishingPaused(curStock, targetMaxStock, eco.isDepleted);
 
           // If zone just reached 100% full recovery from depleted state, notify player
-          if (eco.isDepleted && !isNowDepleted && curStock >= eco.maxStock) {
+          if (eco.isDepleted && !isNowDepleted && curStock >= targetMaxStock) {
             state.addNotification(
-              `🐟 Restocked: ${WATER_ZONES[zoneId].name} is now 100% full (${curStock}/${eco.maxStock} fish)! Fishing resumed.`,
+              `🐟 Restocked: ${WATER_ZONES[zoneId].name} is now 100% full (${curStock}/${targetMaxStock} fish)! Fishing resumed.`,
               '🌊',
               'discovery'
             );
@@ -5114,9 +5195,10 @@ export const useGameStore = create<GameState>()(
 
           currentEcosystem[zoneId] = {
             currentStock: curStock,
-            maxStock: eco.maxStock,
+            maxStock: targetMaxStock,
             spawnProgressSec: spawnSec,
             isDepleted: isNowDepleted,
+            tier: zTier,
           };
         }
 
@@ -5149,12 +5231,14 @@ export const useGameStore = create<GameState>()(
           const fMultiplier = isFisheryOverclocked ? fOverclock.speedMultiplier : 1.0;
 
           const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
+          const zTier = (zoneEco?.tier || 1) as ZoneUpgradeTier;
           const effectiveInterval = calculateActiveCatchIntervalMs({
             zoneId,
             rodSpeedMultiplier: rod.speedMultiplier,
             hasSlicker,
             overclockMultiplier: fMultiplier,
             waterVolume: zoneId === 'zone_pond' ? currentPondVolume : undefined,
+            tier: zTier,
           });
 
           if (now - lastCatch >= effectiveInterval) {
@@ -8543,17 +8627,44 @@ export const useGameStore = create<GameState>()(
           } : a);
         }
 
+        // Boost Button Integration: The ⚡ Boost 1★ button instantly refills up to the newly expanded stockCap
+        let updatedFishery = state.fishery;
+        if (entityType === 'fishery') {
+          const zId = entityId.replace('fishery_', '') as WaterZoneId;
+          const currentEcosystem = state.fishery.zoneEcosystem || createDefaultZoneEcosystem();
+          const eco = currentEcosystem[zId];
+          if (eco) {
+            const zTier = (eco.tier || 1) as ZoneUpgradeTier;
+            const expandedCap = getZoneStockCap(zId, zTier);
+            updatedFishery = {
+              ...state.fishery,
+              zoneEcosystem: {
+                ...currentEcosystem,
+                [zId]: {
+                  ...eco,
+                  currentStock: expandedCap,
+                  maxStock: expandedCap,
+                  isDepleted: false,
+                  spawnProgressSec: 0,
+                },
+              },
+            };
+          }
+        }
+
         set({
           coins: state.coins - cost,
           entityOverclocks: updatedOverclocks,
           buildingOverclocks: updatedBuildingOverclocks,
           animals: updatedAnimals,
+          fishery: updatedFishery,
           isDirty: true,
         });
 
         const bonusMsg = tierConfig.bonusYield > 0 ? ` (+${tierConfig.bonusYield} yield!)` : '';
         const riskMsg = tierConfig.burnoutChance > 0 ? ` (${Math.round(tierConfig.burnoutChance * 100)}% burnout risk)` : ' (0% risk)';
-        state.addNotification(`⚡ ${tierConfig.label} Activated! ${tierConfig.speedMultiplier}x speed${bonusMsg}${riskMsg}.`, '🔥', 'info');
+        const boostRefillNote = entityType === 'fishery' ? ' (⚡ Full fish stock instantly refilled!)' : '';
+        state.addNotification(`⚡ ${tierConfig.label} Activated! ${tierConfig.speedMultiplier}x speed${bonusMsg}${riskMsg}.${boostRefillNote}`, '🔥', 'info');
         return true;
       },
 
@@ -8997,10 +9108,13 @@ export const useGameStore = create<GameState>()(
           if (!merged.fishery.zoneEcosystem) {
             merged.fishery.zoneEcosystem = createDefaultZoneEcosystem();
           } else {
-            // Reconcile depleted flags: any zone with 0 stock or marked depleted remains paused until full
+            // Reconcile depleted flags and upgrade tiers: ensure tier is set and capacity matches
             for (const key of Object.keys(merged.fishery.zoneEcosystem) as WaterZoneId[]) {
               const eco = merged.fishery.zoneEcosystem[key];
               if (eco) {
+                if (!eco.tier) eco.tier = 1;
+                const expectedCap = getZoneStockCap(key, eco.tier);
+                eco.maxStock = expectedCap;
                 eco.isDepleted = isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted);
               }
             }

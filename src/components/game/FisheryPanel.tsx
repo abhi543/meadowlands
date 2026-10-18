@@ -16,6 +16,8 @@ import {
   calculateActiveSpawnInterval,
   calculateActiveCatchIntervalMs,
   POND_HYDROLOGY,
+  type ZoneUpgradeTier,
+  getZoneUpgradeDef,
 } from '@/game/aquaticEcosystem';
 import { OverclockActionMenu } from './OverclockActionMenu';
 
@@ -32,7 +34,7 @@ function formatTimeSec(seconds: number): string {
 export function FisheryPanel() {
   const {
     fishery, hydrology, level, coins, gems, barn, farmhands, autonomousWorkers, unifiedWorkers,
-    unlockFisheryZone, upgradeFishingRod, buyFarmhand, hireUnifiedWorker,
+    unlockFisheryZone, upgradeFishingRod, upgradeWaterZoneTier, buyFarmhand, hireUnifiedWorker,
     refillPondFromTower, manualCatchFish,
   } = useGameStore();
 
@@ -363,7 +365,14 @@ export function FisheryPanel() {
               maxStock: cfg.stockCap,
               spawnProgressSec: 0,
               isDepleted: false,
+              tier: 1,
             };
+
+            const tier = (eco.tier || 1) as ZoneUpgradeTier;
+            const currentDef = getZoneUpgradeDef(zoneId, tier);
+            const isMaxTier = tier >= 5;
+            const nextTier = (tier + 1) as ZoneUpgradeTier;
+            const nextDef = !isMaxTier ? getZoneUpgradeDef(zoneId, nextTier) : null;
 
             const isPond = zoneId === 'zone_pond';
             const curPondVol = isPond ? pondVolume : undefined;
@@ -371,7 +380,7 @@ export function FisheryPanel() {
             // Meteorological & Hydrological Calculations
             const climate = calculateClimateSensitivity(zoneId, tempC);
             const volInfo = calculateVolumeMultiplier(zoneId, curPondVol);
-            const spawnInfo = calculateActiveSpawnInterval(zoneId, tempC, curPondVol);
+            const spawnInfo = calculateActiveSpawnInterval(zoneId, tempC, curPondVol, tier);
 
             // Effective worker catch interval
             const effectiveCatchIntervalMs = calculateActiveCatchIntervalMs({
@@ -380,6 +389,7 @@ export function FisheryPanel() {
               hasSlicker,
               overclockMultiplier: 1.0,
               waterVolume: curPondVol,
+              tier,
             });
 
             // UI State Machine Determination
@@ -440,8 +450,11 @@ export function FisheryPanel() {
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h5 className="font-bold text-sm text-stone-800 dark:text-gray-100">
-                          {zone.name}
+                        <h5 className="font-bold text-sm text-stone-800 dark:text-gray-100 flex items-center gap-1.5">
+                          <span>{zone.name}</span>
+                          <span className="text-[10px] font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-300 dark:border-indigo-800 px-1.5 py-0.5 rounded">
+                            [Tier {tier}/5]
+                          </span>
                         </h5>
                         {isUnlocked && (
                           <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
@@ -460,7 +473,9 @@ export function FisheryPanel() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-stone-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5">
+                      <p className="text-[11px] text-stone-500 dark:text-gray-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400">{currentDef.name}</span>
+                        <span>•</span>
                         <span className="capitalize font-semibold text-stone-600 dark:text-gray-300">{cfg.habitatClassification}</span>
                         <span>•</span>
                         <span>Tier Mult: <strong>{cfg.tierMultiplier.toFixed(1)}x</strong> (R: {cfg.replenishRatio.toFixed(1)}x)</span>
@@ -471,7 +486,7 @@ export function FisheryPanel() {
                   </div>
 
                   {isUnlocked && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${climate.colorClass}`}>
                         {climate.statusBadge}
                       </span>
@@ -481,6 +496,50 @@ export function FisheryPanel() {
                         name={zone.name}
                         compact={true}
                       />
+                      {isMaxTier ? (
+                        <span className="px-2.5 py-1 text-[10px] font-extrabold rounded-lg bg-amber-100 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border border-amber-400 flex items-center gap-1 shadow-xs">
+                          <span>★</span>
+                          <span>MAX TIER REACHED</span>
+                        </span>
+                      ) : nextDef ? (
+                        <div className="relative group">
+                          <button
+                            onClick={() => upgradeWaterZoneTier(zoneId)}
+                            disabled={coins < nextDef.costCoins}
+                            className="px-2.5 py-1 text-[10px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 dark:disabled:text-gray-500 text-white shadow-xs transition-all flex items-center gap-1 whitespace-nowrap cursor-pointer disabled:cursor-not-allowed"
+                          >
+                            <span>⬆️</span>
+                            <span>Upgrade to Tier {nextTier} ({nextDef.costCoins.toLocaleString()} 🪙)</span>
+                          </button>
+                          <div className="absolute right-0 top-full mt-1.5 z-30 hidden group-hover:block w-64 p-2.5 bg-slate-900/95 backdrop-blur-md text-white text-xs rounded-xl shadow-xl border border-slate-700 pointer-events-none text-left">
+                            <div className="font-bold text-amber-300 border-b border-slate-700 pb-1 mb-1.5 flex items-center justify-between text-[11px]">
+                              <span>Tier {nextTier}: {nextDef.name}</span>
+                              <span className="text-emerald-400">{nextDef.costCoins.toLocaleString()} 🪙</span>
+                            </div>
+                            <p className="text-[10px] text-slate-300 mb-2 leading-tight">{nextDef.description}</p>
+                            <div className="space-y-1 text-[10px]">
+                              <div className="flex items-center justify-between text-emerald-400 font-semibold">
+                                <span>Capacity:</span>
+                                <span>+{nextDef.stockCap - currentDef.stockCap} Fish ({currentDef.stockCap} → {nextDef.stockCap})</span>
+                              </div>
+                              <div className="flex items-center justify-between text-sky-400 font-semibold">
+                                <span>Catch Speed:</span>
+                                <span>-{(currentDef.catchIntervalSec - nextDef.catchIntervalSec).toFixed(1)}s ({currentDef.catchIntervalSec.toFixed(1)}s → {nextDef.catchIntervalSec.toFixed(1)}s)</span>
+                              </div>
+                              <div className="flex items-center justify-between text-purple-400 font-semibold">
+                                <span>Spawn Speed:</span>
+                                <span>+25% faster ({currentDef.spawnTickSec.toFixed(1)}s → {nextDef.spawnTickSec.toFixed(1)}s)</span>
+                              </div>
+                              {nextDef.towerLitersCost && (
+                                <div className="flex items-center justify-between text-blue-300 text-[9px] pt-1 border-t border-slate-800">
+                                  <span>Gravity Tower:</span>
+                                  <span>-{nextDef.towerLitersCost}L on upgrade</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   )}
                 </div>

@@ -122,11 +122,281 @@ export const POND_HYDROLOGY = {
   OXYGENATED_SHOCK_BONUS_FISH: 5,
 } as const;
 
+export type ZoneUpgradeTier = 1 | 2 | 3 | 4 | 5;
+
+export interface ZoneUpgradeTierDef {
+  tier: ZoneUpgradeTier;
+  name: string;
+  stockCap: number;
+  catchIntervalSec: number;
+  spawnTickSec: number;
+  costCoins: number;
+  description: string;
+  towerLitersCost?: number;
+}
+
+export const ZONE_UPGRADES: Record<WaterZoneId, Record<ZoneUpgradeTier, ZoneUpgradeTierDef>> = {
+  zone_pond: {
+    1: {
+      tier: 1,
+      name: 'Natural Basin',
+      stockCap: 30,
+      catchIntervalSec: 5.0,
+      spawnTickSec: 10.0,
+      costCoins: 0,
+      description: 'Natural freshwater pond fed by surface rainwater.',
+    },
+    2: {
+      tier: 2,
+      name: 'Cobblestone Bank',
+      stockCap: 52,
+      catchIntervalSec: 4.6,
+      spawnTickSec: 8.0,
+      costCoins: 50000,
+      description: 'Stabilized stone banks prevent silt runoff and enhance habitat volume.',
+    },
+    3: {
+      tier: 3,
+      name: 'Submerged Aerator Pipe',
+      stockCap: 75,
+      catchIntervalSec: 4.2,
+      spawnTickSec: 6.6,
+      costCoins: 250000,
+      towerLitersCost: 50,
+      description: 'Subsurface aerator connected to Gravity Tower boosts dissolved oxygen (-50L Tower).',
+    },
+    4: {
+      tier: 4,
+      name: 'Gravel Spawning Beds',
+      stockCap: 97,
+      catchIntervalSec: 3.8,
+      spawnTickSec: 5.7,
+      costCoins: 1200000,
+      description: 'Specially filtered river gravel allows dense clutch spawning.',
+    },
+    5: {
+      tier: 5,
+      name: 'The Grand Estate Oasis',
+      stockCap: 120,
+      catchIntervalSec: 3.4,
+      spawnTickSec: 5.0,
+      costCoins: 5000000,
+      description: 'Pristine palatial water body with optimal microclimate and biological mastery.',
+    },
+  },
+  zone_river: {
+    1: {
+      tier: 1,
+      name: 'Wild Brook',
+      stockCap: 40,
+      catchIntervalSec: 5.0,
+      spawnTickSec: 12.0,
+      costCoins: 0,
+      description: 'Natural forest river stream flowing through woodland.',
+    },
+    2: {
+      tier: 2,
+      name: 'Boulder Weirs',
+      stockCap: 70,
+      catchIntervalSec: 4.6,
+      spawnTickSec: 9.6,
+      costCoins: 120000,
+      description: 'Hand-placed boulder weirs create deep resting pools for migrating schools.',
+    },
+    3: {
+      tier: 3,
+      name: 'Riparian Willow Bank',
+      stockCap: 100,
+      catchIntervalSec: 4.2,
+      spawnTickSec: 8.0,
+      costCoins: 600000,
+      description: 'Shaded root systems lower water temp and provide sheltered nurseries.',
+    },
+    4: {
+      tier: 4,
+      name: 'Shaded Fishway Chute',
+      stockCap: 130,
+      catchIntervalSec: 3.8,
+      spawnTickSec: 6.8,
+      costCoins: 3000000,
+      description: 'Engineered bypass chutes accelerate fish travel and spawning returns.',
+    },
+    5: {
+      tier: 5,
+      name: 'Ancient River Sanctuary',
+      stockCap: 160,
+      catchIntervalSec: 3.4,
+      spawnTickSec: 6.0,
+      costCoins: 12000000,
+      description: 'Legendary pristine river reserve with abundant endemic fish populations.',
+    },
+  },
+  zone_estuary: {
+    1: {
+      tier: 1,
+      name: 'Brackish Bay',
+      stockCap: 50,
+      catchIntervalSec: 5.0,
+      spawnTickSec: 14.0,
+      costCoins: 0,
+      description: 'Natural coastal mangrove estuary where river meets sea.',
+    },
+    2: {
+      tier: 2,
+      name: 'Mangrove Nursery',
+      stockCap: 87,
+      catchIntervalSec: 4.6,
+      spawnTickSec: 11.2,
+      costCoins: 300000,
+      description: 'Intertwined stilt roots shield juvenile fingerlings from open-water predators.',
+    },
+    3: {
+      tier: 3,
+      name: 'Tidal Sluice Gates',
+      stockCap: 125,
+      catchIntervalSec: 4.2,
+      spawnTickSec: 9.3,
+      costCoins: 1500000,
+      description: 'Automated tidal gates regulate brackish salinity through tidal surges.',
+    },
+    4: {
+      tier: 4,
+      name: 'Oyster Reef Barrier',
+      stockCap: 162,
+      catchIntervalSec: 3.8,
+      spawnTickSec: 8.0,
+      costCoins: 8000000,
+      description: 'Living bivalve reefs filter water and foster thriving crustacean feeding beds.',
+    },
+    5: {
+      tier: 5,
+      name: 'Royal Maritime Lagoon',
+      stockCap: 200,
+      catchIntervalSec: 3.4,
+      spawnTickSec: 7.0,
+      costCoins: 30000000,
+      description: 'A vast, crystal-clear protected estuary teeming with high-value species.',
+    },
+  },
+  zone_lake: {
+    1: {
+      tier: 1,
+      name: 'Glacial Tarn',
+      stockCap: 20,
+      catchIntervalSec: 23.0,
+      spawnTickSec: 73.6,
+      costCoins: 0,
+      description: 'High-altitude alpine glacial lake with crystal-cold water.',
+    },
+    2: {
+      tier: 2,
+      name: 'Sub-surface Rock Ledges',
+      stockCap: 35,
+      catchIntervalSec: 21.1,
+      spawnTickSec: 58.8,
+      costCoins: 800000,
+      description: 'Submerged granite shelves provide sheltered beds amidst cold waters.',
+    },
+    3: {
+      tier: 3,
+      name: 'Geothermal Vents',
+      stockCap: 50,
+      catchIntervalSec: 19.3,
+      spawnTickSec: 49.0,
+      costCoins: 4000000,
+      description: 'Deep thermal fissures prevent bottom freezing and foster aquatic vegetation.',
+    },
+    4: {
+      tier: 4,
+      name: 'Glacial Melt Canal',
+      stockCap: 65,
+      catchIntervalSec: 17.4,
+      spawnTickSec: 42.0,
+      costCoins: 18000000,
+      description: 'Regulated channels bring oxygen-rich meltwater directly to spawning grounds.',
+    },
+    5: {
+      tier: 5,
+      name: 'Summit Crystal Abyss',
+      stockCap: 80,
+      catchIntervalSec: 15.6,
+      spawnTickSec: 36.8,
+      costCoins: 65000000,
+      description: 'Mythic sapphire-hued mountain reservoir of unparalleled biological purity.',
+    },
+  },
+  zone_ocean: {
+    1: {
+      tier: 1,
+      name: 'Timber Wharf',
+      stockCap: 25,
+      catchIntervalSec: 24.0,
+      spawnTickSec: 96.0,
+      costCoins: 0,
+      description: 'Simple open saltwater pier reaching into the coastal ocean.',
+    },
+    2: {
+      tier: 2,
+      name: 'Reinforced Pilings',
+      stockCap: 43,
+      catchIntervalSec: 22.0,
+      spawnTickSec: 76.8,
+      costCoins: 2000000,
+      description: 'Barnacle-encrusted pilings create an artificial reef ecosystem for schooling fish.',
+    },
+    3: {
+      tier: 3,
+      name: 'Deepwater Kelp Forest',
+      stockCap: 62,
+      catchIntervalSec: 20.1,
+      spawnTickSec: 64.0,
+      costCoins: 10000000,
+      description: 'Towering submarine kelp canopies shelter pelagic and deep-sea predators.',
+    },
+    4: {
+      tier: 4,
+      name: 'Sunken Galleon Artificial Reef',
+      stockCap: 81,
+      catchIntervalSec: 18.2,
+      spawnTickSec: 54.8,
+      costCoins: 45000000,
+      description: 'Submerged historical wreckage forms an impenetrable haven for rare ocean species.',
+    },
+    5: {
+      tier: 5,
+      name: 'Abyssal Trench Derrick',
+      stockCap: 100,
+      catchIntervalSec: 16.3,
+      spawnTickSec: 48.0,
+      costCoins: 150000000,
+      description: 'State-of-the-art offshore facility extracting the deepest ocean bounty.',
+    },
+  },
+};
+
+export function getZoneUpgradeDef(zoneId: WaterZoneId, tier: ZoneUpgradeTier = 1): ZoneUpgradeTierDef {
+  const safeTier = Math.min(5, Math.max(1, tier)) as ZoneUpgradeTier;
+  return ZONE_UPGRADES[zoneId]?.[safeTier] || ZONE_UPGRADES[zoneId][1];
+}
+
+export function getZoneStockCap(zoneId: WaterZoneId, tier: ZoneUpgradeTier = 1): number {
+  return getZoneUpgradeDef(zoneId, tier).stockCap;
+}
+
+export function getZoneBaseCatchIntervalSec(zoneId: WaterZoneId, tier: ZoneUpgradeTier = 1): number {
+  return getZoneUpgradeDef(zoneId, tier).catchIntervalSec;
+}
+
+export function getZoneBaseSpawnTickSec(zoneId: WaterZoneId, tier: ZoneUpgradeTier = 1): number {
+  return getZoneUpgradeDef(zoneId, tier).spawnTickSec;
+}
+
 export interface ZoneEcosystemData {
   currentStock: number;
   maxStock: number;
   spawnProgressSec: number;
   isDepleted: boolean;
+  tier?: ZoneUpgradeTier;
 }
 
 export function createDefaultZoneEcosystem(): Record<WaterZoneId, ZoneEcosystemData> {
@@ -136,30 +406,35 @@ export function createDefaultZoneEcosystem(): Record<WaterZoneId, ZoneEcosystemD
       maxStock: 30,
       spawnProgressSec: 0,
       isDepleted: false,
+      tier: 1,
     },
     zone_river: {
       currentStock: 40,
       maxStock: 40,
       spawnProgressSec: 0,
       isDepleted: false,
+      tier: 1,
     },
     zone_estuary: {
       currentStock: 50,
       maxStock: 50,
       spawnProgressSec: 0,
       isDepleted: false,
+      tier: 1,
     },
     zone_lake: {
       currentStock: 20,
       maxStock: 20,
       spawnProgressSec: 0,
       isDepleted: false,
+      tier: 1,
     },
     zone_ocean: {
       currentStock: 25,
       maxStock: 25,
       spawnProgressSec: 0,
       isDepleted: false,
+      tier: 1,
     },
   };
 }
@@ -338,12 +613,13 @@ export function calculateVolumeMultiplier(zoneId: WaterZoneId, waterVolume?: num
 
 /**
  * Calculates active spawn interval:
- * Delta t_spawn(active) = Delta t_spawn(base) / (K_temp * K_volume)
+ * Delta t_spawn(active) = Delta t_spawn(base, tier) / (K_temp * K_volume)
  */
 export function calculateActiveSpawnInterval(
   zoneId: WaterZoneId,
   tempC: number,
-  waterVolume?: number
+  waterVolume?: number,
+  tier: ZoneUpgradeTier = 1
 ): {
   activeSpawnTickSec: number;
   kTemp: number;
@@ -351,7 +627,7 @@ export function calculateActiveSpawnInterval(
   isFrozen: boolean;
   isLowDepth: boolean;
 } {
-  const cfg = ZONE_ECOSYSTEM_CONFIGS[zoneId];
+  const baseSpawnSec = getZoneBaseSpawnTickSec(zoneId, tier);
   const { kTemp, isFrozen } = calculateClimateSensitivity(zoneId, tempC);
   const { kVolume, isLowDepth } = calculateVolumeMultiplier(zoneId, waterVolume);
 
@@ -367,7 +643,7 @@ export function calculateActiveSpawnInterval(
 
   const denominator = kTemp * kVolume;
   const activeSpawnTickSec = denominator > 0
-    ? cfg.singleFishSpawnTickSec / denominator
+    ? baseSpawnSec / denominator
     : Infinity;
 
   return {
@@ -381,7 +657,7 @@ export function calculateActiveSpawnInterval(
 
 /**
  * Calculates effective catch interval in milliseconds.
- * In low depth (<1500L), Farmstead Pond base interval doubles from 5s to 10s.
+ * In low depth (<1500L), Farmstead Pond base interval doubles from its tier base.
  */
 export function calculateActiveCatchIntervalMs(params: {
   zoneId: WaterZoneId;
@@ -389,16 +665,18 @@ export function calculateActiveCatchIntervalMs(params: {
   hasSlicker: boolean;
   overclockMultiplier?: number;
   waterVolume?: number;
+  tier?: ZoneUpgradeTier;
 }): number {
-  const { zoneId, rodSpeedMultiplier, hasSlicker, overclockMultiplier = 1.0, waterVolume } = params;
-  const cfg = ZONE_ECOSYSTEM_CONFIGS[zoneId];
-  let baseMs = cfg.catchIntervalSec * 1000;
+  const { zoneId, rodSpeedMultiplier, hasSlicker, overclockMultiplier = 1.0, waterVolume, tier = 1 } = params;
+  const baseCatchSec = getZoneBaseCatchIntervalSec(zoneId, tier);
+  let baseMs = baseCatchSec * 1000;
 
   if (zoneId === 'zone_pond' && waterVolume !== undefined && waterVolume < POND_HYDROLOGY.LOW_DEPTH_THRESHOLD_LITERS) {
-    baseMs *= 2.0; // Low depth doubles catch duration (5s -> 10s)
+    baseMs *= 2.0; // Low depth doubles catch duration
   }
 
   const speedMult = rodSpeedMultiplier * (hasSlicker ? 0.67 : 1.0);
   const effectiveMs = (baseMs * speedMult) / (overclockMultiplier || 1.0);
   return Math.max(1000, effectiveMs);
 }
+
