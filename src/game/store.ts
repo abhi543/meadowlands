@@ -525,13 +525,50 @@ export interface ActiveHourlyEvent {
   smugglerCrates?: number;
 }
 
-// Notifications
+// Notifications & Estate Dispatch Architecture
+export type NotificationCategory = 'hazards' | 'hydrology' | 'waters_crew' | 'history';
+export type NotificationPriority = 'critical' | 'warning' | 'info';
+
+export interface NotificationActionShortcut {
+  id: string;
+  label: string;
+  icon?: string;
+  actionType:
+    | 'open_spillway'
+    | 'close_spillway'
+    | 'toggle_sluice'
+    | 'open_sluice_console'
+    | 'pump_aquifer'
+    | 'transfer_cistern'
+    | 'desilt_canals'
+    | 'deploy_dew_screens'
+    | 'clear_sediment'
+    | 'clear_withered'
+    | 'water_all'
+    | 'refill_canteen'
+    | 'brew_cold_drink'
+    | 'refill_pond'
+    | 'arbitrate_strike'
+    | 'view_workers'
+    | 'view_fishery'
+    | 'view_farm'
+    | 'view_barn'
+    | 'open_defense_modal'
+    | 'dismiss';
+  payload?: any;
+}
+
 export interface NotificationItem {
   id: string;
   message: string;
   emoji: string;
   createdAt: number;
   type: 'xp' | 'coin' | 'gem' | 'discovery' | 'event' | 'info';
+  category?: NotificationCategory;
+  priority?: NotificationPriority;
+  shortcut?: NotificationActionShortcut;
+  resolved?: boolean;
+  targetId?: string | number;
 }
 
 // Breeding
@@ -844,8 +881,21 @@ export interface GameState {
   refreshFreightContract: () => void;
   recalculateEstateAura: () => void;
 
-  // Notifications
-  addNotification: (message: string, emoji: string, type: NotificationItem['type']) => void;
+  // Notifications & Estate Dispatch
+  isDispatchModalOpen: boolean;
+  setDispatchModalOpen: (open: boolean) => void;
+  addNotification: (
+    message: string,
+    emoji: string,
+    type: NotificationItem['type'],
+    category?: NotificationCategory,
+    priority?: NotificationPriority,
+    shortcut?: NotificationActionShortcut,
+    targetId?: string | number
+  ) => void;
+  dismissNotification: (id: string) => void;
+  resolveNotification: (id: string) => void;
+  clearNotifications: (category?: NotificationCategory) => void;
   // Cloud Sync & Auth
   isDirty: boolean;
   isGuest: boolean;
@@ -1239,6 +1289,7 @@ export const useGameStore = create<GameState>()(
       activeEvent: null,
       lastEventTriggerTime: Date.now(),
 
+      isDispatchModalOpen: false,
       notifications: [],
 
       breedingSlots: 1,
@@ -5182,22 +5233,150 @@ export const useGameStore = create<GameState>()(
         }
       },
 
-      // Notifications
-      addNotification: (message, emoji, type) => {
+      // Notifications & Estate Dispatch Center
+      setDispatchModalOpen: (open) => {
+        set({ isDispatchModalOpen: open });
+      },
+
+      addNotification: (message, emoji, type, category, priority, shortcut, targetId) => {
         const state = get();
+        // Intelligent auto-classification if not explicitly provided
+        let resolvedCategory: NotificationCategory = category || 'history';
+        let resolvedPriority: NotificationPriority = priority || 'info';
+
+        if (!category || !priority) {
+          const lower = message.toLowerCase();
+          // Hazards: Flash Floods, Root Rot, Crop Wilting, Heat Stasis, Lightning strikes, Crises
+          if (
+            lower.includes('flood') ||
+            lower.includes('root rot') ||
+            lower.includes('wilt') ||
+            lower.includes('heat') ||
+            lower.includes('lightning') ||
+            lower.includes('convective') ||
+            lower.includes('ash') ||
+            lower.includes('crisis') ||
+            lower.includes('lodging') ||
+            lower.includes('fire') ||
+            lower.includes('burnout') ||
+            lower.includes('exhausted')
+          ) {
+            resolvedCategory = 'hazards';
+            if (
+              lower.includes('crisis') ||
+              lower.includes('flood') ||
+              lower.includes('root rot') ||
+              lower.includes('incinerat') ||
+              lower.includes('fire')
+            ) {
+              resolvedPriority = 'critical';
+            } else {
+              resolvedPriority = 'warning';
+            }
+          }
+          // Hydrology: Sluice gate, Cistern, Tower, Aquifer, Canal, Evaporat, Silt, Dew
+          else if (
+            lower.includes('sluice') ||
+            lower.includes('cistern') ||
+            lower.includes('tower') ||
+            lower.includes('aquifer') ||
+            lower.includes('canal') ||
+            lower.includes('evaporat') ||
+            lower.includes('irrigation') ||
+            lower.includes('dew') ||
+            lower.includes('percolat') ||
+            lower.includes('sediment') ||
+            lower.includes('spillway')
+          ) {
+            resolvedCategory = 'hydrology';
+            if (lower.includes('dry') || lower.includes('ran dry') || lower.includes('0l') || lower.includes('breached')) {
+              resolvedPriority = 'critical';
+            } else if (lower.includes('clog') || lower.includes('sediment') || lower.includes('closed') || lower.includes('low')) {
+              resolvedPriority = 'warning';
+            } else {
+              resolvedPriority = 'info';
+            }
+          }
+          // Waters & Crew: Fishery, Restock, Worker, Dehydration, Fatigue, Shift, Strike, Desertion, Wage, Canteen, Bunkhouse
+          else if (
+            lower.includes('fisher') ||
+            lower.includes('angler') ||
+            lower.includes('fish') ||
+            lower.includes('restock') ||
+            lower.includes('deplet') ||
+            lower.includes('worker') ||
+            lower.includes('dehydrat') ||
+            lower.includes('fatigue') ||
+            lower.includes('canteen') ||
+            lower.includes('shift') ||
+            lower.includes('handoff') ||
+            lower.includes('strike') ||
+            lower.includes('grievance') ||
+            lower.includes('desertion') ||
+            lower.includes('bunkhouse') ||
+            lower.includes('herder') ||
+            lower.includes('overtime') ||
+            lower.includes('wage')
+          ) {
+            resolvedCategory = 'waters_crew';
+            if (lower.includes('strike') || lower.includes('desert') || lower.includes('dehydrat') || lower.includes('dispute')) {
+              resolvedPriority = 'critical';
+            } else if (lower.includes('deplet') || lower.includes('restock') || lower.includes('grumbling') || lower.includes('exhaust')) {
+              resolvedPriority = 'warning';
+            } else {
+              resolvedPriority = 'info';
+            }
+          } else {
+            resolvedCategory = 'history';
+            resolvedPriority = type === 'event' ? 'warning' : 'info';
+          }
+        }
+
         const notification: NotificationItem = {
           id: generateId(),
           message,
           emoji,
           createdAt: Date.now(),
           type,
+          category: resolvedCategory,
+          priority: resolvedPriority,
+          shortcut,
+          targetId,
+          resolved: false,
         };
-        const newNotifications = [notification, ...state.notifications].slice(0, 20);
+        // Retain up to 150 items for rich chronological audit trail
+        const newNotifications = [notification, ...state.notifications].slice(0, 150);
         set({ notifications: newNotifications });
       },
 
-      clearNotifications: () => {
-        set({ notifications: [] });
+      dismissNotification: (id: string) => {
+        const state = get();
+        set({ notifications: state.notifications.filter(n => n.id !== id) });
+      },
+
+      resolveNotification: (id: string) => {
+        const state = get();
+        set({
+          notifications: state.notifications.map(n =>
+            n.id === id ? { ...n, resolved: true } : n
+          ),
+        });
+      },
+
+      clearNotifications: (category?: NotificationCategory) => {
+        const state = get();
+        if (!category) {
+          // Clear all except unresolved critical items
+          set({
+            notifications: state.notifications.filter(n => n.priority === 'critical' && !n.resolved),
+          });
+        } else {
+          set({
+            notifications: state.notifications.filter(
+              n => n.category !== category || (n.priority === 'critical' && !n.resolved)
+            ),
+          });
+        }
       },
 
       tick: () => {

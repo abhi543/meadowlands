@@ -28,6 +28,9 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     unifiedWorkers,
     specialistWorkers,
     isAllWorkersPaused,
+    notifications = [],
+    setDispatchModalOpen,
+    hydrology,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -37,6 +40,19 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
   }, []);
 
   const clock = getCircadianClock(now, farmEpochStart);
+
+  // Active Critical & Warning count calculation
+  const hasFlashFlood = Boolean(hydrology?.isFlashFloodActive);
+  const hasStrikes = Boolean(
+    Object.values(unifiedWorkers || {}).some(w => w?.isHired && w?.moraleTier === 'striking') ||
+    Object.values(specialistWorkers || {}).some(sp => sp?.isHired && (sp?.moraleTier === 'striking' || sp?.isStriking))
+  );
+  const criticalNotifications = notifications.filter(n => n.priority === 'critical' && !n.resolved).length;
+  const criticalCount = criticalNotifications + (hasFlashFlood ? 1 : 0) + (hasStrikes ? 1 : 0);
+
+  const warningNotifications = notifications.filter(n => n.priority === 'warning' && !n.resolved).length;
+  const hasLowTower = Boolean(hydrology && hydrology.towerLiters < 100);
+  const warningCount = warningNotifications + (hasLowTower ? 1 : 0);
 
   // Count active/hired workforce
   let totalHired = 0;
@@ -118,6 +134,33 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             <span>Backup</span>
           </button>
         )}
+
+        {/* Dedicated Estate Notification & Dispatch Center Button */}
+        <button
+          onClick={() => setDispatchModalOpen(true)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm border backdrop-blur-sm cursor-pointer ${
+            criticalCount > 0
+              ? 'bg-rose-700 hover:bg-rose-600 text-white border-rose-400 animate-pulse'
+              : warningCount > 0
+              ? 'bg-amber-500/85 hover:bg-amber-400 text-stone-950 border-amber-300'
+              : 'bg-white/20 hover:bg-white/30 text-white border-white/20'
+          }`}
+          title={`Estate Notification & Dispatch Center (${criticalCount} Critical, ${warningCount} Warnings) · Click to open`}
+        >
+          <span className="text-sm">📡</span>
+          <span className="font-extrabold hidden sm:inline">Dispatch</span>
+          {criticalCount > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full bg-white text-rose-700 font-black text-[10px] leading-tight">
+              {criticalCount}
+            </span>
+          ) : warningCount > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full bg-stone-950 text-amber-300 font-black text-[10px] leading-tight">
+              {warningCount}
+            </span>
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+          )}
+        </button>
 
         {/* Workers Timing Display Widget (On Top Header) */}
         <button

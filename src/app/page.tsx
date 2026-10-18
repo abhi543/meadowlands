@@ -31,6 +31,7 @@ import { BarnTab } from '@/components/game/BarnTab';
 import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { EstateHydrologyGauge } from '@/components/game/EstateHydrologyGauge';
 import { SluiceGateControlModal } from '@/components/game/SluiceGateControlModal';
+import { EstateDispatchCenterModal } from '@/components/game/EstateDispatchCenterModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -73,6 +74,8 @@ function useHydrated() {
 export default function Home() {
   const tick = useGameStore(s => s.tick);
   const animals = useGameStore(s => s.animals || []);
+  const isDispatchModalOpen = useGameStore(s => s.isDispatchModalOpen);
+  const setDispatchModalOpen = useGameStore(s => s.setDispatchModalOpen);
   const [activeTab, setActiveTab] = useState<TabId>('farm');
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
@@ -337,6 +340,12 @@ export default function Home() {
       />
       {/* Closed-Loop Hydrological Sluice & Canal Console Modal */}
       <SluiceGateControlModal />
+      {/* Centralized Dedicated Estate Notification & Dispatch Center Modal */}
+      <EstateDispatchCenterModal
+        isOpen={isDispatchModalOpen}
+        onClose={() => setDispatchModalOpen(false)}
+        onSelectTab={setActiveTab}
+      />
 
       {/** Floating Notifications */}
       <FloatingNumbers />
