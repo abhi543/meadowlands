@@ -1038,37 +1038,50 @@ export function EstateDispatchCenterModal({
                 {/* 9. Fishery Depleted / Restocking Zones */}
                 {depletedZones.length > 0 && (
                   <div className="bg-amber-950/50 border border-amber-500/60 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <span className="text-2xl p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 shrink-0 mt-0.5">
                         🐟
                       </span>
-                      <div>
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-2 py-0.5 rounded bg-amber-500 text-stone-950 font-extrabold text-[10px]">
-                            WARNING
+                            REPLENISHING
                           </span>
                           <span className="font-bold text-white text-sm">
-                            Fishery Restocking: {depletedZones.map(z => z.name).join(', ')}
+                            Biological Fish Stock Recovery ({depletedZones.length} Zones)
                           </span>
                         </div>
-                        <p className="text-[11px] text-amber-200/80 mt-0.5">
-                          Stock depleted (≤20%). Dock Master rotation holds auto-anglers until biological recharge completes.
+                        <p className="text-[11px] text-amber-200/80 mt-1 leading-relaxed">
+                          Fish populations naturally regenerate on a spawn timer. Dock Master rotation holds anglers until stocks recover:
                         </p>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {depletedZones.map(z => (
+                            <span key={z.id} className="px-2 py-0.5 rounded-lg bg-stone-900/80 border border-amber-500/30 text-amber-200 font-mono text-[10px] flex items-center gap-1">
+                              <span>🐟</span>
+                              <span className="font-sans font-medium text-stone-300">{z.name}:</span>
+                              <span className="font-bold text-amber-300">{z.current}/{z.max} ({z.pct}%)</span>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        onClick={() => handleShortcutAction('refill_pond')}
-                        className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-sm cursor-pointer"
-                      >
-                        🌊 Refill Pond (+500L)
-                      </button>
+                      {(fishery?.pondWaterVolume ?? 3000) < 3000 && (
+                        <button
+                          onClick={() => handleShortcutAction('refill_pond')}
+                          className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-sm cursor-pointer"
+                          title="Discharge 500L from Gravity Tower into Farmstead Pond"
+                        >
+                          🌊 Refill Pond (+500L)
+                        </button>
+                      )}
                       <button
                         onClick={() => handleShortcutAction('view_fishery')}
-                        className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-600"
+                        className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-bold text-xs shadow-sm cursor-pointer flex items-center gap-1"
                       >
-                        🎣 View Fishery
+                        <span>🎣</span>
+                        <span>Inspect Fishery Docks</span>
                       </button>
                     </div>
                   </div>
