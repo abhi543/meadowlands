@@ -50,6 +50,16 @@ import {
   createDefaultWeatherState,
 } from '@/game/hydrologyEngine';
 import {
+  type ZoneEcosystemData,
+  createDefaultZoneEcosystem,
+  calculatePondEvaporationLitersPerMin,
+  calculateClimateSensitivity,
+  calculateActiveSpawnInterval,
+  calculateActiveCatchIntervalMs,
+  ZONE_ECOSYSTEM_CONFIGS,
+  POND_HYDROLOGY,
+} from './aquaticEcosystem';
+import {
   rollBreedingTier,
   INCUBATION_TIMES,
   type AnimalTier,
@@ -427,6 +437,8 @@ export interface FisheryState {
   rodTier: RodTier;
   lastCatchTimestamps: Record<WaterZoneId, number>;
   fishCodex: Record<string, boolean>;
+  zoneEcosystem?: Record<WaterZoneId, ZoneEcosystemData>;
+  pondWaterVolume?: number; // 0..3000 Liters (default 3000)
 }
 
 // Autonomous Workers (legacy — kept for migration)
@@ -700,6 +712,8 @@ export interface GameState {
   // Fishery
   unlockFisheryZone: (zoneId: WaterZoneId) => void;
   upgradeFishingRod: () => void;
+  refillPondFromTower: () => boolean;
+  manualCatchFish: (zoneId: WaterZoneId) => boolean;
 
   // Autonomous Workers (legacy)
   hireAutonomousWorker: (type: WorkerType) => void;
@@ -1159,6 +1173,8 @@ export const useGameStore = create<GameState>()(
           zone_ocean: 0,
         },
         fishCodex: {},
+        zoneEcosystem: createDefaultZoneEcosystem(),
+        pondWaterVolume: 3000,
       },
 
       autonomousWorkers: [],
@@ -2765,6 +2781,8 @@ export const useGameStore = create<GameState>()(
         if (state.level < zone.unlockLevel) return;
         if (zone.unlockCostCoins && state.coins < zone.unlockCostCoins) return;
         if (zone.unlockCostGems && state.gems < zone.unlockCostGems) return;
+        const currentEco = state.fishery.zoneEcosystem || createDefaultZoneEcosystem();
+        const cfg = ZONE_ECOSYSTEM_CONFIGS[zoneId];
         set({
           coins: zone.unlockCostCoins ? state.coins - zone.unlockCostCoins : state.coins,
           gems: zone.unlockCostGems ? state.gems - zone.unlockCostGems : state.gems,
@@ -2772,6 +2790,15 @@ export const useGameStore = create<GameState>()(
             ...state.fishery,
             unlockedZones: [...state.fishery.unlockedZones, zoneId],
             lastCatchTimestamps: { ...state.fishery.lastCatchTimestamps, [zoneId]: Date.now() },
+            zoneEcosystem: {
+              ...currentEco,
+              [zoneId]: currentEco[zoneId] || {
+                currentStock: cfg.stockCap,
+                maxStock: cfg.stockCap,
+                spawnProgressSec: 0,
+                isDepleted: false,
+              },
+            },
           },
         });
       },
@@ -2788,6 +2815,180 @@ export const useGameStore = create<GameState>()(
           coins: state.coins - nextDef.costCoins,
           fishery: { ...state.fishery, rodTier: nextTier },
         });
+      },
+
+      refillPondFromTower: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentFishery = state.fishery;
+        const currentPondVolume = currentFishery.pondWaterVolume !== undefined
+          ? currentFishery.pondWaterVolume
+          : POND_HYDROLOGY.INITIAL_VOLUME_LITERS;
+
+        if (currentHydro.towerLiters < POND_HYDROLOGY.REFILL_DEDUCTION_LITERS) {
+          state.addNotification('🚰 Tower Depleted: Elevated Gravity Tower needs at least 100L to refill pond!', '🗼', 'info');
+          return false;
+        }
+
+        if (currentPondVolume >= POND_HYDROLOGY.MAX_CAPACITY_LITERS) {
+          state.addNotification('🌊 Pond Full: Farmstead Pond is already at maximum capacity (3,000L)!', '🌧️', 'info');
+          return false;
+        }
+
+        // Atomic deduction from tower
+        const newTowerLiters = Math.max(0, currentHydro.towerLiters - POND_HYDROLOGY.REFILL_DEDUCTION_LITERS);
+        const newPondVolume = Math.min(POND_HYDROLOGY.MAX_CAPACITY_LITERS, currentPondVolume + POND_HYDROLOGY.REFILL_DEDUCTION_LITERS);
+
+        // Oxygenated Shock Bonus: adding cold aerated water from the gravity tower immediately grants +5 fish to recovering stock (capped at stockCap = 30)
+        const currentEcosystem = currentFishery.zoneEcosystem || createDefaultZoneEcosystem();
+        const pondEco = currentEcosystem.zone_pond || {
+          currentStock: 30,
+          maxStock: 30,
+          spawnProgressSec: 0,
+          isDepleted: false,
+        };
+        const newPondStock = Math.min(pondEco.maxStock, pondEco.currentStock + POND_HYDROLOGY.OXYGENATED_SHOCK_BONUS_FISH);
+        const updatedEcosystem = {
+          ...currentEcosystem,
+          zone_pond: {
+            ...pondEco,
+            currentStock: newPondStock,
+            isDepleted: newPondStock <= 0,
+          },
+        };
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            towerLiters: Math.round(newTowerLiters * 10) / 10,
+          },
+          fishery: {
+            ...currentFishery,
+            pondWaterVolume: Math.round(newPondVolume * 10) / 10,
+            zoneEcosystem: updatedEcosystem,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(1);
+        state.addNotification(
+          `⛲ Aerated Top-off: Transferred 100L from Gravity Tower to Farmstead Pond! (+5 Fish Oxygenated Shock Bonus 🐟, Vol: ${Math.round(newPondVolume)}L)`,
+          '💧',
+          'discovery'
+        );
+        return true;
+      },
+
+      manualCatchFish: (zoneId) => {
+        const state = get();
+        if (!state.fishery.unlockedZones.includes(zoneId)) return false;
+        const zone = WATER_ZONES[zoneId];
+        const currentAtmosphere = state.hydrology?.weatherState;
+        const currentTemp = currentAtmosphere?.temperatureC !== undefined ? currentAtmosphere.temperatureC : 27;
+
+        // Check if frozen
+        const climate = calculateClimateSensitivity(zoneId, currentTemp);
+        if (climate.isFrozen) {
+          playDefeatSound();
+          state.addNotification(`🧊 Surface Bed Frozen: Cannot fish while ${zone.name} is iced over (<2°C)!`, '❄️', 'info');
+          return false;
+        }
+
+        // Check stock
+        const currentEcosystem = state.fishery.zoneEcosystem || createDefaultZoneEcosystem();
+        const cfg = ZONE_ECOSYSTEM_CONFIGS[zoneId];
+        const eco = currentEcosystem[zoneId] || {
+          currentStock: cfg.stockCap,
+          maxStock: cfg.stockCap,
+          spawnProgressSec: 0,
+          isDepleted: false,
+        };
+
+        if (eco.currentStock <= 0 || eco.isDepleted) {
+          playDefeatSound();
+          state.addNotification(`⚠️ Depleted: ${zone.name} fish population is exhausted! Awaiting biological recharge.`, '🎣', 'info');
+          return false;
+        }
+
+        // Perform catch
+        const newFishCodex = { ...state.fishery.fishCodex };
+        const newCodex = { ...state.codex };
+        const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
+
+        if (!catchResult) {
+          state.addNotification(`🎣 Cast Line: The line came back empty this time. Try again!`, '🐟', 'info');
+          return false;
+        }
+
+        const fishDef = FISH_SPECIES[catchResult.speciesId];
+        const newBarn = { ...state.barn };
+        newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + 1;
+        newBarn.fish = (newBarn.fish || 0) + 1;
+
+        const codexKey = `fish_${catchResult.speciesId}`;
+        newFishCodex[codexKey] = true;
+        newCodex[codexKey] = true;
+
+        let addedGems = 0;
+        if (catchResult.isNew) {
+          addedGems += fishDef.codexGems;
+        }
+        if (catchResult.speciesId === 'lanternfish') {
+          addedGems += 1;
+        }
+
+        // Decrement stock by 1
+        const nextStock = Math.max(0, eco.currentStock - 1);
+        const isDepletedNow = nextStock <= 0;
+
+        const updatedEcosystem = {
+          ...currentEcosystem,
+          [zoneId]: {
+            ...eco,
+            currentStock: nextStock,
+            isDepleted: isDepletedNow,
+          },
+        };
+
+        const newTimestamps = {
+          ...state.fishery.lastCatchTimestamps,
+          [zoneId]: Date.now(),
+        };
+
+        // Earn XP
+        const xpEarned = 10;
+        const { xp: finalXp, level: finalLevel } = levelUpCheck(state.xp + xpEarned, state.level);
+
+        set({
+          barn: newBarn,
+          gems: state.gems + addedGems,
+          xp: finalXp,
+          level: finalLevel,
+          codex: newCodex,
+          fishery: {
+            ...state.fishery,
+            lastCatchTimestamps: newTimestamps,
+            fishCodex: newFishCodex,
+            zoneEcosystem: updatedEcosystem,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(2);
+        if (isDepletedNow) {
+          state.addNotification(
+            `🎣 Reeled in ${fishDef.name} ${fishDef.emoji}! ⚠️ ${zone.name} is now EXHAUSTED (0/${eco.maxStock} fish) and recharging!`,
+            fishDef.emoji,
+            'event'
+          );
+        } else {
+          state.addNotification(
+            `🎣 Hand Catch! Reeled in ${fishDef.name} ${fishDef.emoji} from ${zone.name}! (${nextStock}/${eco.maxStock} fish remaining)`,
+            fishDef.emoji,
+            'discovery'
+          );
+        }
+        return true;
       },
 
       // Autonomous Workers
@@ -4843,6 +5044,62 @@ export const useGameStore = create<GameState>()(
           (Boolean(state.unifiedWorkers?.auto_fisherman?.isHired) && !state.unifiedWorkers?.auto_fisherman?.isPaused)
         );
 
+        // --- Dynamic Aquatic Ecosystem Tick ---
+        const currentAtmosphere = hydroSimResult.updatedHydrology.weatherState;
+        const currentTemp = currentAtmosphere?.temperatureC !== undefined ? currentAtmosphere.temperatureC : 27;
+        const currentHumidity = currentAtmosphere?.relativeHumidityPct !== undefined ? currentAtmosphere.relativeHumidityPct : 40;
+
+        let currentPondVolume = state.fishery.pondWaterVolume !== undefined
+          ? state.fishery.pondWaterVolume
+          : POND_HYDROLOGY.INITIAL_VOLUME_LITERS;
+
+        // Evaporative loss on Farmstead Pond
+        const pondEvapRateLPerMin = calculatePondEvaporationLitersPerMin(currentTemp, currentHumidity);
+        const pondEvapLossLiters = (pondEvapRateLPerMin / 60) * deltaSeconds;
+        currentPondVolume = Math.max(0, currentPondVolume - pondEvapLossLiters);
+
+        // Natural spawning recharge for all unlocked zones
+        const currentEcosystem = { ...(state.fishery.zoneEcosystem || createDefaultZoneEcosystem()) };
+        for (const zoneId of state.fishery.unlockedZones) {
+          const cfg = ZONE_ECOSYSTEM_CONFIGS[zoneId];
+          const eco = currentEcosystem[zoneId] || {
+            currentStock: cfg.stockCap,
+            maxStock: cfg.stockCap,
+            spawnProgressSec: 0,
+            isDepleted: false,
+          };
+
+          let curStock = eco.currentStock;
+          let spawnSec = eco.spawnProgressSec;
+
+          if (curStock < eco.maxStock) {
+            const { activeSpawnTickSec, isFrozen } = calculateActiveSpawnInterval(
+              zoneId,
+              currentTemp,
+              zoneId === 'zone_pond' ? currentPondVolume : undefined
+            );
+
+            if (!isFrozen && activeSpawnTickSec < Infinity && activeSpawnTickSec > 0) {
+              spawnSec += deltaSeconds;
+              while (spawnSec >= activeSpawnTickSec && curStock < eco.maxStock) {
+                curStock += 1;
+                spawnSec -= activeSpawnTickSec;
+              }
+              if (curStock >= eco.maxStock) {
+                curStock = eco.maxStock;
+                spawnSec = 0;
+              }
+            }
+          }
+
+          currentEcosystem[zoneId] = {
+            currentStock: curStock,
+            maxStock: eco.maxStock,
+            spawnProgressSec: spawnSec,
+            isDepleted: curStock <= 0,
+          };
+        }
+
         const rod = ROD_TIERS[state.fishery.rodTier];
         if (hasFisherman) {
         for (const zoneId of state.fishery.unlockedZones) {
@@ -4855,17 +5112,34 @@ export const useGameStore = create<GameState>()(
           if (isFisheryExhausted) {
             continue; // Halted while reel is jammed/exhausted
           }
+
+          // Check if zone is depleted
+          const zoneEco = currentEcosystem[zoneId];
+          if (zoneEco && (zoneEco.currentStock <= 0 || zoneEco.isDepleted)) {
+            continue; // Halted while population is exhausted
+          }
+
+          // Check if frozen
+          const climate = calculateClimateSensitivity(zoneId, currentTemp);
+          if (climate.isFrozen) {
+            continue; // Halted while surface bed is iced over
+          }
+
           const isFisheryOverclocked = Boolean(fOverclock?.isOverclocked && (!fOverclock.expiresAt || now < fOverclock.expiresAt));
           const fMultiplier = isFisheryOverclocked ? fOverclock.speedMultiplier : 1.0;
 
-          const interval = (zone.baseIntervalMs * rod.speedMultiplier) / fMultiplier;
-          // Outfit bonus
           const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
-          const effectiveInterval = hasSlicker ? interval * 0.67 : interval;
+          const effectiveInterval = calculateActiveCatchIntervalMs({
+            zoneId,
+            rodSpeedMultiplier: rod.speedMultiplier,
+            hasSlicker,
+            overclockMultiplier: fMultiplier,
+            waterVolume: zoneId === 'zone_pond' ? currentPondVolume : undefined,
+          });
 
           if (now - lastCatch >= effectiveInterval) {
             const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
-            if (catchResult) {
+            if (catchResult && zoneEco.currentStock > 0) {
               const fishDef = FISH_SPECIES[catchResult.speciesId];
               const bonusQty = (isFisheryOverclocked && fOverclock?.bonusYield) ? fOverclock.bonusYield : 0;
               const catchQty = 1 + bonusQty;
@@ -4880,6 +5154,18 @@ export const useGameStore = create<GameState>()(
               // Lanternfish gem bonus
               if (catchResult.speciesId === 'lanternfish') {
                 newGems += 1;
+              }
+
+              // Decrement stock
+              const remainingStock = Math.max(0, zoneEco.currentStock - 1);
+              currentEcosystem[zoneId] = {
+                ...zoneEco,
+                currentStock: remainingStock,
+                isDepleted: remainingStock <= 0,
+              };
+
+              if (remainingStock <= 0) {
+                state.addNotification(`⚠️ Population Depleted: ${zone.name} fish stock emptied (0/${zoneEco.maxStock})! Natural recharge commenced.`, '🐟', 'event');
               }
 
               // Roll burnout on catch cycle completion
@@ -6047,6 +6333,8 @@ export const useGameStore = create<GameState>()(
             ...state.fishery,
             lastCatchTimestamps: newCatchTimestamps,
             fishCodex: newFishCodex,
+            zoneEcosystem: currentEcosystem,
+            pondWaterVolume: Math.round(currentPondVolume * 10) / 10,
           },
           autonomousWorkers: newWorkers,
           unifiedWorkers: unifiedWorkersModified ? updatedUnifiedWorkers : state.unifiedWorkers,
@@ -8541,6 +8829,8 @@ export const useGameStore = create<GameState>()(
             rodTier: 'bamboo',
             lastCatchTimestamps: { zone_pond: Date.now(), zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
             fishCodex: {},
+            zoneEcosystem: createDefaultZoneEcosystem(),
+            pondWaterVolume: 3000,
           },
           autonomousWorkers: [],
           unifiedWorkers: initialUnifiedWorkers,
@@ -8679,7 +8969,16 @@ export const useGameStore = create<GameState>()(
             rodTier: 'bamboo',
             lastCatchTimestamps: { zone_pond: Date.now(), zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
             fishCodex: {},
+            zoneEcosystem: createDefaultZoneEcosystem(),
+            pondWaterVolume: 3000,
           };
+        } else {
+          if (!merged.fishery.zoneEcosystem) {
+            merged.fishery.zoneEcosystem = createDefaultZoneEcosystem();
+          }
+          if (merged.fishery.pondWaterVolume === undefined) {
+            merged.fishery.pondWaterVolume = 3000;
+          }
         }
 
         // Migration: if lastFishTime exists (old format), migrate to per-zone timestamps

@@ -478,27 +478,27 @@ export interface WaterZoneDef {
 export const WATER_ZONES: Record<WaterZoneId, WaterZoneDef> = {
   zone_pond: {
     id: 'zone_pond', name: 'Farmstead Pond', emoji: '\u{1F327}\uFE0F', waterType: 'freshwater',
-    unlockLevel: 1, baseIntervalMs: 60000,
+    unlockLevel: 1, baseIntervalMs: 5000,
     species: ['carp', 'catfish', 'perch'],
   },
   zone_river: {
     id: 'zone_river', name: 'Forest River Stream', emoji: '\u{1F4A7}', waterType: 'freshwater',
-    unlockLevel: 5, baseIntervalMs: 60000, unlockCostCoins: 500,
+    unlockLevel: 5, baseIntervalMs: 5000, unlockCostCoins: 500,
     species: ['trout', 'salmon', 'bass'],
   },
   zone_estuary: {
     id: 'zone_estuary', name: 'Coastal Estuary', emoji: '\u{1F3DD}\uFE0F', waterType: 'brackish',
-    unlockLevel: 10, baseIntervalMs: 60000, unlockCostCoins: 2000,
+    unlockLevel: 10, baseIntervalMs: 5000, unlockCostCoins: 2000,
     species: ['mud_crab', 'snapper', 'barramundi'],
   },
   zone_lake: {
     id: 'zone_lake', name: 'Alpine Mountain Lake', emoji: '\u{1F3D4}\uFE0F', waterType: 'freshwater',
-    unlockLevel: 16, baseIntervalMs: 80000, unlockCostCoins: 5000,
+    unlockLevel: 16, baseIntervalMs: 23000, unlockCostCoins: 5000,
     species: ['arctic_char', 'golden_trout', 'sturgeon'],
   },
   zone_ocean: {
     id: 'zone_ocean', name: 'Deep Ocean Pier', emoji: '\u{1F30A}', waterType: 'saltwater',
-    unlockLevel: 22, baseIntervalMs: 120000, unlockCostCoins: 15000, unlockCostGems: 10,
+    unlockLevel: 22, baseIntervalMs: 24000, unlockCostCoins: 15000, unlockCostGems: 10,
     species: ['tuna', 'marlin', 'lanternfish'],
   },
 };
