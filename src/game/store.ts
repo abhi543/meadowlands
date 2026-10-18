@@ -52,6 +52,7 @@ import {
 import {
   type ZoneEcosystemData,
   createDefaultZoneEcosystem,
+  isZoneFishingPaused,
   calculatePondEvaporationLitersPerMin,
   calculateClimateSensitivity,
   calculateActiveSpawnInterval,
@@ -2853,7 +2854,7 @@ export const useGameStore = create<GameState>()(
           zone_pond: {
             ...pondEco,
             currentStock: newPondStock,
-            isDepleted: newPondStock <= 0,
+            isDepleted: isZoneFishingPaused(newPondStock, pondEco.maxStock, pondEco.isDepleted),
           },
         };
 
@@ -2904,9 +2905,17 @@ export const useGameStore = create<GameState>()(
           isDepleted: false,
         };
 
-        if (eco.currentStock <= 0 || eco.isDepleted) {
+        if (isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted)) {
           playDefeatSound();
-          state.addNotification(`⚠️ Depleted: ${zone.name} fish population is exhausted! Awaiting biological recharge.`, '🎣', 'info');
+          if (eco.isDepleted && eco.currentStock < eco.maxStock) {
+            state.addNotification(
+              `⏳ Restocking: ${zone.name} is resting until stock fully recovers to 100% capacity (${eco.currentStock}/${eco.maxStock} fish).`,
+              '🐟',
+              'info'
+            );
+          } else {
+            state.addNotification(`⚠️ Depleted: ${zone.name} fish population is exhausted! Awaiting biological recharge.`, '🎣', 'info');
+          }
           return false;
         }
 
@@ -2939,7 +2948,7 @@ export const useGameStore = create<GameState>()(
 
         // Decrement stock by 1
         const nextStock = Math.max(0, eco.currentStock - 1);
-        const isDepletedNow = nextStock <= 0;
+        const isDepletedNow = isZoneFishingPaused(nextStock, eco.maxStock, eco.isDepleted);
 
         const updatedEcosystem = {
           ...currentEcosystem,
@@ -5092,11 +5101,22 @@ export const useGameStore = create<GameState>()(
             }
           }
 
+          const isNowDepleted = isZoneFishingPaused(curStock, eco.maxStock, eco.isDepleted);
+
+          // If zone just reached 100% full recovery from depleted state, notify player
+          if (eco.isDepleted && !isNowDepleted && curStock >= eco.maxStock) {
+            state.addNotification(
+              `🐟 Restocked: ${WATER_ZONES[zoneId].name} is now 100% full (${curStock}/${eco.maxStock} fish)! Fishing resumed.`,
+              '🌊',
+              'discovery'
+            );
+          }
+
           currentEcosystem[zoneId] = {
             currentStock: curStock,
             maxStock: eco.maxStock,
             spawnProgressSec: spawnSec,
-            isDepleted: curStock <= 0,
+            isDepleted: isNowDepleted,
           };
         }
 
@@ -5113,10 +5133,10 @@ export const useGameStore = create<GameState>()(
             continue; // Halted while reel is jammed/exhausted
           }
 
-          // Check if zone is depleted
+          // Check if zone is depleted / paused until 100% full
           const zoneEco = currentEcosystem[zoneId];
-          if (zoneEco && (zoneEco.currentStock <= 0 || zoneEco.isDepleted)) {
-            continue; // Halted while population is exhausted
+          if (zoneEco && isZoneFishingPaused(zoneEco.currentStock, zoneEco.maxStock, zoneEco.isDepleted)) {
+            continue; // Halted while population is recovering to 100% capacity
           }
 
           // Check if frozen
@@ -5139,7 +5159,7 @@ export const useGameStore = create<GameState>()(
 
           if (now - lastCatch >= effectiveInterval) {
             const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
-            if (catchResult && zoneEco.currentStock > 0) {
+            if (catchResult && zoneEco.currentStock > 0 && !isZoneFishingPaused(zoneEco.currentStock, zoneEco.maxStock, zoneEco.isDepleted)) {
               const fishDef = FISH_SPECIES[catchResult.speciesId];
               const bonusQty = (isFisheryOverclocked && fOverclock?.bonusYield) ? fOverclock.bonusYield : 0;
               const catchQty = 1 + bonusQty;
@@ -5158,10 +5178,11 @@ export const useGameStore = create<GameState>()(
 
               // Decrement stock
               const remainingStock = Math.max(0, zoneEco.currentStock - 1);
+              const isDepletedNow = isZoneFishingPaused(remainingStock, zoneEco.maxStock, zoneEco.isDepleted);
               currentEcosystem[zoneId] = {
                 ...zoneEco,
                 currentStock: remainingStock,
-                isDepleted: remainingStock <= 0,
+                isDepleted: isDepletedNow,
               };
 
 
@@ -8975,6 +8996,14 @@ export const useGameStore = create<GameState>()(
         } else {
           if (!merged.fishery.zoneEcosystem) {
             merged.fishery.zoneEcosystem = createDefaultZoneEcosystem();
+          } else {
+            // Reconcile depleted flags: any zone with 0 stock or marked depleted remains paused until full
+            for (const key of Object.keys(merged.fishery.zoneEcosystem) as WaterZoneId[]) {
+              const eco = merged.fishery.zoneEcosystem[key];
+              if (eco) {
+                eco.isDepleted = isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted);
+              }
+            }
           }
           if (merged.fishery.pondWaterVolume === undefined) {
             merged.fishery.pondWaterVolume = 3000;

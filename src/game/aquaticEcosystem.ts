@@ -165,6 +165,21 @@ export function createDefaultZoneEcosystem(): Record<WaterZoneId, ZoneEcosystemD
 }
 
 /**
+ * Determines whether a zone's fishing should remain paused/depleted.
+ * Strict full-replenishment rule:
+ * Once depleted (currentStock <= 0 or isDepleted === true), fishing is paused
+ * until the population has fully recharged to 100% capacity (currentStock >= maxStock).
+ * Only once currentStock >= maxStock does isDepleted clear to false and fishing resume.
+ */
+export function isZoneFishingPaused(currentStock: number, maxStock: number, isDepleted: boolean): boolean {
+  if (isDepleted) {
+    return currentStock < maxStock;
+  }
+  return currentStock <= 0;
+}
+
+
+/**
  * Calculates continuous thermodynamic evaporative water loss for Farmstead Pond.
  *
  * Formula:

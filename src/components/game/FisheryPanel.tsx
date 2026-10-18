@@ -9,6 +9,7 @@ import {
 } from '@/game/data';
 import {
   ZONE_ECOSYSTEM_CONFIGS,
+  isZoneFishingPaused,
   calculatePondEvaporationLitersPerMin,
   calculateClimateSensitivity,
   calculateVolumeMultiplier,
@@ -84,7 +85,7 @@ export function FisheryPanel() {
     };
     totalCurrentStock += eco.currentStock;
     totalStockCap += eco.maxStock;
-    if (eco.currentStock <= 0 || eco.isDepleted) depletedZonesCount++;
+    if (isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted)) depletedZonesCount++;
     const climate = calculateClimateSensitivity(zId, tempC);
     if (climate.isFrozen) frozenZonesCount++;
   }
@@ -155,8 +156,8 @@ export function FisheryPanel() {
             ● {fishery.unlockedZones.length - depletedZonesCount - frozenZonesCount} Active
           </span>
           {depletedZonesCount > 0 && (
-            <span className="px-2 py-0.5 rounded-md bg-rose-950/80 text-rose-300 border border-rose-700/60 animate-pulse font-semibold">
-              ⚠️ {depletedZonesCount} Depleted / Recharging
+            <span className="px-2 py-0.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-700/60 animate-pulse font-semibold">
+              ⏳ {depletedZonesCount} Paused (Restocking to Full)
             </span>
           )}
           {frozenZonesCount > 0 && (
@@ -382,15 +383,14 @@ export function FisheryPanel() {
             });
 
             // UI State Machine Determination
+            const isPausedUntilFull = isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted);
             let zoneStatus: 'LOCKED' | 'FROZEN' | 'DEPLETED' | 'RECHARGING' | 'ACTIVE' = 'ACTIVE';
             if (!isUnlocked) {
               zoneStatus = 'LOCKED';
             } else if (climate.isFrozen) {
               zoneStatus = 'FROZEN';
-            } else if (eco.currentStock <= 0 || eco.isDepleted) {
-              zoneStatus = 'DEPLETED';
-            } else if (eco.currentStock < eco.maxStock) {
-              zoneStatus = 'RECHARGING';
+            } else if (isPausedUntilFull) {
+              zoneStatus = eco.currentStock <= 0 ? 'DEPLETED' : 'RECHARGING';
             } else {
               zoneStatus = 'ACTIVE';
             }
@@ -425,6 +425,8 @@ export function FisheryPanel() {
                     ? 'bg-stone-50 dark:bg-stone-900/30 border-stone-200 dark:border-gray-800 opacity-80'
                     : zoneStatus === 'DEPLETED'
                     ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-300 dark:border-rose-900/70'
+                    : zoneStatus === 'RECHARGING'
+                    ? 'bg-amber-50/30 dark:bg-amber-950/15 border-amber-300 dark:border-amber-900/60'
                     : zoneStatus === 'FROZEN'
                     ? 'bg-blue-50/40 dark:bg-blue-950/20 border-blue-300 dark:border-blue-900/70'
                     : 'bg-white dark:bg-gray-900 border-sky-200 dark:border-sky-800/80'
@@ -446,13 +448,13 @@ export function FisheryPanel() {
                             zoneStatus === 'ACTIVE'
                               ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border-emerald-400'
                               : zoneStatus === 'RECHARGING'
-                              ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300 border-sky-400'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300 border-amber-400 animate-pulse'
                               : zoneStatus === 'DEPLETED'
                               ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300 border-rose-500 animate-pulse'
                               : 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border-blue-400 animate-pulse'
                           }`}>
                             {zoneStatus === 'ACTIVE' && 'ACTIVE'}
-                            {zoneStatus === 'RECHARGING' && 'RECHARGING'}
+                            {zoneStatus === 'RECHARGING' && `RESTOCKING (${eco.currentStock}/${eco.maxStock})`}
                             {zoneStatus === 'DEPLETED' && 'EXHAUSTED / DEPLETED'}
                             {zoneStatus === 'FROZEN' && 'SURFACE FROZEN'}
                           </span>
@@ -604,13 +606,22 @@ export function FisheryPanel() {
                           <span>🧊</span>
                           <span>Surface bed is frozen solid. Fishing lines cannot penetrate ice layer until ambient temperature rises (&ge;2°C).</span>
                         </div>
-                      ) : eco.currentStock <= 0 || eco.isDepleted ? (
-                        <div className="bg-rose-100/80 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 rounded-lg p-2 flex items-center justify-between gap-2">
-                          <div className="text-xs text-rose-800 dark:text-rose-200">
-                            <span className="font-bold">⚠️ EXHAUSTED:</span> Fish population depleted! Awaiting natural recharge (+1 in {singleRemainingSec}s).
+                      ) : isPausedUntilFull ? (
+                        <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 rounded-lg p-2.5 flex items-center justify-between gap-2">
+                          <div className="text-xs text-amber-900 dark:text-amber-200">
+                            <span className="font-bold">
+                              {eco.currentStock <= 0 ? '⚠️ EXHAUSTED (PAUSED):' : '⏳ RESTOCKING (PAUSED):'}
+                            </span>{' '}
+                            {eco.currentStock <= 0
+                              ? `Fish population depleted! Natural recharge in progress (+1 in ${singleRemainingSec}s). Fishing paused until 100% full.`
+                              : `Resting until 100% full capacity (${eco.currentStock}/${eco.maxStock} fish). Full in ${Math.floor(totalRemainingSec / 60)}m ${totalRemainingSec % 60}s. Fishing resumes only after full.`}
                           </div>
-                          <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200 border border-rose-400">
-                            Depleted
+                          <span className={`px-2.5 py-1 text-xs font-bold rounded-md border whitespace-nowrap ${
+                            eco.currentStock <= 0
+                              ? 'bg-rose-200 dark:bg-rose-900 text-rose-800 dark:text-rose-200 border-rose-400'
+                              : 'bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border-amber-400'
+                          }`}>
+                            {eco.currentStock <= 0 ? 'Depleted (Paused)' : `Restocking (${eco.currentStock}/${eco.maxStock})`}
                           </span>
                         </div>
                       ) : (
@@ -644,7 +655,7 @@ export function FisheryPanel() {
                             </span>
                             <button
                               onClick={() => handleManualCast(zoneId)}
-                              disabled={isCasting || eco.currentStock <= 0}
+                              disabled={isCasting || eco.currentStock <= 0 || isPausedUntilFull}
                               className={`px-3 py-1.5 text-xs font-bold rounded-lg text-white shadow-sm transition-all flex items-center gap-1.5 ${
                                 isCasting
                                   ? 'bg-amber-500 scale-95'
