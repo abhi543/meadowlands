@@ -18,6 +18,10 @@ import {
   POND_HYDROLOGY,
   type ZoneUpgradeTier,
   getZoneUpgradeDef,
+  getZoneMaxStationSlots,
+  computeDockMasterAssignments,
+  type ZoneCrewAllocation,
+  type FisheryCrewPolicy,
 } from '@/game/aquaticEcosystem';
 import { OverclockActionMenu } from './OverclockActionMenu';
 
@@ -36,6 +40,7 @@ export function FisheryPanel() {
     fishery, hydrology, level, coins, gems, barn, farmhands, autonomousWorkers, unifiedWorkers,
     unlockFisheryZone, upgradeFishingRod, upgradeWaterZoneTier, buyFarmhand, hireUnifiedWorker,
     refillPondFromTower, manualCatchFish,
+    setSustainableRotation, setCatchHandlingPolicy, pinWorkerToZone, unpinWorkerFromZone,
   } = useGameStore();
 
   // Re-render every second for progress bars & spawn clocks
@@ -61,6 +66,29 @@ export function FisheryPanel() {
   const totalFishermenActive = fishermanFarmhands.length + (isDockMasterHired ? 1 : 0) + (isAutoTrawlerHired ? 1 : 0) + autonomousFishermanCount;
   const hasFisherman = totalFishermenActive > 0;
   const hasSlicker = fishermanFarmhands.some(fh => fh.equippedOutfit === 'fisherman_slicker');
+
+  // Crew Policies & Dock Master Workforce Allocation
+  const crewPolicy: FisheryCrewPolicy = fishery.crew?.policy || {
+    sustainableRotation: true,
+    catchHandling: 'auto-sell-common',
+  };
+  const pinnedWorkersMap: Record<WaterZoneId, number> = fishery.crew?.pinnedWorkers || {
+    zone_pond: 0,
+    zone_river: 0,
+    zone_estuary: 0,
+    zone_lake: 0,
+    zone_ocean: 0,
+  };
+
+  const dockMasterAssignments = computeDockMasterAssignments({
+    unlockedZones: fishery.unlockedZones,
+    totalWorkforce: totalFishermenActive,
+    pinnedWorkers: pinnedWorkersMap,
+    zoneEcosystem: fishery.zoneEcosystem || {},
+    sustainableRotation: crewPolicy.sustainableRotation,
+  });
+
+  const availableFreeWorkers = Math.max(0, totalFishermenActive - dockMasterAssignments.totalPinned);
 
   // Meteorological & Hydrological Context
   const atmos = hydrology?.weatherState;
@@ -227,42 +255,207 @@ export function FisheryPanel() {
         )}
       </div>
 
-      {/* Fishermen Crew & Hiring Section */}
-      <div className="bg-white dark:bg-gray-900 border border-sky-200 dark:border-sky-800 rounded-xl p-3 space-y-2.5">
-        <div className="flex items-center justify-between">
+      {/* Fishermen Crew & Dock Master Allocation Command */}
+      <div className="bg-white dark:bg-gray-900 border border-sky-200 dark:border-sky-800 rounded-xl p-3.5 space-y-3 shadow-xs">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🎣</span>
+            <span className="text-2xl p-1 bg-sky-50 dark:bg-sky-950/70 rounded-lg border border-sky-200 dark:border-sky-800">
+              ⚓
+            </span>
             <div>
-              <h4 className="text-sm font-bold text-stone-800 dark:text-gray-200">
-                Fishermen Crew
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-stone-800 dark:text-gray-100">
+                  Fishermen Crew & Dock Master Command
+                </h4>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  hasFisherman
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700'
+                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                }`}>
+                  {hasFisherman ? `${totalFishermenActive} Active Angler${totalFishermenActive > 1 ? 's' : ''}` : 'Idle (Hire Below)'}
+                </span>
+              </div>
               <p className="text-[11px] text-stone-500 dark:text-gray-400">
-                Hire fishermen to harvest fish continuously across unlocked waters.
+                Automated smart-balanced rotation with zone station caps (S<sub>max</sub>) and tactical manual pinning.
               </p>
             </div>
           </div>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-            hasFisherman
-              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
-              : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
-          }`}>
-            {hasFisherman ? `${totalFishermenActive} on Duty` : 'Idle (Hire Below)'}
-          </span>
+
+          {/* Telemetry Pills */}
+          <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
+            <span className="px-2 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 font-semibold text-sky-800 dark:text-sky-300">
+              🎣 {totalFishermenActive} Total
+            </span>
+            <span className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 font-semibold text-indigo-700 dark:text-indigo-300">
+              📌 {dockMasterAssignments.totalPinned} Pinned
+            </span>
+            <span className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 font-semibold text-emerald-700 dark:text-emerald-300">
+              🤖 {dockMasterAssignments.totalAutoAssigned} Auto
+            </span>
+            <span className="px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800/80 border border-stone-300 dark:border-stone-700 font-semibold text-stone-600 dark:text-stone-300">
+              🏠 {dockMasterAssignments.totalBunkhouseReserve} Bunkhouse
+            </span>
+          </div>
         </div>
 
         {/* Notice banner when idle */}
         {!hasFisherman && (
           <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-lg p-2.5 flex items-center justify-between gap-2">
             <div className="text-xs text-amber-800 dark:text-amber-200">
-              <span className="font-bold">Water zones are idle!</span> Hire a fisherman to start catching fish automatically.
+              <span className="font-bold">Waters are unstaffed!</span> Hire fishermen or the Dock Master below to automatically harvest unlocked water bodies.
             </div>
             <button
               onClick={() => buyFarmhand('fisherman')}
               disabled={coins < 100}
-              className="px-3 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white shadow-sm transition-all whitespace-nowrap"
+              className="px-3 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white shadow-sm transition-all whitespace-nowrap cursor-pointer"
             >
               Hire Now 💰100
             </button>
+          </div>
+        )}
+
+        {/* Dock Master Guild Policies */}
+        <div className="bg-stone-50/70 dark:bg-stone-900/50 rounded-xl p-2.5 border border-stone-200 dark:border-gray-800 space-y-2">
+          <div className="flex items-center justify-between text-xs font-bold text-stone-700 dark:text-gray-300">
+            <span className="flex items-center gap-1.5">
+              <span>📜</span> Dock Master Guild Policies
+            </span>
+            <span className="text-[10px] text-stone-400 font-normal">Applies dynamically to all unpinned auto-routing anglers</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {/* Policy 1: Harvest Rotation */}
+            <div className="bg-white dark:bg-gray-900 border border-stone-200 dark:border-gray-800 rounded-lg p-2 flex flex-col justify-between space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-700 dark:text-gray-300">
+                  Harvest Aggression Mode
+                </span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                  crewPolicy.sustainableRotation
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                }`}>
+                  {crewPolicy.sustainableRotation ? 'Sustainable' : 'Full Deplete'}
+                </span>
+              </div>
+              <p className="text-[10px] text-stone-500 dark:text-gray-400 leading-tight">
+                {crewPolicy.sustainableRotation
+                  ? 'Auto-anglers evacuate water bodies at ≤20% stock, rotating to healthier waters to prevent full restock lockout.'
+                  : 'Anglers harvest zones down to 0 stock, triggering a full restocking recovery pause.'}
+              </p>
+              <div className="grid grid-cols-2 gap-1 pt-1 border-t border-stone-100 dark:border-gray-800">
+                <button
+                  onClick={() => setSustainableRotation(true)}
+                  className={`py-1 text-[11px] font-bold rounded transition-colors cursor-pointer ${
+                    crewPolicy.sustainableRotation
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  🌿 Sustainable (20%)
+                </button>
+                <button
+                  onClick={() => setSustainableRotation(false)}
+                  className={`py-1 text-[11px] font-bold rounded transition-colors cursor-pointer ${
+                    !crewPolicy.sustainableRotation
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  ⚔️ Strip-Mine (0%)
+                </button>
+              </div>
+            </div>
+
+            {/* Policy 2: Catch Handling Logistics */}
+            <div className="bg-white dark:bg-gray-900 border border-stone-200 dark:border-gray-800 rounded-lg p-2 flex flex-col justify-between space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-700 dark:text-gray-300">
+                  Catch Priority & Logistics
+                </span>
+                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
+                  crewPolicy.catchHandling === 'auto-sell-common'
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                    : 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300'
+                }`}>
+                  {crewPolicy.catchHandling === 'auto-sell-common' ? 'Auto-Sell Common' : 'Hoard All'}
+                </span>
+              </div>
+              <p className="text-[10px] text-stone-500 dark:text-gray-400 leading-tight">
+                {crewPolicy.catchHandling === 'auto-sell-common'
+                  ? 'Common fish (Carp, Trout, Mud Crab, Arctic Char, Tuna) auto-sold for coins on catch. Rare & culinary species saved to Barn.'
+                  : 'All caught species stored in Barn inventory without auto-selling.'}
+              </p>
+              <div className="grid grid-cols-2 gap-1 pt-1 border-t border-stone-100 dark:border-gray-800">
+                <button
+                  onClick={() => setCatchHandlingPolicy('auto-sell-common')}
+                  className={`py-1 text-[11px] font-bold rounded transition-colors cursor-pointer ${
+                    crewPolicy.catchHandling === 'auto-sell-common'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  💰 Auto-Sell Common
+                </button>
+                <button
+                  onClick={() => setCatchHandlingPolicy('hoard-all')}
+                  className={`py-1 text-[11px] font-bold rounded transition-colors cursor-pointer ${
+                    crewPolicy.catchHandling === 'hoard-all'
+                      ? 'bg-sky-600 text-white shadow-xs'
+                      : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300'
+                  }`}
+                >
+                  📦 Hoard All in Barn
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Harbor Station Allocation Overview */}
+        {hasFisherman && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-stone-700 dark:text-gray-300 flex items-center gap-1.5">
+                <span>📍</span> Harbor Station Distribution
+              </span>
+              <span className="text-[10px] text-stone-400 dark:text-gray-500">
+                Free Anglers in Pool: <strong className="text-stone-700 dark:text-gray-200">{availableFreeWorkers}</strong>
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">
+              {fishery.unlockedZones.map(zId => {
+                const alloc = dockMasterAssignments.zoneAssignments[zId] || { pinned: 0, autoAssigned: 0, maxSlots: 2, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 };
+                const totalStationed = alloc.pinned + alloc.autoAssigned;
+                const zName = WATER_ZONES[zId].name;
+                const isFull = totalStationed >= alloc.maxSlots;
+
+                return (
+                  <div
+                    key={zId}
+                    className={`rounded-lg p-2 border text-center transition-all ${
+                      alloc.isProtectedLowStock
+                        ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800'
+                        : isFull
+                        ? 'bg-indigo-50/50 dark:bg-indigo-950/20 border-indigo-300 dark:border-indigo-800'
+                        : 'bg-stone-50 dark:bg-stone-900/40 border-stone-200 dark:border-gray-800'
+                    }`}
+                  >
+                    <div className="text-[10px] font-semibold text-stone-600 dark:text-gray-300 truncate">
+                      {zName}
+                    </div>
+                    <div className="text-xs font-bold text-stone-800 dark:text-gray-100 my-0.5">
+                      🎣 {totalStationed}/{alloc.maxSlots}
+                    </div>
+                    <div className="text-[9px] text-stone-400 dark:text-gray-500 flex items-center justify-center gap-1">
+                      <span>📌 {alloc.pinned}</span>
+                      <span>•</span>
+                      <span>🤖 {alloc.autoAssigned}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -374,6 +567,18 @@ export function FisheryPanel() {
             const nextTier = (tier + 1) as ZoneUpgradeTier;
             const nextDef = !isMaxTier ? getZoneUpgradeDef(zoneId, nextTier) : null;
 
+            // Dock Master Allocation Telemetry for this zone
+            const zoneAlloc = dockMasterAssignments.zoneAssignments[zoneId] || {
+              pinned: 0,
+              autoAssigned: 0,
+              maxSlots: getZoneMaxStationSlots(zoneId, tier),
+              totalAssigned: 0,
+              isProtectedLowStock: false,
+              isPausedRestocking: false,
+              score: -1,
+            };
+            const totalZoneAnglers = zoneAlloc.pinned + zoneAlloc.autoAssigned;
+
             const isPond = zoneId === 'zone_pond';
             const curPondVol = isPond ? pondVolume : undefined;
 
@@ -382,8 +587,8 @@ export function FisheryPanel() {
             const volInfo = calculateVolumeMultiplier(zoneId, curPondVol);
             const spawnInfo = calculateActiveSpawnInterval(zoneId, tempC, curPondVol, tier);
 
-            // Effective worker catch interval
-            const effectiveCatchIntervalMs = calculateActiveCatchIntervalMs({
+            // Effective worker catch interval scaled by stationed anglers
+            const baseCatchIntervalMs = calculateActiveCatchIntervalMs({
               zoneId,
               rodSpeedMultiplier: currentRod.speedMultiplier,
               hasSlicker,
@@ -391,6 +596,9 @@ export function FisheryPanel() {
               waterVolume: curPondVol,
               tier,
             });
+            const effectiveCatchIntervalMs = totalZoneAnglers > 0
+              ? Math.max(800, Math.round(baseCatchIntervalMs / totalZoneAnglers))
+              : baseCatchIntervalMs;
 
             // UI State Machine Determination
             const isPausedUntilFull = isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted);
@@ -487,6 +695,43 @@ export function FisheryPanel() {
 
                   {isUnlocked && (
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {/* Station Capacity Pill */}
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-sky-100 dark:bg-sky-900/60 text-sky-800 dark:text-sky-300 border border-sky-300 dark:border-sky-700 flex items-center gap-1 shadow-2xs">
+                        <span>⚓</span>
+                        <span>{totalZoneAnglers}/{zoneAlloc.maxSlots} Stations</span>
+                        <span className="text-stone-400 dark:text-gray-400 font-normal">
+                          (📌{zoneAlloc.pinned}, 🤖{zoneAlloc.autoAssigned})
+                        </span>
+                      </span>
+
+                      {/* Tactical Pin / Unpin Button Pair */}
+                      <div className="inline-flex items-center rounded-lg border border-indigo-300 dark:border-indigo-700 overflow-hidden shadow-2xs">
+                        <button
+                          onClick={() => pinWorkerToZone(zoneId)}
+                          disabled={availableFreeWorkers <= 0 || zoneAlloc.pinned >= zoneAlloc.maxSlots}
+                          title={
+                            zoneAlloc.pinned >= zoneAlloc.maxSlots
+                              ? 'Station capacity limit reached for this tier'
+                              : availableFreeWorkers <= 0
+                              ? 'No unpinned free-roaming anglers available in pool'
+                              : 'Pin 1 angler permanently to this zone (fishes past 20% down to 0)'
+                          }
+                          className="px-2 py-0.5 text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/70 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors border-r border-indigo-200 dark:border-indigo-800 flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>📌</span>
+                          <span>Pin</span>
+                        </button>
+                        <button
+                          onClick={() => unpinWorkerFromZone(zoneId)}
+                          disabled={zoneAlloc.pinned <= 0}
+                          title={zoneAlloc.pinned <= 0 ? 'No pinned anglers on this zone' : 'Release 1 pinned angler back to Dock Master auto-pool'}
+                          className="px-2 py-0.5 text-[10px] font-bold bg-stone-50 hover:bg-stone-100 dark:bg-stone-900/70 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <span>✕</span>
+                          <span>Unpin</span>
+                        </button>
+                      </div>
+
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${climate.colorClass}`}>
                         {climate.statusBadge}
                       </span>
@@ -660,6 +905,26 @@ export function FisheryPanel() {
 
                     {/* Fishing Operations: Worker Progress & Manual Cast Line */}
                     <div className="pt-1 space-y-2">
+                      {/* Sustainable Low-Stock Evacuation Badge */}
+                      {zoneAlloc.isProtectedLowStock && (
+                        <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-lg p-2 text-xs text-emerald-900 dark:text-emerald-200 font-medium flex items-center gap-2">
+                          <span>🌿</span>
+                          <span>
+                            <strong>Sustainable Low-Stock Evacuation:</strong> Auto-anglers evacuated (Stock &le; 20% cap) to protect breeding pool from hitting 0 and triggering restock pause. Rotated to healthier waters.
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Waiting for Spawn Badge for Pinned Workers */}
+                      {eco.currentStock <= 0 && zoneAlloc.pinned > 0 && (
+                        <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-800 rounded-lg p-2 text-xs text-indigo-900 dark:text-indigo-200 font-medium flex items-center gap-2">
+                          <span>📌</span>
+                          <span>
+                            <strong>Waiting for Spawn:</strong> {zoneAlloc.pinned} pinned angler(s) on watch. Catching will resume immediately upon the first +1 fish tick.
+                          </span>
+                        </div>
+                      )}
+
                       {climate.isFrozen ? (
                         <div className="bg-blue-100/70 dark:bg-blue-950/50 border border-blue-300 dark:border-blue-800 rounded-lg p-2 text-xs text-blue-900 dark:text-blue-200 font-semibold flex items-center gap-2">
                           <span>🧊</span>
@@ -686,11 +951,11 @@ export function FisheryPanel() {
                       ) : (
                         <div className="space-y-2">
                           {/* Worker Catch Bar (if fisherman active) */}
-                          {hasFisherman ? (
+                          {totalZoneAnglers > 0 ? (
                             <div className="space-y-1">
                               <div className="flex items-center justify-between text-[11px] text-stone-600 dark:text-gray-300 font-medium">
                                 <span className="flex items-center gap-1">
-                                  <span>🎣</span> Worker Catch Progress
+                                  <span>🎣</span> Worker Catch Progress ({totalZoneAnglers} Angler{totalZoneAnglers > 1 ? 's' : ''}: 📌{zoneAlloc.pinned}, 🤖{zoneAlloc.autoAssigned})
                                 </span>
                                 <span>Next catch in <strong>{catchCountdownSec}s</strong></span>
                               </div>
@@ -700,6 +965,11 @@ export function FisheryPanel() {
                                   style={{ width: `${catchProgress * 100}%` }}
                                 />
                               </div>
+                            </div>
+                          ) : totalFishermenActive > 0 ? (
+                            <div className="bg-stone-50 dark:bg-stone-900/40 border border-stone-200 dark:border-gray-800 rounded-lg p-2 text-xs text-stone-600 dark:text-stone-400 flex items-center justify-between">
+                              <span>⚓ No anglers stationed here (Auto-anglers routed elsewhere or resting in Bunkhouse)</span>
+                              <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400">0/{zoneAlloc.maxSlots} Stations</span>
                             </div>
                           ) : (
                             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/50 rounded-lg p-2 text-xs text-amber-700 dark:text-amber-300">

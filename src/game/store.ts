@@ -64,6 +64,11 @@ import {
   getZoneStockCap,
   getZoneBaseCatchIntervalSec,
   getZoneBaseSpawnTickSec,
+  getZoneMaxStationSlots,
+  type FisheryCrewPolicy,
+  type ZoneCrewAllocation,
+  type DockMasterAssignmentResult,
+  computeDockMasterAssignments,
 } from './aquaticEcosystem';
 import {
   rollBreedingTier,
@@ -445,6 +450,10 @@ export interface FisheryState {
   fishCodex: Record<string, boolean>;
   zoneEcosystem?: Record<WaterZoneId, ZoneEcosystemData>;
   pondWaterVolume?: number; // 0..3000 Liters (default 3000)
+  crew?: {
+    policy: FisheryCrewPolicy;
+    pinnedWorkers: Record<WaterZoneId, number>;
+  };
 }
 
 // Autonomous Workers (legacy — kept for migration)
@@ -721,6 +730,10 @@ export interface GameState {
   upgradeWaterZoneTier: (zoneId: WaterZoneId) => boolean;
   refillPondFromTower: () => boolean;
   manualCatchFish: (zoneId: WaterZoneId) => boolean;
+  setSustainableRotation: (enabled: boolean) => void;
+  setCatchHandlingPolicy: (policy: 'auto-sell-common' | 'hoard-all') => void;
+  pinWorkerToZone: (zoneId: WaterZoneId) => boolean;
+  unpinWorkerFromZone: (zoneId: WaterZoneId) => boolean;
 
   // Autonomous Workers (legacy)
   hireAutonomousWorker: (type: WorkerType) => void;
@@ -1182,6 +1195,19 @@ export const useGameStore = create<GameState>()(
         fishCodex: {},
         zoneEcosystem: createDefaultZoneEcosystem(),
         pondWaterVolume: 3000,
+        crew: {
+          policy: {
+            sustainableRotation: true,
+            catchHandling: 'auto-sell-common',
+          },
+          pinnedWorkers: {
+            zone_pond: 0,
+            zone_river: 0,
+            zone_estuary: 0,
+            zone_lake: 0,
+            zone_ocean: 0,
+          },
+        },
       },
 
       autonomousWorkers: [],
@@ -2892,6 +2918,140 @@ export const useGameStore = create<GameState>()(
           '🏆',
           'discovery'
         );
+        return true;
+      },
+
+      setSustainableRotation: (enabled) => {
+        const state = get();
+        const currentCrew = state.fishery.crew || {
+          policy: { sustainableRotation: true, catchHandling: 'auto-sell-common' as const },
+          pinnedWorkers: { zone_pond: 0, zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+        };
+        set({
+          fishery: {
+            ...state.fishery,
+            crew: {
+              ...currentCrew,
+              policy: {
+                ...currentCrew.policy,
+                sustainableRotation: enabled,
+              },
+            },
+          },
+          isDirty: true,
+        });
+        if (enabled) {
+          state.addNotification('🌿 Sustainable Rotation ACTIVE: Auto-assigned anglers will evacuate any zone at ≤20% stock capacity.', '🌊', 'info');
+        } else {
+          state.addNotification('⚡ Full Deplete ACTIVE: Auto-assigned anglers will fish waters down to 0% stock.', '🔥', 'info');
+        }
+      },
+
+      setCatchHandlingPolicy: (policy) => {
+        const state = get();
+        const currentCrew = state.fishery.crew || {
+          policy: { sustainableRotation: true, catchHandling: 'auto-sell-common' as const },
+          pinnedWorkers: { zone_pond: 0, zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+        };
+        set({
+          fishery: {
+            ...state.fishery,
+            crew: {
+              ...currentCrew,
+              policy: {
+                ...currentCrew.policy,
+                catchHandling: policy,
+              },
+            },
+          },
+          isDirty: true,
+        });
+        if (policy === 'auto-sell-common') {
+          state.addNotification('💰 Catch Policy: Common fish automatically sold for instant coins. Rare/Legendary kept in Barn.', '🪙', 'info');
+        } else {
+          state.addNotification('📦 Catch Policy: Hoard All. All fish species are stored in Barn.', '🐟', 'info');
+        }
+      },
+
+      pinWorkerToZone: (zoneId) => {
+        const state = get();
+        if (!state.fishery.unlockedZones.includes(zoneId)) return false;
+        const currentCrew = state.fishery.crew || {
+          policy: { sustainableRotation: true, catchHandling: 'auto-sell-common' as const },
+          pinnedWorkers: { zone_pond: 0, zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+        };
+
+        const totalWorkforce = state.farmhands.filter(f => f.role === 'fisherman').length +
+          (state.unifiedWorkers?.fisherman?.isHired ? 1 : 0) +
+          (state.unifiedWorkers?.auto_fisherman?.isHired ? 1 : 0) +
+          state.autonomousWorkers.filter(w => w.type === 'fisherman').length;
+
+        const currentPinnedTotal = Object.values(currentCrew.pinnedWorkers).reduce((a, b) => a + b, 0);
+        if (currentPinnedTotal >= totalWorkforce) {
+          playDefeatSound();
+          state.addNotification(`⚠️ No Free Fishermen: All ${totalWorkforce} hired anglers are already pinned! Hire another fisherman or unpin a worker first.`, '⚓', 'info');
+          return false;
+        }
+
+        const eco = (state.fishery.zoneEcosystem || createDefaultZoneEcosystem())[zoneId];
+        const tier = (eco?.tier || 1) as ZoneUpgradeTier;
+        const maxSlots = getZoneMaxStationSlots(zoneId, tier);
+        const zonePinned = currentCrew.pinnedWorkers[zoneId] || 0;
+
+        if (zonePinned >= maxSlots) {
+          playDefeatSound();
+          state.addNotification(`⚠️ Station Full: ${WATER_ZONES[zoneId].name} maxes out at ${maxSlots} angler slots (Tier ${tier})! Upgrade zone tier to expand station slots.`, '⚓', 'info');
+          return false;
+        }
+
+        const newPinned = {
+          ...currentCrew.pinnedWorkers,
+          [zoneId]: zonePinned + 1,
+        };
+
+        set({
+          fishery: {
+            ...state.fishery,
+            crew: {
+              ...currentCrew,
+              pinnedWorkers: newPinned,
+            },
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(2);
+        state.addNotification(`📌 Angler Pinned: Stationed 1 angler permanently at ${WATER_ZONES[zoneId].name} (${zonePinned + 1}/${maxSlots} slots pinned).`, '🎣', 'info');
+        return true;
+      },
+
+      unpinWorkerFromZone: (zoneId) => {
+        const state = get();
+        const currentCrew = state.fishery.crew || {
+          policy: { sustainableRotation: true, catchHandling: 'auto-sell-common' as const },
+          pinnedWorkers: { zone_pond: 0, zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 },
+        };
+        const zonePinned = currentCrew.pinnedWorkers[zoneId] || 0;
+        if (zonePinned <= 0) return false;
+
+        const newPinned = {
+          ...currentCrew.pinnedWorkers,
+          [zoneId]: zonePinned - 1,
+        };
+
+        set({
+          fishery: {
+            ...state.fishery,
+            crew: {
+              ...currentCrew,
+              pinnedWorkers: newPinned,
+            },
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(1);
+        state.addNotification(`↩️ Angler Unpinned: 1 angler returned to the Dock Master's auto-routing pool.`, '⚓', 'info');
         return true;
       },
 
@@ -5106,6 +5266,8 @@ export const useGameStore = create<GameState>()(
         }
 
         // Multi-zone fishery: iterate ALL unlocked zones in parallel
+        let newCoins = state.coins;
+        let newXp = state.xp;
         let newBarn = { ...state.barn };
         let newSilo = { ...state.silo };
         if ((newBarn as Record<string, number>).honey_comb) {
@@ -5203,98 +5365,142 @@ export const useGameStore = create<GameState>()(
         }
 
         const rod = ROD_TIERS[state.fishery.rodTier];
-        if (hasFisherman) {
-        for (const zoneId of state.fishery.unlockedZones) {
-          const zone = WATER_ZONES[zoneId];
-          const lastCatch = state.fishery.lastCatchTimestamps[zoneId] || 0;
-          if (lastCatch === 0) continue;
+        // Calculate total active fisherman workforce
+        const totalWorkforce = areWorkersPaused ? 0 : (
+          state.farmhands.filter(f => f.role === 'fisherman').length +
+          (state.unifiedWorkers?.fisherman?.isHired && !state.unifiedWorkers?.fisherman?.isPaused ? 1 : 0) +
+          (state.unifiedWorkers?.auto_fisherman?.isHired && !state.unifiedWorkers?.auto_fisherman?.isPaused ? 1 : 0) +
+          state.autonomousWorkers.filter(w => w.type === 'fisherman').length
+        );
 
-          const fOverclock = state.entityOverclocks?.[`fishery_${zoneId}`];
-          const isFisheryExhausted = Boolean(fOverclock?.isExhausted && fOverclock?.exhaustedUntil && now < fOverclock.exhaustedUntil);
-          if (isFisheryExhausted) {
-            continue; // Halted while reel is jammed/exhausted
-          }
+        if (totalWorkforce > 0) {
+          const crewPolicy = state.fishery.crew?.policy || { sustainableRotation: true, catchHandling: 'auto-sell-common' as const };
+          const pinnedWorkers = state.fishery.crew?.pinnedWorkers || { zone_pond: 0, zone_river: 0, zone_estuary: 0, zone_lake: 0, zone_ocean: 0 };
 
-          // Check if zone is depleted / paused until 100% full
-          const zoneEco = currentEcosystem[zoneId];
-          if (zoneEco && isZoneFishingPaused(zoneEco.currentStock, zoneEco.maxStock, zoneEco.isDepleted)) {
-            continue; // Halted while population is recovering to 100% capacity
-          }
-
-          // Check if frozen
-          const climate = calculateClimateSensitivity(zoneId, currentTemp);
-          if (climate.isFrozen) {
-            continue; // Halted while surface bed is iced over
-          }
-
-          const isFisheryOverclocked = Boolean(fOverclock?.isOverclocked && (!fOverclock.expiresAt || now < fOverclock.expiresAt));
-          const fMultiplier = isFisheryOverclocked ? fOverclock.speedMultiplier : 1.0;
-
-          const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
-          const zTier = (zoneEco?.tier || 1) as ZoneUpgradeTier;
-          const effectiveInterval = calculateActiveCatchIntervalMs({
-            zoneId,
-            rodSpeedMultiplier: rod.speedMultiplier,
-            hasSlicker,
-            overclockMultiplier: fMultiplier,
-            waterVolume: zoneId === 'zone_pond' ? currentPondVolume : undefined,
-            tier: zTier,
+          const crewAssignments = computeDockMasterAssignments({
+            unlockedZones: state.fishery.unlockedZones,
+            totalWorkforce,
+            pinnedWorkers,
+            zoneEcosystem: currentEcosystem,
+            sustainableRotation: crewPolicy.sustainableRotation,
           });
 
-          if (now - lastCatch >= effectiveInterval) {
-            const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
-            if (catchResult && zoneEco.currentStock > 0 && !isZoneFishingPaused(zoneEco.currentStock, zoneEco.maxStock, zoneEco.isDepleted)) {
-              const fishDef = FISH_SPECIES[catchResult.speciesId];
-              const bonusQty = (isFisheryOverclocked && fOverclock?.bonusYield) ? fOverclock.bonusYield : 0;
-              const catchQty = 1 + bonusQty;
-              newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + catchQty;
-              newBarn.fish = (newBarn.fish || 0) + catchQty;
-              const codexKey = `fish_${catchResult.speciesId}`;
-              newFishCodex[codexKey] = true;
-              newCodex[codexKey] = true;
-              if (catchResult.isNew) {
-                newGems += fishDef.codexGems;
+          for (const zoneId of state.fishery.unlockedZones) {
+            const zone = WATER_ZONES[zoneId];
+            const alloc = crewAssignments.zoneAssignments[zoneId];
+            if (!alloc || alloc.totalAssigned <= 0) {
+              continue; // No fishermen stationed at this zone
+            }
+
+            const lastCatch = state.fishery.lastCatchTimestamps[zoneId] || 0;
+            if (lastCatch === 0) continue;
+
+            const fOverclock = state.entityOverclocks?.[`fishery_${zoneId}`];
+            const isFisheryExhausted = Boolean(fOverclock?.isExhausted && fOverclock?.exhaustedUntil && now < fOverclock.exhaustedUntil);
+            if (isFisheryExhausted) {
+              continue; // Halted while reel is jammed/exhausted
+            }
+
+            const zoneEco = currentEcosystem[zoneId];
+            if (!zoneEco) continue;
+
+            // Pinned workers vs auto-assigned worker eligibility:
+            // Pinned workers do NOT evacuate at 20%; they fish down to 0 stock and wait for spawn
+            // Auto-assigned workers respect low-stock protection (<=20%) and restocking lockout
+            const hasPinned = alloc.pinned > 0;
+            if (!hasPinned) {
+              if (alloc.isPausedRestocking || alloc.isProtectedLowStock) {
+                continue;
               }
-              // Lanternfish gem bonus
-              if (catchResult.speciesId === 'lanternfish') {
-                newGems += 1;
-              }
-
-              // Decrement stock
-              const remainingStock = Math.max(0, zoneEco.currentStock - 1);
-              const isDepletedNow = isZoneFishingPaused(remainingStock, zoneEco.maxStock, zoneEco.isDepleted);
-              currentEcosystem[zoneId] = {
-                ...zoneEco,
-                currentStock: remainingStock,
-                isDepleted: isDepletedNow,
-              };
-
-
-              // Roll burnout on catch cycle completion
-              if (isFisheryOverclocked && Math.random() < fOverclock.burnoutChance) {
-                playDefeatSound();
-                state.addNotification(`⚠️ Reel Jam: ${zone.name} fishing gear overheated & exhausted for 180s! Service reel or rest.`, '⚙️', 'event');
-                if (state.entityOverclocks[`fishery_${zoneId}`]) {
-                  state.entityOverclocks[`fishery_${zoneId}`] = {
-                    ...fOverclock,
-                    isOverclocked: false,
-                    activeTier: null,
-                    speedMultiplier: 1.0,
-                    bonusYield: 0,
-                    isExhausted: true,
-                    exhaustedUntil: now + 180000,
-                  };
-                }
+            } else {
+              if (zoneEco.currentStock <= 0) {
+                continue; // Waiting for spawn!
               }
             }
-            newCatchTimestamps[zoneId] = now;
+
+            // Check if frozen
+            const climate = calculateClimateSensitivity(zoneId, currentTemp);
+            if (climate.isFrozen) {
+              continue; // Halted while surface bed is iced over
+            }
+
+            const isFisheryOverclocked = Boolean(fOverclock?.isOverclocked && (!fOverclock.expiresAt || now < fOverclock.expiresAt));
+            const fMultiplier = isFisheryOverclocked ? fOverclock.speedMultiplier : 1.0;
+
+            const hasSlicker = state.farmhands.some(fh => fh.role === 'fisherman' && fh.equippedOutfit === 'fisherman_slicker');
+            const zTier = (zoneEco?.tier || 1) as ZoneUpgradeTier;
+            const baseInterval = calculateActiveCatchIntervalMs({
+              zoneId,
+              rodSpeedMultiplier: rod.speedMultiplier,
+              hasSlicker,
+              overclockMultiplier: fMultiplier,
+              waterVolume: zoneId === 'zone_pond' ? currentPondVolume : undefined,
+              tier: zTier,
+            });
+
+            // Effective interval scaled by total assigned anglers stationed at this water body
+            const effectiveInterval = Math.max(800, Math.round(baseInterval / alloc.totalAssigned));
+
+            if (now - lastCatch >= effectiveInterval) {
+              const catchResult = rollFishCatch(zoneId, state.fishery.rodTier, newFishCodex);
+              if (catchResult && zoneEco.currentStock > 0) {
+                const fishDef = FISH_SPECIES[catchResult.speciesId];
+                const bonusQty = (isFisheryOverclocked && fOverclock?.bonusYield) ? fOverclock.bonusYield : 0;
+                const catchQty = 1 + bonusQty;
+
+                // Dock Master Catch Policy Handling
+                const isAutoSellCommon = crewPolicy.catchHandling === 'auto-sell-common' && fishDef.tier === 'common';
+                if (isAutoSellCommon) {
+                  const saleEarnings = fishDef.sellPrice * catchQty;
+                  newCoins += saleEarnings;
+                } else {
+                  newBarn[fishDef.id] = (newBarn[fishDef.id] || 0) + catchQty;
+                  newBarn.fish = (newBarn.fish || 0) + catchQty;
+                }
+
+                const codexKey = `fish_${catchResult.speciesId}`;
+                newFishCodex[codexKey] = true;
+                newCodex[codexKey] = true;
+                if (catchResult.isNew) {
+                  newGems += fishDef.codexGems;
+                }
+                // Lanternfish gem bonus
+                if (catchResult.speciesId === 'lanternfish') {
+                  newGems += 1;
+                }
+
+                // Decrement stock
+                const remainingStock = Math.max(0, zoneEco.currentStock - 1);
+                const isDepletedNow = isZoneFishingPaused(remainingStock, zoneEco.maxStock, zoneEco.isDepleted);
+                currentEcosystem[zoneId] = {
+                  ...zoneEco,
+                  currentStock: remainingStock,
+                  isDepleted: isDepletedNow,
+                };
+
+                // Roll burnout on catch cycle completion
+                if (isFisheryOverclocked && Math.random() < fOverclock.burnoutChance) {
+                  playDefeatSound();
+                  state.addNotification(`⚠️ Reel Jam: ${zone.name} fishing gear overheated & exhausted for 180s! Service reel or rest.`, '⚙️', 'event');
+                  if (state.entityOverclocks[`fishery_${zoneId}`]) {
+                    state.entityOverclocks[`fishery_${zoneId}`] = {
+                      ...fOverclock,
+                      isOverclocked: false,
+                      activeTier: null,
+                      speedMultiplier: 1.0,
+                      bonusYield: 0,
+                      isExhausted: true,
+                      exhaustedUntil: now + 180000,
+                    };
+                  }
+                }
+              }
+              newCatchTimestamps[zoneId] = now;
+            }
           }
-        }
-        } // end if (hasFisherman)
+        } // end if (totalWorkforce > 0)
 
         // Autonomous workers tick (legacy — kept for backward compat, but main logic is unified below)
-        let newCoins = state.coins;
-        let newXp = state.xp;
         const newWorkers = areWorkersPaused ? state.autonomousWorkers : state.autonomousWorkers.map(w => {
           const def = WORKERS[w.type];
           const gear = def.gearTiers[w.gearTier - 1] || def.gearTiers[0];
@@ -9118,6 +9324,22 @@ export const useGameStore = create<GameState>()(
                 eco.isDepleted = isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted);
               }
             }
+          }
+
+          if (!merged.fishery.crew) {
+            merged.fishery.crew = {
+              policy: {
+                sustainableRotation: true,
+                catchHandling: 'auto-sell-common',
+              },
+              pinnedWorkers: {
+                zone_pond: 0,
+                zone_river: 0,
+                zone_estuary: 0,
+                zone_lake: 0,
+                zone_ocean: 0,
+              },
+            };
           }
           if (merged.fishery.pondWaterVolume === undefined) {
             merged.fishery.pondWaterVolume = 3000;

@@ -680,3 +680,167 @@ export function calculateActiveCatchIntervalMs(params: {
   return Math.max(1000, effectiveMs);
 }
 
+/**
+ * Per-Zone Station Capacity Base Configuration
+ * S_base:
+ * - Farmstead Pond & Forest River: 2 (Tier 1: 2 anglers -> Tier 5: 5 anglers)
+ * - Coastal Estuary: 3 (Tier 1: 3 anglers -> Tier 5: 6 anglers)
+ * - Alpine Mountain Lake & Deep Ocean Pier: 1 (Tier 1: 1 angler -> Tier 5: 4 anglers)
+ */
+export const ZONE_BASE_STATION_CAPS: Record<WaterZoneId, number> = {
+  zone_pond: 2,
+  zone_river: 2,
+  zone_estuary: 3,
+  zone_lake: 1,
+  zone_ocean: 1,
+};
+
+export function getZoneMaxStationSlots(zoneId: WaterZoneId, tier: ZoneUpgradeTier = 1): number {
+  const base = ZONE_BASE_STATION_CAPS[zoneId] ?? 2;
+  const safeTier = Math.min(5, Math.max(1, tier)) as ZoneUpgradeTier;
+  return base + Math.floor(0.75 * (safeTier - 1));
+}
+
+export interface FisheryCrewPolicy {
+  sustainableRotation: boolean; // true = evacuate at <= 20%, false = strip-mine to 0%
+  catchHandling: 'auto-sell-common' | 'hoard-all';
+}
+
+export interface ZoneCrewAllocation {
+  pinned: number;
+  autoAssigned: number;
+  maxSlots: number;
+  totalAssigned: number;
+  isProtectedLowStock: boolean;
+  isPausedRestocking: boolean;
+  score: number;
+}
+
+export interface DockMasterAssignmentResult {
+  zoneAssignments: Record<WaterZoneId, ZoneCrewAllocation>;
+  totalWorkforce: number;
+  totalPinned: number;
+  totalAutoAssigned: number;
+  totalBunkhouseReserve: number;
+}
+
+/**
+ * Dock Master Dynamic Smart Auto-Routing Algorithm
+ * 1. Partition workforce into pinned and free-roaming anglers
+ * 2. Score unlocked zones based on stock health, priority weight, and sustainability thresholds
+ * 3. Greedily distribute available free anglers up to per-zone station capacity caps
+ */
+export function computeDockMasterAssignments(args: {
+  unlockedZones: WaterZoneId[];
+  totalWorkforce: number;
+  pinnedWorkers: Partial<Record<WaterZoneId, number>>;
+  zoneEcosystem: Partial<Record<WaterZoneId, ZoneEcosystemData>>;
+  sustainableRotation: boolean;
+}): DockMasterAssignmentResult {
+  const { unlockedZones, totalWorkforce, pinnedWorkers, zoneEcosystem, sustainableRotation } = args;
+
+  const result: Record<WaterZoneId, ZoneCrewAllocation> = {
+    zone_pond: { pinned: 0, autoAssigned: 0, maxSlots: 2, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 },
+    zone_river: { pinned: 0, autoAssigned: 0, maxSlots: 2, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 },
+    zone_estuary: { pinned: 0, autoAssigned: 0, maxSlots: 3, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 },
+    zone_lake: { pinned: 0, autoAssigned: 0, maxSlots: 1, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 },
+    zone_ocean: { pinned: 0, autoAssigned: 0, maxSlots: 1, totalAssigned: 0, isProtectedLowStock: false, isPausedRestocking: false, score: -1 },
+  };
+
+  // Step 1: Partition Workforce
+  let remainingTotalWorkers = Math.max(0, totalWorkforce);
+  let totalPinned = 0;
+
+  for (const zId of unlockedZones) {
+    const eco = zoneEcosystem[zId];
+    const tier = (eco?.tier || 1) as ZoneUpgradeTier;
+    const maxSlots = getZoneMaxStationSlots(zId, tier);
+    const requestedPinned = Math.max(0, pinnedWorkers[zId] || 0);
+
+    // Can only pin up to maxSlots and up to available total workforce
+    const actualPinned = Math.min(requestedPinned, maxSlots, remainingTotalWorkers);
+    remainingTotalWorkers -= actualPinned;
+    totalPinned += actualPinned;
+
+    const isPaused = eco ? isZoneFishingPaused(eco.currentStock, eco.maxStock, eco.isDepleted) : false;
+    const isLowStock = eco ? eco.currentStock <= Math.floor(eco.maxStock * 0.20) : false;
+    const isProtected = sustainableRotation && isLowStock;
+
+    result[zId] = {
+      pinned: actualPinned,
+      autoAssigned: 0,
+      maxSlots,
+      totalAssigned: actualPinned,
+      isProtectedLowStock: isProtected,
+      isPausedRestocking: isPaused,
+      score: -1,
+    };
+  }
+
+  // Free-roaming workforce for Dock Master auto-assignment
+  let freeWorkers = remainingTotalWorkers;
+
+  // Step 2: Score Available Zones
+  const scoredZones: { zoneId: WaterZoneId; score: number; slotsLeft: number }[] = [];
+
+  for (const zId of unlockedZones) {
+    const alloc = result[zId];
+    const eco = zoneEcosystem[zId];
+    if (!eco) continue;
+
+    const slotsLeft = Math.max(0, alloc.maxSlots - alloc.pinned);
+    if (slotsLeft <= 0) {
+      alloc.score = -1;
+      continue;
+    }
+
+    // Restocking paused zones are ineligible for auto-routing
+    if (alloc.isPausedRestocking) {
+      alloc.score = -1;
+      continue;
+    }
+
+    // Sustainable rotation: evacuate when stock <= 20%
+    if (alloc.isProtectedLowStock) {
+      alloc.score = -1;
+      continue;
+    }
+
+    // Score = (stock / stockCap) * PriorityWeight
+    const cfg = ZONE_ECOSYSTEM_CONFIGS[zId];
+    const priorityWeight = cfg?.tierMultiplier || 1.0;
+    const stockRatio = eco.maxStock > 0 ? eco.currentStock / eco.maxStock : 0;
+    const score = stockRatio * priorityWeight;
+
+    alloc.score = score;
+    if (score > 0) {
+      scoredZones.push({ zoneId: zId, score, slotsLeft });
+    }
+  }
+
+  // Step 3: Distribute Anglers
+  // Sort descending by score
+  scoredZones.sort((a, b) => b.score - a.score);
+
+  let totalAutoAssigned = 0;
+  for (const item of scoredZones) {
+    if (freeWorkers <= 0) break;
+    const assignCount = Math.min(item.slotsLeft, freeWorkers);
+    result[item.zoneId].autoAssigned = assignCount;
+    result[item.zoneId].totalAssigned += assignCount;
+    freeWorkers -= assignCount;
+    totalAutoAssigned += assignCount;
+  }
+
+  const totalBunkhouseReserve = Math.max(0, freeWorkers);
+
+  return {
+    zoneAssignments: result,
+    totalWorkforce,
+    totalPinned,
+    totalAutoAssigned,
+    totalBunkhouseReserve,
+  };
+}
+
+
