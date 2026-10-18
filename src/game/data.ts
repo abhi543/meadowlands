@@ -285,7 +285,7 @@ export const HABITAT_UPGRADES: HabitatUpgradeStep[] = [
 ];
 
 // --- Products ---
-export type ProductId = 'feed' | 'egg' | 'egg_blue' | 'egg_obsidian' | 'egg_golden' | 'milk' | 'milk_rich_cream' | 'milk_alpine' | 'milk_starlight' | 'wool' | 'wool_patterned' | 'wool_merino' | 'wool_gilded' | 'truffle' | 'truffle_white' | 'truffle_alba' | 'truffle_diamond' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar' | 'golden_shawl' | 'merino_sweater' | 'rich_butter' | 'alpine_cheese' | 'golden_cake' | 'horn_shavings' | 'lanolin_balm' | 'ancient_coin';
+export type ProductId = 'feed' | 'egg' | 'egg_blue' | 'egg_obsidian' | 'egg_golden' | 'milk' | 'milk_rich_cream' | 'milk_alpine' | 'milk_starlight' | 'wool' | 'wool_patterned' | 'wool_merino' | 'wool_gilded' | 'truffle' | 'truffle_white' | 'truffle_alba' | 'truffle_diamond' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar' | 'golden_shawl' | 'merino_sweater' | 'rich_butter' | 'alpine_cheese' | 'golden_cake' | 'horn_shavings' | 'lanolin_balm' | 'ancient_coin' | 'citrus_tea';
 
 export interface ProductDef {
   id: ProductId;
@@ -340,6 +340,8 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   rich_butter:      { id: 'rich_butter',      name: 'Rich Butter',      emoji: '\u{1F9C8}', category: 'manufactured', sellPrice: 35 },
   alpine_cheese:    { id: 'alpine_cheese',    name: 'Alpine Cheese',    emoji: '\u{1F9C0}', category: 'manufactured', sellPrice: 60 },
   golden_cake:      { id: 'golden_cake',      name: 'Golden Cake',      emoji: '\u{1F370}', category: 'manufactured', sellPrice: 120 },
+  // Crafted cold beverages (Worker Hydration Metabolism)
+  citrus_tea:       { id: 'citrus_tea',       name: 'Citrus Herb Tea',  emoji: '🍵',        category: 'manufactured', sellPrice: 40 },
   // Bonus drop items from high-tier breeds
   horn_shavings:    { id: 'horn_shavings',    name: 'Horn Shavings',    emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 12 },
   lanolin_balm:     { id: 'lanolin_balm',     name: 'Lanolin Balm',     emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 20 },
@@ -394,6 +396,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       // Supply chain: breed-specific egg recipes
       { id: 'make_golden_cake', name: 'Bake Golden Cake', emoji: '\u{1F370}', inputs: [{ productId: 'egg_golden', qty: 1 }, { productId: 'bread', qty: 1 }], output: { productId: 'golden_cake', qty: 1 }, timeSec: 90 },
       { id: 'make_lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', inputs: [{ productId: 'pie', qty: 1 }, { productId: 'strawberry', qty: 4 }], output: { productId: 'lure_berry', qty: 1 }, timeSec: 150 },
+      // Worker Hydration: Chilled Citrus Herb Tea
+      { id: 'brew_citrus_tea', name: 'Brew Citrus Herb Tea', emoji: '🍵', inputs: [{ productId: 'wild_berries', qty: 2 }, { productId: 'wheat', qty: 1 }], output: { productId: 'citrus_tea', qty: 1 }, timeSec: 60 },
     ],
   },
   dairy: {

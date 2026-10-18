@@ -199,6 +199,16 @@ import {
   processOfflineShiftCycles,
 } from './shiftEngine';
 import {
+  type WorkerHydrationState,
+  type HydrationTelemetry,
+  getClimateHeatMultiplier,
+  calculateMicroTickWaterConsumption,
+  evaluateHydrationTelemetry,
+  deductWorkerHydration,
+  executeNightWatchHydrationAutomation,
+  CANTEEN_DEFAULT_CAPACITY_LITERS,
+} from './hydrationEngine';
+import {
   PLOT_SOIL_TIERS,
   getSoilTier,
   getPlotUnlockCost,
@@ -614,6 +624,13 @@ export interface GameState {
   bunkhouse: {
     level: number;
     capacity: number;
+    // Worker Hydration & Thirst Mechanics (v3.5)
+    canteenLiters?: number;
+    canteenCapacityLiters?: number;
+    coldInfusedDrinks?: number;
+    autoRefillFromTower?: boolean;
+    nightWatchAutomation?: boolean;
+    totalWaterConsumedLiters?: number;
   };
 
   // Worker Feeding Automation & Barn Lock Policies
@@ -766,6 +783,12 @@ export interface GameState {
   callEmergencyOvertime: (roleOrId: string) => { success: boolean; message: string };
   upgradeBunkhouse: () => { success: boolean; message: string };
   expandBunkhouseCapacity: () => { success: boolean; message: string };
+
+  // Worker Hydration Metabolism & Thirst Actions (v3.5)
+  refillStaffCanteen: (liters?: number) => { success: boolean; message: string };
+  stockColdBeverage: (qty?: number) => { success: boolean; message: string };
+  toggleNightWatchWaterAutomation: () => void;
+  toggleCanteenAutoRefill: () => void;
 
   // Wrangler Feed Policy & Automation Controls
   updateWranglerPolicy: (policy: Partial<WranglerPolicyConfig>) => void;
@@ -1293,6 +1316,12 @@ export const useGameStore = create<GameState>()(
       bunkhouse: {
         level: 1,
         capacity: 8,
+        canteenLiters: 60,
+        canteenCapacityLiters: 100,
+        coldInfusedDrinks: 0,
+        autoRefillFromTower: true,
+        nightWatchAutomation: true,
+        totalWaterConsumedLiters: 0,
       },
 
       // Wrangler Feeding Automation & Barn Lock Policies
@@ -3913,6 +3942,115 @@ export const useGameStore = create<GameState>()(
         };
       },
 
+      // Worker Hydration Metabolism & Thirst Actions (v3.5)
+      refillStaffCanteen: (liters = 50) => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentBunk = state.bunkhouse || { level: 1, capacity: 8 };
+        const cap = currentBunk.canteenCapacityLiters || CANTEEN_DEFAULT_CAPACITY_LITERS;
+        const currentLiters = currentBunk.canteenLiters || 0;
+        const space = cap - currentLiters;
+
+        if (space <= 0) {
+          state.addNotification('🚰 Canteen Cooler is already full to the brim!', '🥛', 'info');
+          return { success: false, message: 'Canteen is already at maximum capacity!' };
+        }
+        if (currentHydro.towerLiters <= 0) {
+          state.addNotification('🗼 Elevated Gravity Tower is empty (0L)! Pump water to the tower first.', '⚠️', 'info');
+          return { success: false, message: 'Elevated Gravity Tower has no clean water available!' };
+        }
+
+        const transfer = Math.min(liters, space, currentHydro.towerLiters);
+        const newTower = Math.max(0, currentHydro.towerLiters - transfer);
+        const newCanteen = Math.min(cap, currentLiters + transfer);
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            towerLiters: Math.round(newTower * 10) / 10,
+          },
+          bunkhouse: {
+            ...currentBunk,
+            canteenLiters: Math.round(newCanteen * 10) / 10,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(2);
+        state.addNotification(`🚰 Canteen Refilled: Transferred +${Math.round(transfer)}L from Elevated Tower to Staff Canteen!`, '🥛', 'info');
+        return { success: true, message: `Refilled +${Math.round(transfer)}L into Staff Canteen!` };
+      },
+
+      stockColdBeverage: (qty = 5) => {
+        const state = get();
+        const teaInBarn = state.barn.citrus_tea || 0;
+        if (teaInBarn <= 0) {
+          state.addNotification('🍵 No Citrus Herb Tea in Barn! Brew chilled tea in Bakery/Kitchen first.', '⚠️', 'info');
+          return { success: false, message: 'No Citrus Herb Tea in Barn. Brew it in the Bakery!' };
+        }
+
+        const toStock = Math.min(qty, teaInBarn);
+        const currentBunk = state.bunkhouse || { level: 1, capacity: 8 };
+        const currentDrinks = currentBunk.coldInfusedDrinks || 0;
+
+        const newBarn = { ...state.barn };
+        newBarn.citrus_tea = teaInBarn - toStock;
+        if (newBarn.citrus_tea <= 0) delete newBarn.citrus_tea;
+
+        set({
+          barn: newBarn,
+          bunkhouse: {
+            ...currentBunk,
+            coldInfusedDrinks: currentDrinks + toStock,
+          },
+          isDirty: true,
+        });
+
+        playRapidTapSound(1);
+        state.addNotification(`🧊 Cold Cooler Stocked: Added +${toStock} Citrus Herb Teas! Active staff gain Cold-Infused (+15% Velocity & Heatwave Immunity)!`, '🧊', 'event');
+        return { success: true, message: `Stocked +${toStock} Citrus Teas in Cold Cooler!` };
+      },
+
+      toggleNightWatchWaterAutomation: () => {
+        const state = get();
+        const currentBunk = state.bunkhouse || { level: 1, capacity: 8 };
+        const currentVal = currentBunk.nightWatchAutomation ?? true;
+        set({
+          bunkhouse: {
+            ...currentBunk,
+            nightWatchAutomation: !currentVal,
+          },
+          isDirty: true,
+        });
+        state.addNotification(
+          !currentVal
+            ? '🌙 Night Watch Automation ENABLED: Off-shift staff will replenish canteen cooler from cistern/aquifer.'
+            : '🌙 Night Watch Automation DISABLED.',
+          '🌙',
+          'info'
+        );
+      },
+
+      toggleCanteenAutoRefill: () => {
+        const state = get();
+        const currentBunk = state.bunkhouse || { level: 1, capacity: 8 };
+        const currentVal = currentBunk.autoRefillFromTower ?? true;
+        set({
+          bunkhouse: {
+            ...currentBunk,
+            autoRefillFromTower: !currentVal,
+          },
+          isDirty: true,
+        });
+        state.addNotification(
+          !currentVal
+            ? '🗼 Gravity Tower Auto-Refill ENABLED: Staff Canteen will top off automatically from the tower.'
+            : '🗼 Gravity Tower Auto-Refill DISABLED.',
+          '🗼',
+          'info'
+        );
+      },
+
       // Wrangler Feed Policy & Automation Controls
       updateWranglerPolicy: (policyUpdate) => {
         const state = get();
@@ -5569,6 +5707,111 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // --- Worker Hydration Metabolism & Thirst Dynamics (v3.5) ---
+        const ambientTemp = hydroSimResult.updatedHydrology.weatherState?.temperatureC ?? 22;
+        const currentCanteenLiters = state.bunkhouse?.canteenLiters ?? 60;
+        const currentCanteenCap = state.bunkhouse?.canteenCapacityLiters ?? CANTEEN_DEFAULT_CAPACITY_LITERS;
+        const currentTowerLiters = hydroSimResult.updatedHydrology.towerLiters;
+        const currentColdDrinks = state.bunkhouse?.coldInfusedDrinks ?? 0;
+        const hasColdBeverage = currentColdDrinks > 0;
+
+        // Count active workers currently on duty across unified, specialist, and fishery crews
+        let activeDutyWorkerCount = 0;
+        if (!areWorkersPaused) {
+          for (const role of Object.keys(state.unifiedWorkers || {}) as WorkerRole[]) {
+            const w = state.unifiedWorkers[role];
+            if (w?.isHired && !w.isPaused && w.moraleTier !== 'striking' && w.moraleTier !== 'deserted') {
+              const testSched = getWorkerScheduleTelemetry({
+                worker: w,
+                roleOrId: role,
+                baseDailyWage: WORKER_UPKEEP_ROSTER[role]?.baseDailyWage || 15,
+                timestamp: now,
+                epochStart: state.farmEpochStart || now,
+                bunkhouseLevel: state.bunkhouse?.level || 1,
+              });
+              if (testSched.isOnDuty) activeDutyWorkerCount++;
+            }
+          }
+          for (const sp of Object.values(updatedSpecialistWorkers)) {
+            if (sp?.isHired && sp.isActive && !sp.isStriking && sp.moraleTier !== 'deserted') {
+              activeDutyWorkerCount++;
+            }
+          }
+          const fisheryPinned = state.fishery?.crew?.pinnedWorkers
+            ? Object.values(state.fishery.crew.pinnedWorkers).reduce((a, b) => a + b, 0)
+            : 0;
+          activeDutyWorkerCount += fisheryPinned;
+        }
+
+        // Evaluate overall estate worker hydration state
+        const hydrationTelemetry = evaluateHydrationTelemetry({
+          temperatureC: ambientTemp,
+          canteenLiters: currentCanteenLiters,
+          towerLiters: currentTowerLiters,
+          hasColdBeverage,
+        });
+
+        let newCanteenLiters = currentCanteenLiters;
+        let newTowerLiters = currentTowerLiters;
+        let totalWaterConsumed = state.bunkhouse?.totalWaterConsumedLiters ?? 0;
+        let newColdDrinks = currentColdDrinks;
+
+        // Micro-tick water deduction under physical mass conservation
+        if (activeDutyWorkerCount > 0 && deltaSeconds > 0) {
+          const waterNeeded = calculateMicroTickWaterConsumption(
+            activeDutyWorkerCount,
+            deltaSeconds,
+            ambientTemp
+          );
+
+          if (waterNeeded > 0) {
+            const deductRes = deductWorkerHydration({
+              amountLiters: waterNeeded,
+              currentCanteenLiters: newCanteenLiters,
+              currentTowerLiters: newTowerLiters,
+            });
+            newCanteenLiters = deductRes.newCanteenLiters;
+            newTowerLiters = deductRes.newTowerLiters;
+            totalWaterConsumed += deductRes.deductedLiters;
+            hydroSimResult.updatedHydrology.towerLiters = newTowerLiters;
+          }
+
+          // Consume cold beverage portions while active (1 drink per 600s shift per active worker)
+          if (hasColdBeverage) {
+            const drinkDrain = (activeDutyWorkerCount / 600) * deltaSeconds;
+            newColdDrinks = Math.max(0, newColdDrinks - drinkDrain);
+          }
+        }
+
+        // Auto-refill Canteen Cooler from Elevated Gravity Tower if enabled and below 30% capacity
+        const isCanteenAutoRefill = state.bunkhouse?.autoRefillFromTower ?? true;
+        if (isCanteenAutoRefill && newCanteenLiters < currentCanteenCap * 0.3 && newTowerLiters > 0) {
+          const refillNeeded = currentCanteenCap - newCanteenLiters;
+          const transferFromTower = Math.min(refillNeeded, newTowerLiters);
+          newCanteenLiters += transferFromTower;
+          newTowerLiters -= transferFromTower;
+          hydroSimResult.updatedHydrology.towerLiters = newTowerLiters;
+        }
+
+        // Night Watch Replenishment Automation (off-shift draw from Cistern or Aquifer)
+        const isNightWatchAuto = state.bunkhouse?.nightWatchAutomation ?? true;
+        const isNightClock = clock.currentPeriod === 'night';
+        if (isNightWatchAuto && isNightClock && newCanteenLiters < currentCanteenCap) {
+          const nwRes = executeNightWatchHydrationAutomation({
+            canteenLiters: newCanteenLiters,
+            canteenCapacity: currentCanteenCap,
+            cisternLiters: hydroSimResult.updatedHydrology.cisternLiters,
+            aquiferLiters: hydroSimResult.updatedHydrology.aquiferLiters,
+            deltaSeconds,
+            isNightShift: true,
+          });
+          if (nwRes.pumpedLiters > 0) {
+            newCanteenLiters = nwRes.newCanteenLiters;
+            hydroSimResult.updatedHydrology.cisternLiters = nwRes.newCisternLiters;
+            hydroSimResult.updatedHydrology.aquiferLiters = nwRes.newAquiferLiters;
+          }
+        }
+
         // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
         let unifiedWorkersModified = false;
         const updatedUnifiedWorkers = { ...state.unifiedWorkers };
@@ -5609,6 +5852,7 @@ export const useGameStore = create<GameState>()(
               timestamp: now,
               epochStart: state.farmEpochStart || now,
               bunkhouseLevel: state.bunkhouse?.level || 1,
+              hydrationState: hydrationTelemetry.state,
             });
 
             // Update real-time stamina
@@ -6680,6 +6924,13 @@ export const useGameStore = create<GameState>()(
           level: finalLevel,
           entityOverclocks: updatedWorkerOverclocks,
           hydrology: hydroSimResult.updatedHydrology,
+          bunkhouse: {
+            ...state.bunkhouse,
+            canteenLiters: Math.round(newCanteenLiters * 10) / 10,
+            canteenCapacityLiters: currentCanteenCap,
+            coldInfusedDrinks: Math.round(newColdDrinks * 10) / 10,
+            totalWaterConsumedLiters: Math.round(totalWaterConsumed * 10) / 10,
+          },
           notifications: state.notifications.filter(
             n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
           ),
@@ -9442,7 +9693,25 @@ export const useGameStore = create<GameState>()(
         }
 
         if (merged.farmEpochStart === undefined) merged.farmEpochStart = Date.now() - (Date.now() % DAY_CYCLE_MS);
-        if (!merged.bunkhouse) merged.bunkhouse = { level: 1, capacity: 8 };
+        if (!merged.bunkhouse) {
+          merged.bunkhouse = {
+            level: 1,
+            capacity: 8,
+            canteenLiters: 60,
+            canteenCapacityLiters: 100,
+            coldInfusedDrinks: 0,
+            autoRefillFromTower: true,
+            nightWatchAutomation: true,
+            totalWaterConsumedLiters: 0,
+          };
+        } else {
+          if (merged.bunkhouse.canteenLiters === undefined) merged.bunkhouse.canteenLiters = 60;
+          if (merged.bunkhouse.canteenCapacityLiters === undefined) merged.bunkhouse.canteenCapacityLiters = 100;
+          if (merged.bunkhouse.coldInfusedDrinks === undefined) merged.bunkhouse.coldInfusedDrinks = 0;
+          if (merged.bunkhouse.autoRefillFromTower === undefined) merged.bunkhouse.autoRefillFromTower = true;
+          if (merged.bunkhouse.nightWatchAutomation === undefined) merged.bunkhouse.nightWatchAutomation = true;
+          if (merged.bunkhouse.totalWaterConsumedLiters === undefined) merged.bunkhouse.totalWaterConsumedLiters = 0;
+        }
 
         // Upkeep & Pantry Auto-Recovery: Restore missing funds/food if previously lost
         if (merged.payrollVaultCoins === undefined || merged.payrollVaultCoins === null) {

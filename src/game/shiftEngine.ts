@@ -4,6 +4,7 @@ import {
   getGuildTaxRate,
   type MoraleTier,
 } from '@/data/workerUpkeep';
+import { type WorkerHydrationState } from './hydrationEngine';
 
 /**
  * Shift Engine & Circadian Labor Cycle Architecture
@@ -247,6 +248,9 @@ export interface WorkerScheduleTelemetry {
   overtimeSnackName: string;
   speedMultiplier: number;
   dialogueSnippet: string;
+  hydrationState?: WorkerHydrationState;
+  hydrationBadgeEmoji?: string;
+  hydrationBadgeText?: string;
 }
 
 /**
@@ -259,6 +263,7 @@ export function getWorkerScheduleTelemetry(params: {
   timestamp: number;
   epochStart?: number;
   bunkhouseLevel?: number;
+  hydrationState?: WorkerHydrationState;
 }): WorkerScheduleTelemetry {
   const {
     worker,
@@ -267,6 +272,7 @@ export function getWorkerScheduleTelemetry(params: {
     timestamp,
     epochStart = 0,
     bunkhouseLevel = 1,
+    hydrationState = 'hydrated',
   } = params;
 
   const clock = getCircadianClock(timestamp, epochStart);
@@ -405,6 +411,13 @@ export function getWorkerScheduleTelemetry(params: {
     speedMultiplier *= 1.10; // +10% Appreciated Staff modifier
   }
 
+  // Hydration Metabolism Modifier
+  if (hydrationState === 'dehydrated') {
+    speedMultiplier *= 0.5; // -50% Dehydration Fatigue penalty
+  } else if (hydrationState === 'cold_infused') {
+    speedMultiplier *= 1.15; // +15% Cold-Infused Velocity Bonus
+  }
+
   const isOnDuty = Boolean(
     (phase === 'on_shift' || isOvertime) &&
     !isAdjusting &&
@@ -422,8 +435,25 @@ export function getWorkerScheduleTelemetry(params: {
     worker?.isHired &&
     worker?.moraleTier !== 'striking' &&
     worker?.moraleTier !== 'deserted' &&
-    worker?.moraleTier !== 'sabbatical'
+    worker?.moraleTier !== 'sabbatical' &&
+    hydrationState !== 'dehydrated' // Cannot sprint to emergencies while dehydrated
   );
+
+  let hydrationBadgeEmoji = '🥛';
+  let hydrationBadgeText = 'Hydrated';
+  if (hydrationState === 'cold_infused') {
+    hydrationBadgeEmoji = '🧊';
+    hydrationBadgeText = 'Cold-Infused (+15%)';
+  } else if (hydrationState === 'dehydrated') {
+    hydrationBadgeEmoji = '🥵';
+    hydrationBadgeText = 'Thirsty (50% Spd)';
+  }
+
+  if (hydrationState === 'dehydrated' && phase === 'on_shift') {
+    dialogueSnippet = 'Parched and sluggish! Need clean water from the canteen or gravity tower.';
+  } else if (hydrationState === 'cold_infused' && phase === 'on_shift') {
+    dialogueSnippet = 'Invigorated by chilled citrus tea! Working at peak velocity with full heatwave immunity.';
+  }
 
   return {
     shiftType,
@@ -447,6 +477,9 @@ export function getWorkerScheduleTelemetry(params: {
     overtimeSnackName,
     speedMultiplier,
     dialogueSnippet,
+    hydrationState,
+    hydrationBadgeEmoji,
+    hydrationBadgeText,
   };
 }
 

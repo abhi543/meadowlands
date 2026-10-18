@@ -23,6 +23,7 @@ import {
   type ShiftType,
   SHIFT_DEFINITIONS,
 } from '@/game/shiftEngine';
+import { evaluateHydrationTelemetry } from '@/game/hydrationEngine';
 import {
   WORKER_UPKEEP_ROSTER,
   calculateStaffUpkeep,
@@ -116,6 +117,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     level,
     farmEpochStart,
     bunkhouse,
+    hydrology,
     hireUnifiedWorker,
     bulkUpgradeUnifiedWorker,
     toggleUnifiedWorkerMode,
@@ -143,6 +145,14 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     payrollVaultCoins,
     staffPantry
   );
+
+  const ambientTemp = hydrology?.weatherState?.temperatureC ?? 22;
+  const currentHydration = evaluateHydrationTelemetry({
+    temperatureC: ambientTemp,
+    canteenLiters: bunkhouse?.canteenLiters ?? 60,
+    towerLiters: hydrology?.towerLiters ?? 0,
+    hasColdBeverage: (bunkhouse?.coldInfusedDrinks ?? 0) > 0,
+  });
 
   const division = WORKER_DIVISIONS[activeDivision];
   const hiredCount = Object.values(unifiedWorkers).filter(w => w.isHired).length;
@@ -320,6 +330,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
             timestamp: now,
             epochStart: farmEpochStart,
             bunkhouseLevel: bunkhouse?.level || 1,
+            hydrationState: currentHydration.state,
           });
 
           // Filter by shift if shiftFilter is active
@@ -381,6 +392,26 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                       {worker.isHired && worker.isPaused && (
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/40 whitespace-nowrap">
                           ⏸️ Paused
+                        </span>
+                      )}
+                      {worker.isHired && schedule.hydrationBadgeText && (
+                        <span
+                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border whitespace-nowrap ${
+                            schedule.hydrationState === 'cold_infused'
+                              ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-400/50 animate-pulse'
+                              : schedule.hydrationState === 'dehydrated'
+                              ? 'bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-500/50 animate-pulse'
+                              : 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-400/30'
+                          }`}
+                          title={
+                            schedule.hydrationState === 'dehydrated'
+                              ? 'Thirsty! -50% work speed penalty due to water deficit in Canteen/Tower.'
+                              : schedule.hydrationState === 'cold_infused'
+                              ? 'Cold-Infused! +15% work velocity & 100% heatwave immunity.'
+                              : 'Hydrated! Operating at 100% standard speed.'
+                          }
+                        >
+                          {schedule.hydrationBadgeEmoji} {schedule.hydrationBadgeText}
                         </span>
                       )}
                       {worker.isHired && (

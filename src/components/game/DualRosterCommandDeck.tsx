@@ -7,6 +7,7 @@ import {
   getWorkerScheduleTelemetry,
   type ShiftType,
 } from '@/game/shiftEngine';
+import { evaluateHydrationTelemetry } from '@/game/hydrationEngine';
 import { WORKER_REGISTRY, type WorkerRole } from '@/game/data';
 import { LIVESTOCK_WORKER_ROSTER } from '@/data/workerCatalog';
 import { WORKER_UPKEEP_ROSTER } from '@/data/workerUpkeep';
@@ -17,6 +18,7 @@ export function DualRosterCommandDeck() {
     specialistWorkers,
     farmEpochStart,
     bunkhouse,
+    hydrology,
     payrollVaultCoins,
     staffPantry,
     assignWorkerShift,
@@ -90,6 +92,15 @@ export function DualRosterCommandDeck() {
   const slotA = morningWorkers[0] || null;
   const slotB = nightWorkers[0] || null;
 
+  // Climate & Hydration Telemetry
+  const ambientTemp = hydrology?.weatherState?.temperatureC ?? 22;
+  const currentHydration = evaluateHydrationTelemetry({
+    temperatureC: ambientTemp,
+    canteenLiters: bunkhouse?.canteenLiters ?? 60,
+    towerLiters: hydrology?.towerLiters ?? 0,
+    hasColdBeverage: (bunkhouse?.coldInfusedDrinks ?? 0) > 0,
+  });
+
   // Telemetry for Slot A & Slot B
   const slotATelemetry = slotA
     ? getWorkerScheduleTelemetry({
@@ -99,6 +110,7 @@ export function DualRosterCommandDeck() {
         timestamp: now,
         epochStart: farmEpochStart,
         bunkhouseLevel: bunkhouse?.level || 1,
+        hydrationState: currentHydration.state,
       })
     : null;
 
@@ -110,6 +122,7 @@ export function DualRosterCommandDeck() {
         timestamp: now,
         epochStart: farmEpochStart,
         bunkhouseLevel: bunkhouse?.level || 1,
+        hydrationState: currentHydration.state,
       })
     : null;
 
@@ -122,6 +135,7 @@ export function DualRosterCommandDeck() {
       timestamp: now,
       epochStart: farmEpochStart,
       bunkhouseLevel: bunkhouse?.level || 1,
+      hydrationState: currentHydration.state,
     });
     return tele.canCallOvertime;
   });
@@ -210,23 +224,39 @@ export function DualRosterCommandDeck() {
           </div>
 
           {/* Live Status Pill */}
-          <div className="pt-1 flex items-center justify-between text-xs">
+          <div className="pt-1 flex items-center justify-between text-xs flex-wrap gap-2">
             <span className="text-stone-400 font-medium text-[11px]">Roster Status:</span>
-            {slotA && slotATelemetry ? (
-              clock.activeShift === 'morning' ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[11px]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>🟢 In Field (Ends in {slotATelemetry.timeRemainingFormatted})</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {slotA && slotATelemetry?.hydrationBadgeText && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    slotATelemetry.hydrationState === 'cold_infused'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 animate-pulse'
+                      : slotATelemetry.hydrationState === 'dehydrated'
+                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 animate-pulse'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-400/30'
+                  }`}
+                >
+                  <span>{slotATelemetry.hydrationBadgeEmoji}</span>
+                  <span>{slotATelemetry.hydrationBadgeText}</span>
                 </span>
+              )}
+              {slotA && slotATelemetry ? (
+                clock.activeShift === 'morning' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>🟢 In Field (Ends in {slotATelemetry.timeRemainingFormatted})</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
+                    <span>🌙</span>
+                    <span>Sleeping in Bunkhouse (Wakes at 06:00)</span>
+                  </span>
+                )
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
-                  <span>🌙</span>
-                  <span>Sleeping in Bunkhouse (Wakes at 06:00)</span>
-                </span>
-              )
-            ) : (
-              <span className="text-stone-500 text-[11px] italic">Unassigned slot</span>
-            )}
+                <span className="text-stone-500 text-[11px] italic">Unassigned slot</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -271,23 +301,39 @@ export function DualRosterCommandDeck() {
           </div>
 
           {/* Live Status Pill */}
-          <div className="pt-1 flex items-center justify-between text-xs">
+          <div className="pt-1 flex items-center justify-between text-xs flex-wrap gap-2">
             <span className="text-stone-400 font-medium text-[11px]">Roster Status:</span>
-            {slotB && slotBTelemetry ? (
-              clock.activeShift === 'night' ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[11px]">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>🟢 In Field (Ends in {slotBTelemetry.timeRemainingFormatted})</span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {slotB && slotBTelemetry?.hydrationBadgeText && (
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    slotBTelemetry.hydrationState === 'cold_infused'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 animate-pulse'
+                      : slotBTelemetry.hydrationState === 'dehydrated'
+                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 animate-pulse'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-400/30'
+                  }`}
+                >
+                  <span>{slotBTelemetry.hydrationBadgeEmoji}</span>
+                  <span>{slotBTelemetry.hydrationBadgeText}</span>
                 </span>
+              )}
+              {slotB && slotBTelemetry ? (
+                clock.activeShift === 'night' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>🟢 In Field (Ends in {slotBTelemetry.timeRemainingFormatted})</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
+                    <span>🌙</span>
+                    <span>Sleeping in Bunkhouse (Wakes at 06:00)</span>
+                  </span>
+                )
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-[11px]">
-                  <span>🌙</span>
-                  <span>Sleeping in Bunkhouse (Wakes at 06:00)</span>
-                </span>
-              )
-            ) : (
-              <span className="text-stone-500 text-[11px] italic">Unassigned slot</span>
-            )}
+                <span className="text-stone-500 text-[11px] italic">Unassigned slot</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

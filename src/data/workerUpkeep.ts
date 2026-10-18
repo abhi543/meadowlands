@@ -63,6 +63,7 @@ export const COMMISSARY_FOOD_ITEMS: Record<string, FoodItemMeta> = {
   crab_bisque: { id: 'crab_bisque', name: 'Crab Bisque', icon: '🍲', category: 'meal', categoryLabel: 'Meals' },
   golden_cake: { id: 'golden_cake', name: 'Golden Cake', icon: '🎂', category: 'meal', categoryLabel: 'Meals' },
   honey: { id: 'honey', name: 'Raw Honey', icon: '🍯', category: 'meal', categoryLabel: 'Meals' },
+  citrus_tea: { id: 'citrus_tea', name: 'Citrus Herb Tea', icon: '🍵', category: 'meal', categoryLabel: 'Beverages' },
 };
 
 // 2. Upkeep configurations for all workers

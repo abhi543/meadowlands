@@ -8,6 +8,11 @@ import {
   getCircadianClock,
   type ShiftType,
 } from '@/game/shiftEngine';
+import {
+  evaluateHydrationTelemetry,
+  type WorkerHydrationState,
+  CANTEEN_DEFAULT_CAPACITY_LITERS,
+} from '@/game/hydrationEngine';
 import { WORKER_REGISTRY } from '@/game/data';
 import { LIVESTOCK_WORKER_ROSTER } from '@/data/workerCatalog';
 import { WORKER_UPKEEP_ROSTER } from '@/data/workerUpkeep';
@@ -18,12 +23,17 @@ export function BunkhouseFacilityPanel() {
     coins,
     barn,
     bunkhouse,
+    hydrology,
     farmEpochStart,
     unifiedWorkers,
     specialistWorkers,
     upgradeBunkhouse,
     expandBunkhouseCapacity,
     callEmergencyOvertime,
+    refillStaffCanteen,
+    stockColdBeverage,
+    toggleNightWatchWaterAutomation,
+    toggleCanteenAutoRefill,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -36,6 +46,24 @@ export function BunkhouseFacilityPanel() {
   const capacity = bunkhouse?.capacity || 8;
   const currentTierMeta = BUNKHOUSE_TIERS[currentLevel];
   const nextTierMeta = BUNKHOUSE_TIERS[currentLevel + 1];
+
+  // Hydration & Thirst Mechanics Telemetry
+  const ambientTemp = hydrology?.weatherState?.temperatureC ?? 22;
+  const canteenLiters = bunkhouse?.canteenLiters ?? 60;
+  const canteenCap = bunkhouse?.canteenCapacityLiters ?? CANTEEN_DEFAULT_CAPACITY_LITERS;
+  const towerLiters = hydrology?.towerLiters ?? 0;
+  const towerCap = hydrology?.towerCapacityLiters ?? 800;
+  const coldInfusedDrinks = bunkhouse?.coldInfusedDrinks ?? 0;
+  const teaInBarn = barn.citrus_tea ?? 0;
+  const autoRefillTower = bunkhouse?.autoRefillFromTower ?? true;
+  const nightWatchAuto = bunkhouse?.nightWatchAutomation ?? true;
+
+  const hydrationTelemetry = evaluateHydrationTelemetry({
+    temperatureC: ambientTemp,
+    canteenLiters,
+    towerLiters,
+    hasColdBeverage: coldInfusedDrinks > 0,
+  });
 
   // Scan all hired workers and identify those in sleep or recreation
   interface BunkWorkerEntry {
@@ -52,6 +80,9 @@ export function BunkhouseFacilityPanel() {
     overtimeCostCoins: number;
     dialogue: string;
     isSpecialist: boolean;
+    hydrationState: WorkerHydrationState;
+    hydrationBadgeEmoji?: string;
+    hydrationBadgeText?: string;
   }
 
   const restingWorkers: BunkWorkerEntry[] = [];
@@ -71,6 +102,7 @@ export function BunkhouseFacilityPanel() {
           timestamp: now,
           epochStart: farmEpochStart,
           bunkhouseLevel: currentLevel,
+          hydrationState: hydrationTelemetry.state,
         });
 
         if (telemetry.phase === 'sleeping' || telemetry.phase === 'recreation') {
@@ -88,6 +120,9 @@ export function BunkhouseFacilityPanel() {
             overtimeCostCoins: telemetry.overtimeCostCoins,
             dialogue: telemetry.dialogueSnippet,
             isSpecialist: false,
+            hydrationState: hydrationTelemetry.state,
+            hydrationBadgeEmoji: telemetry.hydrationBadgeEmoji,
+            hydrationBadgeText: telemetry.hydrationBadgeText,
           });
         }
       }
@@ -108,13 +143,14 @@ export function BunkhouseFacilityPanel() {
           timestamp: now,
           epochStart: farmEpochStart,
           bunkhouseLevel: currentLevel,
+          hydrationState: hydrationTelemetry.state,
         });
 
         if (telemetry.phase === 'sleeping' || telemetry.phase === 'recreation') {
           restingWorkers.push({
             id: sId,
             name: meta?.name || sId,
-            emoji: meta?.emoji || '🐾',
+            emoji: meta?.avatar || '🐾',
             shift: telemetry.shiftType,
             phase: telemetry.phase,
             stamina: telemetry.stamina,
@@ -125,6 +161,9 @@ export function BunkhouseFacilityPanel() {
             overtimeCostCoins: telemetry.overtimeCostCoins,
             dialogue: telemetry.dialogueSnippet,
             isSpecialist: true,
+            hydrationState: hydrationTelemetry.state,
+            hydrationBadgeEmoji: telemetry.hydrationBadgeEmoji,
+            hydrationBadgeText: telemetry.hydrationBadgeText,
           });
         }
       }
@@ -256,6 +295,182 @@ export function BunkhouseFacilityPanel() {
         </div>
       </div>
 
+      {/* Worker Hydration Metabolism & Thirst Command Deck */}
+      <div className="rounded-xl border border-sky-600/30 bg-gradient-to-b from-stone-900/90 via-sky-950/20 to-stone-900/90 p-4 space-y-4 shadow-lg">
+        {/* Header + Status Pill */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl animate-bounce">🚰</span>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-extrabold text-sm sm:text-base text-sky-300 tracking-wide">
+                  Staff Hydration & Climate-Coupled Thirst Station
+                </h4>
+                <span
+                  className={`text-[10px] font-black px-2 py-0.5 rounded-full border shadow-xs ${
+                    hydrationTelemetry.state === 'cold_infused'
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/60 animate-pulse'
+                      : hydrationTelemetry.state === 'dehydrated'
+                      ? 'bg-amber-500/25 text-amber-300 border-amber-500/60 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                  }`}
+                >
+                  {hydrationTelemetry.badgeEmoji} {hydrationTelemetry.badgeText}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-0.5">
+                Staff drink clean water from the estate's closed-loop reservoirs. Soft performance penalties prevent death spirals.
+              </p>
+            </div>
+          </div>
+
+          {/* Climate & Perspiration Rate Badge */}
+          <div className="flex items-center gap-3 bg-stone-950/80 border border-sky-500/30 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+            <div className="text-right">
+              <div className="text-[9px] uppercase font-bold text-sky-400">
+                Ambient Climate: {ambientTemp.toFixed(1)}°C
+              </div>
+              <div className="text-xs font-mono font-bold text-stone-200">
+                {hydrationTelemetry.climateLabel} ({hydrationTelemetry.intakeMultiplier}x Perspiration)
+              </div>
+            </div>
+            <span className="text-xl">
+              {ambientTemp > 38 ? '🔥' : ambientTemp >= 27 ? '☀️' : '🌤️'}
+            </span>
+          </div>
+        </div>
+
+        {/* Dual Reservoir Gauges & Beverage Cold-Storage */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* 1. Bunkhouse Canteen Cooler */}
+          <div className="p-3 rounded-xl bg-stone-900/80 border border-sky-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-sky-300 flex items-center gap-1.5">
+                <span>🥛</span>
+                <span>Staff Canteen Cooler</span>
+              </span>
+              <span className="font-mono text-stone-300">
+                {Math.round(canteenLiters)} / {canteenCap} L
+              </span>
+            </div>
+            <div className="w-full h-2 bg-stone-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  canteenLiters <= 0
+                    ? 'bg-rose-500'
+                    : canteenLiters < 25
+                    ? 'bg-amber-400'
+                    : 'bg-gradient-to-r from-sky-400 to-cyan-400'
+                }`}
+                style={{ width: `${Math.min(100, (canteenLiters / canteenCap) * 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-stone-400">Primary staff dispenser</span>
+              <button
+                onClick={() => refillStaffCanteen(50)}
+                disabled={towerLiters <= 0 || canteenLiters >= canteenCap}
+                className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-600/30 hover:bg-sky-600/50 text-sky-200 border border-sky-500/40 disabled:opacity-40 transition-all cursor-pointer"
+                title="Transfer +50L clean water from Elevated Gravity Tower"
+              >
+                +50L from Tower
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Elevated Gravity Tower */}
+          <div className="p-3 rounded-xl bg-stone-900/80 border border-blue-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-blue-300 flex items-center gap-1.5">
+                <span>🗼</span>
+                <span>Elevated Gravity Tower</span>
+              </span>
+              <span className="font-mono text-stone-300">
+                {Math.round(towerLiters)} / {towerCap} L
+              </span>
+            </div>
+            <div className="w-full h-2 bg-stone-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  towerLiters <= 0
+                    ? 'bg-rose-500'
+                    : 'bg-gradient-to-r from-blue-500 to-indigo-500'
+                }`}
+                style={{ width: `${Math.min(100, (towerLiters / towerCap) * 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1 text-[10px] text-stone-400">
+              <span>Automatic backup source</span>
+              <span className={towerLiters > 0 ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-bold'}>
+                {towerLiters > 0 ? 'Online & Flowing' : 'Tower Empty (0L)'}
+              </span>
+            </div>
+          </div>
+
+          {/* 3. Chilled Cold Beverages */}
+          <div className="p-3 rounded-xl bg-stone-900/80 border border-cyan-500/30 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold">
+              <span className="text-cyan-300 flex items-center gap-1.5">
+                <span>🧊</span>
+                <span>Cold Citrus Tea Cooler</span>
+              </span>
+              <span className="font-mono text-cyan-200 font-black">
+                {Math.round(coldInfusedDrinks)} Servings
+              </span>
+            </div>
+            <div className="text-[10px] text-stone-400">
+              Grants <b className="text-cyan-300">+15% Work Velocity</b> & <b>100% Heatwave Immunity</b>.
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[10px] text-stone-400">Barn: {teaInBarn}x Tea</span>
+              <button
+                onClick={() => stockColdBeverage(5)}
+                disabled={teaInBarn <= 0}
+                className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/40 disabled:opacity-40 transition-all cursor-pointer"
+                title="Stock +5 Citrus Herb Tea portions from Barn"
+              >
+                +5 Chilled Drinks
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Automation Toggles */}
+        <div className="flex items-center justify-between flex-wrap gap-2 pt-2 border-t border-stone-800 text-xs">
+          <div className="flex items-center gap-4 flex-wrap">
+            {/* Night Watch Auto */}
+            <button
+              onClick={() => toggleNightWatchWaterAutomation()}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-stone-950/80 border border-stone-800 hover:border-sky-500/50 transition-all cursor-pointer"
+            >
+              <span className={nightWatchAuto ? 'text-emerald-400 font-bold' : 'text-stone-500'}>
+                {nightWatchAuto ? '☑' : '☐'}
+              </span>
+              <span className="text-[11px] text-stone-300 font-medium">
+                🌙 Night Watch Replenishment Automation
+              </span>
+            </button>
+
+            {/* Tower Auto-Refill */}
+            <button
+              onClick={() => toggleCanteenAutoRefill()}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-stone-950/80 border border-stone-800 hover:border-sky-500/50 transition-all cursor-pointer"
+            >
+              <span className={autoRefillTower ? 'text-emerald-400 font-bold' : 'text-stone-500'}>
+                {autoRefillTower ? '☑' : '☐'}
+              </span>
+              <span className="text-[11px] text-stone-300 font-medium">
+                🗼 Gravity Tower Auto-Top-Off (&lt;30%)
+              </span>
+            </button>
+          </div>
+
+          <div className="text-[10px] text-stone-400 font-mono">
+            Intake: {hydrationTelemetry.intakeLitersPerShift.toFixed(1)} L / 8h shift
+          </div>
+        </div>
+      </div>
+
       {/* Sleeping & Resting Staff Roster */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -276,6 +491,7 @@ export function BunkhouseFacilityPanel() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {restingWorkers.map(w => {
               const isSleeping = w.phase === 'sleeping';
+              const isDehydrated = w.hydrationState === 'dehydrated';
               return (
                 <div
                   key={w.id}
@@ -339,8 +555,21 @@ export function BunkhouseFacilityPanel() {
                       </div>
                     </div>
 
-                    {/* Well-Rested Buff or Exhausted State Alert */}
+                    {/* Hydration & Rest Buffs / Debuffs */}
                     <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                      {w.hydrationBadgeText && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border ${
+                            w.hydrationState === 'cold_infused'
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 animate-pulse'
+                              : w.hydrationState === 'dehydrated'
+                              ? 'bg-amber-500/25 text-amber-300 border-amber-500/50 animate-pulse'
+                              : 'bg-sky-500/15 text-sky-300 border-sky-400/30'
+                          }`}
+                        >
+                          {w.hydrationBadgeEmoji} {w.hydrationBadgeText}
+                        </span>
+                      )}
                       {w.wellRested && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                           ✨ Well-Rested (+15% Speed)
@@ -358,16 +587,20 @@ export function BunkhouseFacilityPanel() {
                   <div className="pt-2 border-t border-stone-800/80">
                     <button
                       onClick={() => callEmergencyOvertime(w.id)}
-                      disabled={!w.canCallOvertime}
+                      disabled={!w.canCallOvertime || isDehydrated}
                       className="w-full py-1 px-2 rounded-lg text-[10px] font-black bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 disabled:opacity-40 disabled:hover:bg-amber-500/20 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1"
                       title={
-                        w.isExhausted
+                        isDehydrated
+                          ? 'Worker is parched and dehydrated! Refill staff canteen or tower to restore sprint capacity.'
+                          : w.isExhausted
                           ? 'Worker is exhausted from consecutive overtime shifts!'
                           : `Wake worker immediately for 4h shift (-🪙${w.overtimeCostCoins} coins + snack)`
                       }
                     >
-                      <span>☕</span>
-                      <span>Call Overtime (-🪙{w.overtimeCostCoins})</span>
+                      <span>{isDehydrated ? '🥵' : '☕'}</span>
+                      <span>
+                        {isDehydrated ? 'Dehydrated (No Sprint)' : `Call Overtime (-🪙${w.overtimeCostCoins})`}
+                      </span>
                     </button>
                   </div>
                 </div>
