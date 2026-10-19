@@ -242,6 +242,17 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   grand_prismatic_jam:     { stage: 1, inputs: [{ id: 'strawberry_prismatic', qty: 1 }, { id: 'honey_comb', qty: 2 }], outputQty: 1, timeSec: 120, name: 'Grand Prismatic Jam', icon: '🍯🌈' },
   silver_woven_quilt:      { stage: 1, inputs: [{ id: 'cotton_silver', qty: 2 }, { id: 'yarn', qty: 2 }], outputQty: 1, timeSec: 90, name: 'Silverweave Bedspread', icon: '🧶✨' },
   prismatic_silk_tapestry: { stage: 1, inputs: [{ id: 'cotton_prismatic', qty: 2 }, { id: 'silk', qty: 1 }], outputQty: 1, timeSec: 150, name: 'Prismatic Silk Tapestry', icon: '🧵🌈' },
+
+  // Gourmet Seafood Masterworks
+  crispy_fried_catfish:    { stage: 2, inputs: [{ id: 'catfish', qty: 1 }, { id: 'corn', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Crispy Fried Catfish', icon: '🐟🌽' },
+  herb_grilled_trout:      { stage: 2, inputs: [{ id: 'trout', qty: 1 }, { id: 'wheat', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Herb-Grilled Trout', icon: '🐟🌿' },
+  steamed_mud_crab:        { stage: 2, inputs: [{ id: 'mud_crab', qty: 1 }, { id: 'carrot', qty: 2 }], outputQty: 1, timeSec: 75, name: 'Spiced Steamed Mud Crab', icon: '🦀✨' },
+  pan_seared_salmon:       { stage: 2, inputs: [{ id: 'salmon', qty: 1 }, { id: 'honey', qty: 1 }], outputQty: 1, timeSec: 90, name: 'Pan-Seared Honey Salmon', icon: '🍣🍯' },
+  smoked_tuna_steak:       { stage: 2, inputs: [{ id: 'tuna', qty: 1 }, { id: 'soybean', qty: 2 }], outputQty: 1, timeSec: 100, name: 'Smoked Tuna Steak', icon: '🐟🔥' },
+  golden_trout_meuniere:   { stage: 2, inputs: [{ id: 'golden_trout', qty: 1 }, { id: 'rich_butter', qty: 1 }], outputQty: 1, timeSec: 110, name: 'Gilded Trout Meunière', icon: '🐟⭐' },
+  imperial_sturgeon_caviar:{ stage: 2, inputs: [{ id: 'sturgeon', qty: 1 }, { id: 'bread', qty: 1 }], outputQty: 1, timeSec: 120, name: 'Imperial Sturgeon Caviar', icon: '🥣⭐' },
+  marlin_tartare:          { stage: 2, inputs: [{ id: 'marlin', qty: 1 }, { id: 'citrus_tea', qty: 1 }], outputQty: 1, timeSec: 140, name: 'Grand Marlin Tartare', icon: '🐟👑' },
+  luminescent_chowder:     { stage: 2, inputs: [{ id: 'lanternfish', qty: 1 }, { id: 'milk_rich_cream', qty: 1 }, { id: 'pumpkin', qty: 1 }], outputQty: 1, timeSec: 180, name: 'Luminescent Abyss Chowder', icon: '🍲🌈' },
 };
 
 // Internal computed memoization cache

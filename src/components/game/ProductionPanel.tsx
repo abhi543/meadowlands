@@ -1,7 +1,7 @@
 'use client';
 
-import { useGameStore, isCropItem } from '@/game/store';
-import { BUILDINGS, PRODUCTS, CROPS, WORKER_REGISTRY, type BuildingId, type RecipeDef, type WorkerRole } from '@/game/data';
+import { useGameStore, isCropItem, getStorageAvailableStock } from '@/game/store';
+import { BUILDINGS, PRODUCTS, CROPS, FISH_SPECIES, WORKER_REGISTRY, type BuildingId, type RecipeDef, type WorkerRole } from '@/game/data';
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { getItemEconomicProfile } from '@/game/pricingEngine';
@@ -83,6 +83,16 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId.endsWith('_silver')) return 'Harvest Silver Crop from Hydrated Farm Soil';
   if (itemId.endsWith('_gold')) return 'Harvest Gold Crop from Optimal Soil (40-80% Moisture)';
   if (itemId.endsWith('_prismatic')) return 'Harvest Prismatic Crop (Rainbow Sunshower bonus)';
+  // Fish Species Hints
+  if (itemId === 'catfish') return 'Catch in Stillwater or River (Fishery)';
+  if (itemId === 'trout') return 'Catch in River (Fishery)';
+  if (itemId === 'mud_crab') return 'Catch in Estuary or Pond (Fishery)';
+  if (itemId === 'salmon') return 'Catch in River Upstream (Fishery)';
+  if (itemId === 'tuna') return 'Catch in Ocean Deep (Fishery)';
+  if (itemId === 'golden_trout') return 'Catch in Alpine Waters (Fishery)';
+  if (itemId === 'sturgeon') return 'Catch in Ancient Waters (Fishery)';
+  if (itemId === 'marlin') return 'Catch in Ocean Deep (Rare, Fishery)';
+  if (itemId === 'lanternfish') return 'Catch in Abyssal Trench (Legendary, Fishery)';
   // Territory-locked items
   if (itemId === 'iron_ore' || itemId === 'gold_ore') return 'Mine at Quarry Ridge (Parcel required)';
   if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';
@@ -94,21 +104,21 @@ function getIngredientSourceHint(itemId: string): string {
 function getItemEmoji(itemId: string): string {
   if (itemId in CROPS) return CROPS[itemId as keyof typeof CROPS].emoji;
   if (itemId in PRODUCTS) return PRODUCTS[itemId as keyof typeof PRODUCTS].emoji;
+  if (itemId in FISH_SPECIES) return (FISH_SPECIES as any)[itemId].emoji;
   return '\u{1F4E6}';
 }
 
 function getItemName(itemId: string): string {
   if (itemId in CROPS) return CROPS[itemId as keyof typeof CROPS].name;
   if (itemId in PRODUCTS) return PRODUCTS[itemId as keyof typeof PRODUCTS].name;
+  if (itemId in FISH_SPECIES) return (FISH_SPECIES as any)[itemId].name;
   if (itemId === 'feed') return 'Feed';
   return itemId;
 }
 
 function canCraftRecipe(recipe: RecipeDef, silo: Record<string, number>, barn: Record<string, number>): boolean {
   for (const input of recipe.inputs) {
-    const isCrop = isCropItem(input.productId);
-    const storage = isCrop ? silo : barn;
-    const have = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+    const have = getStorageAvailableStock(silo, barn, input.productId);
     if (have < input.qty) return false;
   }
   return true;
@@ -117,9 +127,7 @@ function canCraftRecipe(recipe: RecipeDef, silo: Record<string, number>, barn: R
 function calcMaxCraftable(recipe: RecipeDef, silo: Record<string, number>, barn: Record<string, number>): number {
   let max = Infinity;
   for (const input of recipe.inputs) {
-    const isCrop = isCropItem(input.productId);
-    const storage = isCrop ? silo : barn;
-    const available = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+    const available = getStorageAvailableStock(silo, barn, input.productId);
     max = Math.min(max, Math.floor(available / input.qty));
   }
   return max === Infinity ? 0 : max;
@@ -441,9 +449,7 @@ export function ProductionPanel() {
 
                 const missingIngredients: { name: string; emoji: string; have: number; need: number; source: string }[] = [];
                 for (const inp of recipe.inputs) {
-                  const isCrop = isCropItem(inp.productId);
-                  const storage = isCrop ? silo : barn;
-                  const have = (storage[inp.productId] || 0) + (inp.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+                  const have = getStorageAvailableStock(silo, barn, inp.productId);
                   if (have < inp.qty) {
                     missingIngredients.push({ name: getItemName(inp.productId), emoji: getItemEmoji(inp.productId), have, need: inp.qty, source: getIngredientSourceHint(inp.productId) });
                   }

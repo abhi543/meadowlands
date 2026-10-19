@@ -88,6 +88,17 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   prismatic_silk_tapestry: { id: 'prismatic_silk_tapestry', name: 'Prismatic Silk Tapestry', icon: '🧵🌈', category: 'artisan', baseValue: 350, isEdibleFeed: false },
   silver_woven_quilt: { id: 'silver_woven_quilt', name: 'Silverweave Bedspread', icon: '🧶✨', category: 'artisan', baseValue: 140, isEdibleFeed: false },
 
+  // Gourmet Seafood Masterworks
+  crispy_fried_catfish: { id: 'crispy_fried_catfish', name: 'Crispy Fried Catfish', icon: '🐟🌽', category: 'artisan', baseValue: 55, isEdibleFeed: false },
+  herb_grilled_trout: { id: 'herb_grilled_trout', name: 'Herb-Grilled Trout', icon: '🐟🌿', category: 'artisan', baseValue: 48, isEdibleFeed: false },
+  steamed_mud_crab: { id: 'steamed_mud_crab', name: 'Spiced Steamed Mud Crab', icon: '🦀✨', category: 'artisan', baseValue: 65, isEdibleFeed: false },
+  pan_seared_salmon: { id: 'pan_seared_salmon', name: 'Pan-Seared Honey Salmon', icon: '🍣🍯', category: 'artisan', baseValue: 85, isEdibleFeed: false },
+  smoked_tuna_steak: { id: 'smoked_tuna_steak', name: 'Smoked Tuna Steak', icon: '🐟🔥', category: 'artisan', baseValue: 95, isEdibleFeed: false },
+  golden_trout_meuniere: { id: 'golden_trout_meuniere', name: 'Gilded Trout Meunière', icon: '🐟⭐', category: 'artisan', baseValue: 135, isEdibleFeed: false },
+  imperial_sturgeon_caviar: { id: 'imperial_sturgeon_caviar', name: 'Imperial Sturgeon Caviar', icon: '🥣⭐', category: 'artisan', baseValue: 210, isEdibleFeed: false },
+  marlin_tartare: { id: 'marlin_tartare', name: 'Grand Marlin Tartare', icon: '🐟👑', category: 'artisan', baseValue: 240, isEdibleFeed: false },
+  luminescent_chowder: { id: 'luminescent_chowder', name: 'Luminescent Abyss Chowder', icon: '🍲🌈', category: 'artisan', baseValue: 380, isEdibleFeed: false },
+
   // Animal Products
   egg: { id: 'egg', name: 'Egg', icon: '🥚', category: 'animal_product', baseValue: 5, isEdibleFeed: false },
   egg_blue: { id: 'egg_blue', name: 'Blue Egg', icon: '🥚', category: 'animal_product', baseValue: 8, isEdibleFeed: false },

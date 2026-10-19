@@ -306,7 +306,11 @@ export type ProductId =
   | 'cotton_silver' | 'cotton_gold' | 'cotton_prismatic'
   // Gourmet Culinary & Premium Artisan Products
   | 'golden_cornbread' | 'prismatic_berry_tart' | 'glazed_silver_carrots'
-  | 'royal_pumpkin_pottage' | 'grand_prismatic_jam' | 'prismatic_silk_tapestry' | 'silver_woven_quilt';
+  | 'royal_pumpkin_pottage' | 'grand_prismatic_jam' | 'prismatic_silk_tapestry' | 'silver_woven_quilt'
+  // Gourmet Seafood Culinary Products
+  | 'crispy_fried_catfish' | 'herb_grilled_trout' | 'steamed_mud_crab'
+  | 'pan_seared_salmon' | 'smoked_tuna_steak' | 'golden_trout_meuniere'
+  | 'imperial_sturgeon_caviar' | 'marlin_tartare' | 'luminescent_chowder';
 
 export interface ProductDef {
   id: ProductId;
@@ -405,6 +409,17 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   grand_prismatic_jam:     { id: 'grand_prismatic_jam',     name: 'Grand Prismatic Jam',     emoji: '🍯🌈', category: 'manufactured', sellPrice: 280 },
   prismatic_silk_tapestry: { id: 'prismatic_silk_tapestry', name: 'Prismatic Silk Tapestry', emoji: '🧵🌈', category: 'manufactured', sellPrice: 350 },
   silver_woven_quilt:      { id: 'silver_woven_quilt',      name: 'Silverweave Bedspread',   emoji: '🧶✨', category: 'manufactured', sellPrice: 140 },
+
+  // --- Gourmet Seafood Culinary Products ---
+  crispy_fried_catfish:    { id: 'crispy_fried_catfish',    name: 'Crispy Fried Catfish',    emoji: '🐟🌽', category: 'manufactured', sellPrice: 55 },
+  herb_grilled_trout:      { id: 'herb_grilled_trout',      name: 'Herb-Grilled Trout',      emoji: '🐟🌿', category: 'manufactured', sellPrice: 48 },
+  steamed_mud_crab:        { id: 'steamed_mud_crab',        name: 'Spiced Steamed Mud Crab', emoji: '🦀✨', category: 'manufactured', sellPrice: 65 },
+  pan_seared_salmon:       { id: 'pan_seared_salmon',       name: 'Pan-Seared Honey Salmon', emoji: '🍣🍯', category: 'manufactured', sellPrice: 85 },
+  smoked_tuna_steak:       { id: 'smoked_tuna_steak',       name: 'Smoked Tuna Steak',       emoji: '🐟🔥', category: 'manufactured', sellPrice: 95 },
+  golden_trout_meuniere:   { id: 'golden_trout_meuniere',   name: 'Gilded Trout Meunière',   emoji: '🐟⭐', category: 'manufactured', sellPrice: 135 },
+  imperial_sturgeon_caviar:{ id: 'imperial_sturgeon_caviar',name: 'Imperial Sturgeon Caviar',emoji: '🥣⭐', category: 'manufactured', sellPrice: 210 },
+  marlin_tartare:          { id: 'marlin_tartare',          name: 'Grand Marlin Tartare',    emoji: '🐟👑', category: 'manufactured', sellPrice: 240 },
+  luminescent_chowder:     { id: 'luminescent_chowder',     name: 'Luminescent Abyss Chowder', emoji: '🍲🌈', category: 'manufactured', sellPrice: 380 },
 };
 
 // --- Production Buildings ---
@@ -464,6 +479,16 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_prismatic_tart', name: 'Prismatic Berry Tart', emoji: '🥧🌈', inputs: [{ productId: 'strawberry_prismatic', qty: 1 }, { productId: 'wheat_silver', qty: 2 }, { productId: 'honey', qty: 1 }], output: { productId: 'prismatic_berry_tart', qty: 1 }, timeSec: 120 },
       { id: 'make_glazed_carrots', name: 'Glaze Silver Carrots', emoji: '🥕✨', inputs: [{ productId: 'carrot_silver', qty: 2 }, { productId: 'honey', qty: 1 }], output: { productId: 'glazed_silver_carrots', qty: 1 }, timeSec: 60 },
       { id: 'make_royal_pottage', name: 'Royal Pumpkin Pottage', emoji: '🍲👑', inputs: [{ productId: 'pumpkin_gold', qty: 1 }, { productId: 'milk_rich_cream', qty: 1 }], output: { productId: 'royal_pumpkin_pottage', qty: 1 }, timeSec: 90 },
+      // --- Gourmet Seafood Masterworks (Species-Specific Culinary Dishes) ---
+      { id: 'make_fried_catfish', name: 'Fry Crispy Catfish', emoji: '🐟🌽', inputs: [{ productId: 'catfish', qty: 1 }, { productId: 'corn', qty: 2 }], output: { productId: 'crispy_fried_catfish', qty: 1 }, timeSec: 60 },
+      { id: 'make_herb_trout', name: 'Grill Herb Trout', emoji: '🐟🌿', inputs: [{ productId: 'trout', qty: 1 }, { productId: 'wheat', qty: 2 }], output: { productId: 'herb_grilled_trout', qty: 1 }, timeSec: 60 },
+      { id: 'make_steamed_mud_crab', name: 'Steam Spiced Mud Crab', emoji: '🦀✨', inputs: [{ productId: 'mud_crab', qty: 1 }, { productId: 'carrot', qty: 2 }], output: { productId: 'steamed_mud_crab', qty: 1 }, timeSec: 75 },
+      { id: 'make_pan_seared_salmon', name: 'Pan-Sear Honey Salmon', emoji: '🍣🍯', inputs: [{ productId: 'salmon', qty: 1 }, { productId: 'honey', qty: 1 }], output: { productId: 'pan_seared_salmon', qty: 1 }, timeSec: 90 },
+      { id: 'make_smoked_tuna', name: 'Smoke Tuna Steak', emoji: '🐟🔥', inputs: [{ productId: 'tuna', qty: 1 }, { productId: 'soybean', qty: 2 }], output: { productId: 'smoked_tuna_steak', qty: 1 }, timeSec: 100 },
+      { id: 'make_golden_trout_meuniere', name: 'Pan-Fry Gilded Trout', emoji: '🐟⭐', inputs: [{ productId: 'golden_trout', qty: 1 }, { productId: 'rich_butter', qty: 1 }], output: { productId: 'golden_trout_meuniere', qty: 1 }, timeSec: 110 },
+      { id: 'make_sturgeon_caviar', name: 'Cure Imperial Caviar', emoji: '🥣⭐', inputs: [{ productId: 'sturgeon', qty: 1 }, { productId: 'bread', qty: 1 }], output: { productId: 'imperial_sturgeon_caviar', qty: 1 }, timeSec: 120 },
+      { id: 'make_marlin_tartare', name: 'Prepare Marlin Tartare', emoji: '🐟👑', inputs: [{ productId: 'marlin', qty: 1 }, { productId: 'citrus_tea', qty: 1 }], output: { productId: 'marlin_tartare', qty: 1 }, timeSec: 140 },
+      { id: 'make_luminescent_chowder', name: 'Stew Luminescent Chowder', emoji: '🍲🌈', inputs: [{ productId: 'lanternfish', qty: 1 }, { productId: 'milk_rich_cream', qty: 1 }, { productId: 'pumpkin', qty: 1 }], output: { productId: 'luminescent_chowder', qty: 1 }, timeSec: 180 },
     ],
   },
   dairy: {

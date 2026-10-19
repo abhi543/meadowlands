@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { CROPS, PRODUCTS } from '@/game/data';
+import { CROPS, PRODUCTS, FISH_SPECIES } from '@/game/data';
 import { useState, useEffect } from 'react';
 import { FavorShopView } from '@/components/game/FavorShopView';
 
@@ -86,6 +86,25 @@ export function ShopPanel() {
   const SHOP_HIDDEN_PRODUCTS = new Set(['feed']);
   for (const [id, def] of Object.entries(PRODUCTS)) {
     if (SHOP_HIDDEN_PRODUCTS.has(id)) continue;
+    const qty = barn[id] || 0;
+    if (qty > 0) {
+      const { effective, mult, trendType } = getDynamicPrice(id, def.sellPrice);
+      allItems.push({
+        id,
+        name: def.name,
+        emoji: def.emoji,
+        qty,
+        basePrice: def.sellPrice,
+        sellPrice: effective,
+        multiplier: mult,
+        trend: trendType,
+        isCrop: false,
+      });
+    }
+  }
+
+  // Fish species from barn
+  for (const [id, def] of Object.entries(FISH_SPECIES)) {
     const qty = barn[id] || 0;
     if (qty > 0) {
       const { effective, mult, trendType } = getDynamicPrice(id, def.sellPrice);

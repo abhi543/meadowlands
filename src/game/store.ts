@@ -1017,6 +1017,76 @@ export function isCropItem(itemId: string): boolean {
   return false;
 }
 
+export function getStorageAvailableStock(
+  silo: Record<string, number>,
+  barn: Record<string, number>,
+  itemId: string
+): number {
+  if (isCropItem(itemId)) {
+    return (silo[itemId] || 0) + (itemId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+  }
+  if (itemId === 'fish') {
+    let speciesCount = 0;
+    for (const sp of Object.keys(FISH_SPECIES)) {
+      speciesCount += (barn[sp] || 0);
+    }
+    return Math.max(barn.fish || 0, speciesCount);
+  }
+  return barn[itemId] || 0;
+}
+
+export function deductStorageStock(
+  silo: Record<string, number>,
+  barn: Record<string, number>,
+  itemId: string,
+  qty: number
+): boolean {
+  if (isCropItem(itemId)) {
+    const have = (silo[itemId] || 0) + (itemId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
+    if (have < qty) return false;
+    silo[itemId] = (silo[itemId] || 0) - qty;
+    return true;
+  }
+  if (itemId === 'fish') {
+    let speciesCount = 0;
+    for (const sp of Object.keys(FISH_SPECIES)) {
+      speciesCount += (barn[sp] || 0);
+    }
+    const totalFish = Math.max(barn.fish || 0, speciesCount);
+    if (totalFish < qty) return false;
+
+    // Deduct from barn.fish
+    if ((barn.fish || 0) >= qty) {
+      barn.fish = (barn.fish || 0) - qty;
+    } else {
+      barn.fish = 0;
+    }
+    // Deduct from species inventory starting from common ones
+    let remaining = qty;
+    for (const sp of Object.keys(FISH_SPECIES)) {
+      if (remaining <= 0) break;
+      const spQty = barn[sp] || 0;
+      if (spQty > 0) {
+        const take = Math.min(remaining, spQty);
+        barn[sp] = spQty - take;
+        remaining -= take;
+      }
+    }
+    return true;
+  }
+  if (itemId in FISH_SPECIES) {
+    const spQty = barn[itemId] || 0;
+    if (spQty < qty) return false;
+    barn[itemId] = spQty - qty;
+    barn.fish = Math.max(0, (barn.fish || 0) - qty);
+    return true;
+  }
+  const have = barn[itemId] || 0;
+  if (have < qty) return false;
+  barn[itemId] = have - qty;
+  return true;
+}
+
 export const DEFAULT_CLIENT_REPUTATION: Record<string, { level: number; xp: number }> = {
   mayor_barnaby: { level: 1, xp: 0 },
   chef_antoine: { level: 1, xp: 0 },
@@ -2121,10 +2191,10 @@ export const useGameStore = create<GameState>()(
           delete (newBarn as Record<string, number>).honey_comb;
         }
         for (const input of recipe.inputs) {
-          const isCrop = isCropItem(input.productId);
-          const storage = isCrop ? newSilo : newBarn;
-          if ((storage[input.productId] || 0) < input.qty) return;
-          storage[input.productId] = (storage[input.productId] || 0) - input.qty;
+          if (getStorageAvailableStock(newSilo, newBarn, input.productId) < input.qty) return;
+        }
+        for (const input of recipe.inputs) {
+          deductStorageStock(newSilo, newBarn, input.productId, input.qty);
         }
 
         const newSlot: ProductionSlot = {
@@ -2271,9 +2341,7 @@ export const useGameStore = create<GameState>()(
         for (let i = 0; i < freeSlots; i++) {
           let canAfford = true;
           for (const input of recipe.inputs) {
-            const isCrop = isCropItem(input.productId);
-            const storage = isCrop ? newSilo : newBarn;
-            if ((storage[input.productId] || 0) < input.qty) {
+            if (getStorageAvailableStock(newSilo, newBarn, input.productId) < input.qty) {
               canAfford = false;
               break;
             }
@@ -2281,9 +2349,7 @@ export const useGameStore = create<GameState>()(
           if (!canAfford) break;
           // Deduct inputs
           for (const input of recipe.inputs) {
-            const isCrop = isCropItem(input.productId);
-            const storage = isCrop ? newSilo : newBarn;
-            storage[input.productId] = (storage[input.productId] || 0) - input.qty;
+            deductStorageStock(newSilo, newBarn, input.productId, input.qty);
           }
           craftCount++;
         }
@@ -2390,12 +2456,12 @@ export const useGameStore = create<GameState>()(
         const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty, name: r.name, icon: r.emoji })) || []);
 
         for (const item of required) {
-          const isCrop = isCropItem(item.itemId);
-          const storage = isCrop ? newSilo : newBarn;
-          if ((storage[item.itemId] || 0) < item.quantity) {
+          if (getStorageAvailableStock(newSilo, newBarn, item.itemId) < item.quantity) {
             return { success: false, message: `Need ${item.quantity} ${item.name}` };
           }
-          storage[item.itemId] = (storage[item.itemId] || 0) - item.quantity;
+        }
+        for (const item of required) {
+          deductStorageStock(newSilo, newBarn, item.itemId, item.quantity);
         }
 
         const now = Date.now();

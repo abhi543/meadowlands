@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useGameStore } from '@/game/store';
+import { useGameStore, getStorageAvailableStock } from '@/game/store';
 import { CROPS, PRODUCTS, BUILDINGS } from '@/game/data';
 import {
   CLIENT_DEFINITIONS,
@@ -179,8 +179,7 @@ export function OrderBoard() {
   const checkOrderFulfillable = (order: DeliveryOrder) => {
     const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty })) || []);
     for (const item of required) {
-      const storage = isCropItem(item.itemId) ? silo : barn;
-      if ((storage[item.itemId] || 0) < item.quantity) return false;
+      if (getStorageAvailableStock(silo, barn, item.itemId) < item.quantity) return false;
     }
     return true;
   };
