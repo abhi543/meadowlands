@@ -178,12 +178,22 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
             const effectiveFloor = customReserve !== undefined ? customReserve : globalFloor;
             const isFeedCrop = item.category === 'crop' || item.id === 'feed' || item.id === 'wild_berries';
 
+            const isSilver = item.id.endsWith('_silver') || item.id === 'silver_woven_quilt' || item.id === 'glazed_silver_carrots';
+            const isGold = item.id.endsWith('_gold') || item.id === 'golden_cornbread' || item.id === 'royal_pumpkin_pottage' || item.id === 'golden_cake' || item.id === 'golden_shawl';
+            const isPrismatic = item.id.endsWith('_prismatic') || item.id === 'prismatic_berry_tart' || item.id === 'grand_prismatic_jam' || item.id === 'prismatic_silk_tapestry';
+
             return (
               <div
                 key={item.id}
                 className={`relative rounded-2xl border p-3.5 transition-all flex flex-col justify-between overflow-hidden shadow-sm ${
                   isLocked
                     ? 'border-rose-400/40 dark:border-rose-500/30 bg-rose-50/40 dark:bg-rose-950/15 ring-1 ring-rose-500/20'
+                    : isPrismatic
+                    ? 'border-purple-400 dark:border-purple-500/60 bg-purple-50/30 dark:bg-purple-950/25 ring-1 ring-purple-500/40 hover:border-purple-400'
+                    : isGold
+                    ? 'border-amber-400 dark:border-amber-500/50 bg-amber-50/30 dark:bg-amber-950/20 ring-1 ring-amber-400/30 hover:border-amber-400'
+                    : isSilver
+                    ? 'border-slate-300 dark:border-slate-600 bg-slate-50/40 dark:bg-slate-900/50 ring-1 ring-slate-400/20 hover:border-slate-400'
                     : 'border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/90 hover:border-amber-400/50 dark:hover:border-stone-700'
                 }`}
               >
@@ -191,13 +201,38 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-11 h-11 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-2xl shrink-0 shadow-2xs">
+                      <div className={`w-11 h-11 rounded-xl border flex items-center justify-center text-2xl shrink-0 shadow-2xs ${
+                        isPrismatic
+                          ? 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700'
+                          : isGold
+                          ? 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700'
+                          : isSilver
+                          ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'
+                          : 'bg-stone-100 dark:bg-stone-800 border-stone-200 dark:border-stone-700'
+                      }`}>
                         {item.icon}
                       </div>
                       <div className="min-w-0">
-                        <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 truncate">
-                          {item.name}
-                        </h4>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100 truncate">
+                            {item.name}
+                          </h4>
+                          {isPrismatic && (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-gradient-to-r from-purple-500 via-pink-500 to-amber-500 text-white shadow-xs">
+                              Prismatic
+                            </span>
+                          )}
+                          {isGold && (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              Gold Tier
+                            </span>
+                          )}
+                          {isSilver && (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600">
+                              Silver Tier
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="font-black text-amber-700 dark:text-amber-300 font-mono">
                             {item.quantity} in stock

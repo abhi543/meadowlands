@@ -46,45 +46,34 @@ export function ShopPanel() {
     isCrop: boolean;
   }[] = [];
 
-  // Crops from silo (exclude wheat, corn)
-  const SHOP_HIDDEN_CROPS = new Set(['wheat', 'corn']);
-  for (const [id, def] of Object.entries(CROPS)) {
+  // Crops & Silo Goods (standard crops, dedicated quality crops, and forage in silo)
+  const SHOP_HIDDEN_CROPS = new Set(['wheat', 'corn', 'feed']);
+  for (const [id, qty] of Object.entries(silo)) {
     if (SHOP_HIDDEN_CROPS.has(id)) continue;
-    const qty = silo[id] || 0;
     if (qty > 0) {
-      const base = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+      let base = 1;
+      let name = id.replace(/_/g, ' ');
+      let emoji = '📦';
+
+      if (id in CROPS) {
+        const def = CROPS[id as keyof typeof CROPS];
+        name = def.name;
+        emoji = def.emoji;
+        base = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+      } else if (id in PRODUCTS) {
+        const pDef = PRODUCTS[id as keyof typeof PRODUCTS];
+        name = pDef.name;
+        emoji = pDef.emoji;
+        base = pDef.sellPrice;
+      }
+
       const { effective, mult, trendType } = getDynamicPrice(id, base);
       allItems.push({
         id,
-        name: def.name,
-        emoji: def.emoji,
+        name,
+        emoji,
         qty,
         basePrice: base,
-        sellPrice: effective,
-        multiplier: mult,
-        trend: trendType,
-        isCrop: true,
-      });
-    }
-  }
-
-  // Other silo items (exclude feed)
-  const siloExtras: { id: string; name: string; emoji: string; sellPrice: number }[] = [
-    { id: 'cotton', name: 'Cotton', emoji: '🌿', sellPrice: 6 },
-    { id: 'honey_comb', name: 'Honey Comb', emoji: '🍯', sellPrice: 12 },
-    { id: 'wild_berries', name: 'Wild Berries', emoji: '🍇', sellPrice: 8 },
-    { id: 'gold_nugget', name: 'Gold Nugget', emoji: '⭐', sellPrice: 50 },
-  ];
-  for (const extra of siloExtras) {
-    const qty = silo[extra.id] || 0;
-    if (qty > 0) {
-      const { effective, mult, trendType } = getDynamicPrice(extra.id, extra.sellPrice);
-      allItems.push({
-        id: extra.id,
-        name: extra.name,
-        emoji: extra.emoji,
-        qty,
-        basePrice: extra.sellPrice,
         sellPrice: effective,
         multiplier: mult,
         trend: trendType,

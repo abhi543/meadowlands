@@ -166,7 +166,14 @@ export function OrderBoard() {
   }, [orders, now]);
 
   const isCropItem = (itemId: string): boolean => {
-    return itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+    if (itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget') {
+      return true;
+    }
+    if (itemId.endsWith('_silver') || itemId.endsWith('_gold') || itemId.endsWith('_prismatic')) {
+      const base = itemId.replace(/_(silver|gold|prismatic)$/, '');
+      if (base in CROPS) return true;
+    }
+    return false;
   };
 
   const checkOrderFulfillable = (order: DeliveryOrder) => {

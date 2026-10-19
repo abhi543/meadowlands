@@ -260,6 +260,15 @@ export const ITEM_UNLOCK_LEVELS: Record<string, number> = {
 
   // Level 28: Quarry Miner (Gold Nugget)
   gold_nugget: 28,
+
+  // Gourmet Quality Culinary & Premium Artisan Products
+  glazed_silver_carrots: 5,
+  golden_cornbread: 6,
+  royal_pumpkin_pottage: 9,
+  silver_woven_quilt: 10,
+  prismatic_berry_tart: 14,
+  grand_prismatic_jam: 15,
+  prismatic_silk_tapestry: 20,
 };
 
 // --- Client Themed Progression Pools by Unlock Level ---
@@ -274,8 +283,10 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'pie', minLevel: 4 },
     { itemId: 'wool', minLevel: 4 },
     { itemId: 'sweater', minLevel: 5 },
+    { itemId: 'golden_cornbread', minLevel: 6 },
     { itemId: 'cotton', minLevel: 8 },
     { itemId: 'silk', minLevel: 12 },
+    { itemId: 'grand_prismatic_jam', minLevel: 15 },
   ],
   chef_antoine: [
     { itemId: 'egg', minLevel: 1 },
@@ -286,9 +297,14 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'strawberry', minLevel: 4 },
     { itemId: 'cheese', minLevel: 4 },
     { itemId: 'pie', minLevel: 4 },
+    { itemId: 'glazed_silver_carrots', minLevel: 5 },
     { itemId: 'savory_fish_pie', minLevel: 5 },
+    { itemId: 'golden_cornbread', minLevel: 6 },
     { itemId: 'crab_bisque', minLevel: 7 },
+    { itemId: 'royal_pumpkin_pottage', minLevel: 9 },
     { itemId: 'honey', minLevel: 12 },
+    { itemId: 'prismatic_berry_tart', minLevel: 14 },
+    { itemId: 'grand_prismatic_jam', minLevel: 15 },
   ],
   captain_sterling: [
     { itemId: 'fish', minLevel: 1 },
@@ -310,17 +326,23 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'yarn', minLevel: 5 },
     { itemId: 'sweater', minLevel: 5 },
     { itemId: 'cotton', minLevel: 8 },
+    { itemId: 'royal_pumpkin_pottage', minLevel: 9 },
+    { itemId: 'silver_woven_quilt', minLevel: 10 },
     { itemId: 'honey_comb', minLevel: 12 },
     { itemId: 'silk', minLevel: 12 },
+    { itemId: 'prismatic_berry_tart', minLevel: 14 },
     { itemId: 'quilted_blanket', minLevel: 18 },
+    { itemId: 'prismatic_silk_tapestry', minLevel: 20 },
   ],
   old_man_jed: [
     { itemId: 'wheat', minLevel: 1 },
     { itemId: 'feed', minLevel: 1 },
     { itemId: 'corn', minLevel: 2 },
     { itemId: 'carrot', minLevel: 3 },
+    { itemId: 'glazed_silver_carrots', minLevel: 5 },
     { itemId: 'truffle', minLevel: 6 },
     { itemId: 'truffle_oil', minLevel: 6 },
+    { itemId: 'golden_cornbread', minLevel: 6 },
     { itemId: 'honey_comb', minLevel: 12 },
     { itemId: 'wild_berries', minLevel: 16 },
     { itemId: 'gold_nugget', minLevel: 28 },

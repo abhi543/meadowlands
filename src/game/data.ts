@@ -285,7 +285,28 @@ export const HABITAT_UPGRADES: HabitatUpgradeStep[] = [
 ];
 
 // --- Products ---
-export type ProductId = 'feed' | 'egg' | 'egg_blue' | 'egg_obsidian' | 'egg_golden' | 'milk' | 'milk_rich_cream' | 'milk_alpine' | 'milk_starlight' | 'wool' | 'wool_patterned' | 'wool_merino' | 'wool_gilded' | 'truffle' | 'truffle_white' | 'truffle_alba' | 'truffle_diamond' | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil' | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque' | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk' | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar' | 'golden_shawl' | 'merino_sweater' | 'rich_butter' | 'alpine_cheese' | 'golden_cake' | 'horn_shavings' | 'lanolin_balm' | 'ancient_coin' | 'citrus_tea';
+export type ProductId =
+  | 'feed' | 'egg' | 'egg_blue' | 'egg_obsidian' | 'egg_golden'
+  | 'milk' | 'milk_rich_cream' | 'milk_alpine' | 'milk_starlight'
+  | 'wool' | 'wool_patterned' | 'wool_merino' | 'wool_gilded'
+  | 'truffle' | 'truffle_white' | 'truffle_alba' | 'truffle_diamond'
+  | 'fish' | 'bread' | 'cheese' | 'pie' | 'sweater' | 'truffle_oil'
+  | 'yarn' | 'quilted_blanket' | 'savory_fish_pie' | 'crab_bisque'
+  | 'honey_comb' | 'honey' | 'wild_berries' | 'gold_nugget' | 'cotton' | 'silk'
+  | 'lure_basic' | 'lure_berry' | 'lure_truffle' | 'lure_nectar'
+  | 'golden_shawl' | 'merino_sweater' | 'rich_butter' | 'alpine_cheese' | 'golden_cake'
+  | 'horn_shavings' | 'lanolin_balm' | 'ancient_coin' | 'citrus_tea'
+  // Dedicated Quality Harvest Crops (Silver, Gold, Prismatic)
+  | 'wheat_silver' | 'wheat_gold' | 'wheat_prismatic'
+  | 'corn_silver' | 'corn_gold' | 'corn_prismatic'
+  | 'carrot_silver' | 'carrot_gold' | 'carrot_prismatic'
+  | 'strawberry_silver' | 'strawberry_gold' | 'strawberry_prismatic'
+  | 'soybean_silver' | 'soybean_gold' | 'soybean_prismatic'
+  | 'pumpkin_silver' | 'pumpkin_gold' | 'pumpkin_prismatic'
+  | 'cotton_silver' | 'cotton_gold' | 'cotton_prismatic'
+  // Gourmet Culinary & Premium Artisan Products
+  | 'golden_cornbread' | 'prismatic_berry_tart' | 'glazed_silver_carrots'
+  | 'royal_pumpkin_pottage' | 'grand_prismatic_jam' | 'prismatic_silk_tapestry' | 'silver_woven_quilt';
 
 export interface ProductDef {
   id: ProductId;
@@ -346,6 +367,44 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   horn_shavings:    { id: 'horn_shavings',    name: 'Horn Shavings',    emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 12 },
   lanolin_balm:     { id: 'lanolin_balm',     name: 'Lanolin Balm',     emoji: '\u{1F9F4}', category: 'raw',          sellPrice: 20 },
   ancient_coin:     { id: 'ancient_coin',     name: 'Ancient Coin',     emoji: '\u{1FA99}', category: 'raw',          sellPrice: 50 },
+
+  // --- Dedicated Quality Harvest Crops (Silver / Gold / Prismatic) ---
+  wheat_silver:         { id: 'wheat_silver',         name: 'Silver Wheat',          emoji: '🌾✨', category: 'raw',          sellPrice: 8 },
+  wheat_gold:           { id: 'wheat_gold',           name: 'Golden Wheat',          emoji: '🌾⭐', category: 'raw',          sellPrice: 15 },
+  wheat_prismatic:      { id: 'wheat_prismatic',      name: 'Prismatic Wheat',       emoji: '🌾🌈', category: 'raw',          sellPrice: 30 },
+
+  corn_silver:          { id: 'corn_silver',          name: 'Silver Corn',           emoji: '🌽✨', category: 'raw',          sellPrice: 8 },
+  corn_gold:            { id: 'corn_gold',            name: 'Golden Corn',           emoji: '🌽⭐', category: 'raw',          sellPrice: 15 },
+  corn_prismatic:       { id: 'corn_prismatic',       name: 'Prismatic Corn',        emoji: '🌽🌈', category: 'raw',          sellPrice: 30 },
+
+  carrot_silver:        { id: 'carrot_silver',        name: 'Silver Carrot',         emoji: '🥕✨', category: 'raw',          sellPrice: 12 },
+  carrot_gold:          { id: 'carrot_gold',          name: 'Golden Carrot',         emoji: '🥕⭐', category: 'raw',          sellPrice: 22 },
+  carrot_prismatic:     { id: 'carrot_prismatic',     name: 'Prismatic Carrot',      emoji: '🥕🌈', category: 'raw',          sellPrice: 45 },
+
+  strawberry_silver:    { id: 'strawberry_silver',    name: 'Silver Strawberry',     emoji: '🍓✨', category: 'raw',          sellPrice: 18 },
+  strawberry_gold:      { id: 'strawberry_gold',      name: 'Golden Strawberry',     emoji: '🍓⭐', category: 'raw',          sellPrice: 35 },
+  strawberry_prismatic: { id: 'strawberry_prismatic', name: 'Prismatic Strawberry',  emoji: '🍓🌈', category: 'raw',          sellPrice: 75 },
+
+  soybean_silver:       { id: 'soybean_silver',       name: 'Silver Soybean',        emoji: '🫛✨', category: 'raw',          sellPrice: 20 },
+  soybean_gold:         { id: 'soybean_gold',         name: 'Golden Soybean',        emoji: '🫛⭐', category: 'raw',          sellPrice: 40 },
+  soybean_prismatic:    { id: 'soybean_prismatic',    name: 'Prismatic Soybean',     emoji: '🫛🌈', category: 'raw',          sellPrice: 85 },
+
+  pumpkin_silver:       { id: 'pumpkin_silver',       name: 'Silver Pumpkin',        emoji: '🎃✨', category: 'raw',          sellPrice: 40 },
+  pumpkin_gold:         { id: 'pumpkin_gold',         name: 'Golden Pumpkin',        emoji: '🎃⭐', category: 'raw',          sellPrice: 75 },
+  pumpkin_prismatic:    { id: 'pumpkin_prismatic',    name: 'Prismatic Pumpkin',     emoji: '🎃🌈', category: 'raw',          sellPrice: 160 },
+
+  cotton_silver:        { id: 'cotton_silver',        name: 'Silver Cotton',         emoji: '🌿✨', category: 'raw',          sellPrice: 15 },
+  cotton_gold:          { id: 'cotton_gold',          name: 'Golden Cotton',         emoji: '🌿⭐', category: 'raw',          sellPrice: 28 },
+  cotton_prismatic:     { id: 'cotton_prismatic',     name: 'Prismatic Cotton',      emoji: '🌿🌈', category: 'raw',          sellPrice: 60 },
+
+  // --- Gourmet Culinary & Premium Artisan Products ---
+  golden_cornbread:        { id: 'golden_cornbread',        name: 'Golden Cornbread',        emoji: '🍞⭐', category: 'manufactured', sellPrice: 95 },
+  prismatic_berry_tart:    { id: 'prismatic_berry_tart',    name: 'Prismatic Berry Tart',    emoji: '🥧🌈', category: 'manufactured', sellPrice: 260 },
+  glazed_silver_carrots:   { id: 'glazed_silver_carrots',   name: 'Glazed Silver Carrots',   emoji: '🥕✨', category: 'manufactured', sellPrice: 85 },
+  royal_pumpkin_pottage:   { id: 'royal_pumpkin_pottage',   name: 'Royal Pumpkin Pottage',   emoji: '🍲👑', category: 'manufactured', sellPrice: 180 },
+  grand_prismatic_jam:     { id: 'grand_prismatic_jam',     name: 'Grand Prismatic Jam',     emoji: '🍯🌈', category: 'manufactured', sellPrice: 280 },
+  prismatic_silk_tapestry: { id: 'prismatic_silk_tapestry', name: 'Prismatic Silk Tapestry', emoji: '🧵🌈', category: 'manufactured', sellPrice: 350 },
+  silver_woven_quilt:      { id: 'silver_woven_quilt',      name: 'Silverweave Bedspread',   emoji: '🧶✨', category: 'manufactured', sellPrice: 140 },
 };
 
 // --- Production Buildings ---
@@ -384,6 +443,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
       { id: 'make_seed_blend', name: 'Wild Forage Seed Blend', emoji: '🌱', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'corn', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 100 },
+      // Gourmet Animal Nutrition: High-yield feed conversion from premium harvest
+      { id: 'make_gourmet_feed', name: 'Gourmet Cattle Ambrosia', emoji: '🥣⭐', inputs: [{ productId: 'soybean_gold', qty: 1 }, { productId: 'corn_silver', qty: 2 }], output: { productId: 'feed', qty: 15 }, timeSec: 60 },
     ],
   },
   bakery: {
@@ -398,6 +459,11 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_lure_berry', name: 'Glazed Berry Pastry', emoji: '\u{1F353}', inputs: [{ productId: 'pie', qty: 1 }, { productId: 'strawberry', qty: 4 }], output: { productId: 'lure_berry', qty: 1 }, timeSec: 150 },
       // Worker Hydration: Chilled Citrus Herb Tea
       { id: 'brew_citrus_tea', name: 'Brew Citrus Herb Tea', emoji: '🍵', inputs: [{ productId: 'wild_berries', qty: 2 }, { productId: 'wheat', qty: 1 }], output: { productId: 'citrus_tea', qty: 1 }, timeSec: 60 },
+      // --- Gourmet Quality Crop Culinary Masterworks ---
+      { id: 'make_golden_cornbread', name: 'Bake Golden Cornbread', emoji: '🍞⭐', inputs: [{ productId: 'corn_gold', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'golden_cornbread', qty: 1 }, timeSec: 75 },
+      { id: 'make_prismatic_tart', name: 'Prismatic Berry Tart', emoji: '🥧🌈', inputs: [{ productId: 'strawberry_prismatic', qty: 1 }, { productId: 'wheat_silver', qty: 2 }, { productId: 'honey', qty: 1 }], output: { productId: 'prismatic_berry_tart', qty: 1 }, timeSec: 120 },
+      { id: 'make_glazed_carrots', name: 'Glaze Silver Carrots', emoji: '🥕✨', inputs: [{ productId: 'carrot_silver', qty: 2 }, { productId: 'honey', qty: 1 }], output: { productId: 'glazed_silver_carrots', qty: 1 }, timeSec: 60 },
+      { id: 'make_royal_pottage', name: 'Royal Pumpkin Pottage', emoji: '🍲👑', inputs: [{ productId: 'pumpkin_gold', qty: 1 }, { productId: 'milk_rich_cream', qty: 1 }], output: { productId: 'royal_pumpkin_pottage', qty: 1 }, timeSec: 90 },
     ],
   },
   dairy: {
@@ -418,6 +484,9 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_yarn_patterned', name: 'Spin Patterned Yarn', emoji: '\u{1F9F5}', inputs: [{ productId: 'wool_patterned', qty: 1 }], output: { productId: 'yarn', qty: 3 }, timeSec: 45 },
       { id: 'make_merino_sweater', name: 'Weave Merino Sweater', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool_merino', qty: 2 }], output: { productId: 'merino_sweater', qty: 1 }, timeSec: 90 },
       { id: 'make_golden_shawl', name: 'Weave Golden Shawl', emoji: '\u{1F9E5}', inputs: [{ productId: 'wool_gilded', qty: 3 }], output: { productId: 'golden_shawl', qty: 1 }, timeSec: 120 },
+      // Quality Textile Artisanship
+      { id: 'make_silver_quilt', name: 'Weave Silver Bedspread', emoji: '🧶✨', inputs: [{ productId: 'cotton_silver', qty: 2 }, { productId: 'yarn', qty: 2 }], output: { productId: 'silver_woven_quilt', qty: 1 }, timeSec: 90 },
+      { id: 'make_prismatic_tapestry', name: 'Weave Prismatic Tapestry', emoji: '🧵🌈', inputs: [{ productId: 'cotton_prismatic', qty: 2 }, { productId: 'silk', qty: 1 }], output: { productId: 'prismatic_silk_tapestry', qty: 1 }, timeSec: 150 },
     ],
   },
   press: {
@@ -427,6 +496,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 60 },
       { id: 'make_lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', inputs: [{ productId: 'truffle_oil', qty: 1 }, { productId: 'cheese', qty: 2 }], output: { productId: 'lure_truffle', qty: 1 }, timeSec: 180 },
       { id: 'make_lure_nectar', name: 'Celestial Ambrosia', emoji: '\u{2728}', inputs: [{ productId: 'truffle_oil', qty: 2 }, { productId: 'sweater', qty: 2 }, { productId: 'fish', qty: 6 }], output: { productId: 'lure_nectar', qty: 1 }, timeSec: 300 },
+      // Grand Prismatic Preserves
+      { id: 'make_prismatic_jam', name: 'Preserve Prismatic Jam', emoji: '🍯🌈', inputs: [{ productId: 'strawberry_prismatic', qty: 1 }, { productId: 'honey_comb', qty: 2 }], output: { productId: 'grand_prismatic_jam', qty: 1 }, timeSec: 120 },
     ],
   },
   tailor_shop: {

@@ -22,6 +22,35 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   soybean: { id: 'soybean', name: 'Soybean', icon: '🫛', category: 'crop', baseValue: 8, isEdibleFeed: true },
   pumpkin: { id: 'pumpkin', name: 'Pumpkin', icon: '🎃', category: 'crop', baseValue: 15, isEdibleFeed: true },
 
+  // Dedicated Quality Crops (Silver / Gold / Prismatic)
+  wheat_silver: { id: 'wheat_silver', name: 'Silver Wheat', icon: '🌾✨', category: 'crop', baseValue: 8, isEdibleFeed: true },
+  wheat_gold: { id: 'wheat_gold', name: 'Golden Wheat', icon: '🌾⭐', category: 'crop', baseValue: 15, isEdibleFeed: true },
+  wheat_prismatic: { id: 'wheat_prismatic', name: 'Prismatic Wheat', icon: '🌾🌈', category: 'crop', baseValue: 30, isEdibleFeed: true },
+
+  corn_silver: { id: 'corn_silver', name: 'Silver Corn', icon: '🌽✨', category: 'crop', baseValue: 8, isEdibleFeed: true },
+  corn_gold: { id: 'corn_gold', name: 'Golden Corn', icon: '🌽⭐', category: 'crop', baseValue: 15, isEdibleFeed: true },
+  corn_prismatic: { id: 'corn_prismatic', name: 'Prismatic Corn', icon: '🌽🌈', category: 'crop', baseValue: 30, isEdibleFeed: true },
+
+  carrot_silver: { id: 'carrot_silver', name: 'Silver Carrot', icon: '🥕✨', category: 'crop', baseValue: 12, isEdibleFeed: true },
+  carrot_gold: { id: 'carrot_gold', name: 'Golden Carrot', icon: '🥕⭐', category: 'crop', baseValue: 22, isEdibleFeed: true },
+  carrot_prismatic: { id: 'carrot_prismatic', name: 'Prismatic Carrot', icon: '🥕🌈', category: 'crop', baseValue: 45, isEdibleFeed: true },
+
+  strawberry_silver: { id: 'strawberry_silver', name: 'Silver Strawberry', icon: '🍓✨', category: 'crop', baseValue: 18, isEdibleFeed: true },
+  strawberry_gold: { id: 'strawberry_gold', name: 'Golden Strawberry', icon: '🍓⭐', category: 'crop', baseValue: 35, isEdibleFeed: true },
+  strawberry_prismatic: { id: 'strawberry_prismatic', name: 'Prismatic Strawberry', icon: '🍓🌈', category: 'crop', baseValue: 75, isEdibleFeed: true },
+
+  soybean_silver: { id: 'soybean_silver', name: 'Silver Soybean', icon: '🫛✨', category: 'crop', baseValue: 20, isEdibleFeed: true },
+  soybean_gold: { id: 'soybean_gold', name: 'Golden Soybean', icon: '🫛⭐', category: 'crop', baseValue: 40, isEdibleFeed: true },
+  soybean_prismatic: { id: 'soybean_prismatic', name: 'Prismatic Soybean', icon: '🫛🌈', category: 'crop', baseValue: 85, isEdibleFeed: true },
+
+  pumpkin_silver: { id: 'pumpkin_silver', name: 'Silver Pumpkin', icon: '🎃✨', category: 'crop', baseValue: 40, isEdibleFeed: true },
+  pumpkin_gold: { id: 'pumpkin_gold', name: 'Golden Pumpkin', icon: '🎃⭐', category: 'crop', baseValue: 75, isEdibleFeed: true },
+  pumpkin_prismatic: { id: 'pumpkin_prismatic', name: 'Prismatic Pumpkin', icon: '🎃🌈', category: 'crop', baseValue: 160, isEdibleFeed: true },
+
+  cotton_silver: { id: 'cotton_silver', name: 'Silver Cotton', icon: '🌿✨', category: 'crop', baseValue: 15, isEdibleFeed: true },
+  cotton_gold: { id: 'cotton_gold', name: 'Golden Cotton', icon: '🌿⭐', category: 'crop', baseValue: 28, isEdibleFeed: true },
+  cotton_prismatic: { id: 'cotton_prismatic', name: 'Prismatic Cotton', icon: '🌿🌈', category: 'crop', baseValue: 60, isEdibleFeed: true },
+
   // Forage & Raw Extras
   wild_berries: { id: 'wild_berries', name: 'Wild Berries', icon: '🍇', category: 'forage', baseValue: 8, isEdibleFeed: true },
   honey_comb: { id: 'honey_comb', name: 'Honey Comb', icon: '🍯', category: 'forage', baseValue: 12, isEdibleFeed: false },
@@ -49,6 +78,15 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   lure_berry: { id: 'lure_berry', name: 'Berry Pastry', icon: '🍓', category: 'artisan', baseValue: 45, isEdibleFeed: false },
   lure_truffle: { id: 'lure_truffle', name: 'Truffle Mash', icon: '🍄', category: 'artisan', baseValue: 80, isEdibleFeed: false },
   lure_nectar: { id: 'lure_nectar', name: 'Ambrosia', icon: '✨', category: 'artisan', baseValue: 200, isEdibleFeed: false },
+
+  // Gourmet Culinary & Quality Artisan
+  golden_cornbread: { id: 'golden_cornbread', name: 'Golden Cornbread', icon: '🍞⭐', category: 'artisan', baseValue: 95, isEdibleFeed: false },
+  prismatic_berry_tart: { id: 'prismatic_berry_tart', name: 'Prismatic Berry Tart', icon: '🥧🌈', category: 'artisan', baseValue: 260, isEdibleFeed: false },
+  glazed_silver_carrots: { id: 'glazed_silver_carrots', name: 'Glazed Silver Carrots', icon: '🥕✨', category: 'artisan', baseValue: 85, isEdibleFeed: false },
+  royal_pumpkin_pottage: { id: 'royal_pumpkin_pottage', name: 'Royal Pumpkin Pottage', icon: '🍲👑', category: 'artisan', baseValue: 180, isEdibleFeed: false },
+  grand_prismatic_jam: { id: 'grand_prismatic_jam', name: 'Grand Prismatic Jam', icon: '🍯🌈', category: 'artisan', baseValue: 280, isEdibleFeed: false },
+  prismatic_silk_tapestry: { id: 'prismatic_silk_tapestry', name: 'Prismatic Silk Tapestry', icon: '🧵🌈', category: 'artisan', baseValue: 350, isEdibleFeed: false },
+  silver_woven_quilt: { id: 'silver_woven_quilt', name: 'Silverweave Bedspread', icon: '🧶✨', category: 'artisan', baseValue: 140, isEdibleFeed: false },
 
   // Animal Products
   egg: { id: 'egg', name: 'Egg', icon: '🥚', category: 'animal_product', baseValue: 5, isEdibleFeed: false },

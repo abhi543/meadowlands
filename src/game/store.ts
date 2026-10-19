@@ -1007,7 +1007,14 @@ export interface GameState {
 const GRID_SIZE = 12;
 
 export function isCropItem(itemId: string): boolean {
-  return itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget';
+  if (itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget') {
+    return true;
+  }
+  if (itemId.endsWith('_silver') || itemId.endsWith('_gold') || itemId.endsWith('_prismatic')) {
+    const base = itemId.replace(/_(silver|gold|prismatic)$/, '');
+    if (base in CROPS) return true;
+  }
+  return false;
 }
 
 export const DEFAULT_CLIENT_REPUTATION: Record<string, { level: number; xp: number }> = {
@@ -1455,7 +1462,9 @@ export const useGameStore = create<GameState>()(
         const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity;
         const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
         const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
-        const newSilo = { ...state.silo, [plot.crop]: (state.silo[plot.crop] || 0) + totalYield };
+        // Deposit into dedicated quality-tier slot in Silo if silver/gold/prismatic
+        const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
+        const newSilo = { ...state.silo, [harvestItemKey]: (state.silo[harvestItemKey] || 0) + totalYield };
         const newPlots = [...state.plots];
         const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
         // Harvest resets soil crop while preserving moisture and quality tier
@@ -1481,7 +1490,8 @@ export const useGameStore = create<GameState>()(
         };
 
         if (qualityRoll.quality !== 'standard') {
-          state.addNotification(`${qualityRoll.badgeEmoji} ${qualityRoll.badgeText} Harvest! +${totalYield} ${cropDef.name}!`, qualityRoll.badgeEmoji, 'event');
+          const qName = qualityRoll.quality.charAt(0).toUpperCase() + qualityRoll.quality.slice(1);
+          state.addNotification(`${qualityRoll.badgeEmoji} ${qualityRoll.badgeText} Harvest! +${totalYield} ${qName} ${cropDef.name} deposited into Silo!`, qualityRoll.badgeEmoji, 'event');
         } else if (plot.hasRootRot) {
           state.addNotification(`🪱 Root Rot Penalty: ${cropDef.name} yield halved (+${totalYield})!`, '🪱', 'info');
         } else if (pheno.yieldMultiplier < 1.0) {
@@ -1651,7 +1661,8 @@ export const useGameStore = create<GameState>()(
             const qualityAdjusted = Math.max(1, Math.round(singleYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
             const plotYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (bonus + soilTier.bonusYield);
-            newSilo[plot.crop] = (newSilo[plot.crop] || 0) + plotYield;
+            const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
+            newSilo[harvestItemKey] = (newSilo[harvestItemKey] || 0) + plotYield;
             const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
             newPlots[i] = {
               id: i,
@@ -2110,7 +2121,7 @@ export const useGameStore = create<GameState>()(
           delete (newBarn as Record<string, number>).honey_comb;
         }
         for (const input of recipe.inputs) {
-          const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+          const isCrop = isCropItem(input.productId);
           const storage = isCrop ? newSilo : newBarn;
           if ((storage[input.productId] || 0) < input.qty) return;
           storage[input.productId] = (storage[input.productId] || 0) - input.qty;
@@ -2174,7 +2185,7 @@ export const useGameStore = create<GameState>()(
         const barnabyBonus = (isBarnabyActive && outputItem === 'feed') ? 1 : 0;
         const totalOutput = outputQty + bonusYield + barnabyBonus;
 
-        const isCropOutput = outputItem in CROPS || outputItem === 'feed' || outputItem === 'cotton' || outputItem === 'honey_comb' || outputItem === 'wild_berries' || outputItem === 'gold_nugget';
+        const isCropOutput = isCropItem(outputItem);
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
         if (isCropOutput) {
@@ -2260,7 +2271,7 @@ export const useGameStore = create<GameState>()(
         for (let i = 0; i < freeSlots; i++) {
           let canAfford = true;
           for (const input of recipe.inputs) {
-            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+            const isCrop = isCropItem(input.productId);
             const storage = isCrop ? newSilo : newBarn;
             if ((storage[input.productId] || 0) < input.qty) {
               canAfford = false;
@@ -2270,7 +2281,7 @@ export const useGameStore = create<GameState>()(
           if (!canAfford) break;
           // Deduct inputs
           for (const input of recipe.inputs) {
-            const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+            const isCrop = isCropItem(input.productId);
             const storage = isCrop ? newSilo : newBarn;
             storage[input.productId] = (storage[input.productId] || 0) - input.qty;
           }
@@ -2791,29 +2802,23 @@ export const useGameStore = create<GameState>()(
         let totalCoins = 0;
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
-        // Sell all silo items (crops + extras), skip hidden, 60% liquidation rate
-        for (const [id, def] of Object.entries(CROPS)) {
+        // Sell all silo items (crops, quality crops, extras), skip hidden, 60% liquidation rate
+        for (const [id, qty] of Object.entries(newSilo)) {
           if (SHOP_HIDDEN.has(id)) continue;
-          const qty = newSilo[id] || 0;
           if (qty > 0) {
-            const basePrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+            let basePrice = 1;
+            if (id in CROPS) {
+              const def = CROPS[id as CropId];
+              basePrice = Math.max(1, Math.floor(def.seedCost / 2) + 1);
+            } else if (id in PRODUCTS) {
+              basePrice = PRODUCTS[id as keyof typeof PRODUCTS].sellPrice;
+            } else {
+              basePrice = 5;
+            }
             const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
             const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
             totalCoins += sellPrice * qty;
             newSilo[id] = 0;
-          }
-        }
-        const siloExtras = ['cotton', 'honey_comb', 'wild_berries', 'gold_nugget'];
-        for (const id of siloExtras) {
-          const qty = newSilo[id] || 0;
-          if (qty > 0) {
-            const product = PRODUCTS[id as keyof typeof PRODUCTS];
-            if (product) {
-              const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-              const sellPrice = Math.max(1, Math.round(product.sellPrice * marketMult * 0.60));
-              totalCoins += sellPrice * qty;
-              newSilo[id] = 0;
-            }
           }
         }
         // Sell all barn items, skip hidden, 60% liquidation rate

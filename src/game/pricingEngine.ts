@@ -233,6 +233,15 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   lure_berry:        { stage: 2, inputs: [{ id: 'pie', qty: 1 }, { id: 'strawberry', qty: 4 }], outputQty: 1, timeSec: 150, name: 'Berry Pastry', icon: '🍓' },
   lure_truffle:      { stage: 2, inputs: [{ id: 'truffle_oil', qty: 1 }, { id: 'cheese', qty: 2 }], outputQty: 1, timeSec: 180, name: 'Truffle Mash', icon: '🍄' },
   lure_nectar:       { stage: 2, inputs: [{ id: 'truffle_oil', qty: 2 }, { id: 'sweater', qty: 2 }, { id: 'fish', qty: 6 }], outputQty: 1, timeSec: 300, name: 'Ambrosia', icon: '✨' },
+
+  // Gourmet Culinary & Quality Artisan Recipes
+  golden_cornbread:        { stage: 2, inputs: [{ id: 'corn_gold', qty: 2 }, { id: 'egg', qty: 1 }], outputQty: 1, timeSec: 75, name: 'Golden Cornbread', icon: '🍞⭐' },
+  prismatic_berry_tart:    { stage: 2, inputs: [{ id: 'strawberry_prismatic', qty: 1 }, { id: 'wheat_silver', qty: 2 }, { id: 'honey', qty: 1 }], outputQty: 1, timeSec: 120, name: 'Prismatic Berry Tart', icon: '🥧🌈' },
+  glazed_silver_carrots:   { stage: 2, inputs: [{ id: 'carrot_silver', qty: 2 }, { id: 'honey', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Glazed Silver Carrots', icon: '🥕✨' },
+  royal_pumpkin_pottage:   { stage: 2, inputs: [{ id: 'pumpkin_gold', qty: 1 }, { id: 'milk_rich_cream', qty: 1 }], outputQty: 1, timeSec: 90, name: 'Royal Pumpkin Pottage', icon: '🍲👑' },
+  grand_prismatic_jam:     { stage: 1, inputs: [{ id: 'strawberry_prismatic', qty: 1 }, { id: 'honey_comb', qty: 2 }], outputQty: 1, timeSec: 120, name: 'Grand Prismatic Jam', icon: '🍯🌈' },
+  silver_woven_quilt:      { stage: 1, inputs: [{ id: 'cotton_silver', qty: 2 }, { id: 'yarn', qty: 2 }], outputQty: 1, timeSec: 90, name: 'Silverweave Bedspread', icon: '🧶✨' },
+  prismatic_silk_tapestry: { stage: 1, inputs: [{ id: 'cotton_prismatic', qty: 2 }, { id: 'silk', qty: 1 }], outputQty: 1, timeSec: 150, name: 'Prismatic Silk Tapestry', icon: '🧵🌈' },
 };
 
 // Internal computed memoization cache
@@ -262,6 +271,31 @@ export function getItemEconomicProfile(itemId: string): ItemValuationDetails {
     };
     ITEM_VALUATION_CACHE.set(itemId, details);
     return details;
+  }
+
+  // 1b. Check Quality Harvest Crops (Silver / Gold / Prismatic)
+  const qualityMatch = itemId.match(/^([a-z_]+)_(silver|gold|prismatic)$/);
+  if (qualityMatch) {
+    const [, baseCrop, quality] = qualityMatch;
+    if (STAGE_0_RAW_CROPS[baseCrop]) {
+      const c = STAGE_0_RAW_CROPS[baseCrop];
+      const baseVal = calculateRawCropValue(c.seedCost, c.growTimeSec);
+      const mult = quality === 'prismatic' ? 4.5 : quality === 'gold' ? 2.5 : 1.5;
+      const val = Math.round(baseVal * mult);
+      const qBadge = quality === 'prismatic' ? '🌈 Prismatic' : quality === 'gold' ? '⭐ Gold' : '✨ Silver';
+      const details: ItemValuationDetails = {
+        id: itemId,
+        name: `${qBadge} ${c.name}`,
+        icon: `${c.icon}${quality === 'prismatic' ? '🌈' : quality === 'gold' ? '⭐' : '✨'}`,
+        stage: 0,
+        category: 'crop',
+        baseValue: val,
+        formulaDescription: `Stage 0 Premium Crop: ${qBadge} grade (${mult}x over base ${baseVal}c)`,
+        breakdownText: `${val}c premium harvest valuation (${mult}x)`,
+      };
+      ITEM_VALUATION_CACHE.set(itemId, details);
+      return details;
+    }
   }
 
   // 2. Check Animal Primary Commodities

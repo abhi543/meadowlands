@@ -1,6 +1,6 @@
 'use client';
 
-import { useGameStore } from '@/game/store';
+import { useGameStore, isCropItem } from '@/game/store';
 import { BUILDINGS, PRODUCTS, CROPS, WORKER_REGISTRY, type BuildingId, type RecipeDef, type WorkerRole } from '@/game/data';
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
@@ -79,6 +79,10 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'rich_butter') return 'Churn at Dairy (2 Rich Cream)';
   if (itemId === 'alpine_cheese') return 'Age at Dairy (2 Alpine Milk)';
   if (itemId === 'golden_cake') return 'Bake at Bakery (Golden Egg + Bread)';
+  // Quality Crops
+  if (itemId.endsWith('_silver')) return 'Harvest Silver Crop from Hydrated Farm Soil';
+  if (itemId.endsWith('_gold')) return 'Harvest Gold Crop from Optimal Soil (40-80% Moisture)';
+  if (itemId.endsWith('_prismatic')) return 'Harvest Prismatic Crop (Rainbow Sunshower bonus)';
   // Territory-locked items
   if (itemId === 'iron_ore' || itemId === 'gold_ore') return 'Mine at Quarry Ridge (Parcel required)';
   if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';
@@ -102,7 +106,7 @@ function getItemName(itemId: string): string {
 
 function canCraftRecipe(recipe: RecipeDef, silo: Record<string, number>, barn: Record<string, number>): boolean {
   for (const input of recipe.inputs) {
-    const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+    const isCrop = isCropItem(input.productId);
     const storage = isCrop ? silo : barn;
     const have = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
     if (have < input.qty) return false;
@@ -113,7 +117,7 @@ function canCraftRecipe(recipe: RecipeDef, silo: Record<string, number>, barn: R
 function calcMaxCraftable(recipe: RecipeDef, silo: Record<string, number>, barn: Record<string, number>): number {
   let max = Infinity;
   for (const input of recipe.inputs) {
-    const isCrop = input.productId in CROPS || input.productId === 'feed' || input.productId === 'cotton' || input.productId === 'honey_comb' || input.productId === 'wild_berries' || input.productId === 'gold_nugget';
+    const isCrop = isCropItem(input.productId);
     const storage = isCrop ? silo : barn;
     const available = (storage[input.productId] || 0) + (input.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
     max = Math.min(max, Math.floor(available / input.qty));
@@ -437,7 +441,7 @@ export function ProductionPanel() {
 
                 const missingIngredients: { name: string; emoji: string; have: number; need: number; source: string }[] = [];
                 for (const inp of recipe.inputs) {
-                  const isCrop = inp.productId in CROPS || inp.productId === 'feed' || inp.productId === 'cotton' || inp.productId === 'honey_comb' || inp.productId === 'wild_berries' || inp.productId === 'gold_nugget';
+                  const isCrop = isCropItem(inp.productId);
                   const storage = isCrop ? silo : barn;
                   const have = (storage[inp.productId] || 0) + (inp.productId === 'honey_comb' ? (barn.honey_comb || 0) : 0);
                   if (have < inp.qty) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/game/store';
-import { CROPS, type CropId } from '@/game/data';
+import { CROPS, PRODUCTS, type CropId } from '@/game/data';
 import { useState } from 'react';
 import { FarmWell } from './FarmWell';
 import { OverclockActionMenu } from './OverclockActionMenu';
@@ -691,11 +691,29 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       {/* Silo summary */}
       <div className="flex flex-wrap gap-2 text-xs">
         <span className="font-semibold text-stone-600 dark:text-stone-400">Silo:</span>
-        {Object.entries(silo).filter(([, v]) => v > 0).map(([k, v]) => (
-          <span key={k} className="bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-full text-stone-700 dark:text-stone-300">
-            {k in CROPS ? CROPS[k as CropId].emoji : '🪹'} {v}
-          </span>
-        ))}
+        {Object.entries(silo).filter(([, v]) => v > 0).map(([k, v]) => {
+          const emoji = k in CROPS ? CROPS[k as CropId].emoji : (PRODUCTS[k as keyof typeof PRODUCTS]?.emoji || '🌾');
+          const isSilver = k.endsWith('_silver');
+          const isGold = k.endsWith('_gold');
+          const isPrismatic = k.endsWith('_prismatic');
+          return (
+            <span
+              key={k}
+              className={`px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${
+                isPrismatic
+                  ? 'bg-purple-900/30 text-purple-300 border border-purple-500/40 shadow-xs'
+                  : isGold
+                  ? 'bg-amber-900/30 text-amber-300 border border-amber-500/40 shadow-xs'
+                  : isSilver
+                  ? 'bg-slate-800 text-slate-200 border border-slate-600'
+                  : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+              }`}
+            >
+              <span>{emoji}</span>
+              <span>{v}</span>
+            </span>
+          );
+        })}
       </div>
 
       {/* Plot Upgrade Modal */}
