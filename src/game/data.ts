@@ -310,7 +310,20 @@ export type ProductId =
   // Gourmet Seafood Culinary Products
   | 'crispy_fried_catfish' | 'herb_grilled_trout' | 'steamed_mud_crab'
   | 'pan_seared_salmon' | 'smoked_tuna_steak' | 'golden_trout_meuniere'
-  | 'imperial_sturgeon_caviar' | 'marlin_tartare' | 'luminescent_chowder';
+  | 'imperial_sturgeon_caviar' | 'marlin_tartare' | 'luminescent_chowder'
+  // Prehistoric Frontier Expedition Tools
+  | 'amber_chisel' | 'excavation_pickaxe' | 'thermal_solvent'
+  // Prehistoric Fossils & Strata Minerals
+  | 'fossil_trilobite_carapace' | 'amber_meganeura_wing' | 'fossil_arthropleura_plates'
+  | 'fossil_dimetrodon_spine' | 'fossil_titanoboa_vertebra' | 'cryo_mammoth_tissue'
+  | 'amber_specimen' | 'mineral_slab'
+  // Prehistoric Diets
+  | 'algae_paste' | 'insect_mash' | 'crushed_grain_mash' | 'mountain_hay_bales'
+  // Prehistoric Shed Harvest Products
+  | 'chitin_molt_plates' | 'prismatic_wing_membrane' | 'primeval_humus'
+  | 'thermal_scutes' | 'serpent_slough' | 'insulated_down_wool'
+  // Amber Bio-Lab Infrastructure Materials
+  | 'fired_hardwood' | 'tempered_glass' | 'copper_pipes' | 'geothermal_relics';
 
 export interface ProductDef {
   id: ProductId;
@@ -420,6 +433,41 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   imperial_sturgeon_caviar:{ id: 'imperial_sturgeon_caviar',name: 'Imperial Sturgeon Caviar',emoji: '🥣⭐', category: 'manufactured', sellPrice: 210 },
   marlin_tartare:          { id: 'marlin_tartare',          name: 'Grand Marlin Tartare',    emoji: '🐟👑', category: 'manufactured', sellPrice: 240 },
   luminescent_chowder:     { id: 'luminescent_chowder',     name: 'Luminescent Abyss Chowder', emoji: '🍲🌈', category: 'manufactured', sellPrice: 380 },
+
+  // --- Prehistoric Frontier Expedition Tools ---
+  amber_chisel:            { id: 'amber_chisel',            name: 'Amber Chisel',            emoji: '🔨', category: 'manufactured', sellPrice: 250 },
+  excavation_pickaxe:      { id: 'excavation_pickaxe',      name: 'Excavation Pickaxe',      emoji: '⛏️', category: 'manufactured', sellPrice: 350 },
+  thermal_solvent:         { id: 'thermal_solvent',         name: 'Thermal Solvent',         emoji: '🧪', category: 'manufactured', sellPrice: 400 },
+
+  // --- Prehistoric Fossils & Strata Minerals ---
+  fossil_trilobite_carapace: { id: 'fossil_trilobite_carapace', name: 'Intact Trilobite Carapace', emoji: '🐚', category: 'raw', sellPrice: 600 },
+  amber_meganeura_wing:    { id: 'amber_meganeura_wing',    name: 'Amber-Encased Giant Wing', emoji: '✨', category: 'raw', sellPrice: 850 },
+  fossil_arthropleura_plates: { id: 'fossil_arthropleura_plates', name: 'Segmented Exoskeleton Plates', emoji: '🧱', category: 'raw', sellPrice: 900 },
+  fossil_dimetrodon_spine: { id: 'fossil_dimetrodon_spine', name: 'Mineralized Dorsal Sail Spine', emoji: '🦴', category: 'raw', sellPrice: 1200 },
+  fossil_titanoboa_vertebra: { id: 'fossil_titanoboa_vertebra', name: 'Petrified Vertebral Column', emoji: '🦴', category: 'raw', sellPrice: 1600 },
+  cryo_mammoth_tissue:     { id: 'cryo_mammoth_tissue',     name: 'Cryo-Preserved Core Tissue', emoji: '❄️', category: 'raw', sellPrice: 2200 },
+  amber_specimen:          { id: 'amber_specimen',          name: 'Primeval Amber Core',     emoji: '✨', category: 'raw', sellPrice: 300 },
+  mineral_slab:            { id: 'mineral_slab',            name: 'Fossiliferous Mineral Slab', emoji: '🪨', category: 'raw', sellPrice: 150 },
+
+  // --- Primeval Diets & Nutrition ---
+  algae_paste:             { id: 'algae_paste',             name: 'Algae Paste',             emoji: '🧪', category: 'manufactured', sellPrice: 45 },
+  insect_mash:             { id: 'insect_mash',             name: 'Insect Mash',             emoji: '🥣', category: 'manufactured', sellPrice: 60 },
+  crushed_grain_mash:      { id: 'crushed_grain_mash',      name: 'Crushed Grain Mash',      emoji: '🌾', category: 'manufactured', sellPrice: 50 },
+  mountain_hay_bales:      { id: 'mountain_hay_bales',      name: 'Mountain Hay Bales',      emoji: '🌾', category: 'manufactured', sellPrice: 70 },
+
+  // --- Prehistoric Shed Harvest Products ---
+  chitin_molt_plates:      { id: 'chitin_molt_plates',      name: 'Chitin Molt Plates',      emoji: '🛡️', category: 'raw', sellPrice: 400 },
+  prismatic_wing_membrane: { id: 'prismatic_wing_membrane', name: 'Prismatic Wing Membranes', emoji: '🪽', category: 'raw', sellPrice: 650 },
+  primeval_humus:          { id: 'primeval_humus',          name: 'Supercharged Primeval Humus', emoji: '🍂', category: 'raw', sellPrice: 500 },
+  thermal_scutes:          { id: 'thermal_scutes',          name: 'Shed Thermal Scutes',      emoji: '🔥', category: 'raw', sellPrice: 750 },
+  serpent_slough:          { id: 'serpent_slough',          name: 'Massive Serpent Slough',  emoji: '📜', category: 'raw', sellPrice: 950 },
+  insulated_down_wool:     { id: 'insulated_down_wool',     name: 'Insulated Down Wool',     emoji: '🧶', category: 'raw', sellPrice: 1100 },
+
+  // --- Amber Bio-Lab Infrastructure Materials ---
+  fired_hardwood:          { id: 'fired_hardwood',          name: 'Fired Hardwood',          emoji: '🪵', category: 'manufactured', sellPrice: 120 },
+  tempered_glass:          { id: 'tempered_glass',          name: 'Tempered Glass Panes',    emoji: '🪟', category: 'manufactured', sellPrice: 180 },
+  copper_pipes:            { id: 'copper_pipes',            name: 'Copper Pipes',            emoji: '🔧', category: 'manufactured', sellPrice: 220 },
+  geothermal_relics:       { id: 'geothermal_relics',       name: 'Geothermal Relics',       emoji: '🏺', category: 'raw', sellPrice: 500 },
 };
 
 // --- Production Buildings ---
@@ -460,6 +508,11 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_seed_blend', name: 'Wild Forage Seed Blend', emoji: '🌱', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'corn', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 100 },
       // Gourmet Animal Nutrition: High-yield feed conversion from premium harvest
       { id: 'make_gourmet_feed', name: 'Gourmet Cattle Ambrosia', emoji: '🥣⭐', inputs: [{ productId: 'soybean_gold', qty: 1 }, { productId: 'corn_silver', qty: 2 }], output: { productId: 'feed', qty: 15 }, timeSec: 60 },
+      // Prehistoric Primeval Diets
+      { id: 'make_algae_paste', name: 'Process Algae Paste', emoji: '🧪', inputs: [{ productId: 'wheat', qty: 2 }, { productId: 'wild_berries', qty: 1 }], output: { productId: 'algae_paste', qty: 2 }, timeSec: 45 },
+      { id: 'make_insect_mash', name: 'Grind Insect Mash', emoji: '🥣', inputs: [{ productId: 'wheat', qty: 2 }, { productId: 'soybean', qty: 1 }], output: { productId: 'insect_mash', qty: 2 }, timeSec: 50 },
+      { id: 'make_crushed_grain_mash', name: 'Crush Grain Mash', emoji: '🌾', inputs: [{ productId: 'wheat', qty: 2 }, { productId: 'corn', qty: 2 }], output: { productId: 'crushed_grain_mash', qty: 3 }, timeSec: 50 },
+      { id: 'make_mountain_hay_bales', name: 'Bundle Mountain Hay', emoji: '🌾', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'cotton', qty: 2 }], output: { productId: 'mountain_hay_bales', qty: 2 }, timeSec: 60 },
     ],
   },
   bakery: {

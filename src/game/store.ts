@@ -112,6 +112,32 @@ import {
   calculateCaravanSettlement,
   getBulkVolumeTierInfo,
 } from './caravanLogistics';
+import {
+  type PrehistoricSpeciesId,
+  type PrehistoricEra,
+  type FrontierBiomeStrataId,
+  type EnclosureTypeId,
+  type PrehistoricSpeciesDef,
+  type FrontierEventCard,
+  type EventActionType,
+  type AmberBioLabState,
+  type PrehistoricSanctuaryState,
+  type FrontierTrailRun,
+  type FrontierRucksack,
+  PREHISTORIC_SPECIES_REGISTRY,
+  FRONTIER_STRATA_REGISTRY,
+  FRONTIER_STRATA_SEQUENCE,
+  createDefaultAmberBioLab,
+  createDefaultSanctuary,
+  AMBER_BIO_LAB_CONSTRUCTION_COSTS,
+} from '@/types/prehistoric';
+import {
+  startNewFrontierRun,
+  calculateNodeTraversalCost,
+  executeEventAction,
+  extractRucksack,
+  drawFrontierEvent,
+} from './frontierTrailEngine';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
   type ActiveEventInstance,
@@ -741,6 +767,11 @@ export interface GameState {
   hydrology: HydrologyState;
   isSluiceModalOpen: boolean;
 
+  // Prehistoric Sanctuary, Amber Bio-Lab & Frontier Trail Procedural Engine
+  amberBioLab: AmberBioLabState;
+  prehistoricSanctuary: PrehistoricSanctuaryState;
+  activeTrailRun: FrontierTrailRun | null;
+
   // Time
   lastTick: number;
 
@@ -868,6 +899,16 @@ export interface GameState {
   unstationBeastFromOutpost: (beastId: string) => void;
   releaseCratedBeastToWild: (beastId: string) => number;
   returnLeftoverRationsToBarn: (expeditionId: string) => void;
+
+  // Prehistoric Frontier Trail Procedural Engine & Amber Bio-Lab Actions
+  startTrailRun: () => void;
+  resolveTrailEventAction: (actionType: EventActionType) => void;
+  advanceTrailNode: () => void;
+  bankAndExtractTrailLoot: () => void;
+  startSpecimenIncubation: (chamberId: number, speciesId: PrehistoricSpeciesId) => boolean;
+  collectRevivedSpecimen: (chamberId: number) => boolean;
+  depositEnclosureFeed: (enclosureId: EnclosureTypeId, qty: number) => boolean;
+  collectEnclosureHarvest: (enclosureId: EnclosureTypeId) => number;
 
   // Habitat
   upgradeHabitat: (species: AnimalSpecies) => void;
@@ -1375,6 +1416,11 @@ export const useGameStore = create<GameState>()(
 
       wilderness: createDefaultWilderness(),
       stagingWagonProvisions: {},
+
+      // Prehistoric Sanctuary, Amber Bio-Lab & Frontier Trail
+      amberBioLab: createDefaultAmberBioLab(),
+      prehistoricSanctuary: createDefaultSanctuary(),
+      activeTrailRun: null,
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -5156,6 +5202,474 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // --- Prehistoric Frontier Trail Procedural Engine ---
+      startTrailRun: () => {
+        const state = get();
+        if (state.activeTrailRun && !state.activeTrailRun.isCompleted && !state.activeTrailRun.isFailed) {
+          state.addNotification('An expedition trail run is already active!', '🧭', 'info');
+          return;
+        }
+        const newRun = startNewFrontierRun();
+        playGoldRushFanfare();
+        state.addNotification('🧭 Frontier Trail Expedition begun! Strata: Paleo Silt Beds.', '🧭', 'event');
+        set({
+          activeTrailRun: newRun,
+          isDirty: true,
+        });
+      },
+
+      resolveTrailEventAction: (actionType: EventActionType) => {
+        const state = get();
+        const run = state.activeTrailRun;
+        if (!run || run.isCompleted || run.isFailed || !run.currentEventCard || run.resolvedEventChoice) {
+          return;
+        }
+
+        const card = run.currentEventCard;
+        const branch = actionType === 'specialized_tool' ? card.actions.specialized : actionType === 'hydrological_resource' ? card.actions.hydrological : card.actions.cautious;
+
+        // Verify item requirement
+        if (branch.requiredItem) {
+          const req = branch.requiredItem;
+          const available = (state.barn[req.id] || 0) + (state.silo[req.id] || 0);
+          if (available < req.qty) {
+            playDefeatSound();
+            state.addNotification(`Missing required item: ${req.qty}x ${req.name}!`, '⚠️', 'info');
+            return;
+          }
+        }
+
+        // Verify Elevated Gravity Tower water requirement
+        if (branch.requiredTowerWaterLiters && branch.requiredTowerWaterLiters > 0) {
+          const availableTower = state.hydrology?.towerLiters || 0;
+          if (availableTower < branch.requiredTowerWaterLiters) {
+            playDefeatSound();
+            state.addNotification(`Insufficient Elevated Gravity Tower water! Requires ${branch.requiredTowerWaterLiters}L (Tower has ${availableTower}L)`, '🚰', 'info');
+            return;
+          }
+        }
+
+        // Deduct item requirement
+        const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
+        if (branch.requiredItem) {
+          const req = branch.requiredItem;
+          let remaining = req.qty;
+          if (newBarn[req.id]) {
+            const take = Math.min(newBarn[req.id], remaining);
+            newBarn[req.id] -= take;
+            remaining -= take;
+          }
+          if (remaining > 0 && newSilo[req.id]) {
+            const take = Math.min(newSilo[req.id], remaining);
+            newSilo[req.id] -= take;
+            remaining -= take;
+          }
+        }
+
+        // Deduct Elevated Gravity Tower water
+        let updatedHydrology = { ...state.hydrology };
+        if (branch.requiredTowerWaterLiters && branch.requiredTowerWaterLiters > 0) {
+          updatedHydrology = {
+            ...updatedHydrology,
+            towerLiters: Math.max(0, updatedHydrology.towerLiters - branch.requiredTowerWaterLiters),
+          };
+        }
+
+        // Execute procedural resolution
+        const outcome = executeEventAction(actionType, card, run.currentNodeIndex);
+
+        // Update Morale
+        const newMorale = Math.max(0, Math.min(100, run.morale + outcome.moraleChange));
+
+        // Update Rucksack
+        const newRucksack = { ...run.rucksack, fossils: { ...run.rucksack.fossils }, preservedEmbryos: { ...run.rucksack.preservedEmbryos } };
+        for (const fId of outcome.addedFossils) {
+          newRucksack.fossils[fId] = (newRucksack.fossils[fId] || 0) + 1;
+        }
+        newRucksack.amberSpecimens += outcome.addedAmber;
+        newRucksack.mineralSlabs += outcome.addedSlabs;
+        newRucksack.coins += outcome.addedCoins;
+        for (const eId of outcome.addedEmbryos) {
+          newRucksack.preservedEmbryos[eId] = (newRucksack.preservedEmbryos[eId] || 0) + 1;
+        }
+
+        const newHistory = [
+          ...run.nodeHistory,
+          {
+            node: run.currentNodeIndex,
+            strataId: run.activeStrataId,
+            eventTitle: card.title,
+            actionTaken: actionType,
+            success: outcome.success,
+          },
+        ];
+
+        // Check if morale hit 0 -> EXPEDITION FAILURE
+        if (newMorale <= 0) {
+          playCrisisAlarm();
+          const extraction = extractRucksack(newRucksack, true);
+          for (const [fId, qty] of Object.entries(extraction.savedFossils)) {
+            newBarn[fId] = (newBarn[fId] || 0) + qty;
+          }
+          if (extraction.savedAmber > 0) newBarn.amber_specimen = (newBarn.amber_specimen || 0) + extraction.savedAmber;
+          if (extraction.savedSlabs > 0) newBarn.mineral_slab = (newBarn.mineral_slab || 0) + extraction.savedSlabs;
+
+          state.addNotification(extraction.lostMaterialsText || 'Expedition Failed: Morale broke! Salvaged half the mineral haul; fragile embryos died.', '💀', 'event');
+
+          set({
+            barn: newBarn,
+            silo: newSilo,
+            coins: state.coins + extraction.savedCoins,
+            hydrology: updatedHydrology,
+            activeTrailRun: {
+              ...run,
+              morale: 0,
+              isFailed: true,
+              resolvedEventChoice: actionType,
+              eventOutcomeMessage: outcome.message,
+              nodeHistory: newHistory,
+              rucksack: newRucksack,
+            },
+            isDirty: true,
+          });
+          return;
+        }
+
+        if (outcome.success) {
+          playVictoryChime();
+        } else {
+          playDefeatSound();
+        }
+
+        set({
+          barn: newBarn,
+          silo: newSilo,
+          hydrology: updatedHydrology,
+          activeTrailRun: {
+            ...run,
+            morale: newMorale,
+            resolvedEventChoice: actionType,
+            eventOutcomeMessage: outcome.message,
+            nodeHistory: newHistory,
+            rucksack: newRucksack,
+          },
+          isDirty: true,
+        });
+      },
+
+      advanceTrailNode: () => {
+        const state = get();
+        const run = state.activeTrailRun;
+        if (!run || run.isCompleted || run.isFailed || !run.resolvedEventChoice) return;
+
+        if (run.currentNodeIndex >= 5) {
+          state.bankAndExtractTrailLoot();
+          return;
+        }
+
+        const traversalCost = calculateNodeTraversalCost(state.hydrology?.weatherCondition);
+        const newMorale = Math.max(0, run.morale - traversalCost);
+
+        if (newMorale <= 0) {
+          playCrisisAlarm();
+          const extraction = extractRucksack(run.rucksack, true);
+          const newBarn = { ...state.barn };
+          for (const [fId, qty] of Object.entries(extraction.savedFossils)) {
+            newBarn[fId] = (newBarn[fId] || 0) + qty;
+          }
+          if (extraction.savedAmber > 0) newBarn.amber_specimen = (newBarn.amber_specimen || 0) + extraction.savedAmber;
+          if (extraction.savedSlabs > 0) newBarn.mineral_slab = (newBarn.mineral_slab || 0) + extraction.savedSlabs;
+
+          state.addNotification('Expedition Failed: Trail traversal depleted remaining stamina. 50% cached haul lost.', '💀', 'event');
+          set({
+            barn: newBarn,
+            coins: state.coins + extraction.savedCoins,
+            activeTrailRun: {
+              ...run,
+              morale: 0,
+              isFailed: true,
+            },
+            isDirty: true,
+          });
+          return;
+        }
+
+        const nextNode = run.currentNodeIndex + 1;
+        const nextStrata = FRONTIER_STRATA_SEQUENCE[nextNode - 1];
+        const nextCard = drawFrontierEvent(nextStrata, nextNode);
+
+        playGoldRushFanfare();
+        state.addNotification(`🧭 Stepped deeper into Strata ${nextNode}/5: ${FRONTIER_STRATA_REGISTRY[nextStrata]?.name || nextStrata} (-${traversalCost} Morale)`, '🧭', 'info');
+
+        set({
+          activeTrailRun: {
+            ...run,
+            currentNodeIndex: nextNode,
+            activeStrataId: nextStrata,
+            morale: newMorale,
+            currentEventCard: nextCard,
+            resolvedEventChoice: null,
+            eventOutcomeMessage: null,
+          },
+          isDirty: true,
+        });
+      },
+
+      bankAndExtractTrailLoot: () => {
+        const state = get();
+        const run = state.activeTrailRun;
+        if (!run || run.isExtracted) return;
+
+        const extraction = extractRucksack(run.rucksack, false);
+        const newBarn = { ...state.barn };
+        let totalItems = 0;
+
+        for (const [fId, qty] of Object.entries(extraction.savedFossils)) {
+          newBarn[fId] = (newBarn[fId] || 0) + qty;
+          totalItems += qty;
+        }
+        if (extraction.savedAmber > 0) {
+          newBarn.amber_specimen = (newBarn.amber_specimen || 0) + extraction.savedAmber;
+          totalItems += extraction.savedAmber;
+        }
+        if (extraction.savedSlabs > 0) {
+          newBarn.mineral_slab = (newBarn.mineral_slab || 0) + extraction.savedSlabs;
+          totalItems += extraction.savedSlabs;
+        }
+        for (const [eId, qty] of Object.entries(extraction.savedEmbryos)) {
+          newBarn[`embryo_${eId}`] = (newBarn[`embryo_${eId}`] || 0) + qty;
+          totalItems += qty;
+        }
+
+        playVictoryChime();
+        state.addNotification(`⛺ Expedition Banked! Deposited ${totalItems} fossils & minerals + ${extraction.savedCoins} coins to estate vault!`, '🎉', 'discovery');
+
+        set({
+          barn: newBarn,
+          coins: state.coins + extraction.savedCoins,
+          activeTrailRun: {
+            ...run,
+            isCompleted: true,
+            isExtracted: true,
+          },
+          isDirty: true,
+        });
+      },
+
+      // --- Amber Bio-Lab Closed-Loop Incubation Actions ---
+      startSpecimenIncubation: (chamberId: number, speciesId: PrehistoricSpeciesId) => {
+        const state = get();
+        const spec = PREHISTORIC_SPECIES_REGISTRY[speciesId];
+        if (!spec) return false;
+
+        const bioLab = state.amberBioLab || createDefaultAmberBioLab();
+        const chamber = bioLab.chambers.find(c => c.chamberId === chamberId);
+        if (!chamber || chamber.status !== 'EMPTY') {
+          state.addNotification('Chamber is currently occupied or unavailable!', '⚠️', 'info');
+          return false;
+        }
+
+        const fossilQty = (state.barn[spec.fossilItemId] || 0);
+        if (fossilQty <= 0) {
+          state.addNotification(`Missing required specimen core: ${spec.fossilName}!`, '⚠️', 'info');
+          return false;
+        }
+
+        const towerWater = state.hydrology?.towerLiters || 0;
+        if (towerWater < spec.incubationTowerWaterLiters) {
+          state.addNotification(`Elevated Gravity Tower has insufficient water! Requires ${spec.incubationTowerWaterLiters}L (Tower has ${towerWater}L)`, '🚰', 'info');
+          return false;
+        }
+
+        const newBarn = { ...state.barn };
+        newBarn[spec.fossilItemId] = fossilQty - 1;
+
+        const updatedHydrology = {
+          ...state.hydrology,
+          towerLiters: Math.max(0, state.hydrology.towerLiters - spec.incubationTowerWaterLiters),
+        };
+
+        const updatedChambers = bioLab.chambers.map(c => {
+          if (c.chamberId === chamberId) {
+            return {
+              ...c,
+              status: 'INCUBATING' as const,
+              speciesId,
+              startedAt: Date.now(),
+              durationSec: spec.incubationTimeSec,
+              progressPct: 0,
+              towerWaterReservedLiters: spec.incubationTowerWaterLiters,
+              uncooledSecElapsed: 0,
+            };
+          }
+          return c;
+        });
+
+        playVictoryChime();
+        state.addNotification(`🧬 Incubation Chamber #${chamberId} initiated for ${spec.name}! Closed-loop cooling engaged (${spec.incubationTowerWaterLiters}L pumped).`, '🧬', 'discovery');
+
+        set({
+          barn: newBarn,
+          hydrology: updatedHydrology,
+          amberBioLab: {
+            ...bioLab,
+            chambers: updatedChambers,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      collectRevivedSpecimen: (chamberId: number) => {
+        const state = get();
+        const bioLab = state.amberBioLab || createDefaultAmberBioLab();
+        const chamber = bioLab.chambers.find(c => c.chamberId === chamberId);
+        if (!chamber || chamber.status !== 'READY_TO_REVIVE' || !chamber.speciesId) {
+          return false;
+        }
+
+        const spec = PREHISTORIC_SPECIES_REGISTRY[chamber.speciesId];
+        const sanctuary = state.prehistoricSanctuary || createDefaultSanctuary();
+        const enclosure = sanctuary.enclosures[spec.enclosureType];
+
+        const updatedEnclosure = {
+          ...enclosure,
+          specimenCount: (enclosure?.specimenCount || 0) + 1,
+          isStarving: false,
+        };
+
+        const updatedChambers = bioLab.chambers.map(c => {
+          if (c.chamberId === chamberId) {
+            return {
+              ...c,
+              status: 'EMPTY' as const,
+              speciesId: undefined,
+              startedAt: undefined,
+              progressPct: 0,
+              towerWaterReservedLiters: 0,
+              uncooledSecElapsed: 0,
+            };
+          }
+          return c;
+        });
+
+        playGoldRushFanfare();
+        state.addNotification(`🌟 ${spec.name} successfully synthesized and relocated to ${spec.enclosureName}! Estate passive [${spec.estatePassiveTitle}] active!`, spec.emoji, 'discovery');
+
+        set({
+          amberBioLab: {
+            ...bioLab,
+            chambers: updatedChambers,
+            totalSpecimensRevived: (bioLab.totalSpecimensRevived || 0) + 1,
+          },
+          prehistoricSanctuary: {
+            ...sanctuary,
+            enclosures: {
+              ...sanctuary.enclosures,
+              [spec.enclosureType]: updatedEnclosure,
+            },
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      // --- Prehistoric Sanctuary Operations ---
+      depositEnclosureFeed: (enclosureId: EnclosureTypeId, qty: number) => {
+        const state = get();
+        const sanctuary = state.prehistoricSanctuary || createDefaultSanctuary();
+        const enclosure = sanctuary.enclosures[enclosureId];
+        if (!enclosure) return false;
+
+        const spec = PREHISTORIC_SPECIES_REGISTRY[enclosure.speciesId];
+        const dietId = spec.dietProductId;
+        const available = (state.barn[dietId] || 0) + (state.silo[dietId] || 0);
+
+        if (available <= 0) {
+          state.addNotification(`No ${spec.dietName} available in barn or silo!`, '⚠️', 'info');
+          return false;
+        }
+
+        const depositAmount = Math.min(qty, available, enclosure.maxTroughLiters - enclosure.troughFoodLiters);
+        if (depositAmount <= 0) {
+          state.addNotification('Trough is already full!', '🥣', 'info');
+          return false;
+        }
+
+        const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
+        let remaining = depositAmount;
+        if (newBarn[dietId]) {
+          const take = Math.min(newBarn[dietId], remaining);
+          newBarn[dietId] -= take;
+          remaining -= take;
+        }
+        if (remaining > 0 && newSilo[dietId]) {
+          const take = Math.min(newSilo[dietId], remaining);
+          newSilo[dietId] -= take;
+          remaining -= take;
+        }
+
+        const updatedEnclosures = {
+          ...sanctuary.enclosures,
+          [enclosureId]: {
+            ...enclosure,
+            troughFoodLiters: Math.min(enclosure.maxTroughLiters, enclosure.troughFoodLiters + depositAmount),
+            isStarving: false,
+            lastFedTimestamp: Date.now(),
+          },
+        };
+
+        playCashRegisterSound();
+        state.addNotification(`🥣 Deposited ${depositAmount} units of ${spec.dietName} into ${enclosure.name}!`, spec.dietEmoji, 'event');
+
+        set({
+          barn: newBarn,
+          silo: newSilo,
+          prehistoricSanctuary: {
+            ...sanctuary,
+            enclosures: updatedEnclosures,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      collectEnclosureHarvest: (enclosureId: EnclosureTypeId) => {
+        const state = get();
+        const sanctuary = state.prehistoricSanctuary || createDefaultSanctuary();
+        const enclosure = sanctuary.enclosures[enclosureId];
+        if (!enclosure || enclosure.harvestReadyCount <= 0) return 0;
+
+        const spec = PREHISTORIC_SPECIES_REGISTRY[enclosure.speciesId];
+        const harvestCount = enclosure.harvestReadyCount;
+
+        const newBarn = { ...state.barn };
+        newBarn[spec.harvestProductId] = (newBarn[spec.harvestProductId] || 0) + harvestCount;
+
+        const updatedEnclosures = {
+          ...sanctuary.enclosures,
+          [enclosureId]: {
+            ...enclosure,
+            harvestReadyCount: 0,
+          },
+        };
+
+        playVictoryChime();
+        state.addNotification(`✨ Harvested ${harvestCount}x ${spec.harvestName} from ${spec.name}!`, spec.harvestEmoji, 'discovery');
+
+        set({
+          barn: newBarn,
+          prehistoricSanctuary: {
+            ...sanctuary,
+            enclosures: updatedEnclosures,
+          },
+          isDirty: true,
+        });
+        return harvestCount;
+      },
+
       // Habitat
       upgradeHabitat: (species) => {
         const state = get();
@@ -5508,6 +6022,16 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // Prehistoric Sanctuary Macro-Simulation Estate Buffs
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const hasDimetrodon = Boolean(sanctuaryBuffs.enclosures?.enclosure_geothermal_basin?.specimenCount > 0 && !sanctuaryBuffs.enclosures?.enclosure_geothermal_basin?.isStarving);
+        const hasMeganeura = Boolean(sanctuaryBuffs.enclosures?.enclosure_canopy_terrarium?.specimenCount > 0 && !sanctuaryBuffs.enclosures?.enclosure_canopy_terrarium?.isStarving);
+        const hasTrilobite = Boolean(sanctuaryBuffs.enclosures?.enclosure_silt_terrarium?.specimenCount > 0 && !sanctuaryBuffs.enclosures?.enclosure_silt_terrarium?.isStarving);
+        const hasArthropleura = Boolean(sanctuaryBuffs.enclosures?.enclosure_sylvan_floor?.specimenCount > 0 && !sanctuaryBuffs.enclosures?.enclosure_sylvan_floor?.isStarving);
+
+        const meganeuraSpeedMultiplier = hasMeganeura ? 1.25 : 1.0;
+        const trilobiteSpeedMultiplier = hasTrilobite ? 1.15 : 1.0;
+
         // Update plots with Hydrology & Atmospheric Crop Phenology Dynamics
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
         const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydroSimResult.updatedHydrology.weatherCondition);
@@ -5528,12 +6052,23 @@ export const useGameStore = create<GameState>()(
             }
 
             // Direct Atmospheric Crop Phenology evaluation
-            const pheno = evaluateCropPhenology({
+            let pheno = evaluateCropPhenology({
               cropId: p.crop,
               weather: activeWeatherId,
               moistureLevel: p.moistureLevel !== undefined ? p.moistureLevel : 60.0,
               isProtectedByGreenhouse: false,
             });
+
+            // Dimetrodon Geothermal Radiance: Micro-climate bubble granting complete immunity to Frost Shock!
+            if (hasDimetrodon && pheno.isFrostbitten) {
+              pheno = {
+                ...pheno,
+                isFrostbitten: false,
+                badgeEmoji: '🔥🛡️',
+                badgeText: 'Geothermal Radiance (Frost Immunity)',
+                growthSpeedMultiplier: Math.max(1.0, pheno.growthSpeedMultiplier),
+              };
+            }
 
             // Growth halted if crop is thermal-wilted, frostbitten, or in winter dormancy
             if (pheno.isWilted || pheno.isFrostbitten || pheno.isDormant) {
@@ -5560,7 +6095,7 @@ export const useGameStore = create<GameState>()(
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -5640,7 +6175,9 @@ export const useGameStore = create<GameState>()(
             !state.specialistWorkers?.worker_feedmaster_barnaby?.isStriking
           );
           const barnabySpeed = (isBarnabyActive && (buildingId === 'animal_feed' || buildingId === 'feed_mill')) ? 1.3 : 1.0;
-          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier * overclockMultiplier * barnabySpeed;
+          // Arthropleura Composting Engine: Doubles Feed Mill processing velocity (+100% throughput)
+          const arthropleuraSpeed = (hasArthropleura && buildingId === 'feed_mill') ? 2.0 : 1.0;
+          const speedMultiplier = (isArtisanMasterclass && isArtisanWorkshop ? 4.0 : 1.0) * masterLedgerMultiplier * overclockMultiplier * barnabySpeed * arthropleuraSpeed;
 
           newQueues[buildingId] = queue.map(slot => {
             if (!slot.done) {
@@ -6820,174 +7357,127 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-    // --- Expedition Processing (Isolated Frontier Cache & Camp Holding Pens) ---
-    const currentWilderness = get().wilderness || createDefaultWilderness();
-    let frontierCache = { ...(currentWilderness.frontierCache || {}) };
-    let campHoldingPens = [...(currentWilderness.campHoldingPens || [])];
-    let stationedBeasts = [...(currentWilderness.stationedBeasts || [])];
-    let expeditionsToUpdate = [...(currentWilderness.activeExpeditions || [])];
+    // --- Prehistoric Amber Bio-Lab & Sanctuary Closed-Loop Simulation Tick ---
+    const currentBioLab = get().amberBioLab || createDefaultAmberBioLab();
+    const currentSanctuary = get().prehistoricSanctuary || createDefaultSanctuary();
+    const towerLiters = get().hydrology?.towerLiters || 0;
     let notificationsToAdd: { message: string; emoji: string; type: string }[] = [];
-    const stateForExpedition = get();
 
-    expeditionsToUpdate = expeditionsToUpdate.map(expedition => {
-      // Long-duration expedition (1h, 4h, 8h, 12h)
-      if (expedition.presetId) {
-        if (expedition.status === 'active') {
-          const elapsed = now - expedition.startedAt;
-          if (elapsed >= expedition.durationMs) {
-            const preset = EXPEDITION_PRESETS[expedition.presetId];
-            const materials: Record<string, number> = {};
-
-            // Stationed beast keen_forager trait bonus
-            const hasForager = stationedBeasts.some(b => b.trait?.toLowerCase().includes('forager'));
-            const bonusRoll = hasForager ? 2 : 0;
-
-            if (preset) {
-              for (const [matId, [min, max]] of Object.entries(preset.yieldRanges)) {
-                const qty = Math.floor(min + Math.random() * (max - min + 1)) + bonusRoll;
-                if (qty > 0) materials[matId] = qty;
-              }
-            }
-
-            const cratedBeasts: CratedBeast[] = [];
-            if (preset && Math.random() <= preset.beastChance) {
-              cratedBeasts.push(generateCratedBeast(expedition.presetId, preset.tierPool));
-              if (expedition.presetId === '12h' && Math.random() < 0.5) {
-                cratedBeasts.push(generateCratedBeast(expedition.presetId, preset.tierPool));
-              }
-            }
-
-            const leftoverRations: Record<string, number> = {};
-            for (const [itemId, qty] of Object.entries(expedition.provisions || {})) {
-              const unused = Math.floor(qty * 0.25);
-              if (unused > 0) leftoverRations[itemId] = unused;
-            }
-
-            // Deposit materials into Frontier Cache & beasts into Camp Holding Pens
-            for (const [mId, mQty] of Object.entries(materials)) {
-              frontierCache[mId] = (frontierCache[mId] || 0) + mQty;
-            }
-            campHoldingPens.push(...cratedBeasts);
-
+    // 1. Amber Bio-Lab Closed-Loop Incubation Chamber Tick
+    const updatedChambers = (currentBioLab.chambers || []).map(ch => {
+      if (ch.status === 'INCUBATING') {
+        if (towerLiters <= 0) {
+          // Elevated Gravity Tower ran dry (0L)! Enters SUSPENDED_UNCOOLED
+          notificationsToAdd.push({
+            message: `⚠️ Amber Bio-Lab Alert: Incubation Chamber #${ch.chamberId} cooling pipe lost water! Incubation suspended. Replenish Gravity Tower immediately.`,
+            emoji: '❄️⚠️',
+            type: 'alert',
+          });
+          return {
+            ...ch,
+            status: 'SUSPENDED_UNCOOLED' as const,
+            uncooledSecElapsed: ch.uncooledSecElapsed + 1,
+          };
+        } else {
+          // Healthy closed-loop cooling: advance progress
+          const deltaPct = (1 / Math.max(1, ch.durationSec)) * 100;
+          const nextPct = Math.min(100, ch.progressPct + deltaPct);
+          if (nextPct >= 100) {
+            const spec = ch.speciesId ? PREHISTORIC_SPECIES_REGISTRY[ch.speciesId] : null;
             notificationsToAdd.push({
-              message: `🏕️ Caravan arrived from ${preset?.name || 'Wilderness'}! Materials cached in Frontier Cache & beasts crated in Camp Holding Pens.`,
-              emoji: '📦',
+              message: `🌟 Incubation Chamber #${ch.chamberId} completed! ${spec?.name || 'Ancient specimen'} is ready to revive into Sanctuary.`,
+              emoji: spec?.emoji || '🧬',
               type: 'discovery',
             });
-
             return {
-              ...expedition,
-              status: 'completed' as const,
-              spoils: {
-                materials,
-                cratedBeast: cratedBeasts[0] || null,
-                cratedBeasts,
-                leftoverRations,
-                coins: preset ? Math.floor((preset.coinRewardRange[0] + preset.coinRewardRange[1]) / 2) : 1000,
-                gems: preset ? preset.gemRewardRange[0] : 2,
-                recalledEarly: false,
-                completionPct: 100,
-                claimed: false,
-              },
+              ...ch,
+              status: 'READY_TO_REVIVE' as const,
+              progressPct: 100,
             };
           }
-        }
-        return expedition;
-      }
-
-      // Legacy expedition handling
-      const elapsed = now - expedition.startedAt;
-      if (expedition.biomeId && elapsed >= (expedition.durationMs || 0) * 0.5 && !expedition.midpointResolved && !expedition.pendingChoice) {
-        const encounter = TRAIL_ENCOUNTERS[Math.floor(Math.random() * TRAIL_ENCOUNTERS.length)];
-        return {
-          ...expedition,
-          pendingChoice: {
-            prompt: encounter.prompt,
-            safeLabel: encounter.safeLabel,
-            riskyLabel: encounter.riskyLabel,
-          },
-        };
-      }
-
-      if (expedition.biomeId && elapsed >= (expedition.durationMs || 0) && expedition.midpointResolved) {
-        const biome = BIOMES[expedition.biomeId];
-        const lure = expedition.lureId ? LURES[expedition.lureId] : null;
-        let success = true;
-        let tierBoost = 0;
-        if (expedition.riskyChosen) {
-          if (Math.random() < 0.4) success = false;
-          else tierBoost = 0.15;
-        }
-
-        if (success && biome && lure) {
-          const pool = biome.speciesPool;
-          const totalWeight = pool.reduce((sum, p) => sum + p.weight, 0);
-          let roll = Math.random() * totalWeight;
-          let selected = pool[0];
-          for (const p of pool) {
-            roll -= p.weight;
-            if (roll <= 0) { selected = p; break; }
-          }
-          const rareChance = lure.rareBoost + tierBoost;
-          const legendaryChance = lure.legendaryBoost + (tierBoost * 0.5);
-          if (selected.tier === 'common' && Math.random() < rareChance) {
-            selected = { ...selected, tier: 'rare' };
-          } else if (selected.tier === 'uncommon' && Math.random() < rareChance * 0.7) {
-            selected = { ...selected, tier: 'rare' };
-          }
-          if (selected.tier === 'rare' && Math.random() < legendaryChance) {
-            selected = { ...selected, tier: 'legendary' };
-          }
-
-          const breedId = `${selected.species}_${selected.tier}`;
-          const crated: CratedBeast = {
-            id: generateId(),
-            species: selected.species,
-            tier: selected.tier,
-            breedId,
-            name: `${TIER_LABELS[selected.tier]} ${ANIMALS[selected.species].name}`,
-            avatar: ANIMALS[selected.species].emoji,
-            emoji: ANIMALS[selected.species].emoji,
-            capturedAt: Date.now(),
-            originPreset: '1h',
-            maxCycles: 20,
-            trait: 'Wild Instincts',
-            traitDescription: 'Hardened by wilderness survival',
-            statBonus: '+10% Resilience',
+          return {
+            ...ch,
+            progressPct: nextPct,
           };
-          campHoldingPens.push(crated);
-          notificationsToAdd.push({
-            message: `Rescued ${selected.tier} ${ANIMALS[selected.species].name} from ${biome.name}! Stored in Camp Holding Pens.`,
-            emoji: ANIMALS[selected.species].emoji,
-            type: 'success',
-          });
         }
-        return null as any;
+      } else if (ch.status === 'SUSPENDED_UNCOOLED') {
+        if (towerLiters > 0) {
+          // Gravity Tower replenished! Cooling resumed
+          return {
+            ...ch,
+            status: 'INCUBATING' as const,
+          };
+        } else {
+          const newElapsed = ch.uncooledSecElapsed + 1;
+          if (newElapsed >= 180) { // Specimen decay threshold
+            notificationsToAdd.push({
+              message: `💀 Critical Bio-Lab Failure: Chamber #${ch.chamberId} specimen decayed due to prolonged uncooled state!`,
+              emoji: '💀',
+              type: 'alert',
+            });
+            return {
+              ...ch,
+              status: 'DECAYED' as const,
+              uncooledSecElapsed: newElapsed,
+            };
+          }
+          return {
+            ...ch,
+            uncooledSecElapsed: newElapsed,
+          };
+        }
       }
+      return ch;
+    });
 
-      return expedition;
-    }).filter(Boolean);
+    // 2. Prehistoric Sanctuary Habitat Enclosures Tick
+    const updatedEnclosures = { ...(currentSanctuary.enclosures || {}) };
+    for (const [encKey, enc] of Object.entries(updatedEnclosures)) {
+      if (enc.specimenCount > 0) {
+        const spec = PREHISTORIC_SPECIES_REGISTRY[enc.speciesId];
+        // Food trough consumption: -0.05 liters per second per living specimen
+        const newTrough = Math.max(0, enc.troughFoodLiters - 0.05 * enc.specimenCount);
+        const isStarving = newTrough <= 0;
 
-    const unlockedBiomes = { ...currentWilderness.unlockedBiomes };
-    for (const [biomeId, biome] of Object.entries(BIOMES)) {
-      if (stateForExpedition.level >= biome.unlockLevel) {
-        unlockedBiomes[biomeId as BiomeId] = true;
+        let nextHarvestProgress = enc.harvestProgressSec;
+        let nextHarvestReady = enc.harvestReadyCount;
+
+        if (!isStarving && spec) {
+          nextHarvestProgress += 1;
+          if (nextHarvestProgress >= spec.harvestPeriodSec) {
+            nextHarvestReady += 1;
+            nextHarvestProgress = 0;
+            notificationsToAdd.push({
+              message: `✨ ${spec.name} in ${enc.name} shed new ${spec.harvestName}! Ready to collect.`,
+              emoji: spec.harvestEmoji,
+              type: 'event',
+            });
+          }
+        }
+
+        updatedEnclosures[encKey as EnclosureTypeId] = {
+          ...enc,
+          troughFoodLiters: newTrough,
+          isStarving,
+          harvestProgressSec: nextHarvestProgress,
+          harvestReadyCount: nextHarvestReady,
+        };
       }
     }
 
     set({
-      wilderness: {
-        ...currentWilderness,
-        unlockedBiomes,
-        activeExpeditions: expeditionsToUpdate,
-        frontierCache,
-        campHoldingPens,
-        stationedBeasts,
+      amberBioLab: {
+        ...currentBioLab,
+        chambers: updatedChambers,
+      },
+      prehistoricSanctuary: {
+        ...currentSanctuary,
+        enclosures: updatedEnclosures,
       },
     });
 
     for (const n of notificationsToAdd) {
-      stateForExpedition.addNotification(n.message, n.emoji, n.type as any);
+      get().addNotification(n.message, n.emoji, n.type as any);
     }
 
         // --- Territory Expansion Tick ---

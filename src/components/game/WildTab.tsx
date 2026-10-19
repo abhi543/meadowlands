@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { WildernessPanel } from './WildernessPanel';
+import { PrehistoricSanctuaryPanel } from './prehistoric/PrehistoricSanctuaryPanel';
 
 /**
- * WildTab component rendering the Wilderness Outpost and 3D Low-Poly Expedition Explorer.
+ * WildTab component rendering the Prehistoric Sanctuary & Amber Bio-Lab Console.
  */
 export function WildTab() {
-  return <WildernessPanel />;
+  return <PrehistoricSanctuaryPanel />;
 }
 
 export default WildTab;

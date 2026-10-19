@@ -176,6 +176,24 @@ export const WILDERNESS_MATERIAL_TIERS: Record<string, { rarity: 'common' | 'unc
   mountain_slate: { rarity: 'rare',      base: 220, defaultHours: 4,  name: 'Mountain Slate', icon: '🪨' },
   fossil_bark:    { rarity: 'rare',      base: 220, defaultHours: 6,  name: 'Fossil Bark',    icon: '🍂' },
   mythical_ore:   { rarity: 'legendary', base: 600, defaultHours: 8,  name: 'Mythical Ore',   icon: '🔮' },
+
+  // Prehistoric Strata Fossils & Minerals
+  fossil_trilobite_carapace: { rarity: 'uncommon', base: 300, defaultHours: 4, name: 'Intact Trilobite Carapace', icon: '🐚' },
+  amber_meganeura_wing:    { rarity: 'rare', base: 450, defaultHours: 5, name: 'Amber-Encased Giant Wing', icon: '✨' },
+  fossil_arthropleura_plates: { rarity: 'rare', base: 480, defaultHours: 5, name: 'Segmented Exoskeleton Plates', icon: '🧱' },
+  fossil_dimetrodon_spine: { rarity: 'rare', base: 600, defaultHours: 6, name: 'Mineralized Dorsal Sail Spine', icon: '🦴' },
+  fossil_titanoboa_vertebra: { rarity: 'legendary', base: 800, defaultHours: 7, name: 'Petrified Vertebral Column', icon: '🦴' },
+  cryo_mammoth_tissue:     { rarity: 'legendary', base: 1000, defaultHours: 8, name: 'Cryo-Preserved Core Tissue', icon: '❄️' },
+  amber_specimen:          { rarity: 'uncommon', base: 150, defaultHours: 3, name: 'Primeval Amber Core', icon: '✨' },
+  mineral_slab:            { rarity: 'common', base: 80, defaultHours: 2, name: 'Fossiliferous Mineral Slab', icon: '🪨' },
+
+  // Prehistoric Shed Harvest Commodities
+  chitin_molt_plates:      { rarity: 'uncommon', base: 200, defaultHours: 4, name: 'Chitin Molt Plates', icon: '🛡️' },
+  prismatic_wing_membrane: { rarity: 'rare', base: 350, defaultHours: 5, name: 'Prismatic Wing Membranes', icon: '🪽' },
+  primeval_humus:          { rarity: 'uncommon', base: 250, defaultHours: 4, name: 'Supercharged Primeval Humus', icon: '🍂' },
+  thermal_scutes:          { rarity: 'rare', base: 400, defaultHours: 6, name: 'Shed Thermal Scutes', icon: '🔥' },
+  serpent_slough:          { rarity: 'rare', base: 500, defaultHours: 6, name: 'Massive Serpent Slough', icon: '📜' },
+  insulated_down_wool:     { rarity: 'legendary', base: 600, defaultHours: 7, name: 'Insulated Down Wool', icon: '🧶' },
 };
 
 export function calculateWildMaterialValue(

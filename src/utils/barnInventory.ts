@@ -128,6 +128,41 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   mountain_slate: { id: 'mountain_slate', name: 'Mountain Slate', icon: '🪨', category: 'forage', baseValue: 450, isEdibleFeed: false },
   fossil_bark: { id: 'fossil_bark', name: 'Fossil Bark', icon: '🍂', category: 'forage', baseValue: 750, isEdibleFeed: false },
   mythical_ore: { id: 'mythical_ore', name: 'Mythical Ore', icon: '🔮', category: 'forage', baseValue: 1800, isEdibleFeed: false },
+
+  // Prehistoric Frontier Tools
+  amber_chisel: { id: 'amber_chisel', name: 'Amber Chisel', icon: '🔨', category: 'artisan', baseValue: 250, isEdibleFeed: false },
+  excavation_pickaxe: { id: 'excavation_pickaxe', name: 'Excavation Pickaxe', icon: '⛏️', category: 'artisan', baseValue: 350, isEdibleFeed: false },
+  thermal_solvent: { id: 'thermal_solvent', name: 'Thermal Solvent', icon: '🧪', category: 'artisan', baseValue: 400, isEdibleFeed: false },
+
+  // Prehistoric Fossils & Strata Minerals
+  fossil_trilobite_carapace: { id: 'fossil_trilobite_carapace', name: 'Intact Trilobite Carapace', icon: '🐚', category: 'forage', baseValue: 600, isEdibleFeed: false },
+  amber_meganeura_wing: { id: 'amber_meganeura_wing', name: 'Amber-Encased Giant Wing', icon: '✨', category: 'forage', baseValue: 850, isEdibleFeed: false },
+  fossil_arthropleura_plates: { id: 'fossil_arthropleura_plates', name: 'Segmented Exoskeleton Plates', icon: '🧱', category: 'forage', baseValue: 900, isEdibleFeed: false },
+  fossil_dimetrodon_spine: { id: 'fossil_dimetrodon_spine', name: 'Mineralized Dorsal Sail Spine', icon: '🦴', category: 'forage', baseValue: 1200, isEdibleFeed: false },
+  fossil_titanoboa_vertebra: { id: 'fossil_titanoboa_vertebra', name: 'Petrified Vertebral Column', icon: '🦴', category: 'forage', baseValue: 1600, isEdibleFeed: false },
+  cryo_mammoth_tissue: { id: 'cryo_mammoth_tissue', name: 'Cryo-Preserved Core Tissue', icon: '❄️', category: 'forage', baseValue: 2200, isEdibleFeed: false },
+  amber_specimen: { id: 'amber_specimen', name: 'Primeval Amber Core', icon: '✨', category: 'forage', baseValue: 300, isEdibleFeed: false },
+  mineral_slab: { id: 'mineral_slab', name: 'Fossiliferous Mineral Slab', icon: '🪨', category: 'forage', baseValue: 150, isEdibleFeed: false },
+
+  // Prehistoric Diets
+  algae_paste: { id: 'algae_paste', name: 'Algae Paste', icon: '🧪', category: 'artisan', baseValue: 45, isEdibleFeed: true },
+  insect_mash: { id: 'insect_mash', name: 'Insect Mash', icon: '🥣', category: 'artisan', baseValue: 60, isEdibleFeed: true },
+  crushed_grain_mash: { id: 'crushed_grain_mash', name: 'Crushed Grain Mash', icon: '🌾', category: 'artisan', baseValue: 50, isEdibleFeed: true },
+  mountain_hay_bales: { id: 'mountain_hay_bales', name: 'Mountain Hay Bales', icon: '🌾', category: 'artisan', baseValue: 70, isEdibleFeed: true },
+
+  // Prehistoric Harvest Products
+  chitin_molt_plates: { id: 'chitin_molt_plates', name: 'Chitin Molt Plates', icon: '🛡️', category: 'animal_product', baseValue: 400, isEdibleFeed: false },
+  prismatic_wing_membrane: { id: 'prismatic_wing_membrane', name: 'Prismatic Wing Membranes', icon: '🪽', category: 'animal_product', baseValue: 650, isEdibleFeed: false },
+  primeval_humus: { id: 'primeval_humus', name: 'Supercharged Primeval Humus', icon: '🍂', category: 'forage', baseValue: 500, isEdibleFeed: false },
+  thermal_scutes: { id: 'thermal_scutes', name: 'Shed Thermal Scutes', icon: '🔥', category: 'animal_product', baseValue: 750, isEdibleFeed: false },
+  serpent_slough: { id: 'serpent_slough', name: 'Massive Serpent Slough', icon: '📜', category: 'animal_product', baseValue: 950, isEdibleFeed: false },
+  insulated_down_wool: { id: 'insulated_down_wool', name: 'Insulated Down Wool', icon: '🧶', category: 'animal_product', baseValue: 1100, isEdibleFeed: false },
+
+  // Amber Bio-Lab Infrastructure Materials
+  fired_hardwood: { id: 'fired_hardwood', name: 'Fired Hardwood', icon: '🪵', category: 'artisan', baseValue: 120, isEdibleFeed: false },
+  tempered_glass: { id: 'tempered_glass', name: 'Tempered Glass Panes', icon: '🪟', category: 'artisan', baseValue: 180, isEdibleFeed: false },
+  copper_pipes: { id: 'copper_pipes', name: 'Copper Pipes', icon: '🔧', category: 'artisan', baseValue: 220, isEdibleFeed: false },
+  geothermal_relics: { id: 'geothermal_relics', name: 'Geothermal Relics', icon: '🏺', category: 'forage', baseValue: 500, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {
