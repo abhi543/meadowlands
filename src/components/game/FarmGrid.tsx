@@ -3,7 +3,6 @@
 import { useGameStore } from '@/game/store';
 import { CROPS, PRODUCTS, type CropId } from '@/game/data';
 import { useState } from 'react';
-import { FarmWell } from './FarmWell';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { PlotUpgradeModal } from './PlotUpgradeModal';
 import { getSoilTier, getPlotUnlockCost } from '@/game/plotUpgrades';
@@ -109,8 +108,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         </div>
       )}
 
-      {/* Interactive Farm Well HUD */}
-      <FarmWell />
 
       {/* Farm Livestock & Animals Overview Widget */}
       <div className="bg-gradient-to-r from-amber-50/90 via-stone-50 to-orange-50/80 dark:from-stone-900/90 dark:via-stone-850 dark:to-stone-900/90 rounded-2xl p-3 border border-amber-200/90 dark:border-amber-900/50 shadow-xs flex flex-wrap items-center justify-between gap-3">
