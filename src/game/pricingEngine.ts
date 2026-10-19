@@ -43,13 +43,13 @@ export interface ContractSettlementBreakdown {
 // Formula: Raw Crop Value = (Seed Purchase Price * 2.0) + ((Growth Duration Sec / 60) * 2.5)
 // ----------------------------------------------------------------------------
 export const STAGE_0_RAW_CROPS: Record<string, { seedCost: number; growTimeSec: number; name: string; icon: string }> = {
-  wheat:       { seedCost: 1,  growTimeSec: 60,  name: 'Wheat',       icon: '🌾' },
-  corn:        { seedCost: 1,  growTimeSec: 60,  name: 'Corn',        icon: '🌽' },
-  carrot:      { seedCost: 5,  growTimeSec: 90,  name: 'Carrot',      icon: '🥕' },
-  strawberry:  { seedCost: 10, growTimeSec: 120, name: 'Strawberry',  icon: '🍓' },
-  cotton:      { seedCost: 12, growTimeSec: 150, name: 'Cotton',      icon: '🌿' },
-  soybean:     { seedCost: 15, growTimeSec: 180, name: 'Soybean',     icon: '🫛' },
-  pumpkin:     { seedCost: 25, growTimeSec: 600, name: 'Pumpkin',     icon: '🎃' },
+  wheat:       { seedCost: 1,  growTimeSec: 120,  name: 'Wheat',       icon: '🌾' },
+  corn:        { seedCost: 1,  growTimeSec: 120,  name: 'Corn',        icon: '🌽' },
+  carrot:      { seedCost: 5,  growTimeSec: 180,  name: 'Carrot',      icon: '🥕' },
+  strawberry:  { seedCost: 10, growTimeSec: 240, name: 'Strawberry',  icon: '🍓' },
+  cotton:      { seedCost: 12, growTimeSec: 300, name: 'Cotton',      icon: '🌿' },
+  soybean:     { seedCost: 15, growTimeSec: 360, name: 'Soybean',     icon: '🫛' },
+  pumpkin:     { seedCost: 25, growTimeSec: 1200, name: 'Pumpkin',     icon: '🎃' },
 };
 
 export function calculateRawCropValue(seedCost: number, growTimeSec: number): number {
