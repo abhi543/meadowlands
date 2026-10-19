@@ -50,6 +50,13 @@ import {
   createDefaultWeatherState,
 } from '@/game/hydrologyEngine';
 import {
+  simulateSiphonTick,
+  resolveOfflineHydrologyCatchUp,
+  type OfflineHydrologyResolutionResult,
+  getTowerLoadSheddingStage,
+  STAGE_THRESHOLDS,
+} from '@/game/hydraulicFailSafeEngine';
+import {
   type ZoneEcosystemData,
   createDefaultZoneEcosystem,
   isZoneFishingPaused,
@@ -630,6 +637,7 @@ export interface WorkshopLoadoutState {
   aquiferCasingsInstalled: number; // 0 to 4
   prismaticLensMounted: boolean;
   thermalCoreActive?: boolean;
+  emergencySiphonInstalled?: boolean;
 }
 
 export function createDefaultWorkshopLoadout(): WorkshopLoadoutState {
@@ -639,6 +647,7 @@ export function createDefaultWorkshopLoadout(): WorkshopLoadoutState {
     aquiferCasingsInstalled: 0,
     prismaticLensMounted: false,
     thermalCoreActive: false,
+    emergencySiphonInstalled: false,
   };
 }
 
@@ -1071,6 +1080,11 @@ export interface GameState {
   unmountPrismaticLens: () => void;
   mountThermalCore: () => boolean;
   unmountThermalCore: () => void;
+  installEmergencySiphonValve: () => boolean;
+
+  // Elevated Gravity Tower Fail-Safe & Offline Protection
+  offlineHydrologyReport: OfflineHydrologyResolutionResult | null;
+  dismissOfflineHydrologyReport: () => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -1374,6 +1388,7 @@ export const useGameStore = create<GameState>()(
       level: 1,
 
       workshopLoadout: createDefaultWorkshopLoadout(),
+      offlineHydrologyReport: null,
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
       barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
@@ -5951,6 +5966,34 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      installEmergencySiphonValve: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (loadout.emergencySiphonInstalled) return false;
+        const have = state.barn.emergency_siphon_valve || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        newBarn.emergency_siphon_valve = Math.max(0, have - 1);
+
+        playVictoryChime();
+        state.addNotification('🚰 Emergency Aquifer Siphon Valve installed! Automatic hydraulic transfer will protect tower from dropping below 80L.', '🛡️💧', 'discovery');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            emergencySiphonInstalled: true,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      dismissOfflineHydrologyReport: () => {
+        set({ offlineHydrologyReport: null, isDirty: true });
+      },
+
       // Habitat
       upgradeHabitat: (species) => {
         const state = get();
@@ -6289,12 +6332,60 @@ export const useGameStore = create<GameState>()(
         const sealsInstalled = Math.min(3, Math.max(0, workshopLoadout.sluiceGateSealsInstalled ?? (currentHydrology.hasReinforcedSluiceSeal ? 1 : 0)));
         const casingsInstalled = Math.min(4, Math.max(0, workshopLoadout.aquiferCasingsInstalled ?? ((state.barn?.subsoil_aquifer_casing || 0) > 0 ? 1 : 0)));
         const targetAquifer = 3000 + (casingsInstalled * 500);
+
+        // Offline Absence Mathematical Catch-Up Resolver (> 5 minutes / 300s)
+        let offlineHydrologyReportToSet: OfflineHydrologyResolutionResult | null = null;
+        if (state.lastTick && (now - state.lastTick >= 300000)) {
+          const elapsedOfflineSeconds = Math.round((now - state.lastTick) / 1000);
+          const activeChambers = (state.amberBioLab?.chambers || []).filter(c => c.status === 'INCUBATING' || (c.status as string) === 'CRYO_STANDBY').length;
+          const activeWorkers = Object.values(state.unifiedWorkers || {}).filter(w => w.isHired && !w.isPaused).length;
+
+          const offlineCatchup = resolveOfflineHydrologyCatchUp({
+            initialTowerLiters: currentHydrology.towerLiters,
+            initialAquiferLiters: currentHydrology.aquiferLiters,
+            elapsedOfflineSeconds,
+            isSluiceOpen: currentHydrology.sluiceGatesOpen,
+            sluiceDischargeRateLps: currentHydrology.liveDischargeLitersPerSec || 1.5,
+            activeBioLabChambersCount: activeChambers,
+            activeWorkerCount: activeWorkers,
+            hasEmergencySiphon: Boolean(workshopLoadout.emergencySiphonInstalled),
+            hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+          });
+
+          offlineHydrologyReportToSet = offlineCatchup;
+          currentHydrology.towerLiters = offlineCatchup.finalTowerLiters;
+          currentHydrology.aquiferLiters = offlineCatchup.finalAquiferLiters;
+          currentHydrology.totalSiphonedLiters = (currentHydrology.totalSiphonedLiters || 0) + offlineCatchup.totalSiphonedLiters;
+          currentHydrology.loadSheddingStage = offlineCatchup.stageReached;
+          currentHydrology.isCropConservationActive = offlineCatchup.stageReached >= 1;
+          currentHydrology.isCrewRationingActive = offlineCatchup.stageReached >= 2;
+          currentHydrology.isCryoStandbyActive = offlineCatchup.isCryoStandbyActive;
+          if (offlineCatchup.stageReached >= 1) {
+            currentHydrology.sluiceGatesOpen = false;
+          }
+        }
+
         const effectiveHydrology = {
           ...currentHydrology,
           hasReinforcedSluiceSeal: sealsInstalled > 0,
           sluiceSealsCount: sealsInstalled,
           aquiferCapacityLiters: Math.max(currentHydrology.aquiferCapacityLiters || 3000, targetAquifer),
         };
+
+        // Real-Time Emergency Siphon Float Valve simulation
+        const hasEmergencySiphon = Boolean(workshopLoadout.emergencySiphonInstalled);
+        const siphonSim = simulateSiphonTick({
+          towerLiters: effectiveHydrology.towerLiters,
+          aquiferLiters: effectiveHydrology.aquiferLiters,
+          deltaSeconds,
+          hasEmergencySiphon,
+        });
+        effectiveHydrology.towerLiters = siphonSim.newTowerLiters;
+        effectiveHydrology.aquiferLiters = siphonSim.newAquiferLiters;
+        effectiveHydrology.isSiphonActive = siphonSim.isSiphonActive;
+        if (siphonSim.siphonedLiters > 0) {
+          effectiveHydrology.totalSiphonedLiters = (effectiveHydrology.totalSiphonedLiters || 0) + siphonSim.siphonedLiters;
+        }
 
         const hydroSimResult = stepHydrologySimulation({
           hydrology: effectiveHydrology,
@@ -6308,6 +6399,14 @@ export const useGameStore = create<GameState>()(
           hasFieldHandMorningDuty,
           hasNightWatchDuty,
         });
+
+        const loadSheddingStage = getTowerLoadSheddingStage(hydroSimResult.updatedHydrology.towerLiters);
+        hydroSimResult.updatedHydrology.loadSheddingStage = loadSheddingStage;
+        hydroSimResult.updatedHydrology.isCropConservationActive = loadSheddingStage >= 1;
+        hydroSimResult.updatedHydrology.isCrewRationingActive = loadSheddingStage >= 2;
+        hydroSimResult.updatedHydrology.isCryoStandbyActive = loadSheddingStage >= 3;
+        hydroSimResult.updatedHydrology.isSiphonActive = effectiveHydrology.isSiphonActive;
+        hydroSimResult.updatedHydrology.totalSiphonedLiters = effectiveHydrology.totalSiphonedLiters;
 
         if (hydroSimResult.notifications && hydroSimResult.notifications.length > 0) {
           for (const notif of hydroSimResult.notifications) {
@@ -6334,6 +6433,18 @@ export const useGameStore = create<GameState>()(
             // Under barn_fire, unwatered/burning plots are frozen
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
               return p;
+            }
+            // Fail-Safe Stage 1+ Crop Conservation Mode (Tower <= 200L)
+            // Canal gates auto-closed; growth timers pause cleanly in place without drying out or withering
+            if (loadSheddingStage >= 1) {
+              return {
+                ...p,
+                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze growth cleanly without resetting
+                desiccatedSeconds: 0,
+                isWithered: false,
+                phenologyBadgeEmoji: '🛡️💧',
+                phenologyBadgeText: 'Crop Conservation (Tower ≤ 200L)',
+              };
             }
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
@@ -6986,8 +7097,14 @@ export const useGameStore = create<GameState>()(
             }
 
             // Desertion Hard Deadline Check (2 Real-World Hours on Strike)
+            // Suppressed when tower is in Stage 2 or 3 (loadSheddingStage >= 2 / <= 80L) — workers never abandon the farm during water emergencies!
             if (worker.moraleTier === 'striking') {
-              if (!worker.strikeStartedAt) {
+              if (loadSheddingStage >= 2) {
+                // Suppress abandonment during emergency water rationing & lockdown
+                if (worker.desertionDeadline) {
+                  worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
+                }
+              } else if (!worker.strikeStartedAt) {
                 worker.strikeStartedAt = now;
                 worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
                 unifiedWorkersModified = true;
@@ -7020,7 +7137,9 @@ export const useGameStore = create<GameState>()(
               (state.barn?.hardened_chitin_trowel || 0) > 0
             );
             const trowelSpeed = (hasChitinTrowel && role === 'farmer') ? 0.70 : 1.0;
-            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier);
+            // Load-Shedding Crew Rationing & Dehydration speed penalty (-30% in Stage 2, -50% in Stage 3)
+            const towerWorkerSpeedPenalty = loadSheddingStage === 3 ? 0.50 : (loadSheddingStage === 2 ? 0.70 : 1.0);
+            const effectiveInterval = ((workerEffectiveInterval(role, worker.level) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier)) / towerWorkerSpeedPenalty;
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -7673,20 +7792,21 @@ export const useGameStore = create<GameState>()(
     const towerLiters = get().hydrology?.towerLiters || 0;
     let notificationsToAdd: { message: string; emoji: string; type: string }[] = [];
 
-    // 1. Amber Bio-Lab Closed-Loop Incubation Chamber Tick
+    // 1. Amber Bio-Lab Closed-Loop Incubation Chamber Tick (Cryo-Standby Preservation Lock)
+    const cryoGraceSec = currentBioLab.cryoInsulationInstalled ? 172800 : 86400; // 48h or 24h
     const updatedChambers = (currentBioLab.chambers || []).map(ch => {
       if (ch.status === 'INCUBATING') {
         if (towerLiters <= 0) {
-          // Elevated Gravity Tower ran dry (0L)! Enters SUSPENDED_UNCOOLED
+          // Elevated Gravity Tower ran dry (0L)! Enters CRYO_STANDBY with full preservation guarantee
           notificationsToAdd.push({
-            message: `⚠️ Amber Bio-Lab Alert: Incubation Chamber #${ch.chamberId} cooling pipe lost water! Incubation suspended. Replenish Gravity Tower immediately.`,
-            emoji: '❄️⚠️',
+            message: `❄️ Amber Bio-Lab Cryo-Standby Engaged: Chamber #${ch.chamberId} cooling loop locked! Incubation paused safely (Grace buffer: ${currentBioLab.cryoInsulationInstalled ? '48' : '24'}h).`,
+            emoji: '❄️🛡️',
             type: 'alert',
           });
           return {
             ...ch,
-            status: 'SUSPENDED_UNCOOLED' as const,
-            uncooledSecElapsed: ch.uncooledSecElapsed + 1,
+            status: 'CRYO_STANDBY' as const,
+            uncooledSecElapsed: (ch.uncooledSecElapsed || 0) + 1,
           };
         } else {
           // Healthy closed-loop cooling: advance progress
@@ -7710,7 +7830,7 @@ export const useGameStore = create<GameState>()(
             progressPct: nextPct,
           };
         }
-      } else if (ch.status === 'SUSPENDED_UNCOOLED') {
+      } else if (ch.status === 'CRYO_STANDBY' || (ch.status as string) === 'SUSPENDED_UNCOOLED') {
         if (towerLiters > 0) {
           // Gravity Tower replenished! Cooling resumed
           return {
@@ -7718,10 +7838,11 @@ export const useGameStore = create<GameState>()(
             status: 'INCUBATING' as const,
           };
         } else {
-          const newElapsed = ch.uncooledSecElapsed + 1;
-          if (newElapsed >= 180) { // Specimen decay threshold
+          const newElapsed = (ch.uncooledSecElapsed || 0) + 1;
+          // Specimen integrity 100% preserved within grace buffer (24h or 48h)
+          if (newElapsed >= cryoGraceSec) {
             notificationsToAdd.push({
-              message: `💀 Critical Bio-Lab Failure: Chamber #${ch.chamberId} specimen decayed due to prolonged uncooled state!`,
+              message: `💀 Critical Bio-Lab Failure: Chamber #${ch.chamberId} specimen decayed after exceeding ${currentBioLab.cryoInsulationInstalled ? '48' : '24'}-hour grace buffer!`,
               emoji: '💀',
               type: 'alert',
             });
@@ -7733,6 +7854,7 @@ export const useGameStore = create<GameState>()(
           }
           return {
             ...ch,
+            status: 'CRYO_STANDBY' as const,
             uncooledSecElapsed: newElapsed,
           };
         }
@@ -7974,6 +8096,7 @@ export const useGameStore = create<GameState>()(
           level: finalLevel,
           entityOverclocks: updatedWorkerOverclocks,
           hydrology: hydroSimResult.updatedHydrology,
+          ...(offlineHydrologyReportToSet ? { offlineHydrologyReport: offlineHydrologyReportToSet } : {}),
           bunkhouse: {
             ...state.bunkhouse,
             canteenLiters: Math.round(newCanteenLiters * 10) / 10,
@@ -8083,11 +8206,44 @@ export const useGameStore = create<GameState>()(
           totalElapsedSeconds: elapsedMs / 1000,
         });
 
+        let offlineHydrologyReport: OfflineHydrologyResolutionResult | null = null;
+        if (elapsedMs >= 300000) {
+          const elapsedSec = Math.round(elapsedMs / 1000);
+          const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+          const activeChambers = (state.amberBioLab?.chambers || []).filter(c => c.status === 'INCUBATING' || (c.status as string) === 'CRYO_STANDBY').length;
+          const activeWorkers = Object.values(state.unifiedWorkers || {}).filter(w => w.isHired && !w.isPaused).length;
+          const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+
+          offlineHydrologyReport = resolveOfflineHydrologyCatchUp({
+            initialTowerLiters: currentHydro.towerLiters,
+            initialAquiferLiters: currentHydro.aquiferLiters,
+            elapsedOfflineSeconds: elapsedSec,
+            isSluiceOpen: currentHydro.sluiceGatesOpen,
+            sluiceDischargeRateLps: currentHydro.liveDischargeLitersPerSec || 1.5,
+            activeBioLabChambersCount: activeChambers,
+            activeWorkerCount: activeWorkers,
+            hasEmergencySiphon: Boolean(loadout.emergencySiphonInstalled),
+            hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+          });
+
+          hydroOffline.updatedHydrology.towerLiters = offlineHydrologyReport.finalTowerLiters;
+          hydroOffline.updatedHydrology.aquiferLiters = offlineHydrologyReport.finalAquiferLiters;
+          hydroOffline.updatedHydrology.totalSiphonedLiters = (hydroOffline.updatedHydrology.totalSiphonedLiters || 0) + offlineHydrologyReport.totalSiphonedLiters;
+          hydroOffline.updatedHydrology.loadSheddingStage = offlineHydrologyReport.stageReached;
+          hydroOffline.updatedHydrology.isCropConservationActive = offlineHydrologyReport.stageReached >= 1;
+          hydroOffline.updatedHydrology.isCrewRationingActive = offlineHydrologyReport.stageReached >= 2;
+          hydroOffline.updatedHydrology.isCryoStandbyActive = offlineHydrologyReport.isCryoStandbyActive;
+          if (offlineHydrologyReport.stageReached >= 1) {
+            hydroOffline.updatedHydrology.sluiceGatesOpen = false;
+          }
+        }
+
         set({
           plots: hydroOffline.updatedPlots,
           hydrology: hydroOffline.updatedHydrology,
           animals: newAnimals,
           productionQueues: newQueues,
+          ...(offlineHydrologyReport ? { offlineHydrologyReport } : {}),
           lastTick: now,
           isDirty: true,
         });
@@ -10450,6 +10606,7 @@ export const useGameStore = create<GameState>()(
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
           workshopLoadout: createDefaultWorkshopLoadout(),
+          offlineHydrologyReport: null,
           silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
           barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
           plots: initialPlots, unlockedPlots: GRID_SIZE,
@@ -10596,6 +10753,10 @@ export const useGameStore = create<GameState>()(
         lastSettlementTimestamp: state.lastSettlementTimestamp,
         farmEpochStart: state.farmEpochStart,
         bunkhouse: state.bunkhouse,
+        workshopLoadout: state.workshopLoadout,
+        hydrology: state.hydrology,
+        amberBioLab: state.amberBioLab,
+        prehistoricSanctuary: state.prehistoricSanctuary,
         lastTick: state.lastTick,
       }),
       merge: (persistedState, currentState) => {
@@ -11013,6 +11174,17 @@ export const useGameStore = create<GameState>()(
             }
             return order;
           });
+        }
+
+        if (!merged.workshopLoadout) {
+          merged.workshopLoadout = createDefaultWorkshopLoadout();
+        } else {
+          if (merged.workshopLoadout.emergencySiphonInstalled === undefined) {
+            merged.workshopLoadout.emergencySiphonInstalled = false;
+          }
+        }
+        if (merged.offlineHydrologyReport === undefined) {
+          merged.offlineHydrologyReport = null;
         }
 
         return merged as GameState;

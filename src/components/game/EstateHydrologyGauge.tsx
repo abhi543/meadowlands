@@ -104,6 +104,56 @@ export function EstateHydrologyGauge() {
 
       <div className="h-4 w-px bg-stone-700/60 hidden sm:block" />
 
+      {/* Elevated Gravity Tower Section */}
+      <div className="flex items-center gap-1.5">
+        <div className={`flex items-center justify-center w-6 h-6 rounded-lg border text-xs ${
+          towerLiters <= 0
+            ? 'bg-rose-950/90 border-rose-500/80 text-rose-300 animate-pulse'
+            : towerLiters <= 80
+            ? 'bg-orange-950/80 border-orange-500/60 text-orange-300'
+            : towerLiters <= 200
+            ? 'bg-amber-950/80 border-amber-500/60 text-amber-300'
+            : 'bg-cyan-950/80 border-cyan-500/40 text-cyan-300'
+        }`}>
+          <span>🗼</span>
+        </div>
+        <div>
+          <div className="flex items-center gap-1 text-[10px] font-bold text-stone-200">
+            <span>Tower:</span>
+            <span className={`font-mono ${towerLiters <= 0 ? 'text-rose-400 font-extrabold animate-pulse' : towerLiters <= 80 ? 'text-orange-300' : towerLiters <= 200 ? 'text-amber-300' : 'text-cyan-300'}`}>
+              {towerLiters} / {towerMax} L
+            </span>
+            <span className="text-[9px] font-semibold text-stone-400">
+              {towerLiters > 200 ? '🟢' : towerLiters > 80 ? '🟡 S1' : towerLiters > 0 ? '🟠 S2' : '🔴 S3'}
+            </span>
+          </div>
+          {/* Tower mini fill bar */}
+          <div className="w-20 h-1.5 bg-stone-800 rounded-full overflow-hidden mt-0.5 border border-stone-700/60">
+            <div
+              className={`h-full rounded-full transition-all duration-300 ${
+                towerLiters <= 0
+                  ? 'bg-rose-600'
+                  : towerLiters <= 80
+                  ? 'bg-orange-500'
+                  : towerLiters <= 200
+                  ? 'bg-amber-400'
+                  : 'bg-gradient-to-r from-cyan-400 to-emerald-400'
+              }`}
+              style={{ width: `${Math.min(100, Math.round((towerLiters / (towerMax || 800)) * 100))}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {hydrology?.isSiphonActive && (
+        <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black bg-cyan-500/20 text-cyan-300 border border-cyan-400 animate-pulse shadow-xs">
+          <span>🚰⚡</span>
+          <span>Siphon (+2 L/s)</span>
+        </span>
+      )}
+
+      <div className="h-4 w-px bg-stone-700/60 hidden sm:block" />
+
       {/* Deep Subterranean Aquifer Meter */}
       <div className="flex items-center gap-1.5">
         <div className={`flex items-center justify-center w-6 h-6 rounded-lg border text-xs ${

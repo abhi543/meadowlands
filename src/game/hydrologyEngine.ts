@@ -313,6 +313,16 @@ export interface HydrologyState {
   wasFloodControlled?: boolean;
   floodTriggeredAt?: number | null;
   
+  // F. Fail-Safe Load-Shedding & Emergency Siphon
+  loadSheddingStage?: 0 | 1 | 2 | 3;
+  isCropConservationActive?: boolean;
+  isCrewRationingActive?: boolean;
+  isCryoStandbyActive?: boolean;
+  cryoStandbyStartedAt?: number | null;
+  isSiphonActive?: boolean;
+  siphonTransferRateLps?: number;
+  totalSiphonedLiters?: number;
+  
   // Telemetry
   totalWaterDischargedLiters: number;
   totalPercolatedLiters: number;
@@ -354,6 +364,15 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     wasFloodControlled: false,
     floodTriggeredAt: null,
     
+    loadSheddingStage: 0,
+    isCropConservationActive: false,
+    isCrewRationingActive: false,
+    isCryoStandbyActive: false,
+    cryoStandbyStartedAt: null,
+    isSiphonActive: false,
+    siphonTransferRateLps: 0,
+    totalSiphonedLiters: 0,
+    
     totalWaterDischargedLiters: 0,
     totalPercolatedLiters: 0,
   };
@@ -378,11 +397,13 @@ export function canOpenGates(
 ): { canOpen: boolean; reason?: string } {
   if (!hydrology) return { canOpen: true };
 
-  // 1. Tower Volume Prerequisite
-  if ((hydrology.towerLiters ?? 0) <= 0) {
+  // 1. Tower Volume Prerequisite & Load-Shedding Gatekeeper
+  if ((hydrology.towerLiters ?? 0) <= 200) {
     return {
       canOpen: false,
-      reason: 'Elevated Gravity Tower is empty (0L)! Transfer from Rain Cistern or pump from Deep Aquifer first.',
+      reason: (hydrology.towerLiters ?? 0) <= 0
+        ? 'Elevated Gravity Tower is empty (0L)! Transfer from Rain Cistern or pump from Deep Aquifer first.'
+        : `Elevated Gravity Tower in Crop Conservation Mode (${Math.round(hydrology.towerLiters)}L ≤ 200L). Water conserved for crew hydration & Bio-Lab.`,
     };
   }
 
@@ -707,8 +728,8 @@ export function stepHydrologySimulation(params: {
   let totalDeliveredLiters = 0;
 
   // Check if Tier 4 Pressurized Brass Sprinklers need to auto-pulse across all available plots
-  // Prerequisite: tower must have sufficient volume; zero-pressure bypass strictly blocked!
-  if (effectiveTier >= 4) {
+  // Prerequisite: tower must be above Stage 1 Crop Conservation threshold (200L)
+  if (effectiveTier >= 4 && currentTower > 200) {
     for (let i = 0; i < numAvailablePlots; i++) {
       const p = newPlots[i];
       if (!p) continue;
@@ -719,8 +740,8 @@ export function stepHydrologySimulation(params: {
         const neededLiters = neededPct * LITERS_PER_PERCENT_MOISTURE_PER_PLOT; // 2.5L per +1% moisture per plot
 
         // Sprinkler Zero-Pressure Bypass Check: tower MUST have at least neededLiters to pulse!
-        if (currentTower < neededLiters || currentTower <= 0) {
-          // Insufficient tower pressure: skip pulse until tank is refilled
+        if (currentTower < neededLiters || currentTower <= 200) {
+          // Insufficient tower pressure or conservation active: skip pulse
           continue;
         }
 
@@ -738,14 +759,20 @@ export function stepHydrologySimulation(params: {
 
   // Handle open sluice gates
   if (sluiceGatesOpen) {
-    if (currentTower <= 0 || isClogged) {
-      // Out of water or clogged
+    if (currentTower <= 200 || isClogged) {
+      // Out of water, conservation mode, or clogged
       sluiceGatesOpen = false;
       if (currentTower <= 0) {
         currentTower = 0;
         notifications.push({
           text: '🛑 Sluice Gates Closed: Elevated Gravity Tower is empty (0L)!',
           icon: '🔴',
+          type: 'info',
+        });
+      } else if (currentTower <= 200) {
+        notifications.push({
+          text: `🛡️ Sluice Gates Secured: Tower reached Stage 1 Crop Conservation (${Math.round(currentTower)}L ≤ 200L). Water conserved for crew & Bio-Lab.`,
+          icon: '🚰',
           type: 'info',
         });
       } else {
@@ -1031,6 +1058,12 @@ export function stepHydrologySimulation(params: {
 
       totalWaterDischargedLiters: Math.round((totalDischarged + Number.EPSILON) * 10) / 10,
       totalPercolatedLiters: Math.round((totalPercolated + Number.EPSILON) * 10) / 10,
+
+      // Fail-Safe Load-Shedding Status
+      loadSheddingStage: currentTower > 200 ? 0 : currentTower > 80 ? 1 : currentTower > 0 ? 2 : 3,
+      isCropConservationActive: currentTower <= 200,
+      isCrewRationingActive: currentTower <= 80 && currentTower > 0,
+      isCryoStandbyActive: currentTower <= 0,
     },
     updatedPlots: newPlots,
     notifications,

@@ -353,6 +353,7 @@ export type IncubationStatus =
   | 'EMPTY'
   | 'INCUBATING'
   | 'SUSPENDED_UNCOOLED'
+  | 'CRYO_STANDBY'
   | 'READY_TO_REVIVE'
   | 'DECAYED';
 
@@ -364,7 +365,7 @@ export interface IncubationChamber {
   durationSec: number;
   progressPct: number;
   towerWaterReservedLiters: number;
-  uncooledSecElapsed: number; // If tower hits 0L, increments; decays if > 180s
+  uncooledSecElapsed: number; // If tower hits 0L, increments; decays only after 24h/48h grace window
 }
 
 export interface AmberBioLabState {
@@ -372,6 +373,9 @@ export interface AmberBioLabState {
   chambers: IncubationChamber[];
   totalSpecimensRevived: number;
   coolingPipesInstalled: boolean;
+  cryoInsulationInstalled?: boolean;
+  isCryoStandbyActive?: boolean;
+  cryoStandbyStartedAt?: number | null;
 }
 
 // --- Prehistoric Sanctuary Enclosure State ---

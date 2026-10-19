@@ -326,7 +326,7 @@ export type ProductId =
   | 'fired_hardwood' | 'tempered_glass' | 'copper_pipes' | 'geothermal_relics'
   // Workshop Tool, Hardware & Hydraulic Upgrades
   | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
-  | 'prismatic_light_lens' | 'thermal_retaining_core';
+  | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve';
 
 export interface ProductDef {
   id: ProductId;
@@ -478,6 +478,7 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   subsoil_aquifer_casing:  { id: 'subsoil_aquifer_casing',  name: 'Subsoil Aquifer Casing',      emoji: '🏗️💧', category: 'manufactured', sellPrice: 650 },
   prismatic_light_lens:    { id: 'prismatic_light_lens',    name: 'Prismatic Light Lens',        emoji: '🔍🌈', category: 'manufactured', sellPrice: 850 },
   thermal_retaining_core:  { id: 'thermal_retaining_core',  name: 'Thermal Retaining Core',      emoji: '🔥💎', category: 'manufactured', sellPrice: 950 },
+  emergency_siphon_valve:  { id: 'emergency_siphon_valve',  name: 'Emergency Siphon Float Valve', emoji: '🚰⚡', category: 'manufactured', sellPrice: 750 },
 };
 
 // --- Production Buildings ---
@@ -660,6 +661,14 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
         inputs: [{ productId: 'mineral_slab', qty: 2 }],
         output: { productId: 'tempered_glass', qty: 1 },
         timeSec: 60,
+      },
+      {
+        id: 'make_emergency_siphon_valve',
+        name: 'Emergency Siphon Float Valve',
+        emoji: '🚰⚡',
+        inputs: [{ productId: 'mineral_slab', qty: 3 }, { productId: 'chitin_molt_plates', qty: 2 }],
+        output: { productId: 'emergency_siphon_valve', qty: 1 },
+        timeSec: 120,
       },
     ],
   },

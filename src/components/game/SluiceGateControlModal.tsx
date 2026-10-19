@@ -16,6 +16,7 @@ import {
   type WeatherCategoryId,
   canOpenGates,
 } from '@/game/hydrologyEngine';
+import { GravityTowerWidget } from './GravityTowerWidget';
 
 export function SluiceGateControlModal() {
   const {
@@ -135,8 +136,13 @@ export function SluiceGateControlModal() {
           </button>
         </div>
 
+        {/* Dedicated Gravity Tower Hydraulic Fail-Safe Status & Estimator Widget */}
+        <div className="mt-4">
+          <GravityTowerWidget />
+        </div>
+
         {/* Central Master Valve & Live Flow Display */}
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Master Flow Lever Control */}
           <div className="md:col-span-2 rounded-2xl bg-stone-900/90 border border-stone-800 p-4 relative overflow-hidden flex flex-col justify-between">
             <div className="flex items-center justify-between gap-2 mb-3">

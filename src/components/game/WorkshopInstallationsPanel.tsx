@@ -22,6 +22,7 @@ export const WorkshopInstallationsPanel: React.FC = () => {
   const unmountPrismaticLens = useGameStore(state => state.unmountPrismaticLens);
   const mountThermalCore = useGameStore(state => state.mountThermalCore);
   const unmountThermalCore = useGameStore(state => state.unmountThermalCore);
+  const installEmergencySiphonValve = useGameStore(state => state.installEmergencySiphonValve);
 
   // Bag inventory counts
   const trowelInBag = barn.hardened_chitin_trowel || 0;
@@ -29,10 +30,12 @@ export const WorkshopInstallationsPanel: React.FC = () => {
   const casingsInBag = barn.subsoil_aquifer_casing || 0;
   const lensInBag = barn.prismatic_light_lens || 0;
   const thermalCoreInBag = barn.thermal_retaining_core || 0;
+  const siphonInBag = barn.emergency_siphon_valve || 0;
 
   // Hydrology values
   const sealsInstalled = Math.min(3, Math.max(0, workshopLoadout.sluiceGateSealsInstalled || 0));
   const casingsInstalled = Math.min(4, Math.max(0, workshopLoadout.aquiferCasingsInstalled || 0));
+  const isSiphonInstalled = Boolean(workshopLoadout.emergencySiphonInstalled);
   const baseCapacity = 3000;
   const currentAquiferCapacity = baseCapacity + (casingsInstalled * 500);
   const isTrowelEquipped = workshopLoadout.equippedTool === 'hardened_chitin_trowel';
@@ -139,7 +142,7 @@ export const WorkshopInstallationsPanel: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
           {/* Sluice Gate Seals */}
           <div className="bg-stone-800/80 dark:bg-gray-900/90 border border-stone-700/80 dark:border-gray-800 rounded-xl p-3.5 space-y-3 shadow-sm hover:border-sky-500/40 transition-all">
             <div className="flex items-center justify-between gap-2">
@@ -271,6 +274,82 @@ export const WorkshopInstallationsPanel: React.FC = () => {
                 <>
                   <span>🪨 Install Tier {casingsInstalled + 1}</span>
                   <span className="text-[10px] opacity-80">(Requires 1 Casing, Bag: {casingsInBag})</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Emergency Aquifer Siphon Float Valve */}
+          <div className="bg-stone-800/80 dark:bg-gray-900/90 border border-stone-700/80 dark:border-gray-800 rounded-xl p-3.5 space-y-3 shadow-sm hover:border-cyan-500/40 transition-all">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🚰</span>
+                <div>
+                  <h5 className="font-bold text-sm text-stone-100">Emergency Siphon Valve</h5>
+                  <p className="text-[11px] text-stone-400">Aquifer-to-Tower Fail-Safe</p>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                isSiphonInstalled
+                  ? (hydrology?.isSiphonActive
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30')
+                  : 'bg-stone-800 text-stone-400 border-stone-700'
+              }`}>
+                {isSiphonInstalled
+                  ? (hydrology?.isSiphonActive ? '⚡ Active Siphon' : '🛡️ Armed & Idle')
+                  : '0 / 1 Socket'}
+              </span>
+            </div>
+
+            {/* Visual Valve Status */}
+            <div className={`p-2.5 rounded-lg border text-center transition-all ${
+              isSiphonInstalled
+                ? 'bg-cyan-950/40 border-cyan-500/40 text-cyan-200'
+                : 'bg-stone-900/40 border-stone-700/60 text-stone-500'
+            }`}>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-400">
+                Hydraulic Status
+              </div>
+              <div className="font-bold text-xs flex items-center justify-center gap-1.5 mt-0.5">
+                {isSiphonInstalled ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping inline-block" />
+                    <span>Auto-Siphon Armed (Triggers ≤80L)</span>
+                  </>
+                ) : (
+                  <span>⭕ Socket Unoccupied</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center justify-between text-stone-300">
+                <span>Trickle Transfer Rate:</span>
+                <span className="font-mono font-bold text-cyan-400">
+                  2.0 Liters / sec
+                </span>
+              </div>
+              <p className="text-[11px] text-cyan-200/80 font-medium">
+                • Threshold: Siphons groundwater into Gravity Tower when volume drops ≤ 80L, filling up to 200L.
+              </p>
+            </div>
+
+            <button
+              onClick={() => installEmergencySiphonValve()}
+              disabled={isSiphonInstalled || siphonInBag <= 0}
+              className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 ${
+                isSiphonInstalled
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
+                  : 'bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white cursor-pointer disabled:cursor-not-allowed active:scale-95'
+              }`}
+            >
+              {isSiphonInstalled ? (
+                <>✅ Float Valve Installed &amp; Guarding Tower</>
+              ) : (
+                <>
+                  <span>🚰 Install Siphon Valve</span>
+                  <span className="text-[10px] opacity-80">(Requires 1 Valve, Bag: {siphonInBag})</span>
                 </>
               )}
             </button>

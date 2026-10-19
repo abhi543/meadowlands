@@ -32,6 +32,7 @@ import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { EstateHydrologyGauge } from '@/components/game/EstateHydrologyGauge';
 import { SluiceGateControlModal } from '@/components/game/SluiceGateControlModal';
 import { EstateDispatchCenterModal } from '@/components/game/EstateDispatchCenterModal';
+import { OfflineHydrologyReturnModal } from '@/components/game/OfflineHydrologyReturnModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -346,6 +347,8 @@ export default function Home() {
         onClose={() => setDispatchModalOpen(false)}
         onSelectTab={setActiveTab}
       />
+      {/* Offline Return Modal (Estate Dispatch Center Fail-Safe Engine) */}
+      <OfflineHydrologyReturnModal />
 
       {/** Floating Notifications */}
       <FloatingNumbers />
