@@ -5,6 +5,7 @@ import { BUILDINGS, PRODUCTS, CROPS, FISH_SPECIES, WORKER_REGISTRY, type Buildin
 import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { getItemEconomicProfile } from '@/game/pricingEngine';
+import { WorkshopInstallationsPanel } from './WorkshopInstallationsPanel';
 
 const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop', 'workshop'];
 
@@ -164,6 +165,7 @@ export function ProductionPanel() {
     specialistWorkers,
   } = useGameStore();
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
+  const [workshopSubTab, setWorkshopSubTab] = useState<'recipes' | 'installations'>('recipes');
   const [, setTick] = useState(0);
 
   // 1-second interval for overclock timers
@@ -280,7 +282,42 @@ export function ProductionPanel() {
           </div>
         ) : (
           <>
-            {/* Queue Full Hint */}
+            {/* Workshop Secondary Sub-Navigation Strip */}
+            {activeBuilding === 'workshop' && (
+              <div className="flex items-center gap-2 px-4 py-2.5 bg-stone-100 dark:bg-stone-800/80 border-b border-stone-200 dark:border-gray-700">
+                <button
+                  onClick={() => setWorkshopSubTab('recipes')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                    workshopSubTab === 'recipes'
+                      ? 'bg-amber-700 text-white shadow-sm font-black'
+                      : 'bg-white dark:bg-gray-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-gray-600 border border-stone-200 dark:border-gray-600'
+                  }`}
+                >
+                  <span>🔨 Recipes &amp; Queue</span>
+                  {queue.length > 0 && (
+                    <span className="bg-black/20 text-white px-1.5 py-0.2 rounded-full text-[10px]">
+                      {queue.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setWorkshopSubTab('installations')}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                    workshopSubTab === 'installations'
+                      ? 'bg-amber-700 text-white shadow-sm font-black'
+                      : 'bg-white dark:bg-gray-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-gray-600 border border-stone-200 dark:border-gray-600'
+                  }`}
+                >
+                  <span>⚙️ Active Installations &amp; Gear</span>
+                </button>
+              </div>
+            )}
+
+            {activeBuilding === 'workshop' && workshopSubTab === 'installations' ? (
+              <WorkshopInstallationsPanel />
+            ) : (
+              <>
+                {/* Queue Full Hint */}
             {freeSlots <= 0 && (
               <div className="mx-3 mt-3 flex items-center gap-1.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 rounded px-2 py-1.5">
                 <span>{'\u{1F4E6}'}</span>
@@ -560,6 +597,8 @@ export function ProductionPanel() {
                   })}
                 </div>
               </div>
+            )}
+              </>
             )}
           </>
         )}

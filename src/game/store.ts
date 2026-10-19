@@ -624,12 +624,33 @@ export interface HatchRevealData {
   storedInReserve?: boolean;
 }
 
+export interface WorkshopLoadoutState {
+  equippedTool: 'hardened_chitin_trowel' | null;
+  sluiceGateSealsInstalled: number; // 0 to 3
+  aquiferCasingsInstalled: number; // 0 to 4
+  prismaticLensMounted: boolean;
+  thermalCoreActive?: boolean;
+}
+
+export function createDefaultWorkshopLoadout(): WorkshopLoadoutState {
+  return {
+    equippedTool: null,
+    sluiceGateSealsInstalled: 0,
+    aquiferCasingsInstalled: 0,
+    prismaticLensMounted: false,
+    thermalCoreActive: false,
+  };
+}
+
 export interface GameState {
   // Player
   coins: number;
   gems: number;
   xp: number;
   level: number;
+
+  // Workshop Active Installations & Tool Loadout
+  workshopLoadout: WorkshopLoadoutState;
 
   // Storage
   silo: Record<string, number>;
@@ -1041,6 +1062,16 @@ export interface GameState {
   useInstantOverclock: (entityId: string, entityType: OverclockEntityType) => boolean;
   consumeInstantOverclock: (entityId: string, entityType: OverclockEntityType) => boolean;
 
+  // Workshop Active Installations & Gear Loadout
+  equipWorkshopTool: (toolId: 'hardened_chitin_trowel') => boolean;
+  unequipWorkshopTool: () => void;
+  installSluiceGateSeal: () => boolean;
+  reinforceAquiferCasing: () => boolean;
+  mountPrismaticLens: () => boolean;
+  unmountPrismaticLens: () => void;
+  mountThermalCore: () => boolean;
+  unmountThermalCore: () => void;
+
   tick: () => void;
   resetGame: () => void;
 }
@@ -1341,6 +1372,8 @@ export const useGameStore = create<GameState>()(
       gems: 10,
       xp: 0,
       level: 1,
+
+      workshopLoadout: createDefaultWorkshopLoadout(),
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
       barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
@@ -5713,6 +5746,211 @@ export const useGameStore = create<GameState>()(
         return harvestCount;
       },
 
+      // ---- Workshop Active Installations & Tool Loadout Actions ----
+
+      equipWorkshopTool: (toolId: 'hardened_chitin_trowel') => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        const have = state.barn[toolId] || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        if (loadout.equippedTool) {
+          newBarn[loadout.equippedTool] = (newBarn[loadout.equippedTool] || 0) + 1;
+        }
+        newBarn[toolId] = Math.max(0, have - 1);
+
+        playVictoryChime();
+        state.addNotification('🗡️ Hardened Chitin Trowel equipped! +30% Tilling, Planting & Harvest Speed active across all plots.', '⛏️✨', 'discovery');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            equippedTool: toolId,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      unequipWorkshopTool: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (!loadout.equippedTool) return;
+
+        const tool = loadout.equippedTool;
+        const newBarn = { ...state.barn };
+        newBarn[tool] = (newBarn[tool] || 0) + 1;
+
+        state.addNotification('📦 Unequipped tool returned to Barn inventory.', '🛡️', 'info');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            equippedTool: null,
+          },
+          isDirty: true,
+        });
+      },
+
+      installSluiceGateSeal: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (loadout.sluiceGateSealsInstalled >= 3) return false;
+        const have = state.barn.reinforced_sluice_seal || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        newBarn.reinforced_sluice_seal = Math.max(0, have - 1);
+        const newCount = loadout.sluiceGateSealsInstalled + 1;
+
+        playVictoryChime();
+        state.addNotification(`🚰 Installed Sluice Gate Seal (${newCount}/3)! Canal drainage loss reduced by -${newCount * 20}%.`, '🛡️🔧', 'discovery');
+
+        const updatedHydrology = state.hydrology
+          ? {
+              ...state.hydrology,
+              hasReinforcedSluiceSeal: true,
+              sluiceSealsCount: newCount,
+            }
+          : state.hydrology;
+
+        set({
+          barn: newBarn,
+          hydrology: updatedHydrology,
+          workshopLoadout: {
+            ...loadout,
+            sluiceGateSealsInstalled: newCount,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      reinforceAquiferCasing: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (loadout.aquiferCasingsInstalled >= 4) return false;
+        const have = state.barn.subsoil_aquifer_casing || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        newBarn.subsoil_aquifer_casing = Math.max(0, have - 1);
+        const newTier = loadout.aquiferCasingsInstalled + 1;
+        const newCapacity = 3000 + (newTier * 500);
+
+        playVictoryChime();
+        state.addNotification(`🪨 Subsoil Aquifer Casing Tier ${newTier}/4 installed! Deep groundwater capacity expanded to ${newCapacity.toLocaleString()}L (+500L).`, '🏗️💧', 'discovery');
+
+        const updatedHydrology = state.hydrology
+          ? {
+              ...state.hydrology,
+              aquiferCapacityLiters: newCapacity,
+            }
+          : state.hydrology;
+
+        set({
+          barn: newBarn,
+          hydrology: updatedHydrology,
+          workshopLoadout: {
+            ...loadout,
+            aquiferCasingsInstalled: newTier,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      mountPrismaticLens: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (loadout.prismaticLensMounted) return false;
+        const have = state.barn.prismatic_light_lens || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        newBarn.prismatic_light_lens = Math.max(0, have - 1);
+
+        playVictoryChime();
+        state.addNotification('☀️ Prismatic Light Canopy mounted! Nighttime growth penalties completely neutralized across all 12 plots.', '🔍🌈', 'discovery');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            prismaticLensMounted: true,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      unmountPrismaticLens: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (!loadout.prismaticLensMounted) return;
+
+        const newBarn = { ...state.barn };
+        newBarn.prismatic_light_lens = (newBarn.prismatic_light_lens || 0) + 1;
+
+        state.addNotification('📦 Prismatic Light Lens unmounted and returned to Barn inventory.', '🔍🌈', 'info');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            prismaticLensMounted: false,
+          },
+          isDirty: true,
+        });
+      },
+
+      mountThermalCore: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (loadout.thermalCoreActive) return false;
+        const have = state.barn.thermal_retaining_core || 0;
+        if (have <= 0) return false;
+
+        const newBarn = { ...state.barn };
+        newBarn.thermal_retaining_core = Math.max(0, have - 1);
+
+        playVictoryChime();
+        state.addNotification('🔥 Thermal Retaining Core activated! Micro-climate geothermal frost protection active.', '🔥💎', 'discovery');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            thermalCoreActive: true,
+          },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      unmountThermalCore: () => {
+        const state = get();
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        if (!loadout.thermalCoreActive) return;
+
+        const newBarn = { ...state.barn };
+        newBarn.thermal_retaining_core = (newBarn.thermal_retaining_core || 0) + 1;
+
+        state.addNotification('📦 Thermal Retaining Core unmounted and returned to Barn inventory.', '🔥💎', 'info');
+
+        set({
+          barn: newBarn,
+          workshopLoadout: {
+            ...loadout,
+            thermalCoreActive: false,
+          },
+          isDirty: true,
+        });
+      },
+
       // Habitat
       upgradeHabitat: (species) => {
         const state = get();
@@ -6047,12 +6285,15 @@ export const useGameStore = create<GameState>()(
         );
 
         const currentHydrology = state.hydrology || createDefaultHydrologyState(state.level);
-        const hasSluiceSeal = Boolean(currentHydrology.hasReinforcedSluiceSeal || (state.barn?.reinforced_sluice_seal || 0) > 0);
-        const hasAquiferCasing = Boolean((state.barn?.subsoil_aquifer_casing || 0) > 0);
+        const workshopLoadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        const sealsInstalled = Math.min(3, Math.max(0, workshopLoadout.sluiceGateSealsInstalled ?? (currentHydrology.hasReinforcedSluiceSeal ? 1 : 0)));
+        const casingsInstalled = Math.min(4, Math.max(0, workshopLoadout.aquiferCasingsInstalled ?? ((state.barn?.subsoil_aquifer_casing || 0) > 0 ? 1 : 0)));
+        const targetAquifer = 3000 + (casingsInstalled * 500);
         const effectiveHydrology = {
           ...currentHydrology,
-          hasReinforcedSluiceSeal: hasSluiceSeal,
-          aquiferCapacityLiters: hasAquiferCasing ? Math.max(currentHydrology.aquiferCapacityLiters || 3000, 3500) : currentHydrology.aquiferCapacityLiters,
+          hasReinforcedSluiceSeal: sealsInstalled > 0,
+          sluiceSealsCount: sealsInstalled,
+          aquiferCapacityLiters: Math.max(currentHydrology.aquiferCapacityLiters || 3000, targetAquifer),
         };
 
         const hydroSimResult = stepHydrologySimulation({
@@ -6112,7 +6353,7 @@ export const useGameStore = create<GameState>()(
             });
 
             // Dimetrodon Geothermal Radiance or Thermal Retaining Core: Frost Immunity!
-            const hasThermalCore = Boolean((state.barn?.thermal_retaining_core || 0) > 0);
+            const hasThermalCore = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
             if ((hasDimetrodon || hasThermalCore) && pheno.isFrostbitten) {
               pheno = {
                 ...pheno,
@@ -6147,10 +6388,18 @@ export const useGameStore = create<GameState>()(
             const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
-            const hasLightLens = Boolean((state.barn?.prismatic_light_lens || 0) > 0);
+
+            // Prismatic Light Lens: completely eliminates nighttime crop growth slowdown and grants +25% ambient boost
+            const hasLightLens = Boolean(workshopLoadout.prismaticLensMounted || (state.barn?.prismatic_light_lens || 0) > 0);
+            const isNight = currentClock.currentPeriod === 'night';
+            const nightFactor = isNight ? (hasLightLens ? 1.0 : 0.70) : 1.0;
             const lightLensMultiplier = hasLightLens ? 1.25 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier;
+            // Hardened Chitin Trowel: +30% faster planting, tilling, and crop development
+            const hasChitinTrowel = Boolean(workshopLoadout.equippedTool === 'hardened_chitin_trowel' || (state.barn?.hardened_chitin_trowel || 0) > 0);
+            const trowelCropSpeedMultiplier = hasChitinTrowel ? 1.30 : 1.0;
+
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -6766,7 +7015,10 @@ export const useGameStore = create<GameState>()(
             const hasHerderOutfit = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder' && fh.equippedOutfit === 'herders_chaps');
             const outfitSpeed = hasHerderOutfit ? 0.7 : 1.0;
             // Hardened Chitin Trowel: equips field hands to perform plot tilling, planting, and clearing 30% faster
-            const hasChitinTrowel = Boolean((state.barn?.hardened_chitin_trowel || 0) > 0);
+            const hasChitinTrowel = Boolean(
+              state.workshopLoadout?.equippedTool === 'hardened_chitin_trowel' ||
+              (state.barn?.hardened_chitin_trowel || 0) > 0
+            );
             const trowelSpeed = (hasChitinTrowel && role === 'farmer') ? 0.70 : 1.0;
             const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier);
             const elapsed = now - worker.lastActionTimestamp;
@@ -10197,6 +10449,7 @@ export const useGameStore = create<GameState>()(
       resetGame: () => {
         set({
           coins: 100, gems: 10, xp: 0, level: 1,
+          workshopLoadout: createDefaultWorkshopLoadout(),
           silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
           barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
           plots: initialPlots, unlockedPlots: GRID_SIZE,
@@ -10417,6 +10670,9 @@ export const useGameStore = create<GameState>()(
             ...merged.buildingOverclocks,
             workshop: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
           };
+        }
+        if (!merged.workshopLoadout) {
+          merged.workshopLoadout = createDefaultWorkshopLoadout();
         }
 
         // Migration: add missing state fields

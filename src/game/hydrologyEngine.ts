@@ -303,6 +303,7 @@ export interface HydrologyState {
   lastSluiceMorningDay: number;
   lastPumpMorningDay?: number;
   hasReinforcedSluiceSeal?: boolean;
+  sluiceSealsCount?: number;
 
   // E. Flash Flood Crisis & Emergency Spillway Dynamics
   isFlashFloodActive?: boolean;
@@ -344,6 +345,7 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     lastSluiceMorningDay: 0,
     lastPumpMorningDay: 0,
     hasReinforcedSluiceSeal: false,
+    sluiceSealsCount: 0,
 
     isFlashFloodActive: false,
     isSpillwayOpen: false,
@@ -700,6 +702,7 @@ export function stepHydrologySimulation(params: {
   // Support ALL available unlocked plots on the estate (not artificially restricted to 12)
   const numAvailablePlots = Math.max(1, unlockedPlots || plots.length);
   const targetMoisture = tierConfig.autoCutoffSupported ? hydrology.autoShutoffMoisture : 100;
+  const sealsCount = hydrology.sluiceSealsCount !== undefined ? hydrology.sluiceSealsCount : (hydrology.hasReinforcedSluiceSeal ? 1 : 0);
   let newPlots = [...plots];
   let totalDeliveredLiters = 0;
 
@@ -786,10 +789,11 @@ export function stepHydrologySimulation(params: {
         });
       } else {
         // Discharge rate scales proportionally with available plot count (minimum 12 L/sec)
-        // Reinforced Sluice Gate Seal: eliminates canal leakage, reducing gravity tower drainage by -20%
+        // Reinforced Sluice Gate Seals: Each installed seal reduces gravity tower drainage by -20% (up to 3 seals = -60%)
         const baseFlowRate = 12.0; // Liters / sec base for 12 plots
         const rawFlowRate = Math.max(baseFlowRate, (numAvailablePlots / 12) * baseFlowRate);
-        const flowRate = hydrology.hasReinforcedSluiceSeal ? rawFlowRate * 0.80 : rawFlowRate;
+        const drainageMult = sealsCount > 0 ? Math.max(0.40, 1.0 - (sealsCount * 0.20)) : 1.0;
+        const flowRate = rawFlowRate * drainageMult;
         const requestedLiters = flowRate * dt;
         const actualDischargedLiters = Math.min(requestedLiters, currentTower);
         
@@ -809,9 +813,9 @@ export function stepHydrologySimulation(params: {
         }
 
         // Seepage loss applied based on canal tier:
-        // Tier 1: 35% seeps into turf, 65% reaches crop beds (eliminated if Reinforced Sluice Seal installed)
+        // Tier 1: 35% seeps into turf, 65% reaches crop beds (eliminated if at least 1 Sluice Seal installed)
         // Tier 2+: 0% transit loss
-        const effectiveSeepage = hydrology.hasReinforcedSluiceSeal ? 0 : tierConfig.seepageLossFraction;
+        const effectiveSeepage = sealsCount > 0 ? 0 : tierConfig.seepageLossFraction;
         const deliveredLiters = actualDischargedLiters * (1.0 - effectiveSeepage);
         totalDeliveredLiters += deliveredLiters;
 
@@ -1014,7 +1018,8 @@ export function stepHydrologySimulation(params: {
       dewHarvestedToday,
       lastSluiceMorningDay,
       lastPumpMorningDay,
-      hasReinforcedSluiceSeal: Boolean(hydrology.hasReinforcedSluiceSeal),
+      hasReinforcedSluiceSeal: sealsCount > 0,
+      sluiceSealsCount: sealsCount,
 
       // Flash Flood & Emergency Spillway Dynamics
       isFlashFloodActive,
