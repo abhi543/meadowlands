@@ -323,7 +323,10 @@ export type ProductId =
   | 'chitin_molt_plates' | 'prismatic_wing_membrane' | 'primeval_humus'
   | 'thermal_scutes' | 'serpent_slough' | 'insulated_down_wool'
   // Amber Bio-Lab Infrastructure Materials
-  | 'fired_hardwood' | 'tempered_glass' | 'copper_pipes' | 'geothermal_relics';
+  | 'fired_hardwood' | 'tempered_glass' | 'copper_pipes' | 'geothermal_relics'
+  // Workshop Tool, Hardware & Hydraulic Upgrades
+  | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
+  | 'prismatic_light_lens' | 'thermal_retaining_core';
 
 export interface ProductDef {
   id: ProductId;
@@ -468,10 +471,17 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   tempered_glass:          { id: 'tempered_glass',          name: 'Tempered Glass Panes',    emoji: '🪟', category: 'manufactured', sellPrice: 180 },
   copper_pipes:            { id: 'copper_pipes',            name: 'Copper Pipes',            emoji: '🔧', category: 'manufactured', sellPrice: 220 },
   geothermal_relics:       { id: 'geothermal_relics',       name: 'Geothermal Relics',       emoji: '🏺', category: 'raw', sellPrice: 500 },
+
+  // --- Workshop Tool, Hardware & Hydraulic Upgrades ---
+  reinforced_sluice_seal:  { id: 'reinforced_sluice_seal',  name: 'Reinforced Sluice Gate Seal', emoji: '🛡️🔧', category: 'manufactured', sellPrice: 180 },
+  hardened_chitin_trowel:  { id: 'hardened_chitin_trowel',  name: 'Hardened Chitin Trowel',      emoji: '⛏️✨', category: 'manufactured', sellPrice: 320 },
+  subsoil_aquifer_casing:  { id: 'subsoil_aquifer_casing',  name: 'Subsoil Aquifer Casing',      emoji: '🏗️💧', category: 'manufactured', sellPrice: 650 },
+  prismatic_light_lens:    { id: 'prismatic_light_lens',    name: 'Prismatic Light Lens',        emoji: '🔍🌈', category: 'manufactured', sellPrice: 850 },
+  thermal_retaining_core:  { id: 'thermal_retaining_core',  name: 'Thermal Retaining Core',      emoji: '🔥💎', category: 'manufactured', sellPrice: 950 },
 };
 
 // --- Production Buildings ---
-export type BuildingId = 'animal_feed' | 'feed_mill' | 'bakery' | 'dairy' | 'loom' | 'press' | 'tailor_shop' | 'textiles';
+export type BuildingId = 'animal_feed' | 'feed_mill' | 'bakery' | 'dairy' | 'loom' | 'press' | 'tailor_shop' | 'textiles' | 'workshop';
 
 export interface BuildingDef {
   id: BuildingId;
@@ -590,6 +600,67 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'textiles', name: 'Textiles', emoji: '\u{1F33F}', queueSlots: 20, unlockLevel: 12,
     recipes: [
       { id: 'make_silk', name: 'Weave Silk', emoji: '\u{1F9F5}', inputs: [{ productId: 'cotton', qty: 4 }], output: { productId: 'silk', qty: 1 }, timeSec: 60 },
+    ],
+  },
+  workshop: {
+    id: 'workshop', name: 'Workshop', emoji: '🔨', queueSlots: 20,
+    recipes: [
+      {
+        id: 'make_reinforced_sluice_seal',
+        name: 'Reinforced Sluice Gate Seal',
+        emoji: '🛡️🔧',
+        inputs: [{ productId: 'chitin_molt_plates', qty: 2 }, { productId: 'mineral_slab', qty: 2 }],
+        output: { productId: 'reinforced_sluice_seal', qty: 1 },
+        timeSec: 60,
+      },
+      {
+        id: 'make_hardened_chitin_trowel',
+        name: 'Hardened Chitin Trowel',
+        emoji: '⛏️✨',
+        inputs: [{ productId: 'chitin_molt_plates', qty: 3 }, { productId: 'fired_hardwood', qty: 2 }],
+        output: { productId: 'hardened_chitin_trowel', qty: 1 },
+        timeSec: 90,
+      },
+      {
+        id: 'make_subsoil_aquifer_casing',
+        name: 'Subsoil Aquifer Casing',
+        emoji: '🏗️💧',
+        inputs: [{ productId: 'chitin_molt_plates', qty: 5 }, { productId: 'mineral_slab', qty: 4 }],
+        output: { productId: 'subsoil_aquifer_casing', qty: 1 },
+        timeSec: 120,
+      },
+      {
+        id: 'make_prismatic_light_lens',
+        name: 'Prismatic Light Lens',
+        emoji: '🔍🌈',
+        inputs: [{ productId: 'prismatic_wing_membrane', qty: 2 }, { productId: 'tempered_glass', qty: 2 }],
+        output: { productId: 'prismatic_light_lens', qty: 1 },
+        timeSec: 150,
+      },
+      {
+        id: 'make_thermal_retaining_core',
+        name: 'Thermal Retaining Core',
+        emoji: '🔥💎',
+        inputs: [{ productId: 'thermal_scutes', qty: 2 }, { productId: 'mineral_slab', qty: 4 }],
+        output: { productId: 'thermal_retaining_core', qty: 1 },
+        timeSec: 180,
+      },
+      {
+        id: 'make_fired_hardwood',
+        name: 'Cure Hardwood Timber',
+        emoji: '🪵',
+        inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'cotton', qty: 2 }],
+        output: { productId: 'fired_hardwood', qty: 1 },
+        timeSec: 45,
+      },
+      {
+        id: 'make_tempered_glass',
+        name: 'Temper Glass Panes',
+        emoji: '🪟',
+        inputs: [{ productId: 'mineral_slab', qty: 2 }],
+        output: { productId: 'tempered_glass', qty: 1 },
+        timeSec: 60,
+      },
     ],
   },
 };

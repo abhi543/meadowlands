@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { getItemEconomicProfile } from '@/game/pricingEngine';
 
-const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop'];
+const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop', 'workshop'];
 
 const FEED_MILLER_ROLES: { role: WorkerRole; feedName: string; cropName: string; icon: string }[] = [
   { role: 'feed_miller_wheat', feedName: 'Grain Feed', cropName: 'Wheat', icon: '🌾' },
@@ -28,6 +28,7 @@ const BUILDING_THEME: Record<BuildingId, {
   press: { emoji: '\u{1FAD2}', color: 'text-emerald-600 dark:text-emerald-300', bgActive: 'bg-emerald-500 dark:bg-emerald-600', borderActive: 'border-emerald-600', headerFrom: 'from-emerald-100', headerTo: 'to-green-50', headerText: 'text-emerald-900 dark:text-emerald-100', headerSub: 'text-emerald-700 dark:text-emerald-300', progressColor: 'bg-emerald-400 dark:bg-emerald-500', craftBtn: 'bg-emerald-500 hover:bg-emerald-600', craftBtnHover: 'bg-emerald-600 hover:bg-emerald-700' },
   textiles: { emoji: '\u{1F33F}', color: 'text-teal-600 dark:text-teal-300', bgActive: 'bg-teal-500 dark:bg-teal-600', borderActive: 'border-teal-600', headerFrom: 'from-teal-100', headerTo: 'to-cyan-50', headerText: 'text-teal-900 dark:text-teal-100', headerSub: 'text-teal-700 dark:text-teal-300', progressColor: 'bg-teal-400 dark:bg-teal-500', craftBtn: 'bg-teal-500 hover:bg-teal-600', craftBtnHover: 'bg-teal-600 hover:bg-teal-700' },
   tailor_shop: { emoji: '\u{1F9E5}', color: 'text-rose-600 dark:text-rose-300', bgActive: 'bg-rose-500 dark:bg-rose-600', borderActive: 'border-rose-600', headerFrom: 'from-rose-100', headerTo: 'to-pink-50', headerText: 'text-rose-900 dark:text-rose-100', headerSub: 'text-rose-700 dark:text-rose-300', progressColor: 'bg-rose-400 dark:bg-rose-500', craftBtn: 'bg-rose-500 hover:bg-rose-600', craftBtnHover: 'bg-rose-600 hover:bg-rose-700' },
+  workshop: { emoji: '🔨', color: 'text-amber-800 dark:text-amber-300', bgActive: 'bg-amber-700 dark:bg-amber-600', borderActive: 'border-amber-700', headerFrom: 'from-amber-100', headerTo: 'to-stone-100', headerText: 'text-amber-950 dark:text-amber-100', headerSub: 'text-amber-900 dark:text-amber-300', progressColor: 'bg-amber-600 dark:bg-amber-500', craftBtn: 'bg-amber-700 hover:bg-amber-800', craftBtnHover: 'bg-amber-800 hover:bg-amber-900' },
 };
 
 function getIngredientSourceHint(itemId: string): string {
@@ -98,6 +99,13 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'apple' || itemId === 'cherry') return 'Grow in Sunken Grove Orchard (Parcel required)';
   if (itemId === 'smoked_trout') return 'Fish at Riverfront Estuary (Parcel required)';
   if (itemId === 'fine_sail') return 'Weave at Guild Loom in Highland Meadow (Parcel required)';
+  // Prehistoric & Workshop Materials
+  if (itemId === 'chitin_molt_plates') return 'Shed by Asaphid Trilobite in Prehistoric Sanctuary';
+  if (itemId === 'prismatic_wing_membrane') return 'Shed by Meganeura in Prehistoric Sanctuary';
+  if (itemId === 'thermal_scutes') return 'Shed by Dimetrodon in Prehistoric Sanctuary';
+  if (itemId === 'mineral_slab') return 'Frontier Trail Strata Scavenge & Outpost';
+  if (itemId === 'fired_hardwood') return 'Cured in Workshop or Bio-Lab';
+  if (itemId === 'tempered_glass') return 'Tempered in Workshop or Bio-Lab';
   return 'Produce or gather';
 }
 
@@ -186,7 +194,7 @@ export function ProductionPanel() {
   return (
     <div className="space-y-3">
       {/* Building Tabs */}
-      <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
         {BUILDING_LIST.map(bId => {
           const b = BUILDINGS[bId];
           const t = BUILDING_THEME[bId];
@@ -484,7 +492,7 @@ export function ProductionPanel() {
                         )}
 
                         <div className="text-xs text-stone-500 dark:text-gray-400 mt-1">
-                          {recipe.inputs.map(inp => `${getItemEmoji(inp.productId)}${inp.qty}`).join(' + ')} {'\u2192'} {getItemEmoji(recipe.output.productId)}{recipe.output.qty}
+                          {recipe.inputs.map(inp => `${getItemEmoji(inp.productId)}${inp.qty} ${getItemName(inp.productId)} (${getStorageAvailableStock(silo, barn, inp.productId)} avail)`).join(' + ')} {'\u2192'} {getItemEmoji(recipe.output.productId)}{recipe.output.qty}
                           <span className={`ml-2 ${theme.headerSub}`}>{'\u23F1'} {recipe.timeSec}s</span>
                         </div>
                         {maxCraftable > 0 && <div className="text-[10px] text-stone-400 dark:text-gray-500 mt-0.5">Can craft: {maxCraftable}x | Free slots: {freeSlots}</div>}

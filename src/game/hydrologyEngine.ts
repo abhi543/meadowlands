@@ -302,6 +302,7 @@ export interface HydrologyState {
   dewHarvestedToday: boolean;
   lastSluiceMorningDay: number;
   lastPumpMorningDay?: number;
+  hasReinforcedSluiceSeal?: boolean;
 
   // E. Flash Flood Crisis & Emergency Spillway Dynamics
   isFlashFloodActive?: boolean;
@@ -342,6 +343,7 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     dewHarvestedToday: false,
     lastSluiceMorningDay: 0,
     lastPumpMorningDay: 0,
+    hasReinforcedSluiceSeal: false,
 
     isFlashFloodActive: false,
     isSpillwayOpen: false,
@@ -784,8 +786,10 @@ export function stepHydrologySimulation(params: {
         });
       } else {
         // Discharge rate scales proportionally with available plot count (minimum 12 L/sec)
+        // Reinforced Sluice Gate Seal: eliminates canal leakage, reducing gravity tower drainage by -20%
         const baseFlowRate = 12.0; // Liters / sec base for 12 plots
-        const flowRate = Math.max(baseFlowRate, (numAvailablePlots / 12) * baseFlowRate);
+        const rawFlowRate = Math.max(baseFlowRate, (numAvailablePlots / 12) * baseFlowRate);
+        const flowRate = hydrology.hasReinforcedSluiceSeal ? rawFlowRate * 0.80 : rawFlowRate;
         const requestedLiters = flowRate * dt;
         const actualDischargedLiters = Math.min(requestedLiters, currentTower);
         
@@ -805,9 +809,10 @@ export function stepHydrologySimulation(params: {
         }
 
         // Seepage loss applied based on canal tier:
-        // Tier 1: 35% seeps into turf, 65% reaches crop beds
+        // Tier 1: 35% seeps into turf, 65% reaches crop beds (eliminated if Reinforced Sluice Seal installed)
         // Tier 2+: 0% transit loss
-        const deliveredLiters = actualDischargedLiters * (1.0 - tierConfig.seepageLossFraction);
+        const effectiveSeepage = hydrology.hasReinforcedSluiceSeal ? 0 : tierConfig.seepageLossFraction;
+        const deliveredLiters = actualDischargedLiters * (1.0 - effectiveSeepage);
         totalDeliveredLiters += deliveredLiters;
 
         const litersPerPlot = deliveredLiters / thirstyPlotIndices.length;
@@ -1009,6 +1014,7 @@ export function stepHydrologySimulation(params: {
       dewHarvestedToday,
       lastSluiceMorningDay,
       lastPumpMorningDay,
+      hasReinforcedSluiceSeal: Boolean(hydrology.hasReinforcedSluiceSeal),
 
       // Flash Flood & Emergency Spillway Dynamics
       isFlashFloodActive,

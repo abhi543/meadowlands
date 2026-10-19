@@ -163,6 +163,13 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   tempered_glass: { id: 'tempered_glass', name: 'Tempered Glass Panes', icon: '🪟', category: 'artisan', baseValue: 180, isEdibleFeed: false },
   copper_pipes: { id: 'copper_pipes', name: 'Copper Pipes', icon: '🔧', category: 'artisan', baseValue: 220, isEdibleFeed: false },
   geothermal_relics: { id: 'geothermal_relics', name: 'Geothermal Relics', icon: '🏺', category: 'forage', baseValue: 500, isEdibleFeed: false },
+
+  // Workshop Tool, Hardware & Hydraulic Upgrades
+  reinforced_sluice_seal: { id: 'reinforced_sluice_seal', name: 'Reinforced Sluice Gate Seal', icon: '🛡️🔧', category: 'artisan', baseValue: 180, isEdibleFeed: false },
+  hardened_chitin_trowel: { id: 'hardened_chitin_trowel', name: 'Hardened Chitin Trowel', icon: '⛏️✨', category: 'artisan', baseValue: 320, isEdibleFeed: false },
+  subsoil_aquifer_casing: { id: 'subsoil_aquifer_casing', name: 'Subsoil Aquifer Casing', icon: '🏗️💧', category: 'artisan', baseValue: 650, isEdibleFeed: false },
+  prismatic_light_lens: { id: 'prismatic_light_lens', name: 'Prismatic Light Lens', icon: '🔍🌈', category: 'artisan', baseValue: 850, isEdibleFeed: false },
+  thermal_retaining_core: { id: 'thermal_retaining_core', name: 'Thermal Retaining Core', icon: '🔥💎', category: 'artisan', baseValue: 950, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {

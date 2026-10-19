@@ -194,6 +194,13 @@ export const WILDERNESS_MATERIAL_TIERS: Record<string, { rarity: 'common' | 'unc
   thermal_scutes:          { rarity: 'rare', base: 400, defaultHours: 6, name: 'Shed Thermal Scutes', icon: '🔥' },
   serpent_slough:          { rarity: 'rare', base: 500, defaultHours: 6, name: 'Massive Serpent Slough', icon: '📜' },
   insulated_down_wool:     { rarity: 'legendary', base: 600, defaultHours: 7, name: 'Insulated Down Wool', icon: '🧶' },
+
+  // Workshop Tool, Hardware & Hydraulic Upgrades
+  reinforced_sluice_seal:  { rarity: 'uncommon', base: 180, defaultHours: 4, name: 'Reinforced Sluice Gate Seal', icon: '🛡️🔧' },
+  hardened_chitin_trowel:  { rarity: 'uncommon', base: 320, defaultHours: 6, name: 'Hardened Chitin Trowel', icon: '⛏️✨' },
+  subsoil_aquifer_casing:  { rarity: 'rare', base: 650, defaultHours: 8, name: 'Subsoil Aquifer Casing', icon: '🏗️💧' },
+  prismatic_light_lens:    { rarity: 'rare', base: 850, defaultHours: 10, name: 'Prismatic Light Lens', icon: '🔍🌈' },
+  thermal_retaining_core:  { rarity: 'legendary', base: 950, defaultHours: 12, name: 'Thermal Retaining Core', icon: '🔥💎' },
 };
 
 export function calculateWildMaterialValue(
@@ -271,6 +278,13 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   imperial_sturgeon_caviar:{ stage: 2, inputs: [{ id: 'sturgeon', qty: 1 }, { id: 'bread', qty: 1 }], outputQty: 1, timeSec: 120, name: 'Imperial Sturgeon Caviar', icon: '🥣⭐' },
   marlin_tartare:          { stage: 2, inputs: [{ id: 'marlin', qty: 1 }, { id: 'citrus_tea', qty: 1 }], outputQty: 1, timeSec: 140, name: 'Grand Marlin Tartare', icon: '🐟👑' },
   luminescent_chowder:     { stage: 2, inputs: [{ id: 'lanternfish', qty: 1 }, { id: 'milk_rich_cream', qty: 1 }, { id: 'pumpkin', qty: 1 }], outputQty: 1, timeSec: 180, name: 'Luminescent Abyss Chowder', icon: '🍲🌈' },
+
+  // Workshop Tool, Hardware & Hydraulic Upgrades
+  reinforced_sluice_seal:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 2 }, { id: 'mineral_slab', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Reinforced Sluice Gate Seal', icon: '🛡️🔧' },
+  hardened_chitin_trowel:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 3 }, { id: 'fired_hardwood', qty: 2 }], outputQty: 1, timeSec: 90, name: 'Hardened Chitin Trowel', icon: '⛏️✨' },
+  subsoil_aquifer_casing:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 5 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 120, name: 'Subsoil Aquifer Casing', icon: '🏗️💧' },
+  prismatic_light_lens:    { stage: 1, inputs: [{ id: 'prismatic_wing_membrane', qty: 2 }, { id: 'tempered_glass', qty: 2 }], outputQty: 1, timeSec: 150, name: 'Prismatic Light Lens', icon: '🔍🌈' },
+  thermal_retaining_core:  { stage: 1, inputs: [{ id: 'thermal_scutes', qty: 2 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 180, name: 'Thermal Retaining Core', icon: '🔥💎' },
 };
 
 // Internal computed memoization cache

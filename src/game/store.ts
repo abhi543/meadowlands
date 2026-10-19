@@ -1270,6 +1270,7 @@ function createDefaultBuildingOverclocks(): Record<BuildingId, BuildingOverclock
     press: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
     textiles: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
     tailor_shop: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+    workshop: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
   };
 }
 
@@ -1342,7 +1343,7 @@ export const useGameStore = create<GameState>()(
       level: 1,
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
-      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0 },
+      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
 
       plots: initialPlots,
       unlockedPlots: GRID_SIZE,
@@ -1360,6 +1361,7 @@ export const useGameStore = create<GameState>()(
         press: [],
         tailor_shop: [],
         textiles: [],
+        workshop: [],
       },
 
       orders: initialOrders,
@@ -2312,6 +2314,33 @@ export const useGameStore = create<GameState>()(
 
         let updatedOverclocks = state.entityOverclocks;
         let updatedBuildingOverclocks = state.buildingOverclocks;
+        let updatedHydrology = state.hydrology;
+
+        // Workshop Upgrade Enhancements
+        if (outputItem === 'subsoil_aquifer_casing') {
+          if (updatedHydrology) {
+            updatedHydrology = {
+              ...updatedHydrology,
+              aquiferCapacityLiters: Math.max(updatedHydrology.aquiferCapacityLiters || 3000, 3500),
+            };
+          }
+          state.addNotification('🏗️ Subsoil Aquifer Casing installed! Deep groundwater aquifer boosted to 3,500L.', '💧', 'info');
+        } else if (outputItem === 'reinforced_sluice_seal') {
+          if (updatedHydrology) {
+            updatedHydrology = {
+              ...updatedHydrology,
+              hasReinforcedSluiceSeal: true,
+            };
+          }
+          state.addNotification('🛡️ Sluice Gate Seal ready! Canal leakage eliminated (-20% gravity tower drainage).', '🔧', 'info');
+        } else if (outputItem === 'hardened_chitin_trowel') {
+          state.addNotification('⛏️ Hardened Chitin Trowel equipped! Field hands perform tilling, planting, and clearing 30% faster.', '✨', 'info');
+        } else if (outputItem === 'prismatic_light_lens') {
+          state.addNotification('🔍 Prismatic Light Lens calibrated! Nighttime crop growth stalls completely eliminated.', '🌈', 'info');
+        } else if (outputItem === 'thermal_retaining_core') {
+          state.addNotification('🔥 Thermal Retaining Core activated! Frost-immunity range expanded across outer plots.', '💎', 'info');
+        }
+
         if (isOverclocked && bOverclock) {
           const rollBurnout = Math.random() < bOverclock.burnoutChance;
           const now = Date.now();
@@ -2355,6 +2384,7 @@ export const useGameStore = create<GameState>()(
           },
           entityOverclocks: updatedOverclocks,
           buildingOverclocks: updatedBuildingOverclocks,
+          hydrology: updatedHydrology,
           xp: newXp,
           level: newLevel,
         });
@@ -2434,6 +2464,7 @@ export const useGameStore = create<GameState>()(
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
         let collectedCount = 0;
+        let updatedHydrology = state.hydrology;
         const newQueue: ProductionSlot[] = [];
 
         for (const slot of queue) {
@@ -2471,6 +2502,17 @@ export const useGameStore = create<GameState>()(
               } else {
                 newBarn[outputItem] = (newBarn[outputItem] || 0) + finalOutput;
               }
+              if (outputItem === 'subsoil_aquifer_casing' && updatedHydrology) {
+                updatedHydrology = {
+                  ...updatedHydrology,
+                  aquiferCapacityLiters: Math.max(updatedHydrology.aquiferCapacityLiters || 3000, 3500),
+                };
+              } else if (outputItem === 'reinforced_sluice_seal' && updatedHydrology) {
+                updatedHydrology = {
+                  ...updatedHydrology,
+                  hasReinforcedSluiceSeal: true,
+                };
+              }
               collectedCount++;
             }
           } else {
@@ -2487,6 +2529,7 @@ export const useGameStore = create<GameState>()(
             ...state.productionQueues,
             [buildingId]: newQueue,
           },
+          hydrology: updatedHydrology,
           xp: newXp,
           level: newLevel,
         });
@@ -6003,8 +6046,17 @@ export const useGameStore = create<GameState>()(
           Object.values(state.specialistWorkers || {}).some(sp => sp.isHired && (sp.shiftType === 'night') && sp.isActive && !state.isAllWorkersPaused && !sp.isStriking)
         );
 
+        const currentHydrology = state.hydrology || createDefaultHydrologyState(state.level);
+        const hasSluiceSeal = Boolean(currentHydrology.hasReinforcedSluiceSeal || (state.barn?.reinforced_sluice_seal || 0) > 0);
+        const hasAquiferCasing = Boolean((state.barn?.subsoil_aquifer_casing || 0) > 0);
+        const effectiveHydrology = {
+          ...currentHydrology,
+          hasReinforcedSluiceSeal: hasSluiceSeal,
+          aquiferCapacityLiters: hasAquiferCasing ? Math.max(currentHydrology.aquiferCapacityLiters || 3000, 3500) : currentHydrology.aquiferCapacityLiters,
+        };
+
         const hydroSimResult = stepHydrologySimulation({
-          hydrology: state.hydrology || createDefaultHydrologyState(state.level),
+          hydrology: effectiveHydrology,
           plots: state.plots,
           unlockedPlots: state.unlockedPlots,
           farmLevel: state.level,
@@ -6059,13 +6111,14 @@ export const useGameStore = create<GameState>()(
               isProtectedByGreenhouse: false,
             });
 
-            // Dimetrodon Geothermal Radiance: Micro-climate bubble granting complete immunity to Frost Shock!
-            if (hasDimetrodon && pheno.isFrostbitten) {
+            // Dimetrodon Geothermal Radiance or Thermal Retaining Core: Frost Immunity!
+            const hasThermalCore = Boolean((state.barn?.thermal_retaining_core || 0) > 0);
+            if ((hasDimetrodon || hasThermalCore) && pheno.isFrostbitten) {
               pheno = {
                 ...pheno,
                 isFrostbitten: false,
-                badgeEmoji: '🔥🛡️',
-                badgeText: 'Geothermal Radiance (Frost Immunity)',
+                badgeEmoji: hasThermalCore ? '🔥💎' : '🔥🛡️',
+                badgeText: hasThermalCore ? 'Thermal Retaining Core (Frost Immunity)' : 'Geothermal Radiance (Frost Immunity)',
                 growthSpeedMultiplier: Math.max(1.0, pheno.growthSpeedMultiplier),
               };
             }
@@ -6094,8 +6147,10 @@ export const useGameStore = create<GameState>()(
             const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
+            const hasLightLens = Boolean((state.barn?.prismatic_light_lens || 0) > 0);
+            const lightLensMultiplier = hasLightLens ? 1.25 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier;
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
@@ -6710,7 +6765,10 @@ export const useGameStore = create<GameState>()(
             // Outfit bonus for herder
             const hasHerderOutfit = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder' && fh.equippedOutfit === 'herders_chaps');
             const outfitSpeed = hasHerderOutfit ? 0.7 : 1.0;
-            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier);
+            // Hardened Chitin Trowel: equips field hands to perform plot tilling, planting, and clearing 30% faster
+            const hasChitinTrowel = Boolean((state.barn?.hardened_chitin_trowel || 0) > 0);
+            const trowelSpeed = (hasChitinTrowel && role === 'farmer') ? 0.70 : 1.0;
+            const effectiveInterval = (workerEffectiveInterval(role, worker.level) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier);
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -10145,7 +10203,7 @@ export const useGameStore = create<GameState>()(
           animals: initialAnimals,
           animalCapacity: { chicken: 50, cow: 50, sheep: 50, pig: 50 },
           livestockReserve: [],
-          productionQueues: { animal_feed: [], feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [] },
+          productionQueues: { animal_feed: [], feed_mill: [], bakery: [], dairy: [], loom: [], press: [], tailor_shop: [], textiles: [], workshop: [] },
           orders: generateOrders(6, 1),
           clientReputation: DEFAULT_CLIENT_REPUTATION,
           globalReputation: createInitialGlobalReputation(),
@@ -10350,6 +10408,15 @@ export const useGameStore = create<GameState>()(
         }
         if (!merged.productionQueues.textiles) {
           merged.productionQueues = { ...merged.productionQueues, textiles: [] };
+        }
+        if (!merged.productionQueues.workshop) {
+          merged.productionQueues = { ...merged.productionQueues, workshop: [] };
+        }
+        if (merged.buildingOverclocks && !merged.buildingOverclocks.workshop) {
+          merged.buildingOverclocks = {
+            ...merged.buildingOverclocks,
+            workshop: { isOverclocked: false, expiresAt: null, isExhausted: false, exhaustedUntil: null },
+          };
         }
 
         // Migration: add missing state fields
