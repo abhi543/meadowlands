@@ -3886,18 +3886,27 @@ export const useGameStore = create<GameState>()(
         const foodMeta = COMMISSARY_FOOD_ITEMS[itemId];
         if (!foodMeta || qty <= 0) return false;
 
-        const isSiloItem = foodMeta.category === 'crop' && (state.silo[itemId] || 0) > 0;
-        const currentAvail = isSiloItem ? (state.silo[itemId] || 0) : (state.barn[itemId] || 0);
-        if (currentAvail < qty) return false;
+        const siloAvail = foodMeta.category === 'crop' ? (state.silo[itemId] || 0) : 0;
+        const barnAvail = state.barn[itemId] || 0;
+        const totalAvail = siloAvail + barnAvail;
+        if (totalAvail < qty) return false;
 
         const updatedSilo = { ...state.silo };
         const updatedBarn = { ...state.barn };
-        if (isSiloItem) {
-          updatedSilo[itemId] = currentAvail - qty;
+        let remainingToTake = qty;
+
+        if (siloAvail > 0) {
+          const takeSilo = Math.min(siloAvail, remainingToTake);
+          updatedSilo[itemId] = siloAvail - takeSilo;
           if (updatedSilo[itemId] === 0) delete updatedSilo[itemId];
-        } else {
-          updatedBarn[itemId] = currentAvail - qty;
+          remainingToTake -= takeSilo;
+        }
+
+        if (remainingToTake > 0 && barnAvail > 0) {
+          const takeBarn = Math.min(barnAvail, remainingToTake);
+          updatedBarn[itemId] = barnAvail - takeBarn;
           if (updatedBarn[itemId] === 0) delete updatedBarn[itemId];
+          remainingToTake -= takeBarn;
         }
 
         const updatedPantry = { ...state.staffPantry };
@@ -3924,8 +3933,8 @@ export const useGameStore = create<GameState>()(
         updatedPantry[itemId] = currentPantry - qty;
         if (updatedPantry[itemId] === 0) delete updatedPantry[itemId];
 
-        // Return to silo if crop, else barn
-        if (foodMeta.category === 'crop') {
+        // Return standard crop to silo, all others (including quality crops and prepared dishes) to barn
+        if (foodMeta.category === 'crop' && itemId in CROPS) {
           const updatedSilo = { ...state.silo, [itemId]: (state.silo[itemId] || 0) + qty };
           set({ silo: updatedSilo, staffPantry: updatedPantry });
         } else {
@@ -3933,7 +3942,7 @@ export const useGameStore = create<GameState>()(
           set({ barn: updatedBarn, staffPantry: updatedPantry });
         }
         playRapidTapSound(1);
-        state.addNotification(`📦 Returned ${qty}x ${foodMeta.name} to Barn inventory.`, foodMeta.icon, 'info');
+        state.addNotification(`📦 Returned ${qty}x ${foodMeta.name} to storage.`, foodMeta.icon, 'info');
         return true;
       },
 

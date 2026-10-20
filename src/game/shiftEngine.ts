@@ -622,11 +622,22 @@ export function processSingleWorkerClockOut(params: {
       isInspired = true;
       chosenFoodId = config.favoriteRecipe;
     } else {
+      // 1. Try matching dietary category first
       for (const [fId, qty] of Object.entries(updatedPantry)) {
         if (qty > 0 && COMMISSARY_FOOD_ITEMS[fId]?.category === config.dietaryCategory) {
           canAffordFood = true;
           chosenFoodId = fId;
           break;
+        }
+      }
+      // 2. Luxury fallback: any prepared kitchen meal can nourish workers
+      if (!canAffordFood) {
+        for (const [fId, qty] of Object.entries(updatedPantry)) {
+          if (qty > 0 && COMMISSARY_FOOD_ITEMS[fId]?.category === 'meal') {
+            canAffordFood = true;
+            chosenFoodId = fId;
+            break;
+          }
         }
       }
     }

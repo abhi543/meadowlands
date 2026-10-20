@@ -28,6 +28,7 @@ export function StaffPantryRestockDeck({ isOpen, onClose }: StaffPantryRestockDe
 
   const [categoryFilter, setCategoryFilter] = useState<FoodCategory | 'all'>('all');
   const [transferQuantities, setTransferQuantities] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   if (!isOpen) return null;
 
@@ -68,11 +69,23 @@ export function StaffPantryRestockDeck({ isOpen, onClose }: StaffPantryRestockDe
     returnFromStaffPantry(itemId, qty);
   };
 
-  // Filter food items
-  const foodItemsList = Object.values(COMMISSARY_FOOD_ITEMS).filter((item) => {
-    if (categoryFilter === 'all') return true;
-    return item.category === categoryFilter;
-  });
+  // Filter and sort food items (in-stock items prioritize at top)
+  const foodItemsList = Object.values(COMMISSARY_FOOD_ITEMS)
+    .filter((item) => {
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        return item.name.toLowerCase().includes(q) || item.categoryLabel.toLowerCase().includes(q);
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const stockA = getAvailableStock(a.id, a.category);
+      const stockB = getAvailableStock(b.id, b.category);
+      if (stockA > 0 && stockB <= 0) return -1;
+      if (stockB > 0 && stockA <= 0) return 1;
+      return a.name.localeCompare(b.name);
+    });
 
   // Staged food items
   const stagedEntries = Object.entries(staffPantry).filter(([_, qty]) => qty > 0);
@@ -144,29 +157,51 @@ export function StaffPantryRestockDeck({ isOpen, onClose }: StaffPantryRestockDe
           </div>
         </div>
 
-        {/* Category Filter Tabs */}
-        <div className="px-4 py-2 border-b border-stone-800 flex items-center gap-1.5 overflow-x-auto shrink-0 bg-stone-900/50">
-          <span className="text-xs font-semibold text-stone-400 mr-1">Filter:</span>
-          {(['all', 'crop', 'dairy', 'protein', 'meal'] as const).map((cat) => {
-            const isActive = categoryFilter === cat;
-            const label = cat === 'all' ? 'All Edibles' : FOOD_CATEGORY_INFO[cat].label;
-            const icon = cat === 'all' ? '🍽️' : FOOD_CATEGORY_INFO[cat].icon;
+        {/* Category Filter Tabs & Dish Search */}
+        <div className="px-4 py-2 border-b border-stone-800 flex flex-wrap items-center justify-between gap-2 shrink-0 bg-stone-900/50">
+          <div className="flex items-center gap-1.5 overflow-x-auto">
+            <span className="text-xs font-semibold text-stone-400 mr-1">Filter:</span>
+            {(['all', 'meal', 'protein', 'dairy', 'crop'] as const).map((cat) => {
+              const isActive = categoryFilter === cat;
+              const label = cat === 'all' ? 'All Edibles' : FOOD_CATEGORY_INFO[cat].label;
+              const icon = cat === 'all' ? '🍽️' : FOOD_CATEGORY_INFO[cat].icon;
 
-            return (
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-200'
+                  }`}
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Quick Search */}
+          <div className="relative flex items-center min-w-[160px] max-w-[220px]">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search dishes..."
+              className="w-full bg-stone-950 border border-stone-700/80 rounded-lg px-2.5 py-1 text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500/80"
+            />
+            {searchQuery && (
               <button
-                key={cat}
-                onClick={() => setCategoryFilter(cat)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                  isActive
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'bg-stone-800 text-stone-400 hover:bg-stone-700 hover:text-stone-200'
-                }`}
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 text-stone-400 hover:text-stone-200 text-xs font-bold"
               >
-                <span>{icon}</span>
-                <span>{label}</span>
+                ✕
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
 
         {/* Split View Content: Home Barn Inventory (Left) vs Staff Pantry (Right) */}

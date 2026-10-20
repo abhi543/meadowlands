@@ -27,43 +27,98 @@ export interface FoodItemMeta {
 
 // 1. Edible Items Registered in the Commissary Pantry
 export const COMMISSARY_FOOD_ITEMS: Record<string, FoodItemMeta> = {
-  // Raw Crops
+  // Raw Standard Crops
   wheat: { id: 'wheat', name: 'Wheat', icon: '🌾', category: 'crop', categoryLabel: 'Crops' },
   corn: { id: 'corn', name: 'Corn', icon: '🌽', category: 'crop', categoryLabel: 'Crops' },
   carrot: { id: 'carrot', name: 'Carrot', icon: '🥕', category: 'crop', categoryLabel: 'Crops' },
   strawberry: { id: 'strawberry', name: 'Strawberry', icon: '🍓', category: 'crop', categoryLabel: 'Crops' },
   soybean: { id: 'soybean', name: 'Soybean', icon: '🫛', category: 'crop', categoryLabel: 'Crops' },
   pumpkin: { id: 'pumpkin', name: 'Pumpkin', icon: '🎃', category: 'crop', categoryLabel: 'Crops' },
+  cotton: { id: 'cotton', name: 'Cotton', icon: '🌿', category: 'crop', categoryLabel: 'Crops' },
   wild_berries: { id: 'wild_berries', name: 'Wild Berries', icon: '🍇', category: 'crop', categoryLabel: 'Crops' },
+  honey_comb: { id: 'honey_comb', name: 'Honey Comb', icon: '🍯', category: 'crop', categoryLabel: 'Crops' },
 
-  // Dairy
+  // Dedicated Quality Harvest Crops (Silver / Gold / Prismatic)
+  wheat_silver: { id: 'wheat_silver', name: 'Silver Wheat', icon: '🌾✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  wheat_gold: { id: 'wheat_gold', name: 'Golden Wheat', icon: '🌾⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  wheat_prismatic: { id: 'wheat_prismatic', name: 'Prismatic Wheat', icon: '🌾🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+  corn_silver: { id: 'corn_silver', name: 'Silver Corn', icon: '🌽✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  corn_gold: { id: 'corn_gold', name: 'Golden Corn', icon: '🌽⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  corn_prismatic: { id: 'corn_prismatic', name: 'Prismatic Corn', icon: '🌽🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+  carrot_silver: { id: 'carrot_silver', name: 'Silver Carrot', icon: '🥕✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  carrot_gold: { id: 'carrot_gold', name: 'Golden Carrot', icon: '🥕⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  carrot_prismatic: { id: 'carrot_prismatic', name: 'Prismatic Carrot', icon: '🥕🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+  strawberry_silver: { id: 'strawberry_silver', name: 'Silver Strawberry', icon: '🍓✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  strawberry_gold: { id: 'strawberry_gold', name: 'Golden Strawberry', icon: '🍓⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  strawberry_prismatic: { id: 'strawberry_prismatic', name: 'Prismatic Strawberry', icon: '🍓🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+  soybean_silver: { id: 'soybean_silver', name: 'Silver Soybean', icon: '🫛✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  soybean_gold: { id: 'soybean_gold', name: 'Golden Soybean', icon: '🫛⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  soybean_prismatic: { id: 'soybean_prismatic', name: 'Prismatic Soybean', icon: '🫛🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+  pumpkin_silver: { id: 'pumpkin_silver', name: 'Silver Pumpkin', icon: '🎃✨', category: 'crop', categoryLabel: 'Quality Crops' },
+  pumpkin_gold: { id: 'pumpkin_gold', name: 'Golden Pumpkin', icon: '🎃⭐', category: 'crop', categoryLabel: 'Quality Crops' },
+  pumpkin_prismatic: { id: 'pumpkin_prismatic', name: 'Prismatic Pumpkin', icon: '🎃🌈', category: 'crop', categoryLabel: 'Quality Crops' },
+
+  // Dairy Products & Cheeses
   milk: { id: 'milk', name: 'Milk', icon: '🥛', category: 'dairy', categoryLabel: 'Dairy' },
   milk_rich_cream: { id: 'milk_rich_cream', name: 'Rich Cream', icon: '🥛', category: 'dairy', categoryLabel: 'Dairy' },
   milk_alpine: { id: 'milk_alpine', name: 'Alpine Milk', icon: '🥛', category: 'dairy', categoryLabel: 'Dairy' },
   milk_starlight: { id: 'milk_starlight', name: 'Starlight Milk', icon: '🥛', category: 'dairy', categoryLabel: 'Dairy' },
   rich_butter: { id: 'rich_butter', name: 'Rich Butter', icon: '🧈', category: 'dairy', categoryLabel: 'Dairy' },
-  cheese: { id: 'cheese', name: 'Cheese', icon: '🧀', category: 'dairy', categoryLabel: 'Dairy' },
+  cheese: { id: 'cheese', name: 'Farmstead Cheese', icon: '🧀', category: 'dairy', categoryLabel: 'Dairy' },
   alpine_cheese: { id: 'alpine_cheese', name: 'Alpine Cheese', icon: '🧀', category: 'dairy', categoryLabel: 'Dairy' },
 
-  // Protein
+  // Animal Protein & Fishery Catches
   egg: { id: 'egg', name: 'Egg', icon: '🥚', category: 'protein', categoryLabel: 'Protein' },
   egg_blue: { id: 'egg_blue', name: 'Blue Egg', icon: '🥚', category: 'protein', categoryLabel: 'Protein' },
   egg_obsidian: { id: 'egg_obsidian', name: 'Obsidian Egg', icon: '🥚', category: 'protein', categoryLabel: 'Protein' },
   egg_golden: { id: 'egg_golden', name: 'Golden Egg', icon: '🥚', category: 'protein', categoryLabel: 'Protein' },
-  fish: { id: 'fish', name: 'Fish', icon: '🐟', category: 'protein', categoryLabel: 'Protein' },
+  fish: { id: 'fish', name: 'Common Fish', icon: '🐟', category: 'protein', categoryLabel: 'Protein' },
+  catfish: { id: 'catfish', name: 'Catfish', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  trout: { id: 'trout', name: 'Trout', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  mud_crab: { id: 'mud_crab', name: 'Mud Crab', icon: '🦀', category: 'protein', categoryLabel: 'Fishery Protein' },
+  salmon: { id: 'salmon', name: 'Salmon', icon: '🍣', category: 'protein', categoryLabel: 'Fishery Protein' },
+  tuna: { id: 'tuna', name: 'Tuna', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  golden_trout: { id: 'golden_trout', name: 'Golden Trout', icon: '🐟⭐', category: 'protein', categoryLabel: 'Fishery Protein' },
+  sturgeon: { id: 'sturgeon', name: 'Sturgeon', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  marlin: { id: 'marlin', name: 'Marlin', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  lanternfish: { id: 'lanternfish', name: 'Lanternfish', icon: '🐡', category: 'protein', categoryLabel: 'Fishery Protein' },
+  perch: { id: 'perch', name: 'Perch', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  bass: { id: 'bass', name: 'Bass', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  snapper: { id: 'snapper', name: 'Snapper', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  barramundi: { id: 'barramundi', name: 'Barramundi', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  arctic_char: { id: 'arctic_char', name: 'Arctic Char', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
+  carp: { id: 'carp', name: 'Carp', icon: '🐟', category: 'protein', categoryLabel: 'Fishery Protein' },
   truffle: { id: 'truffle', name: 'Truffle', icon: '🍄', category: 'protein', categoryLabel: 'Protein' },
   truffle_white: { id: 'truffle_white', name: 'White Truffle', icon: '🍄', category: 'protein', categoryLabel: 'Protein' },
   truffle_alba: { id: 'truffle_alba', name: 'Alba Truffle', icon: '🍄', category: 'protein', categoryLabel: 'Protein' },
   truffle_diamond: { id: 'truffle_diamond', name: 'Diamond Truffle', icon: '🍄', category: 'protein', categoryLabel: 'Protein' },
 
-  // Prepared Kitchen Meals
-  bread: { id: 'bread', name: 'Bread', icon: '🍞', category: 'meal', categoryLabel: 'Meals' },
-  pie: { id: 'pie', name: 'Fruit Pie', icon: '🥧', category: 'meal', categoryLabel: 'Meals' },
-  savory_fish_pie: { id: 'savory_fish_pie', name: 'Savory Fish Pie', icon: '🥧', category: 'meal', categoryLabel: 'Meals' },
-  crab_bisque: { id: 'crab_bisque', name: 'Crab Bisque', icon: '🍲', category: 'meal', categoryLabel: 'Meals' },
-  golden_cake: { id: 'golden_cake', name: 'Golden Cake', icon: '🎂', category: 'meal', categoryLabel: 'Meals' },
-  honey: { id: 'honey', name: 'Raw Honey', icon: '🍯', category: 'meal', categoryLabel: 'Meals' },
+  // Prepared Kitchen Meals, Bakery Confections & Gourmet Seafood
+  bread: { id: 'bread', name: 'Bread', icon: '🍞', category: 'meal', categoryLabel: 'Bakery' },
+  pie: { id: 'pie', name: 'Fruit Pie', icon: '🥧', category: 'meal', categoryLabel: 'Bakery' },
+  savory_fish_pie: { id: 'savory_fish_pie', name: 'Savory Fish Pie', icon: '🥧', category: 'meal', categoryLabel: 'Bakery' },
+  crab_bisque: { id: 'crab_bisque', name: 'Crab Bisque', icon: '🍲', category: 'meal', categoryLabel: 'Culinary Soup' },
+  golden_cake: { id: 'golden_cake', name: 'Golden Cake', icon: '🎂', category: 'meal', categoryLabel: 'Bakery' },
+  honey: { id: 'honey', name: 'Raw Honey', icon: '🍯', category: 'meal', categoryLabel: 'Preserves' },
   citrus_tea: { id: 'citrus_tea', name: 'Citrus Herb Tea', icon: '🍵', category: 'meal', categoryLabel: 'Beverages' },
+  golden_cornbread: { id: 'golden_cornbread', name: 'Golden Cornbread', icon: '🍞⭐', category: 'meal', categoryLabel: 'Bakery' },
+  prismatic_berry_tart: { id: 'prismatic_berry_tart', name: 'Prismatic Berry Tart', icon: '🥧🌈', category: 'meal', categoryLabel: 'Bakery' },
+  glazed_silver_carrots: { id: 'glazed_silver_carrots', name: 'Glazed Silver Carrots', icon: '🥕✨', category: 'meal', categoryLabel: 'Kitchen Gourmet' },
+  royal_pumpkin_pottage: { id: 'royal_pumpkin_pottage', name: 'Royal Pumpkin Pottage', icon: '🍲👑', category: 'meal', categoryLabel: 'Kitchen Gourmet' },
+  grand_prismatic_jam: { id: 'grand_prismatic_jam', name: 'Grand Prismatic Jam', icon: '🍯🌈', category: 'meal', categoryLabel: 'Preserves' },
+  crispy_fried_catfish: { id: 'crispy_fried_catfish', name: 'Crispy Fried Catfish', icon: '🐟🌽', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  herb_grilled_trout: { id: 'herb_grilled_trout', name: 'Herb-Grilled Trout', icon: '🐟🌿', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  steamed_mud_crab: { id: 'steamed_mud_crab', name: 'Spiced Steamed Mud Crab', icon: '🦀✨', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  pan_seared_salmon: { id: 'pan_seared_salmon', name: 'Pan-Seared Honey Salmon', icon: '🍣🍯', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  smoked_tuna_steak: { id: 'smoked_tuna_steak', name: 'Smoked Tuna Steak', icon: '🐟🔥', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  golden_trout_meuniere: { id: 'golden_trout_meuniere', name: 'Gilded Trout Meunière', icon: '🐟⭐', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  imperial_sturgeon_caviar: { id: 'imperial_sturgeon_caviar', name: 'Imperial Sturgeon Caviar', icon: '🥣⭐', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  marlin_tartare: { id: 'marlin_tartare', name: 'Grand Marlin Tartare', icon: '🐟👑', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  luminescent_chowder: { id: 'luminescent_chowder', name: 'Luminescent Abyss Chowder', icon: '🍲🌈', category: 'meal', categoryLabel: 'Seafood Kitchen' },
+  lure_berry: { id: 'lure_berry', name: 'Glazed Berry Pastry', icon: '🍓✨', category: 'meal', categoryLabel: 'Bakery' },
+  lure_truffle: { id: 'lure_truffle', name: 'Aromatic Truffle Mash', icon: '🍄✨', category: 'meal', categoryLabel: 'Kitchen Gourmet' },
+  lure_nectar: { id: 'lure_nectar', name: 'Celestial Ambrosia', icon: '✨', category: 'meal', categoryLabel: 'Kitchen Gourmet' },
+  lure_basic: { id: 'lure_basic', name: 'Sweet Seed Cluster', icon: '🌾', category: 'meal', categoryLabel: 'Snacks' },
 };
 
 // 2. Upkeep configurations for all workers
@@ -87,8 +142,8 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 16,
     dietaryCategory: 'dairy',
     dietaryUnits: 1,
-    favoriteRecipe: 'cheese',
-    favoriteRecipeName: 'Farmstead Cheese',
+    favoriteRecipe: 'alpine_cheese',
+    favoriteRecipeName: 'Aged Alpine Cheese',
     favoriteRecipeEmoji: '🧀',
   },
   lumberjack: {
@@ -98,9 +153,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 14,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'bread',
-    favoriteRecipeName: 'Hearty Bread',
-    favoriteRecipeEmoji: '🍞',
+    favoriteRecipe: 'golden_cornbread',
+    favoriteRecipeName: 'Golden Cornbread',
+    favoriteRecipeEmoji: '🍞⭐',
   },
   fisherman: {
     roleOrId: 'fisherman',
@@ -109,9 +164,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 18,
     dietaryCategory: 'protein',
     dietaryUnits: 1,
-    favoriteRecipe: 'savory_fish_pie',
-    favoriteRecipeName: 'Savory Fish Pie',
-    favoriteRecipeEmoji: '🥧',
+    favoriteRecipe: 'herb_grilled_trout',
+    favoriteRecipeName: 'Herb-Grilled Trout',
+    favoriteRecipeEmoji: '🐟🌿',
   },
   artisan: {
     roleOrId: 'artisan',
@@ -120,9 +175,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 22,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'golden_cake',
-    favoriteRecipeName: 'Golden Cake',
-    favoriteRecipeEmoji: '🎂',
+    favoriteRecipe: 'prismatic_berry_tart',
+    favoriteRecipeName: 'Prismatic Berry Tart',
+    favoriteRecipeEmoji: '🥧🌈',
   },
 
   // Division B: Feed Millers
@@ -144,9 +199,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 16,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'pie',
-    favoriteRecipeName: 'Sweet Corn Pie',
-    favoriteRecipeEmoji: '🥧',
+    favoriteRecipe: 'golden_cornbread',
+    favoriteRecipeName: 'Golden Cornbread',
+    favoriteRecipeEmoji: '🍞⭐',
   },
   feed_miller_carrot: {
     roleOrId: 'feed_miller_carrot',
@@ -155,9 +210,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 18,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'bread',
-    favoriteRecipeName: 'Warm Bread',
-    favoriteRecipeEmoji: '🍞',
+    favoriteRecipe: 'glazed_silver_carrots',
+    favoriteRecipeName: 'Glazed Silver Carrots',
+    favoriteRecipeEmoji: '🥕✨',
   },
   feed_miller_soy: {
     roleOrId: 'feed_miller_soy',
@@ -179,9 +234,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 22,
     dietaryCategory: 'protein',
     dietaryUnits: 1,
-    favoriteRecipe: 'savory_fish_pie',
-    favoriteRecipeName: 'Trawler Fish Pie',
-    favoriteRecipeEmoji: '🥧',
+    favoriteRecipe: 'crispy_fried_catfish',
+    favoriteRecipeName: 'Crispy Fried Catfish',
+    favoriteRecipeEmoji: '🐟🌽',
   },
   beekeeper: {
     roleOrId: 'beekeeper',
@@ -190,9 +245,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 25,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'honey',
-    favoriteRecipeName: 'Golden Honey',
-    favoriteRecipeEmoji: '🍯',
+    favoriteRecipe: 'grand_prismatic_jam',
+    favoriteRecipeName: 'Grand Prismatic Jam',
+    favoriteRecipeEmoji: '🍯🌈',
   },
   forager: {
     roleOrId: 'forager',
@@ -201,9 +256,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 24,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'pie',
-    favoriteRecipeName: 'Berry Pie',
-    favoriteRecipeEmoji: '🥧',
+    favoriteRecipe: 'lure_berry',
+    favoriteRecipeName: 'Glazed Berry Pastry',
+    favoriteRecipeEmoji: '🍓✨',
   },
   merchant: {
     roleOrId: 'merchant',
@@ -212,9 +267,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 30,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'golden_cake',
-    favoriteRecipeName: 'Rich Golden Cake',
-    favoriteRecipeEmoji: '🎂',
+    favoriteRecipe: 'imperial_sturgeon_caviar',
+    favoriteRecipeName: 'Imperial Sturgeon Caviar',
+    favoriteRecipeEmoji: '🥣⭐',
   },
   prospector: {
     roleOrId: 'prospector',
@@ -223,9 +278,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 35,
     dietaryCategory: 'protein',
     dietaryUnits: 1,
-    favoriteRecipe: 'bread',
-    favoriteRecipeName: 'Miner Hard Bread',
-    favoriteRecipeEmoji: '🍞',
+    favoriteRecipe: 'pan_seared_salmon',
+    favoriteRecipeName: 'Pan-Seared Honey Salmon',
+    favoriteRecipeEmoji: '🍣🍯',
   },
 
   // Division D: Utility Specialists
@@ -236,9 +291,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 32,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'honey',
-    favoriteRecipeName: 'Refined Honey',
-    favoriteRecipeEmoji: '🍯',
+    favoriteRecipe: 'lure_nectar',
+    favoriteRecipeName: 'Celestial Ambrosia',
+    favoriteRecipeEmoji: '✨',
   },
   barn_overseer: {
     roleOrId: 'barn_overseer',
@@ -247,8 +302,8 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 28,
     dietaryCategory: 'dairy',
     dietaryUnits: 1,
-    favoriteRecipe: 'cheese',
-    favoriteRecipeName: 'Reserve Cheese',
+    favoriteRecipe: 'alpine_cheese',
+    favoriteRecipeName: 'Reserve Alpine Cheese',
     favoriteRecipeEmoji: '🧀',
   },
   cellar_ager: {
@@ -258,9 +313,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 36,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'golden_cake',
-    favoriteRecipeName: 'Dessert Cake',
-    favoriteRecipeEmoji: '🎂',
+    favoriteRecipe: 'royal_pumpkin_pottage',
+    favoriteRecipeName: 'Royal Pumpkin Pottage',
+    favoriteRecipeEmoji: '🍲👑',
   },
   tinkerer: {
     roleOrId: 'tinkerer',
@@ -269,9 +324,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 40,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'crab_bisque',
-    favoriteRecipeName: 'Crab Bisque',
-    favoriteRecipeEmoji: '🍲',
+    favoriteRecipe: 'steamed_mud_crab',
+    favoriteRecipeName: 'Spiced Steamed Mud Crab',
+    favoriteRecipeEmoji: '🦀✨',
   },
 
   // Specialist Contract Staff
@@ -282,9 +337,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 25,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'bread',
-    favoriteRecipeName: 'Trail Bread',
-    favoriteRecipeEmoji: '🍞',
+    favoriteRecipe: 'golden_cornbread',
+    favoriteRecipeName: 'Trail Cornbread',
+    favoriteRecipeEmoji: '🍞⭐',
     isSpecialist: true,
   },
   worker_wrangler_tessa: {
@@ -306,9 +361,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 40,
     dietaryCategory: 'meal',
     dietaryUnits: 1,
-    favoriteRecipe: 'golden_cake',
-    favoriteRecipeName: 'Nursery Golden Sponge',
-    favoriteRecipeEmoji: '🎂',
+    favoriteRecipe: 'luminescent_chowder',
+    favoriteRecipeName: 'Luminescent Abyss Chowder',
+    favoriteRecipeEmoji: '🍲🌈',
     isSpecialist: true,
   },
   worker_feedmaster_barnaby: {
@@ -318,9 +373,9 @@ export const WORKER_UPKEEP_ROSTER: Record<string, WorkerUpkeepConfig> = {
     baseDailyWage: 28,
     dietaryCategory: 'crop',
     dietaryUnits: 1,
-    favoriteRecipe: 'pie',
-    favoriteRecipeName: 'Rustic Fruit Pie',
-    favoriteRecipeEmoji: '🥧',
+    favoriteRecipe: 'prismatic_berry_tart',
+    favoriteRecipeName: 'Prismatic Berry Tart',
+    favoriteRecipeEmoji: '🥧🌈',
     isSpecialist: true,
   },
 };
@@ -456,6 +511,7 @@ export function calculateStaffUpkeep(
 
     const hasFav = (staffPantry[config.favoriteRecipe] || 0) > 0;
     const hasCategoryFood = stagedFoodUnitsByCategory[config.dietaryCategory] > 0;
+    const hasAnyMeal = stagedFoodUnitsByCategory['meal'] > 0;
 
     workerUpkeeps[id] = {
       config,
@@ -463,7 +519,7 @@ export function calculateStaffUpkeep(
       isActive,
       isPaused,
       isWageSecured: false, // Calculated after tax
-      isRationAvailable: hasCategoryFood || hasFav,
+      isRationAvailable: hasCategoryFood || hasFav || hasAnyMeal,
       isFavoriteInPantry: hasFav,
       morale,
       missedCycles,
@@ -617,11 +673,22 @@ export function processUpkeepSettlement(params: {
       isFavoriteFed = true;
       chosenFoodId = config.favoriteRecipe;
     } else {
+      // 1. Try matching dietary category first
       for (const [fId, qty] of Object.entries(updatedPantry)) {
         if (qty > 0 && COMMISSARY_FOOD_ITEMS[fId]?.category === config.dietaryCategory) {
           canAffordFood = true;
           chosenFoodId = fId;
           break;
+        }
+      }
+      // 2. Luxury fallback: any prepared kitchen meal or delicacy can feed staff
+      if (!canAffordFood) {
+        for (const [fId, qty] of Object.entries(updatedPantry)) {
+          if (qty > 0 && COMMISSARY_FOOD_ITEMS[fId]?.category === 'meal') {
+            canAffordFood = true;
+            chosenFoodId = fId;
+            break;
+          }
         }
       }
     }
