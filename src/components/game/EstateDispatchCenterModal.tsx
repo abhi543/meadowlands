@@ -78,6 +78,8 @@ export function EstateDispatchCenterModal({
     productionQueues = {},
     amberBioLab,
     workshopLoadout,
+    isHardcoreMode,
+    toggleHardcoreMode,
   } = useGameStore();
 
   const [mainSection, setMainSection] = useState<'manager' | 'dispatch_actions' | 'alerts' | 'grievances'>('manager');
@@ -917,6 +919,67 @@ export function EstateDispatchCenterModal({
                           {preset.label}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Hardcore Survival Directive Card */}
+                <div className={`p-4 sm:p-5 rounded-2xl border transition-all shadow-xl ${
+                  isHardcoreMode
+                    ? 'bg-gradient-to-r from-red-950/80 via-stone-900 to-rose-950/70 border-red-500/60 ring-2 ring-red-500/20'
+                    : 'bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 border-stone-700/60'
+                }`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                          isHardcoreMode
+                            ? 'bg-red-500 text-stone-950 border-red-300 shadow-md shadow-red-500/20'
+                            : 'bg-stone-800 text-stone-400 border-stone-600'
+                        }`}>
+                          <span>{isHardcoreMode ? '💀' : '🌱'}</span>
+                          <span>{isHardcoreMode ? 'HARDCORE SURVIVAL MODE ACTIVE' : 'STANDARD CASUAL MODE ACTIVE'}</span>
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-300 max-w-xl leading-relaxed">
+                        {isHardcoreMode
+                          ? 'All 6 estate survival pillars are actively punishing inefficiency: rapid 75s withering/rot, monoculture soil exhaustion, 2.5 L/min aquifer recharge, 2x weather hazard pay, and strict market penalties.'
+                          : 'Standard simulation parameters enabled. Crop withering relaxed to 30 mins, baseline wages, and standard market returns.'}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleHardcoreMode}
+                        className={`px-4 py-2 rounded-xl font-black text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 ${
+                          isHardcoreMode
+                            ? 'bg-red-600 hover:bg-red-500 text-white ring-2 ring-red-400/50'
+                            : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-600'
+                        }`}
+                      >
+                        <span>{isHardcoreMode ? '⚙️ Ease to Standard' : '💀 Enable Hardcore'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Hardcore Penalties Grid */}
+                  <div className="mt-3.5 pt-3 border-t border-stone-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                    <div className="p-2 rounded-lg bg-black/40 border border-stone-800">
+                      <div className="font-bold text-red-300">🥀 Monoculture</div>
+                      <div className="text-stone-400 text-[10px]">+35% grow duration if planted without rotation</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-black/40 border border-stone-800">
+                      <div className="font-bold text-amber-300">⏱️ Hazard Timers</div>
+                      <div className="text-stone-400 text-[10px]">75s desiccation withering & 60s flood rot</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-black/40 border border-stone-800">
+                      <div className="font-bold text-cyan-300">🚰 Aquifer Drain</div>
+                      <div className="text-stone-400 text-[10px]">+2.5 L/min recharge (0 in drought/firestorm)</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-black/40 border border-stone-800">
+                      <div className="font-bold text-rose-300">🌩️ 2x Hazard Pay</div>
+                      <div className="text-stone-400 text-[10px]">Crew demands double wages in extreme weather</div>
                     </div>
                   </div>
                 </div>

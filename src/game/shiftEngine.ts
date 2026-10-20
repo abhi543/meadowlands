@@ -572,6 +572,8 @@ export function processSingleWorkerClockOut(params: {
   payrollVaultCoins: number;
   staffPantry: Record<string, number>;
   activeWorkersCount: number;
+  wageMultiplier?: number;
+  isHardcoreMode?: boolean;
 }): ClockOutSettlementResult {
   const {
     workerName,
@@ -581,6 +583,8 @@ export function processSingleWorkerClockOut(params: {
     payrollVaultCoins,
     staffPantry,
     activeWorkersCount,
+    wageMultiplier = 1.0,
+    isHardcoreMode = false,
   } = params;
 
   // Sabbatical workers do not burn wages or pantry rations
@@ -604,7 +608,7 @@ export function processSingleWorkerClockOut(params: {
   const config = WORKER_UPKEEP_ROSTER[roleOrId];
   const baseWage = config?.baseDailyWage || 15;
   const taxRate = getGuildTaxRate(activeWorkersCount);
-  const wageCost = Math.round(baseWage * (1 + taxRate));
+  const wageCost = Math.round(baseWage * (1 + taxRate) * wageMultiplier);
 
   let remainingPayrollCoins = payrollVaultCoins;
   const updatedPantry = { ...staffPantry };
@@ -666,7 +670,8 @@ export function processSingleWorkerClockOut(params: {
     if (canAffordWage) {
       remainingPayrollCoins -= wageCost;
     }
-    newMissedCycles += 1;
+    const cycleIncrement = isHardcoreMode ? 2 : 1;
+    newMissedCycles += cycleIncrement;
     if (newMissedCycles === 1) {
       newMoraleTier = 'grumbling';
       notificationMessage = `🟡 Missed Upkeep: ${workerName} clocked out without complete rations (Grumbling -50% speed).`;

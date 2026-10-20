@@ -503,6 +503,7 @@ export function stepHydrologySimulation(params: {
   isRainstormActive: boolean;
   hasFieldHandMorningDuty: boolean;
   hasNightWatchDuty: boolean;
+  isHardcoreMode?: boolean;
 }): HydrologySimulationResult {
   const {
     hydrology,
@@ -515,6 +516,7 @@ export function stepHydrologySimulation(params: {
     isRainstormActive,
     hasFieldHandMorningDuty,
     hasNightWatchDuty,
+    isHardcoreMode = false,
   } = params;
 
   const dt = Math.max(0.1, Math.min(30, deltaSeconds)); // Clamp step
@@ -651,16 +653,20 @@ export function stepHydrologySimulation(params: {
     }
   }
 
-  // Cistern Heatwave Evaporation Loss: Uncovered cisterns lose 10 L/min to thermal boiling/evaporation
-  if (activeProfileId === 'heatwave') {
-    const heatwaveEvapLiters = (10.0 / 60) * dt;
-    currentCistern = Math.max(0, currentCistern - heatwaveEvapLiters);
+  // Cistern Heatwave & Plasma Firestorm Evaporation Loss: Uncovered cisterns lose water to thermal boiling/evaporation
+  if (activeProfileId === 'heatwave' || activeProfileId === 'plasma_firestorm' || activeProfileId === 'haboob_sandstorm') {
+    const evapRateLMin = isHardcoreMode
+      ? (activeProfileId === 'plasma_firestorm' ? 35.0 : activeProfileId === 'haboob_sandstorm' ? 20.0 : 18.0)
+      : (activeProfileId === 'plasma_firestorm' ? 20.0 : 10.0);
+    const thermalEvapLiters = (evapRateLMin / 60) * dt;
+    currentCistern = Math.max(0, currentCistern - thermalEvapLiters);
   }
 
-  // 3. Subterranean Aquifer Baseline Natural Recharge (+8 L/min, drops to 0 in Drought)
-  const baseRechargeRate = activeProfileId === 'drought' ? 0.0 : AQUIFER_NATURAL_RECHARGE_RATE_L_MIN;
-  if (baseRechargeRate > 0) {
-    const aquiferRechargeLiters = (baseRechargeRate / 60) * dt;
+  // 3. Subterranean Aquifer Baseline Natural Recharge (+8 L/min normal, drops to 2.5 L/min in Hardcore Mode, 0 in Drought/Firestorm)
+  const isAridDrought = activeProfileId === 'drought' || activeProfileId === 'plasma_firestorm' || activeProfileId === 'haboob_sandstorm';
+  const effectiveAquiferRecharge = isAridDrought ? 0.0 : (isHardcoreMode ? 2.5 : AQUIFER_NATURAL_RECHARGE_RATE_L_MIN);
+  if (effectiveAquiferRecharge > 0) {
+    const aquiferRechargeLiters = (effectiveAquiferRecharge / 60) * dt;
     currentAquifer = Math.min(hydrology.aquiferCapacityLiters, currentAquifer + aquiferRechargeLiters);
   }
 
@@ -988,10 +994,11 @@ export function stepHydrologySimulation(params: {
     // Desiccation tracking (< 15.0%)
     if (m <= 15.0 && p.crop && !p.ready && !isWithered) {
       desiccatedSec += dt;
-      if (desiccatedSec >= DESICCATION_WITHER_DURATION_SEC) {
+      const desiccationLimit = isHardcoreMode ? 75 : DESICCATION_WITHER_DURATION_SEC;
+      if (desiccatedSec >= desiccationLimit) {
         isWithered = true;
         notifications.push({
-          text: `🥀 Crop Withered: Plot #${i + 1} remained desiccated (<15%) for 30 minutes! Clear with a hoe.`,
+          text: `🥀 Crop Withered: Plot #${i + 1} remained desiccated (<15%) for ${isHardcoreMode ? '75s' : '30 minutes'}! Clear with a hoe.`,
           icon: '🥀',
           type: 'event',
         });
@@ -1003,12 +1010,14 @@ export function stepHydrologySimulation(params: {
     // Waterlogging & Root Rot tracking (> 95.0%)
     if (m > 95.0 && p.crop && !p.ready && !hasRootRot) {
       waterloggedSec += dt;
-      // In flash flood, the hard 180s countdown applies
-      const rotLimit = isFlashFloodActive ? 180 : ROOT_ROT_HAZARD_DURATION_SEC;
+      // In flash flood or hardcore, shorter countdown applies (60s - 75s in Hardcore)
+      const rotLimit = isHardcoreMode
+        ? (isFlashFloodActive ? 60 : 75)
+        : (isFlashFloodActive ? 180 : ROOT_ROT_HAZARD_DURATION_SEC);
       if (waterloggedSec >= rotLimit) {
         hasRootRot = true;
         notifications.push({
-          text: `⚠️ Root Rot Inflicted: Plot #${i + 1} flooded (>95%) for ${isFlashFloodActive ? '3' : '4'} minutes! Yield halved & quality disabled.`,
+          text: `⚠️ Root Rot Inflicted: Plot #${i + 1} flooded (>95%) for ${Math.round(rotLimit)}s! Yield halved & quality disabled.`,
           icon: '🪱',
           type: 'event',
         });

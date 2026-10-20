@@ -365,6 +365,9 @@ export interface PlotState {
   // Flash Flood & Alluvial Silt Mechanics
   alluvialSiltCyclesRemaining?: number;
   wasFloodedToMax?: boolean;
+  // Hardcore Crop Rotation & Soil Health
+  lastHarvestedCrop?: CropId | null;
+  isMonoculture?: boolean;
 }
 
 export interface AnimalInstance {
@@ -1125,6 +1128,10 @@ export interface GameState {
   simulateOfflineAbsence: (seconds: number) => OfflineActivitySummary;
   dismissOfflineSummary: () => void;
 
+  // Hardcore Survival Mode
+  isHardcoreMode: boolean;
+  toggleHardcoreMode: () => void;
+
   tick: () => void;
   resetGame: () => void;
 }
@@ -1460,6 +1467,9 @@ export const useGameStore = create<GameState>()(
       lastOfflineSummary: null,
       offlineHistory: [],
 
+      // Hardcore Survival Mode (Default: Active)
+      isHardcoreMode: true,
+
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
       barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
 
@@ -1659,6 +1669,11 @@ export const useGameStore = create<GameState>()(
         if (cropDef.seedCost > 0) {
           set({ coins: state.coins - cropDef.seedCost });
         }
+        const isMonoculture = Boolean(state.isHardcoreMode && plot.lastHarvestedCrop && plot.lastHarvestedCrop === cropId);
+        if (isMonoculture) {
+          state.addNotification(`⚠️ Monoculture Exhaustion: Planting ${cropDef.name} consecutively without crop rotation depleted soil micronutrients (+35% grow time)!`, '🥀', 'info');
+        }
+
         const pLevel = plot.level || 1;
         const soilTier = getSoilTier(pLevel);
         const newPlots = [...state.plots];
@@ -1673,6 +1688,7 @@ export const useGameStore = create<GameState>()(
           level: pLevel,
           alluvialSiltCyclesRemaining: plot.alluvialSiltCyclesRemaining,
           moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
+          isMonoculture,
         };
         set({ plots: newPlots });
       },
@@ -1703,9 +1719,9 @@ export const useGameStore = create<GameState>()(
           isProtectedByGreenhouse: false,
         });
 
-        const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
+        const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0) - (plot.isMonoculture ? 0.25 : 0);
         const hasSiltFertilizer = Boolean(plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0);
-        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0));
+        const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, Math.max(0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0)));
         const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity;
         const qualityAdjusted = Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
         const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
@@ -1714,7 +1730,7 @@ export const useGameStore = create<GameState>()(
         const newSilo = { ...state.silo, [harvestItemKey]: (state.silo[harvestItemKey] || 0) + totalYield };
         const newPlots = [...state.plots];
         const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
-        // Harvest resets soil crop while preserving moisture and quality tier
+        // Harvest resets soil crop while preserving moisture, saving lastHarvestedCrop for rotation tracking
         newPlots[plotId] = {
           id: plotId,
           crop: null,
@@ -1734,6 +1750,8 @@ export const useGameStore = create<GameState>()(
           isFrostbitten: false,
           isHeatWilted: false,
           isDormant: false,
+          lastHarvestedCrop: plot.crop,
+          isMonoculture: false,
         };
 
         if (qualityRoll.quality !== 'standard') {
@@ -1828,9 +1846,12 @@ export const useGameStore = create<GameState>()(
         if (cropDef.seedCost > 0 && state.coins < totalCost) return;
         // Deduct cost and plant all
         const newPlots = [...state.plots];
+        let monocultureCount = 0;
         for (const pid of emptyPlotIds) {
           const pLevel = state.plots[pid]?.level || 1;
           const soilTier = getSoilTier(pLevel);
+          const isMonoculture = Boolean(state.isHardcoreMode && state.plots[pid]?.lastHarvestedCrop && state.plots[pid]?.lastHarvestedCrop === cropId);
+          if (isMonoculture) monocultureCount++;
           newPlots[pid] = {
             ...state.plots[pid],
             id: pid,
@@ -1842,7 +1863,11 @@ export const useGameStore = create<GameState>()(
             level: pLevel,
             alluvialSiltCyclesRemaining: state.plots[pid]?.alluvialSiltCyclesRemaining,
             moistureLevel: state.plots[pid]?.moistureLevel !== undefined ? state.plots[pid]?.moistureLevel : 60.0,
+            isMonoculture,
           };
+        }
+        if (monocultureCount > 0) {
+          state.addNotification(`⚠️ Monoculture Exhaustion: ${monocultureCount} plot(s) planted with ${cropDef.name} consecutively (+35% grow time)!`, '🥀', 'info');
         }
         set({
           coins: state.coins - totalCost,
@@ -1930,6 +1955,8 @@ export const useGameStore = create<GameState>()(
               isFrostbitten: false,
               isHeatWilted: false,
               isDormant: false,
+              lastHarvestedCrop: plot.crop,
+              isMonoculture: false,
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -3017,7 +3044,9 @@ export const useGameStore = create<GameState>()(
         const order = state.orders.find(o => o.id === orderId);
         let newCoins = state.coins;
         if (order && (order.type === 'rush' || order.type === 'futures' || order.isRushOrder)) {
-          const fee = order.penaltyCoins || order.breachFee || Math.max(15, Math.round((order.rewards?.coins || order.coinReward || 50) * 0.10));
+          const breachPercent = state.isHardcoreMode ? 0.20 : 0.10;
+          const minFee = state.isHardcoreMode ? 25 : 15;
+          const fee = order.penaltyCoins || order.breachFee || Math.max(minFee, Math.round((order.rewards?.coins || order.coinReward || 50) * breachPercent));
           newCoins = Math.max(0, newCoins - fee);
           playDefeatSound();
           state.addNotification(`⚠️ Contract Cancelled: Paid breach cancellation fee of ${fee} coins.`, '📉', 'event');
@@ -3032,7 +3061,7 @@ export const useGameStore = create<GameState>()(
         const storage = isCrop ? state.silo : state.barn;
         const available = storage[itemId] || 0;
         if (available < qty) return;
-        // Determine sell price with dynamic market multiplier & 60% liquidation rate
+        // Determine sell price with dynamic market multiplier & liquidation rate (40% in Hardcore, 60% Standard)
         let basePrice = 1;
         if (itemId in CROPS) {
           const cropDef = CROPS[itemId as CropId];
@@ -3042,7 +3071,8 @@ export const useGameStore = create<GameState>()(
           if (product) basePrice = product.sellPrice;
         }
         const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
-        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
+        const liquidationRate = state.isHardcoreMode ? 0.40 : 0.60;
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * liquidationRate));
 
         playCashRegisterSound();
 
@@ -3068,7 +3098,8 @@ export const useGameStore = create<GameState>()(
           if (product) basePrice = product.sellPrice;
         }
         const marketMult = state.marketTrends?.[itemId]?.multiplier || 1.0;
-        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
+        const liquidationRate = state.isHardcoreMode ? 0.40 : 0.60;
+        const sellPrice = Math.max(1, Math.round(basePrice * marketMult * liquidationRate));
 
         playCashRegisterSound();
 
@@ -3086,7 +3117,8 @@ export const useGameStore = create<GameState>()(
         let totalCoins = 0;
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
-        // Sell all silo items (crops, quality crops, extras), skip hidden, 60% liquidation rate
+        const liquidationRate = state.isHardcoreMode ? 0.40 : 0.60;
+        // Sell all silo items (crops, quality crops, extras), skip hidden, 40%-60% liquidation rate
         for (const [id, qty] of Object.entries(newSilo)) {
           if (SHOP_HIDDEN.has(id)) continue;
           if (qty > 0) {
@@ -3100,18 +3132,18 @@ export const useGameStore = create<GameState>()(
               basePrice = 5;
             }
             const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-            const sellPrice = Math.max(1, Math.round(basePrice * marketMult * 0.60));
+            const sellPrice = Math.max(1, Math.round(basePrice * marketMult * liquidationRate));
             totalCoins += sellPrice * qty;
             newSilo[id] = 0;
           }
         }
-        // Sell all barn items, skip hidden, 60% liquidation rate
+        // Sell all barn items, skip hidden, 40%-60% liquidation rate
         for (const [id, def] of Object.entries(PRODUCTS)) {
           if (SHOP_HIDDEN.has(id)) continue;
           const qty = newBarn[id] || 0;
           if (qty > 0) {
             const marketMult = state.marketTrends?.[id]?.multiplier || 1.0;
-            const sellPrice = Math.max(1, Math.round(def.sellPrice * marketMult * 0.60));
+            const sellPrice = Math.max(1, Math.round(def.sellPrice * marketMult * liquidationRate));
             totalCoins += sellPrice * qty;
             newBarn[id] = 0;
           }
@@ -6379,6 +6411,18 @@ export const useGameStore = create<GameState>()(
         get().toggleOfflineMode();
       },
 
+      toggleHardcoreMode: () => {
+        const next = !get().isHardcoreMode;
+        set({ isHardcoreMode: next, isDirty: true });
+        get().addNotification(
+          next
+            ? '💀 Hardcore Survival Mode: Monoculture exhaustion, 75s withering & rot, 2x weather hazard pay, and strict contract fines ACTIVE!'
+            : '🌱 Standard Mode: Hardcore constraints eased.',
+          next ? '💀' : '🌱',
+          'event'
+        );
+      },
+
       dismissOfflineSummary: () => {
         set({ lastOfflineSummary: null, isDirty: true });
       },
@@ -6960,6 +7004,7 @@ export const useGameStore = create<GameState>()(
           isRainstormActive: state.activeEvent?.type === 'rainstorm',
           hasFieldHandMorningDuty,
           hasNightWatchDuty,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
         });
 
         const loadSheddingStage = getTowerLoadSheddingStage(hydroSimResult.updatedHydrology.towerLiters);
@@ -7072,16 +7117,21 @@ export const useGameStore = create<GameState>()(
             const hasChitinTrowel = Boolean(workshopLoadout.equippedTool === 'hardened_chitin_trowel' || (state.barn?.hardened_chitin_trowel || 0) > 0);
             const trowelCropSpeedMultiplier = hasChitinTrowel ? 1.30 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier;
+            // Monoculture nutrient exhaustion penalty (+35% grow duration = 0.74x effective speed)
+            const monocultureMultiplier = (state.isHardcoreMode && p.isMonoculture) ? 0.74 : 1.0;
+
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
+            const badgeEmoji = p.isMonoculture ? '🥀⚠️' : pheno.badgeEmoji;
+            const badgeText = p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : pheno.badgeText;
             if (effectiveElapsed >= growTime) {
               return {
                 ...p,
                 ready: true,
-                phenologyBadgeEmoji: pheno.badgeEmoji,
-                phenologyBadgeText: pheno.badgeText,
+                phenologyBadgeEmoji: badgeEmoji,
+                phenologyBadgeText: badgeText,
                 isFrostbitten: false,
                 isHeatWilted: false,
                 isDormant: false,
@@ -7090,8 +7140,8 @@ export const useGameStore = create<GameState>()(
 
             return {
               ...p,
-              phenologyBadgeEmoji: pheno.badgeEmoji,
-              phenologyBadgeText: pheno.badgeText,
+              phenologyBadgeEmoji: badgeEmoji,
+              phenologyBadgeText: badgeText,
               isFrostbitten: false,
               isHeatWilted: false,
               isDormant: false,
@@ -7109,16 +7159,20 @@ export const useGameStore = create<GameState>()(
         };
         const updatedDomesticTroughs = { ...currentDomesticTroughs };
         const dSpeciesList: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
+        const isExtremeWeather = activeWeatherId === 'supercell_deluge' || activeWeatherId === 'plasma_firestorm' || activeWeatherId === 'polar_vortex' || activeWeatherId === 'hyper_cyclone' || activeWeatherId === 'alchemical_monsoon' || activeWeatherId === 'haboob_sandstorm' || Boolean(hydroSimResult.updatedHydrology.isFlashFloodActive) || (state.isHardcoreMode && (activeWeatherId === 'heatwave' || activeWeatherId === 'monsoon' || activeWeatherId === 'cyclone' || activeWeatherId === 'drought'));
         for (const sp of dSpeciesList) {
           const activeProducers = state.animals.filter(a => a.species === sp && a.fed && !a.productReady).length;
           if (activeProducers > 0) {
             const tr = updatedDomesticTroughs[sp] || { foodUnits: 0, maxUnits: 100 };
-            const drain = 0.05 * activeProducers;
+            const drain = (state.isHardcoreMode && isExtremeWeather ? 0.10 : state.isHardcoreMode ? 0.08 : 0.05) * activeProducers;
             updatedDomesticTroughs[sp] = {
               ...tr,
               foodUnits: Math.max(0, tr.foodUnits - drain),
               isPaused: tr.foodUnits <= 0,
             };
+            if (state.isHardcoreMode && tr.foodUnits <= 0 && Math.random() < 0.02) {
+              state.addNotification(`⚠️ Barn Feed Shortage: ${sp.toUpperCase()} trough is dry! Animals are stressed.`, '⚠️', 'info');
+            }
           }
         }
 
@@ -7668,6 +7722,8 @@ export const useGameStore = create<GameState>()(
                 payrollVaultCoins: newPayrollVaultCoins,
                 staffPantry: newStaffPantry,
                 activeWorkersCount: Object.values(updatedUnifiedWorkers).filter(w => w.isHired).length,
+                wageMultiplier: (state.isHardcoreMode && isExtremeWeather) ? 2.0 : 1.0,
+                isHardcoreMode: Boolean(state.isHardcoreMode),
               });
               newPayrollVaultCoins = clockOutRes.newPayrollCoins;
               newStaffPantry = clockOutRes.newStaffPantry;
@@ -8116,6 +8172,8 @@ export const useGameStore = create<GameState>()(
               payrollVaultCoins: newPayrollVaultCoins,
               staffPantry: newStaffPantry,
               activeWorkersCount: Object.values(updatedSpecialistWorkers).filter(w => w.isHired).length,
+              wageMultiplier: (state.isHardcoreMode && isExtremeWeather) ? 2.0 : 1.0,
+              isHardcoreMode: Boolean(state.isHardcoreMode),
             });
             newPayrollVaultCoins = spClockOutRes.newPayrollCoins;
             newStaffPantry = spClockOutRes.newStaffPantry;
@@ -8523,7 +8581,9 @@ export const useGameStore = create<GameState>()(
           const expiryTime = order.expiresAt || order.rushExpiresAt;
           if (isTimed && expiryTime && now >= expiryTime) {
             ordersModified = true;
-            const fee = order.penaltyCoins || order.breachFee || Math.max(15, Math.round((order.rewards?.coins || order.coinReward || 50) * 0.10));
+            const breachPercent = state.isHardcoreMode ? 0.20 : 0.10;
+            const minFee = state.isHardcoreMode ? 25 : 15;
+            const fee = order.penaltyCoins || order.breachFee || Math.max(minFee, Math.round((order.rewards?.coins || order.coinReward || 50) * breachPercent));
             newCoins = Math.max(0, newCoins - fee);
             playDefeatSound();
             state.addNotification(`⚠️ ${order.type === 'futures' ? 'Advance Futures' : 'VIP Rush'} Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
@@ -11473,11 +11533,15 @@ export const useGameStore = create<GameState>()(
         offlineStartTime: state.offlineStartTime,
         lastOfflineSummary: state.lastOfflineSummary,
         offlineHistory: state.offlineHistory,
+        isHardcoreMode: state.isHardcoreMode,
         lastTick: state.lastTick,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
         const merged = { ...currentState, ...persisted };
+        if (merged.isHardcoreMode === undefined) {
+          merged.isHardcoreMode = true;
+        }
 
         // Migration: if fishery doesn't exist, create it
         if (!merged.fishery) {
