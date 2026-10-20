@@ -4,6 +4,7 @@ import { useGameStore } from '@/game/store';
 import { CROPS, PRODUCTS, FISH_SPECIES } from '@/game/data';
 import { useState, useEffect } from 'react';
 import { FavorShopView } from '@/components/game/FavorShopView';
+import { formatDecayCountdown } from '@/game/freshnessEngine';
 
 export function ShopPanel() {
   const {
@@ -16,6 +17,7 @@ export function ShopPanel() {
     marketNewsTicker,
     marketNextRefresh,
     globalReputation,
+    crownSeedLockUntil = 0,
   } = useGameStore();
 
   const [shopMode, setShopMode] = useState<'sell' | 'favor'>('sell');
@@ -128,6 +130,21 @@ export function ShopPanel() {
 
   return (
     <div className="space-y-3">
+      {/* Imperial Crown Embargo Banner */}
+      {crownSeedLockUntil > now && (
+        <div className="p-3.5 rounded-2xl bg-rose-950/80 border border-rose-500/60 text-rose-200 text-xs flex items-center gap-3 animate-pulse shadow-md">
+          <span className="text-2xl">👑</span>
+          <div className="flex-1">
+            <strong className="text-rose-300 font-extrabold uppercase tracking-wide">
+              Imperial Crown Embargo in Effect
+            </strong>
+            <p className="text-[11px] text-rose-200/90 mt-0.5">
+              Due to a breached Royal Crown Expedition contract, all purchases of premium seeds and sovereign goods are embargoed by His Majesty’s Magistrate for another {formatDecayCountdown(Math.round((crownSeedLockUntil - now) / 1000))}.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Top Navigation Mode Switcher */}
       <div className="flex items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-800 pb-2">
         <div className="flex items-center gap-1.5 flex-wrap">

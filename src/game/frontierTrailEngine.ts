@@ -521,7 +521,8 @@ export interface ActionExecutionResult {
 export function executeEventAction(
   actionType: EventActionType,
   card: FrontierEventCard,
-  nodeIndex: number
+  nodeIndex: number,
+  hazardPenalty: number = 0
 ): ActionExecutionResult {
   const branch =
     actionType === 'specialized_tool'
@@ -531,7 +532,8 @@ export function executeEventAction(
       : card.actions.cautious;
 
   const roll = Math.random();
-  const isSuccess = roll <= branch.successRate;
+  const effectiveSuccessRate = Math.max(0.1, branch.successRate - hazardPenalty);
+  const isSuccess = roll <= effectiveSuccessRate;
 
   // Nodes 4 and 5 apply 2x rarity multiplier to legendary fossil and amber drops
   const dropMultiplier = nodeIndex >= 4 ? 2 : 1;

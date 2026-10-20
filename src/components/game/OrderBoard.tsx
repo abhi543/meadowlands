@@ -27,6 +27,7 @@ import {
 import { calculateStaffUpkeep } from '@/data/workerUpkeep';
 import { FavorShopView } from '@/components/game/FavorShopView';
 import { CaravanManifestBar } from './CaravanManifestBar';
+import { HighStakesContractDeck } from './HighStakesContractDeck';
 import {
   canAddOrderToCaravan,
   validateCaravanCargo,
@@ -92,6 +93,7 @@ export function OrderBoard() {
     staffPantry,
   } = useGameStore();
 
+  const [mainMode, setMainMode] = useState<'high_stakes' | 'standard'>('high_stakes');
   const [activeTab, setActiveTab] = useState<'all' | 'local' | 'merchant' | 'noble' | 'timed' | 'favor_shop' | 'reputation'>('all');
   const [selectedOrderForRoute, setSelectedOrderForRoute] = useState<DeliveryOrder | null>(null);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
@@ -210,9 +212,48 @@ export function OrderBoard() {
   else if (activeTab === 'timed') displayedOrders = timedOrders;
 
   return (
-    <div className="space-y-3.5">
-      {/* Top Logistics & Economic Calibration Header */}
-      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border border-stone-700/80 rounded-2xl p-3 text-stone-100 shadow-md space-y-2.5">
+    <div className="space-y-4">
+      {/* Top Level Mode Selector: High-Stakes Faction Contracts vs Standard Town Bounties */}
+      <div className="flex items-center justify-between gap-2.5 p-1.5 rounded-2xl bg-black/60 border border-stone-800 shadow-inner">
+        <button
+          type="button"
+          onClick={() => setMainMode('high_stakes')}
+          className={`flex-1 py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            mainMode === 'high_stakes'
+              ? 'bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-stone-950 shadow-lg shadow-amber-500/20 ring-1 ring-amber-300'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+          }`}
+        >
+          <span className="text-base">👑</span>
+          <span className="tracking-wide">HIGH-STAKES FACTION CONTRACTS</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-stone-950 text-amber-300 hidden sm:inline">
+            Escrow &amp; Perishables
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMainMode('standard')}
+          className={`flex-1 py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            mainMode === 'standard'
+              ? 'bg-gradient-to-r from-stone-700 to-stone-800 text-white shadow-lg ring-1 ring-stone-600'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+          }`}
+        >
+          <span className="text-base">📋</span>
+          <span className="tracking-wide">STANDARD TOWN BOUNTIES</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-stone-950 text-stone-300 hidden sm:inline">
+            {orders.length} Active
+          </span>
+        </button>
+      </div>
+
+      {mainMode === 'high_stakes' ? (
+        <HighStakesContractDeck />
+      ) : (
+        <div className="space-y-3.5">
+          {/* Top Logistics & Economic Calibration Header */}
+          <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 border border-stone-700/80 rounded-2xl p-3 text-stone-100 shadow-md space-y-2.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-stone-700/60">
           <div className="flex items-center gap-2">
             <span className="text-2xl select-none">🚚</span>
@@ -965,6 +1006,8 @@ export function OrderBoard() {
         selectedOrders={selectedOrders}
         onClearSelection={() => setSelectedOrderIds([])}
       />
+        </div>
+      )}
     </div>
   );
 }

@@ -150,6 +150,22 @@ import {
   extractRucksack,
   drawFrontierEvent,
 } from './frontierTrailEngine';
+import {
+  type FreshnessTier,
+  type PerishableBatch,
+  isItemPerishable,
+  PERISHABLE_DEFINITIONS,
+  calculateFreshnessPercent,
+  getFreshnessTier,
+} from './freshnessEngine';
+import {
+  type ContractFactionId,
+  type HighStakesContract,
+  type HighStakesManifestSlot,
+  FACTION_REGISTRY,
+  generateHighStakesContract,
+  calculateScrapLiquidationValue,
+} from './highStakesContractEngine';
 import { sendLocalEventPushNotification } from '@/lib/eventNotifications';
 import {
   type ActiveEventInstance,
@@ -1131,6 +1147,20 @@ export interface GameState {
   // Hardcore Survival Mode
   isHardcoreMode: boolean;
 
+  // High-Stakes Contracts & Perishable Logistics System
+  highStakesContracts: HighStakesContract[];
+  factionReputation: Record<ContractFactionId, number>;
+  perishableBatches: Record<string, PerishableBatch[]>;
+  crownSeedLockUntil: number;
+  guildHazardCyclesRemaining: number;
+  mercantileCooldownUntil: number;
+
+  loadContractEscrow: (contractId: string, slotId: string, quantity?: number) => { success: boolean; message: string };
+  siphonTowerWaterToEscrow: (contractId: string, liters?: number) => { success: boolean; message: string; stageTriggered?: number };
+  finalizeContractShipment: (contractId: string) => { success: boolean; message: string };
+  forfeitContract: (contractId: string) => { scrapCoins: number };
+  registerHarvestFreshness: (itemId: string, quantity: number) => void;
+
   tick: () => void;
   resetGame: () => void;
 }
@@ -1499,6 +1529,23 @@ export const useGameStore = create<GameState>()(
       crisisShields: 0,
       freeOverclocks: 0,
       bonusStorageCapacity: 0,
+
+      // High-Stakes Contracts & Perishable Logistics System
+      highStakesContracts: [
+        generateHighStakesContract('royal_crown', 5),
+        generateHighStakesContract('paleo_guild', 5),
+        generateHighStakesContract('mercantile_caravan', 5),
+      ],
+      factionReputation: {
+        royal_crown: 25,
+        paleo_guild: 30,
+        mercantile_caravan: 40,
+      },
+      perishableBatches: {},
+      crownSeedLockUntil: 0,
+      guildHazardCyclesRemaining: 0,
+      mercantileCooldownUntil: 0,
+
       farmhands: [],
       codex: { 'chicken_common': true, 'cow_common': true },
 
@@ -1727,6 +1774,10 @@ export const useGameStore = create<GameState>()(
         // Deposit into dedicated quality-tier slot in Silo if silver/gold/prismatic
         const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
         const newSilo = { ...state.silo, [harvestItemKey]: (state.silo[harvestItemKey] || 0) + totalYield };
+        state.registerHarvestFreshness(plot.crop, totalYield);
+        if (harvestItemKey !== plot.crop) {
+          state.registerHarvestFreshness(harvestItemKey, totalYield);
+        }
         const newPlots = [...state.plots];
         const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
         // Harvest resets soil crop while preserving moisture, saving lastHarvestedCrop for rotation tracking
@@ -1934,6 +1985,10 @@ export const useGameStore = create<GameState>()(
             totalBonusYield += (bonus + soilTier.bonusYield);
             const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
             newSilo[harvestItemKey] = (newSilo[harvestItemKey] || 0) + plotYield;
+            state.registerHarvestFreshness(plot.crop, plotYield);
+            if (harvestItemKey !== plot.crop) {
+              state.registerHarvestFreshness(harvestItemKey, plotYield);
+            }
             const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
             newPlots[i] = {
               id: i,
@@ -2063,9 +2118,11 @@ export const useGameStore = create<GameState>()(
 
         if (breedDef) {
           newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
+          state.registerHarvestFreshness(breedDef.primaryProductKey, breedDef.baseYieldAmount + bonusYield);
         } else {
           // Fallback to species default
           newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
+          state.registerHarvestFreshness(speciesDef.product, speciesDef.productYield + bonusYield);
         }
 
         // 2. Secondary Bonus Drop Procs
@@ -2202,8 +2259,10 @@ export const useGameStore = create<GameState>()(
           // 1. Primary Product Yield + Overclock Bonus
           if (breedDef) {
             newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
+            state.registerHarvestFreshness(breedDef.primaryProductKey, breedDef.baseYieldAmount + bonusYield);
           } else {
             newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
+            state.registerHarvestFreshness(speciesDef.product, speciesDef.productYield + bonusYield);
           }
 
           // 2. Secondary Bonus Drop Procs
@@ -2466,6 +2525,7 @@ export const useGameStore = create<GameState>()(
         } else {
           newBarn[outputItem] = (newBarn[outputItem] || 0) + totalOutput;
         }
+        state.registerHarvestFreshness(outputItem, totalOutput);
 
         let updatedOverclocks = state.entityOverclocks;
         let updatedBuildingOverclocks = state.buildingOverclocks;
@@ -2657,6 +2717,7 @@ export const useGameStore = create<GameState>()(
               } else {
                 newBarn[outputItem] = (newBarn[outputItem] || 0) + finalOutput;
               }
+              state.registerHarvestFreshness(outputItem, finalOutput);
               if (outputItem === 'subsoil_aquifer_casing' && updatedHydrology) {
                 updatedHydrology = {
                   ...updatedHydrology,
@@ -3052,6 +3113,344 @@ export const useGameStore = create<GameState>()(
         }
         const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level) : o);
         set({ coins: newCoins, orders: newOrders, isDirty: true });
+      },
+
+      registerHarvestFreshness: (itemId: string, quantity: number) => {
+        if (!isItemPerishable(itemId) || quantity <= 0) return;
+        const state = get();
+        const def = PERISHABLE_DEFINITIONS[itemId];
+        const maxLifetime = def?.baseDecayDurationSec || 900;
+        const newBatch: PerishableBatch = {
+          id: `batch_${itemId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          itemId,
+          quantity,
+          harvestedAt: Date.now(),
+          maxLifetimeSec: maxLifetime,
+        };
+        const currentBatches = state.perishableBatches?.[itemId] || [];
+        set({
+          perishableBatches: {
+            ...state.perishableBatches,
+            [itemId]: [...currentBatches, newBatch],
+          },
+          isDirty: true,
+        });
+      },
+
+      loadContractEscrow: (contractId: string, slotId: string, quantity?: number) => {
+        const state = get();
+        const contract = state.highStakesContracts?.find(c => c.id === contractId);
+        if (!contract || contract.status !== 'active') {
+          return { success: false, message: 'Contract is not currently active.' };
+        }
+        const slot = contract.manifest.find(s => s.slotId === slotId);
+        if (!slot) return { success: false, message: 'Manifest slot not found.' };
+
+        const needed = slot.requiredQuantity - slot.escrowQuantity;
+        if (needed <= 0) return { success: false, message: 'Manifest slot is already 100% loaded.' };
+
+        const qtyToLoad = Math.min(needed, quantity && quantity > 0 ? quantity : needed);
+
+        // If water slot, siphon from tower
+        if (slot.isWaterSlot || slot.itemId === 'gravity_tower_water') {
+          return get().siphonTowerWaterToEscrow(contractId, qtyToLoad);
+        }
+
+        const isCrop = slot.itemId in state.silo;
+        const currentStock = isCrop ? (state.silo[slot.itemId] || 0) : (state.barn[slot.itemId] || 0);
+
+        if (currentStock < 1) {
+          return { success: false, message: `You have 0x ${slot.name} available in storage.` };
+        }
+
+        // Freshness Validation Check (Requirement 1 & Verification 1)
+        if (slot.minFreshness && isItemPerishable(slot.itemId)) {
+          const batches = state.perishableBatches?.[slot.itemId] || [];
+          const now = Date.now();
+          const def = PERISHABLE_DEFINITIONS[slot.itemId];
+          const maxLifetime = def?.baseDecayDurationSec || 900;
+
+          // Find available units in batches matching required freshness
+          let eligibleUnits = 0;
+          let bestFreshnessPct = 0;
+          for (const b of batches) {
+            const pct = calculateFreshnessPercent(b.harvestedAt, b.maxLifetimeSec || maxLifetime, now);
+            if (pct > bestFreshnessPct) bestFreshnessPct = pct;
+            const tier = getFreshnessTier(pct);
+            if (slot.minFreshness === 'pristine' && tier === 'pristine') {
+              eligibleUnits += b.quantity;
+            } else if (slot.minFreshness === 'standard' && (tier === 'pristine' || tier === 'standard')) {
+              eligibleUnits += b.quantity;
+            }
+          }
+
+          // If no batches exist yet (e.g. unbatched stock), evaluate baseline
+          if (batches.length === 0) {
+            if (slot.minFreshness === 'pristine') {
+              return {
+                success: false,
+                message: `Rejected by Client Inspector: Requires ★ Pristine freshness (≥85%), but current inventory stock is Standard (70%). Harvest or bake fresh items!`,
+              };
+            }
+            eligibleUnits = currentStock;
+          } else if (eligibleUnits < 1) {
+            const currentTier = getFreshnessTier(bestFreshnessPct);
+            return {
+              success: false,
+              message: `Rejected by Client: Requires ${slot.minFreshness === 'pristine' ? '★ Pristine (≥85%)' : 'Standard (≥40%)'}, but your available stock is ${currentTier.toUpperCase()} (${bestFreshnessPct}%). Harvest or bake fresh stock!`,
+            };
+          }
+        }
+
+        const actualLoad = Math.min(qtyToLoad, currentStock);
+
+        // Deduct from silo or barn
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        if (isCrop) {
+          newSilo[slot.itemId] = Math.max(0, (newSilo[slot.itemId] || 0) - actualLoad);
+        } else {
+          newBarn[slot.itemId] = Math.max(0, (newBarn[slot.itemId] || 0) - actualLoad);
+        }
+
+        // Deduct from perishable batches
+        const newBatches = { ...(state.perishableBatches || {}) };
+        if (newBatches[slot.itemId]) {
+          let remainingToDeduct = actualLoad;
+          const updatedList: PerishableBatch[] = [];
+          for (const b of newBatches[slot.itemId]) {
+            if (remainingToDeduct <= 0) {
+              updatedList.push(b);
+            } else if (b.quantity <= remainingToDeduct) {
+              remainingToDeduct -= b.quantity;
+            } else {
+              updatedList.push({ ...b, quantity: b.quantity - remainingToDeduct });
+              remainingToDeduct = 0;
+            }
+          }
+          newBatches[slot.itemId] = updatedList;
+        }
+
+        // Update contract manifest
+        const updatedContracts = state.highStakesContracts.map(c => {
+          if (c.id !== contractId) return c;
+          return {
+            ...c,
+            manifest: c.manifest.map(m => {
+              if (m.slotId !== slotId) return m;
+              return { ...m, escrowQuantity: m.escrowQuantity + actualLoad };
+            }),
+          };
+        });
+
+        playCashRegisterSound();
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          perishableBatches: newBatches,
+          highStakesContracts: updatedContracts,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `📦 Escrow Loaded: +${actualLoad}x ${slot.name} secured in shipping crate (${slot.escrowQuantity + actualLoad}/${slot.requiredQuantity}).`,
+          '📦',
+          'info'
+        );
+
+        return {
+          success: true,
+          message: `Loaded ${actualLoad}x ${slot.name} into shipping crate.`,
+        };
+      },
+
+      siphonTowerWaterToEscrow: (contractId: string, litersToSiphon?: number) => {
+        const state = get();
+        const contract = state.highStakesContracts?.find(c => c.id === contractId);
+        if (!contract || contract.status !== 'active') {
+          return { success: false, message: 'Contract is not active.' };
+        }
+        const slot = contract.manifest.find(s => s.isWaterSlot || s.itemId === 'gravity_tower_water');
+        if (!slot) return { success: false, message: 'No water requirement in this contract.' };
+
+        const needed = slot.requiredQuantity - slot.escrowQuantity;
+        if (needed <= 0) return { success: false, message: 'Water requirement is already fully escrowed.' };
+
+        const available = state.hydrology?.towerLiters || 0;
+        if (available <= 0) {
+          return { success: false, message: 'Elevated Gravity Tower is completely dry (0L)! Coordinate aquifer pumping first.' };
+        }
+
+        const requested = litersToSiphon && litersToSiphon > 0 ? litersToSiphon : needed;
+        const actualDraw = Math.min(requested, needed, available);
+
+        const newTowerLiters = Math.max(0, Math.round((available - actualDraw) * 10) / 10);
+        const stage = getTowerLoadSheddingStage(newTowerLiters, state.hydrology?.towerCapacityLiters || 800);
+
+        const updatedContracts = state.highStakesContracts.map(c => {
+          if (c.id !== contractId) return c;
+          return {
+            ...c,
+            manifest: c.manifest.map(m => {
+              if (m.slotId !== slot.slotId) return m;
+              return { ...m, escrowQuantity: m.escrowQuantity + actualDraw };
+            }),
+          };
+        });
+
+        playCashRegisterSound();
+
+        set({
+          hydrology: {
+            ...state.hydrology,
+            towerLiters: newTowerLiters,
+          },
+          highStakesContracts: updatedContracts,
+          isDirty: true,
+        });
+
+        let warningMsg = '';
+        if (stage === 1) {
+          warningMsg = ' ⚠️ Stage 1 Crop Conservation triggered (≤200L)!';
+          state.addNotification(`⚠️ Hydraulic Siphon Alert: Gravity Tower volume dropped to ${newTowerLiters}L. Crop Conservation Stage 1 engaged!`, '⚠️', 'event');
+        } else if (stage === 2) {
+          warningMsg = ' 🚨 CRITICAL: Stage 2 Crew Rationing triggered (≤80L)!';
+          state.addNotification(`🚨 Emergency Siphon Alert: Gravity Tower volume collapsed to ${newTowerLiters}L. Stage 2 Crew Rationing active!`, '🚨', 'event');
+        } else {
+          state.addNotification(`💧 Hydraulic Siphon: ${actualDraw}L drawn from Gravity Tower into export crate (${slot.escrowQuantity + actualDraw}/${slot.requiredQuantity}L).`, '💧', 'info');
+        }
+
+        return {
+          success: true,
+          message: `Siphoned ${actualDraw}L water from Gravity Tower into export crate.${warningMsg}`,
+          stageTriggered: stage,
+        };
+      },
+
+      finalizeContractShipment: (contractId: string) => {
+        const state = get();
+        const contract = state.highStakesContracts?.find(c => c.id === contractId);
+        if (!contract || contract.status !== 'active') {
+          return { success: false, message: 'Contract is not active.' };
+        }
+        const isComplete = contract.manifest.every(s => s.escrowQuantity >= s.requiredQuantity);
+        if (!isComplete) {
+          return { success: false, message: 'Cannot finalize shipment: Escrow manifest is not 100% loaded.' };
+        }
+
+        const totalCoins = contract.rewards.coins + (contract.rewards.pristineBonusCoins || 0);
+        const totalXp = contract.rewards.xp;
+        const repGain = contract.rewards.reputation;
+
+        const newFactionRep = { ...(state.factionReputation || { royal_crown: 25, paleo_guild: 30, mercantile_caravan: 40 }) };
+        newFactionRep[contract.factionId] = (newFactionRep[contract.factionId] || 0) + repGain;
+
+        // Credit bonus items into barn or silo
+        const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
+        let newGems = state.gems;
+
+        if (contract.rewards.bonusItems) {
+          for (const item of contract.rewards.bonusItems) {
+            if (item.itemId === 'gem') {
+              newGems += item.quantity;
+            } else if (item.itemId in newSilo) {
+              newSilo[item.itemId] = (newSilo[item.itemId] || 0) + item.quantity;
+            } else {
+              newBarn[item.itemId] = (newBarn[item.itemId] || 0) + item.quantity;
+            }
+          }
+        }
+
+        // Replace completed contract with a new active contract
+        const newContract = generateHighStakesContract(contract.factionId, state.level);
+        const updatedContracts = state.highStakesContracts.map(c => c.id === contractId ? newContract : c);
+
+        const { xp: nextXp, level: nextLevel } = levelUpCheck(state.xp + totalXp, state.level);
+
+        playVictoryChime();
+
+        set({
+          coins: state.coins + totalCoins,
+          xp: nextXp,
+          level: nextLevel,
+          gems: newGems,
+          barn: newBarn,
+          silo: newSilo,
+          factionReputation: newFactionRep,
+          highStakesContracts: updatedContracts,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🚢 High-Stakes Shipment Delivered! Awarded +${totalCoins} Coins, +${totalXp} XP, and +${repGain} ${FACTION_REGISTRY[contract.factionId].name} Standing!`,
+          '🚢',
+          'discovery'
+        );
+
+        return {
+          success: true,
+          message: `Shipment successfully delivered to ${FACTION_REGISTRY[contract.factionId].name}!`,
+        };
+      },
+
+      forfeitContract: (contractId: string) => {
+        const state = get();
+        const contract = state.highStakesContracts?.find(c => c.id === contractId);
+        if (!contract) return { scrapCoins: 0 };
+
+        const scrapCoins = calculateScrapLiquidationValue(contract);
+        const repLoss = contract.penalties.reputationLoss;
+
+        const newFactionRep = { ...(state.factionReputation || { royal_crown: 25, paleo_guild: 30, mercantile_caravan: 40 }) };
+        newFactionRep[contract.factionId] = Math.max(-100, (newFactionRep[contract.factionId] || 0) - repLoss);
+
+        let newCrownSeedLock = state.crownSeedLockUntil || 0;
+        let newGuildCycles = state.guildHazardCyclesRemaining || 0;
+        let newMercantileCooldown = state.mercantileCooldownUntil || 0;
+        const now = Date.now();
+
+        playDefeatSound();
+
+        if (contract.factionId === 'royal_crown') {
+          newCrownSeedLock = now + 2 * 3600 * 1000; // 2 hours
+          state.addNotification(
+            `👑 Imperial Sanction Applied: -15 Crown Standing and Crown Premium Seeds locked for 2 hours! Liquidated cargo returned ${scrapCoins} scrap coins (10%).`,
+            '👑',
+            'event'
+          );
+        } else if (contract.factionId === 'paleo_guild') {
+          newGuildCycles = 3; // 3 cycles
+          state.addNotification(
+            `🦖 Guild Trust Deficit: -20 Guild Trust and Frontier Trail hazard rates increased by +25% for 3 cycles! Liquidated cargo returned ${scrapCoins} scrap coins.`,
+            '🦖',
+            'event'
+          );
+        } else {
+          newMercantileCooldown = now + 20 * 60 * 1000; // 20 minutes
+          state.addNotification(
+            `🚚 Mercantile Rescission: -5 Standing. Order slot placed on 20-minute cooldown penalty. Returned ${scrapCoins} scrap coins.`,
+            '🚚',
+            'event'
+          );
+        }
+
+        // Replace contract with fresh one
+        const replacement = generateHighStakesContract(contract.factionId, state.level);
+        const updatedContracts = state.highStakesContracts.map(c => c.id === contractId ? replacement : c);
+
+        set({
+          coins: state.coins + scrapCoins,
+          factionReputation: newFactionRep,
+          crownSeedLockUntil: newCrownSeedLock,
+          guildHazardCyclesRemaining: newGuildCycles,
+          mercantileCooldownUntil: newMercantileCooldown,
+          highStakesContracts: updatedContracts,
+          isDirty: true,
+        });
+
+        return { scrapCoins };
       },
 
       sellItem: (itemId, qty) => {
@@ -5489,7 +5888,9 @@ export const useGameStore = create<GameState>()(
         }
 
         // Execute procedural resolution
-        const outcome = executeEventAction(actionType, card, run.currentNodeIndex);
+        const guildHazardPenalty = (state.guildHazardCyclesRemaining || 0) > 0 ? 0.25 : 0;
+        const outcome = executeEventAction(actionType, card, run.currentNodeIndex, guildHazardPenalty);
+        const newGuildHazardCycles = guildHazardPenalty > 0 ? Math.max(0, (state.guildHazardCyclesRemaining || 0) - 1) : 0;
 
         // Update Morale
         const newMorale = Math.max(0, Math.min(100, run.morale + outcome.moraleChange));
@@ -5534,6 +5935,7 @@ export const useGameStore = create<GameState>()(
             silo: newSilo,
             coins: state.coins + extraction.savedCoins,
             hydrology: updatedHydrology,
+            guildHazardCyclesRemaining: newGuildHazardCycles,
             activeTrailRun: {
               ...run,
               morale: 0,
@@ -5558,6 +5960,7 @@ export const useGameStore = create<GameState>()(
           barn: newBarn,
           silo: newSilo,
           hydrology: updatedHydrology,
+          guildHazardCyclesRemaining: newGuildHazardCycles,
           activeTrailRun: {
             ...run,
             morale: newMorale,
@@ -8806,11 +9209,105 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // High-Stakes Contracts Expiration & Auto-Liquidation Check
+        let updatedContracts = state.highStakesContracts || [];
+        let contractsChanged = false;
+        let contractLiquidatedCoins = 0;
+        const currentRep = { ...(state.factionReputation || { royal_crown: 25, paleo_guild: 30, mercantile_caravan: 40 }) };
+        let newCrownSeedLock = state.crownSeedLockUntil || 0;
+        let newGuildCycles = state.guildHazardCyclesRemaining || 0;
+        let newMercantileCooldown = state.mercantileCooldownUntil || 0;
+
+        if (updatedContracts.length > 0) {
+          updatedContracts = updatedContracts.map(c => {
+            if (c.status === 'active' && now >= c.expiresAt) {
+              contractsChanged = true;
+              const hasEscrowItems = c.manifest.some(s => s.escrowQuantity > 0);
+              if (hasEscrowItems) {
+                const scrapCoins = calculateScrapLiquidationValue(c);
+                contractLiquidatedCoins += scrapCoins;
+                currentRep[c.factionId] = Math.max(-100, (currentRep[c.factionId] || 0) - c.penalties.reputationLoss);
+                if (c.factionId === 'royal_crown') {
+                  newCrownSeedLock = now + 2 * 3600 * 1000;
+                } else if (c.factionId === 'paleo_guild') {
+                  newGuildCycles = 3;
+                } else {
+                  newMercantileCooldown = now + 20 * 60 * 1000;
+                }
+                state.addNotification(
+                  `⌛ Contract Expired: Shipping deadline missed for ${c.title}! Escrowed goods liquidated for ${scrapCoins} scrap coins (10%) and ${FACTION_REGISTRY[c.factionId].name} trust was damaged!`,
+                  '⌛',
+                  'event'
+                );
+              } else {
+                state.addNotification(
+                  `⌛ Procurement Rotation: Procurement deadline elapsed for ${c.title}. Replacement contract arrived.`,
+                  '⌛',
+                  'info'
+                );
+              }
+              return generateHighStakesContract(c.factionId, state.level);
+            }
+            return c;
+          });
+        }
+
+        // Perishable Batches Spoilage Check
+        const updatedBatches = { ...(state.perishableBatches || {}) };
+        const updatedSilo = { ...state.silo };
+        const updatedBarn = { ...state.barn };
+        let batchesChanged = false;
+
+        for (const [itemId, batchList] of Object.entries(updatedBatches)) {
+          if (!batchList || batchList.length === 0) continue;
+          const def = PERISHABLE_DEFINITIONS[itemId];
+          const maxLifetime = def?.baseDecayDurationSec || 900;
+          const remainingBatches: PerishableBatch[] = [];
+          let spoiledQty = 0;
+
+          for (const b of batchList) {
+            const pct = calculateFreshnessPercent(b.harvestedAt, b.maxLifetimeSec || maxLifetime, now);
+            if (pct <= 0) {
+              spoiledQty += b.quantity;
+              batchesChanged = true;
+            } else {
+              remainingBatches.push(b);
+            }
+          }
+
+          if (spoiledQty > 0) {
+            updatedBatches[itemId] = remainingBatches;
+            if (itemId in updatedSilo) {
+              updatedSilo[itemId] = Math.max(0, (updatedSilo[itemId] || 0) - spoiledQty);
+            } else {
+              updatedBarn[itemId] = Math.max(0, (updatedBarn[itemId] || 0) - spoiledQty);
+            }
+            state.addNotification(
+              `🥀 Spoilage Alert: ${spoiledQty}x ${def?.name || itemId} spoiled and converted into organic rot!`,
+              '🥀',
+              'event'
+            );
+          }
+        }
+
         set({
           plots: hydroOffline.updatedPlots,
           hydrology: hydroOffline.updatedHydrology,
           animals: newAnimals,
           productionQueues: newQueues,
+          ...(contractsChanged ? {
+            highStakesContracts: updatedContracts,
+            factionReputation: currentRep,
+            crownSeedLockUntil: newCrownSeedLock,
+            guildHazardCyclesRemaining: newGuildCycles,
+            mercantileCooldownUntil: newMercantileCooldown,
+            coins: state.coins + contractLiquidatedCoins,
+          } : {}),
+          ...(batchesChanged ? {
+            perishableBatches: updatedBatches,
+            silo: updatedSilo,
+            barn: updatedBarn,
+          } : {}),
           ...(offlineHydrologyReport ? { offlineHydrologyReport } : {}),
           lastTick: now,
           isDirty: true,
@@ -11530,6 +12027,12 @@ export const useGameStore = create<GameState>()(
         lastOfflineSummary: state.lastOfflineSummary,
         offlineHistory: state.offlineHistory,
         isHardcoreMode: state.isHardcoreMode,
+        highStakesContracts: state.highStakesContracts,
+        factionReputation: state.factionReputation,
+        perishableBatches: state.perishableBatches,
+        crownSeedLockUntil: state.crownSeedLockUntil,
+        guildHazardCyclesRemaining: state.guildHazardCyclesRemaining,
+        mercantileCooldownUntil: state.mercantileCooldownUntil,
         lastTick: state.lastTick,
       }),
       merge: (persistedState, currentState) => {
@@ -11537,6 +12040,25 @@ export const useGameStore = create<GameState>()(
         const merged = { ...currentState, ...persisted };
         // Hardcore Survival Mode is permanent across all sessions
         merged.isHardcoreMode = true;
+
+        if (!merged.highStakesContracts || merged.highStakesContracts.length === 0) {
+          merged.highStakesContracts = [
+            generateHighStakesContract('royal_crown', merged.level || 5),
+            generateHighStakesContract('paleo_guild', merged.level || 5),
+            generateHighStakesContract('mercantile_caravan', merged.level || 5),
+          ];
+        }
+        if (!merged.factionReputation) {
+          merged.factionReputation = {
+            royal_crown: 25,
+            paleo_guild: 30,
+            mercantile_caravan: 40,
+          };
+        }
+        if (!merged.perishableBatches) merged.perishableBatches = {};
+        if (merged.crownSeedLockUntil === undefined) merged.crownSeedLockUntil = 0;
+        if (merged.guildHazardCyclesRemaining === undefined) merged.guildHazardCyclesRemaining = 0;
+        if (merged.mercantileCooldownUntil === undefined) merged.mercantileCooldownUntil = 0;
 
         // Migration: if fishery doesn't exist, create it
         if (!merged.fishery) {

@@ -5,6 +5,8 @@ import { useGameStore } from '@/game/store';
 import { getAllBarnItems } from '@/utils/barnInventory';
 import { BarnItemCategory, BarnItem } from '@/types/inventory';
 import { CROPS, PRODUCTS } from '@/game/data';
+import { isItemPerishable } from '@/game/freshnessEngine';
+import { FreshnessBadge } from './FreshnessBadge';
 
 interface BarnTabProps {
   onSelectTab?: (tab: string) => void;
@@ -20,6 +22,7 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
     barnItemLocks = {},
     toggleBarnItemLock,
     setBarnItemCustomReserve,
+    perishableBatches = {},
   } = useGameStore();
 
   const [activeCategory, setActiveCategory] = useState<BarnItemCategory | 'all'>('all');
@@ -240,6 +243,21 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
                           <span>·</span>
                           <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">🪙 {item.baseValue}/ea</span>
                         </div>
+                        {isItemPerishable(item.id) && (
+                          <div className="mt-1">
+                            {perishableBatches[item.id] && perishableBatches[item.id].length > 0 ? (
+                              <FreshnessBadge
+                                compact
+                                harvestedAt={perishableBatches[item.id][0].harvestedAt}
+                                maxLifetimeSec={perishableBatches[item.id][0].maxLifetimeSec}
+                              />
+                            ) : (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                                🌱 Standard Freshness
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {item.breakdownText && (
                           <div className="text-[9px] text-stone-400 dark:text-stone-500 mt-0.5 font-medium truncate" title={item.formulaDescription}>
                             {item.breakdownText}
