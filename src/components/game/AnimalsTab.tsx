@@ -12,6 +12,7 @@ import {
 } from '@/game/data';
 import { TIER_SECTORS, TOTAL_PASTURE_CAPACITY, type AnimalTier, type SectorConfig } from '@/types/animals';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { AnimalProductsQuickReference } from './AnimalProductsQuickReference';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -54,7 +55,6 @@ export function AnimalsTab() {
     isAllWorkersPaused,
     specialistWorkers,
     wranglerPolicy,
-    setMenagerieModalOpen,
   } = useGameStore();
 
   const isTessaActive = Boolean(
@@ -66,6 +66,7 @@ export function AnimalsTab() {
 
   const [showAdoptModal, setShowAdoptModal] = useState(false);
   const [showReserveModal, setShowReserveModal] = useState(false);
+  const [showAnimalItemsModal, setShowAnimalItemsModal] = useState(false);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -257,12 +258,12 @@ export function AnimalsTab() {
           </button>
 
           <button
-            onClick={() => setMenagerieModalOpen(true)}
+            onClick={() => setShowAnimalItemsModal(true)}
             className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-stone-950 shadow-xs border border-amber-300/80 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
-            title="Open Consolidated Estate Menagerie & Fauna Codex"
+            title="View all items given by animals in one place"
           >
-            <span>📖</span>
-            <span className="hidden sm:inline">Menagerie</span>
+            <span>📋</span>
+            <span className="hidden sm:inline">Animal Items</span>
           </button>
         </div>
       </div>
@@ -686,6 +687,12 @@ export function AnimalsTab() {
           </div>
         </div>
       )}
+
+      {/* Quick Reference of All Items Given by Animals */}
+      <AnimalProductsQuickReference
+        isOpen={showAnimalItemsModal}
+        onClose={() => setShowAnimalItemsModal(false)}
+      />
     </div>
   );
 }
