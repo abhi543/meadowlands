@@ -1099,8 +1099,43 @@ export interface GameState {
   offlineHydrologyReport: OfflineHydrologyResolutionResult | null;
   dismissOfflineHydrologyReport: () => void;
 
+  // Game Manager & Offline Progress System
+  isOfflineMode: boolean;
+  offlineStartTime: number | null;
+  lastOfflineSummary: OfflineActivitySummary | null;
+  offlineHistory: OfflineActivitySummary[];
+  toggleOfflineMode: () => void;
+  setOfflineMode: (offline: boolean) => void;
+  simulateOfflineAbsence: (seconds: number) => OfflineActivitySummary;
+  dismissOfflineSummary: () => void;
+
   tick: () => void;
   resetGame: () => void;
+}
+
+export interface OfflineActivitySummary {
+  id: string;
+  timestamp: number;
+  durationSeconds: number;
+  cropsMatured: { crop: string; count: number }[];
+  totalCropsMaturedCount: number;
+  animalProductsReady: { species: string; count: number; product: string }[];
+  totalAnimalProductsCount: number;
+  productionFinished: { building: string; recipe: string; count: number }[];
+  totalProductionFinishedCount: number;
+  waterDrainedLiters: number;
+  waterSiphonedLiters: number;
+  initialTowerLiters: number;
+  finalTowerLiters: number;
+  initialAquiferLiters: number;
+  finalAquiferLiters: number;
+  loadSheddingStage: number;
+  cropConservationTriggered: boolean;
+  specimensPreservedCount: number;
+  coinsEarned: number;
+  xpEarned: number;
+  workersProtected: boolean;
+  notes: string[];
 }
 
 const GRID_SIZE = 12;
@@ -1402,6 +1437,12 @@ export const useGameStore = create<GameState>()(
 
       workshopLoadout: createDefaultWorkshopLoadout(),
       offlineHydrologyReport: null,
+
+      // Game Manager & Offline Progress System
+      isOfflineMode: false,
+      offlineStartTime: null,
+      lastOfflineSummary: null,
+      offlineHistory: [],
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
       barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
@@ -6292,6 +6333,208 @@ export const useGameStore = create<GameState>()(
         set({ offlineHydrologyReport: null, isDirty: true });
       },
 
+      // Game Manager & Offline Caretaker System Actions
+      toggleOfflineMode: () => {
+        const state = get();
+        if (!state.isOfflineMode) {
+          set({
+            isOfflineMode: true,
+            offlineStartTime: Date.now(),
+            isDirty: true,
+          });
+          get().addNotification('🌙 Game Manager: Entered Offline Caretaker Mode. Estate is automated.', '🎮', 'info');
+        } else {
+          const now = Date.now();
+          const start = state.offlineStartTime || (now - 60000);
+          const elapsedSec = Math.max(1, Math.round((now - start) / 1000));
+          get().simulateOfflineAbsence(elapsedSec);
+          set({
+            isOfflineMode: false,
+            offlineStartTime: null,
+            isDirty: true,
+          });
+          get().addNotification('🟢 Game Manager: Returned Online! Offline report compiled.', '🎮', 'info');
+        }
+      },
+
+      setOfflineMode: (offline: boolean) => {
+        const state = get();
+        if (state.isOfflineMode === offline) return;
+        get().toggleOfflineMode();
+      },
+
+      dismissOfflineSummary: () => {
+        set({ lastOfflineSummary: null, isDirty: true });
+      },
+
+      simulateOfflineAbsence: (elapsedSeconds: number) => {
+        const state = get();
+        const now = Date.now();
+        const elapsedMs = Math.max(1000, elapsedSeconds * 1000);
+
+        // 1. Advance plots
+        const auraMultiplier = state.currentEstateAura?.effectDetail?.type === 'growth_speed'
+          ? state.currentEstateAura.effectDetail.value
+          : 1.0;
+        const cropMaturedMap: Record<string, number> = {};
+        let totalCropsMatured = 0;
+
+        const newPlots = state.plots.map(p => {
+          if (p.crop && p.plantedAt && !p.ready) {
+            const cropDef = CROPS[p.crop];
+            const pLevel = p.level || 1;
+            const soilTier = getSoilTier(pLevel);
+            const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
+            const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
+            const growMs = (cropDef.growTimeSec * 1000 * auraMultiplier) / (soilSpeedMultiplier * waterBoost);
+            if ((now - p.plantedAt >= growMs) || (elapsedMs >= growMs)) {
+              cropMaturedMap[p.crop] = (cropMaturedMap[p.crop] || 0) + 1;
+              totalCropsMatured++;
+              return { ...p, ready: true };
+            }
+          }
+          return p;
+        });
+
+        // 2. Advance animals
+        const animalProductMap: Record<string, { count: number; product: string }> = {};
+        let totalAnimalProducts = 0;
+
+        const newAnimals = state.animals.map(a => {
+          if (a.fed && a.fedAt && !a.productReady) {
+            const def = ANIMALS[a.species];
+            const cycleMs = def.productionTimeSec * 1000;
+            if ((now - a.fedAt >= cycleMs) || (elapsedMs >= cycleMs)) {
+              const prodName = def.product;
+              animalProductMap[a.species] = {
+                count: (animalProductMap[a.species]?.count || 0) + 1,
+                product: prodName,
+              };
+              totalAnimalProducts++;
+              return { ...a, productReady: true, fed: false, fedAt: null };
+            }
+          }
+          return a;
+        });
+
+        // 3. Advance production queues
+        const prodFinishedMap: Record<string, { building: string; count: number }> = {};
+        let totalProdFinished = 0;
+        const newQueues = { ...state.productionQueues };
+        for (const bId of Object.keys(newQueues) as BuildingId[]) {
+          newQueues[bId] = newQueues[bId].map(slot => {
+            if (!slot.done && ((now - slot.startedAt >= slot.durationSec * 1000) || (elapsedMs >= slot.durationSec * 1000))) {
+              prodFinishedMap[slot.recipeId] = {
+                building: bId,
+                count: (prodFinishedMap[slot.recipeId]?.count || 0) + 1,
+              };
+              totalProdFinished++;
+              return { ...slot, done: true };
+            }
+            return slot;
+          });
+        }
+
+        // 4. Hydrology & Siphon Catch-Up
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        const activeChambers = (state.amberBioLab?.chambers || []).filter(c => c.status === 'INCUBATING' || (c.status as string) === 'CRYO_STANDBY').length;
+        const activeWorkers = Object.values(state.unifiedWorkers || {}).filter(w => w.isHired && !w.isPaused).length;
+
+        const catchup = resolveOfflineHydrologyCatchUp({
+          initialTowerLiters: currentHydro.towerLiters,
+          initialAquiferLiters: currentHydro.aquiferLiters,
+          elapsedOfflineSeconds: elapsedSeconds,
+          isSluiceOpen: currentHydro.sluiceGatesOpen,
+          sluiceDischargeRateLps: currentHydro.liveDischargeLitersPerSec || 1.5,
+          activeBioLabChambersCount: activeChambers,
+          activeWorkerCount: activeWorkers,
+          hasEmergencySiphon: Boolean(loadout.emergencySiphonInstalled),
+          hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+        });
+
+        const updatedHydro = {
+          ...currentHydro,
+          towerLiters: catchup.finalTowerLiters,
+          aquiferLiters: catchup.finalAquiferLiters,
+          totalSiphonedLiters: (currentHydro.totalSiphonedLiters || 0) + catchup.totalSiphonedLiters,
+          loadSheddingStage: catchup.stageReached,
+          isCropConservationActive: catchup.stageReached >= 1,
+          isCrewRationingActive: catchup.stageReached >= 2,
+          isCryoStandbyActive: catchup.isCryoStandbyActive,
+          sluiceGatesOpen: catchup.stageReached >= 1 ? false : currentHydro.sluiceGatesOpen,
+        };
+
+        // Notes and log assembly
+        const notes: string[] = [];
+        if (totalCropsMatured > 0) {
+          notes.push(`🌾 ${totalCropsMatured} crop plot(s) reached full maturity and are ready to harvest.`);
+        } else {
+          notes.push(`🌾 Field moisture levels safely preserved across all plots.`);
+        }
+
+        if (totalAnimalProducts > 0) {
+          notes.push(`🥛 ${totalAnimalProducts} livestock production cycle(s) completed cleanly.`);
+        }
+
+        if (totalProdFinished > 0) {
+          notes.push(`⚙️ ${totalProdFinished} workshop artisan recipe(s) completed.`);
+        }
+
+        if (catchup.totalSiphonedLiters > 0) {
+          notes.push(`🚰 Emergency Siphon Valve engaged: +${catchup.totalSiphonedLiters}L transferred from Deep Aquifer.`);
+        }
+
+        if (catchup.stageReached >= 1) {
+          notes.push(`🛡️ Stage ${catchup.stageReached} Load-Shedding active: Sluice gates auto-secured to eliminate root rot risk.`);
+        }
+
+        if (activeChambers > 0) {
+          notes.push(`🦖 ${activeChambers} Amber Bio-Lab specimen chamber(s) secured under Cryo-Standby preservation.`);
+        }
+
+        const summary: OfflineActivitySummary = {
+          id: `offline_${Date.now()}`,
+          timestamp: now,
+          durationSeconds: elapsedSeconds,
+          cropsMatured: Object.entries(cropMaturedMap).map(([crop, count]) => ({ crop, count })),
+          totalCropsMaturedCount: totalCropsMatured,
+          animalProductsReady: Object.entries(animalProductMap).map(([species, val]) => ({ species, count: val.count, product: val.product })),
+          totalAnimalProductsCount: totalAnimalProducts,
+          productionFinished: Object.entries(prodFinishedMap).map(([recipe, val]) => ({ recipe, building: val.building, count: val.count })),
+          totalProductionFinishedCount: totalProdFinished,
+          waterDrainedLiters: Math.max(0, Math.round(currentHydro.towerLiters - catchup.finalTowerLiters)),
+          waterSiphonedLiters: catchup.totalSiphonedLiters,
+          initialTowerLiters: catchup.initialTowerLiters,
+          finalTowerLiters: catchup.finalTowerLiters,
+          initialAquiferLiters: catchup.initialAquiferLiters,
+          finalAquiferLiters: catchup.finalAquiferLiters,
+          loadSheddingStage: catchup.stageReached,
+          cropConservationTriggered: catchup.stageReached >= 1,
+          specimensPreservedCount: activeChambers,
+          coinsEarned: 0,
+          xpEarned: 0,
+          workersProtected: true,
+          notes,
+        };
+
+        const newHistory = [summary, ...(state.offlineHistory || [])].slice(0, 10);
+
+        set({
+          plots: newPlots,
+          animals: newAnimals,
+          productionQueues: newQueues,
+          hydrology: updatedHydro,
+          offlineHydrologyReport: catchup,
+          lastOfflineSummary: summary,
+          offlineHistory: newHistory,
+          lastTick: now,
+          isDirty: true,
+        });
+
+        return summary;
+      },
+
       // Habitat
       upgradeHabitat: (species) => {
         const state = get();
@@ -6589,6 +6832,11 @@ export const useGameStore = create<GameState>()(
       tick: () => {
         const now = Date.now();
         const state = get();
+
+        // If Game Manager is in Offline Mode, pause live active ticking
+        if (state.isOfflineMode) {
+          return;
+        }
 
         // Systemic event physics modifiers (v2.3)
         const isAlchemicalBloom = state.systemicEvent?.id === 'alchemical_bloom' && state.systemicEvent.phase === 'active';
@@ -11002,6 +11250,10 @@ export const useGameStore = create<GameState>()(
         hydrology: state.hydrology,
         amberBioLab: state.amberBioLab,
         prehistoricSanctuary: state.prehistoricSanctuary,
+        isOfflineMode: state.isOfflineMode,
+        offlineStartTime: state.offlineStartTime,
+        lastOfflineSummary: state.lastOfflineSummary,
+        offlineHistory: state.offlineHistory,
         lastTick: state.lastTick,
       }),
       merge: (persistedState, currentState) => {

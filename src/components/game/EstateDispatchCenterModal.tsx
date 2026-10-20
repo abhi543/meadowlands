@@ -19,6 +19,16 @@ interface EstateDispatchCenterModalProps {
 type TabFilter = 'all' | NotificationCategory;
 type PriorityFilter = 'all' | NotificationPriority;
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  if (mins < 60) return `${mins}m ${secs > 0 ? `${secs}s` : ''}`;
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hrs}h ${remMins > 0 ? `${remMins}m` : ''}`;
+}
+
 export function EstateDispatchCenterModal({
   isOpen,
   onClose,
@@ -55,8 +65,22 @@ export function EstateDispatchCenterModal({
     addNotification,
     setAutoShutoffMoisture,
     setHydrologyWeather,
+    isOfflineMode,
+    offlineStartTime,
+    lastOfflineSummary,
+    offlineHistory = [],
+    toggleOfflineMode,
+    simulateOfflineAbsence,
+    dismissOfflineSummary,
+    animals = [],
+    silo,
+    barn,
+    productionQueues = {},
+    amberBioLab,
+    workshopLoadout,
   } = useGameStore();
 
+  const [mainSection, setMainSection] = useState<'manager' | 'dispatch_actions' | 'alerts' | 'grievances'>('manager');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -249,6 +273,19 @@ export function EstateDispatchCenterModal({
     evapInfo.evapRatePctPerMin >= 2.5 && 'Severe Evaporative Loss',
   ].filter(Boolean);
 
+  // Estate Readiness Metrics for Game Manager & Offline Caretaker
+  const plantedPlots = activePlots.filter(p => p.crop);
+  const readyPlots = activePlots.filter(p => p.ready);
+  const growingPlots = activePlots.filter(p => p.crop && !p.ready);
+  const avgMoisture = Math.round(activePlots.reduce((sum, p) => sum + (p.moistureLevel ?? 70), 0) / Math.max(1, activePlots.length));
+  const fedAnimals = animals.filter(a => a.fed && !a.productReady);
+  const readyAnimals = animals.filter(a => a.productReady);
+  const activeQueuesList = (Object.values(productionQueues || {}).flat() as Array<{ done?: boolean }>);
+  const activeQueueCount = activeQueuesList.filter(q => !q.done).length;
+  const finishedQueueCount = activeQueuesList.filter(q => q.done).length;
+  const activeChambersCount = (amberBioLab?.chambers || []).filter(c => c.status === 'INCUBATING' || (c.status as string) === 'CRYO_STANDBY').length;
+  const hasEmergencySiphon = Boolean(workshopLoadout?.emergencySiphonInstalled);
+
   // --- Filtered Notifications Feed ---
   const filteredNotifications = useMemo(() => {
     return notifications.filter(item => {
@@ -423,7 +460,7 @@ export function EstateDispatchCenterModal({
           <div className="bg-gradient-to-r from-stone-950 via-stone-900 to-stone-950 p-4 border-b border-stone-800 flex items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-stone-950 shadow-md shrink-0">
-                <span className="text-xl">📡</span>
+                <span className="text-xl">🎮</span>
                 {activeCriticalAlerts.length > 0 && (
                   <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-stone-900 animate-ping" />
                 )}
@@ -431,19 +468,20 @@ export function EstateDispatchCenterModal({
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-base sm:text-lg font-black tracking-tight text-white truncate">
-                    Estate Notification & Dispatch Center
+                    Game Manager &amp; Estate Console
                   </h2>
-                  {activeCriticalAlerts.length > 0 ? (
-                    <span className="px-2 py-0.5 rounded-full bg-rose-600/30 border border-rose-500 text-rose-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
-                      {activeCriticalAlerts.length} CRITICAL
-                    </span>
-                  ) : activeWarningAlerts.length > 0 ? (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
-                      {activeWarningAlerts.length} WARNINGS
+                  {isOfflineMode ? (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] font-black uppercase tracking-wider animate-pulse flex items-center gap-1">
+                      <span>🌙</span> OFFLINE CARETAKER ACTIVE
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-                      ALL SYSTEMS NOMINAL
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                      <span>🟢</span> LIVE ONLINE
+                    </span>
+                  )}
+                  {activeCriticalAlerts.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-600/30 border border-rose-500 text-rose-300 text-[10px] font-black uppercase tracking-wider animate-pulse">
+                      {activeCriticalAlerts.length} CRITICAL
                     </span>
                   )}
                 </div>
@@ -455,8 +493,22 @@ export function EstateDispatchCenterModal({
 
             <div className="flex items-center gap-2 shrink-0">
               <button
+                type="button"
+                onClick={toggleOfflineMode}
+                className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black transition-all border shadow-sm cursor-pointer active:scale-95 ${
+                  isOfflineMode
+                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 border-amber-300 ring-2 ring-amber-400/50 animate-pulse'
+                    : 'bg-emerald-600/70 hover:bg-emerald-500 text-white border-emerald-400'
+                }`}
+                title={isOfflineMode ? 'Click to resume live online mode' : 'Click to go into offline caretaker mode'}
+              >
+                <span>{isOfflineMode ? '🌙' : '🟢'}</span>
+                <span>{isOfflineMode ? 'Resume Online' : 'Go Offline'}</span>
+              </button>
+
+              <button
                 onClick={handleSimulateAlert}
-                className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs border border-stone-700 transition-colors"
+                className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs border border-stone-700 transition-colors cursor-pointer"
                 title="Send test alert to verify dispatch pipeline"
               >
                 <span>🧪</span>
@@ -465,9 +517,87 @@ export function EstateDispatchCenterModal({
               <button
                 onClick={onClose}
                 className="w-8 h-8 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-white flex items-center justify-center font-bold text-sm transition-colors cursor-pointer border border-stone-700/80"
-                aria-label="Close Dispatch Center"
+                aria-label="Close Game Manager"
               >
                 ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Main Section Mode Tabs */}
+          <div className="bg-stone-950 px-3 sm:px-4 py-2 border-b border-stone-800 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMainSection('manager')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  mainSection === 'manager'
+                    ? 'bg-amber-500 text-stone-950 shadow-md ring-2 ring-amber-400/50'
+                    : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+                }`}
+              >
+                <span>🎮</span>
+                <span>Game Manager &amp; Offline Caretaker</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainSection('dispatch_actions')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  mainSection === 'dispatch_actions'
+                    ? 'bg-amber-500 text-stone-950 shadow-md ring-2 ring-amber-400/50'
+                    : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+                }`}
+              >
+                <span>⚡</span>
+                <span>Dispatch Shortcuts</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMainSection('alerts')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                  mainSection === 'alerts'
+                    ? 'bg-amber-500 text-stone-950 shadow-md ring-2 ring-amber-400/50'
+                    : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+                }`}
+              >
+                <span>🔔</span>
+                <span>System Alerts &amp; Logs</span>
+                {notifications.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-stone-900 text-amber-300 font-bold">
+                    {notifications.length}
+                  </span>
+                )}
+              </button>
+
+              {strikingWorkers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMainSection('grievances')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    mainSection === 'grievances'
+                      ? 'bg-rose-600 text-white shadow-md animate-pulse'
+                      : 'bg-rose-950/60 text-rose-300 hover:bg-rose-900 border border-rose-600/40'
+                  }`}
+                >
+                  <span>🪧</span>
+                  <span>Grievances ({strikingWorkers.length})</span>
+                </button>
+              )}
+            </div>
+
+            {/* Mobile Online/Offline button */}
+            <div className="sm:hidden shrink-0">
+              <button
+                type="button"
+                onClick={toggleOfflineMode}
+                className={`px-2.5 py-1 rounded-lg text-xs font-black border flex items-center gap-1 ${
+                  isOfflineMode ? 'bg-amber-500 text-stone-950 border-amber-300' : 'bg-emerald-600 text-white border-emerald-400'
+                }`}
+              >
+                <span>{isOfflineMode ? '🌙' : '🟢'}</span>
+                <span>{isOfflineMode ? 'Offline' : 'Online'}</span>
               </button>
             </div>
           </div>
@@ -595,116 +725,523 @@ export function EstateDispatchCenterModal({
             </div>
           </div>
 
-          {/* Category Tabs & Filter Toolbar */}
-          <div className="bg-stone-900 p-3 border-b border-stone-800 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-            {/* Category Partitioning Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
-              {[
-                { id: 'all', label: 'All Alerts', icon: '📋', count: categoryCounts.all },
-                { id: 'hazards', label: 'Hazards', icon: '⚡', count: categoryCounts.hazards },
-                { id: 'hydrology', label: 'Hydrology', icon: '💧', count: categoryCounts.hydrology },
-                { id: 'waters_crew', label: 'Waters & Crew', icon: '👥', count: categoryCounts.waters_crew },
-                { id: 'history', label: 'History', icon: '📜', count: categoryCounts.history },
-              ].map(tab => {
-                const isActive = activeTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as TabFilter)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
-                      isActive
-                        ? 'bg-amber-500 text-stone-950 shadow-md font-black'
-                        : 'bg-stone-800 text-stone-300 hover:bg-stone-700 hover:text-white'
-                    }`}
-                  >
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                      isActive ? 'bg-stone-950 text-amber-300' : 'bg-stone-900 text-stone-400'
-                    }`}>
-                      {tab.count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          {/* Category Tabs & Filter Toolbar (Shown in Alerts View) */}
+          {mainSection === 'alerts' && (
+            <>
+              <div className="bg-stone-900 p-3 border-b border-stone-800 flex flex-wrap items-center justify-between gap-2.5 shrink-0">
+                {/* Category Partitioning Tabs */}
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full">
+                  {[
+                    { id: 'all', label: 'All Alerts', icon: '📋', count: categoryCounts.all },
+                    { id: 'hazards', label: 'Hazards', icon: '⚡', count: categoryCounts.hazards },
+                    { id: 'hydrology', label: 'Hydrology', icon: '💧', count: categoryCounts.hydrology },
+                    { id: 'waters_crew', label: 'Waters & Crew', icon: '👥', count: categoryCounts.waters_crew },
+                    { id: 'history', label: 'History', icon: '📜', count: categoryCounts.history },
+                  ].map(tab => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as TabFilter)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                          isActive
+                            ? 'bg-amber-500 text-stone-950 shadow-md font-black'
+                            : 'bg-stone-800 text-stone-300 hover:bg-stone-700 hover:text-white'
+                        }`}
+                      >
+                        <span>{tab.icon}</span>
+                        <span>{tab.label}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                          isActive ? 'bg-stone-950 text-amber-300' : 'bg-stone-900 text-stone-400'
+                        }`}>
+                          {tab.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-            {/* Severity and Clear Controls */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {/* Severity filter buttons */}
-              <div className="flex items-center bg-stone-950 rounded-lg p-0.5 border border-stone-800 text-[11px]">
-                <button
-                  onClick={() => setPriorityFilter('all')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
-                    priorityFilter === 'all' ? 'bg-stone-800 text-white' : 'text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  onClick={() => setPriorityFilter('critical')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
-                    priorityFilter === 'critical' ? 'bg-rose-600 text-white' : 'text-rose-400 hover:text-rose-300'
-                  }`}
-                >
-                  Critical
-                </button>
-                <button
-                  onClick={() => setPriorityFilter('warning')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
-                    priorityFilter === 'warning' ? 'bg-amber-500 text-stone-950' : 'text-amber-400 hover:text-amber-300'
-                  }`}
-                >
-                  Warnings
-                </button>
-                <button
-                  onClick={() => setPriorityFilter('info')}
-                  className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
-                    priorityFilter === 'info' ? 'bg-blue-600 text-white' : 'text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Info
-                </button>
+                {/* Severity and Clear Controls */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center bg-stone-950 rounded-lg p-0.5 border border-stone-800 text-[11px]">
+                    <button
+                      onClick={() => setPriorityFilter('all')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
+                        priorityFilter === 'all' ? 'bg-stone-800 text-white' : 'text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setPriorityFilter('critical')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
+                        priorityFilter === 'critical' ? 'bg-rose-600 text-white' : 'text-rose-400 hover:text-rose-300'
+                      }`}
+                    >
+                      Critical
+                    </button>
+                    <button
+                      onClick={() => setPriorityFilter('warning')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
+                        priorityFilter === 'warning' ? 'bg-amber-500 text-stone-950' : 'text-amber-400 hover:text-amber-300'
+                      }`}
+                    >
+                      Warnings
+                    </button>
+                    <button
+                      onClick={() => setPriorityFilter('info')}
+                      className={`px-2 py-0.5 rounded-md font-bold transition-colors ${
+                        priorityFilter === 'info' ? 'bg-blue-600 text-white' : 'text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Info
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      clearNotifications(activeTab === 'all' ? undefined : activeTab);
+                      showFeedback('Cleared non-critical history logs.');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-[11px] border border-stone-700 transition-colors"
+                    title="Clear non-critical logs (preserves unresolved critical alerts)"
+                  >
+                    Clear Log
+                  </button>
+                </div>
               </div>
 
-              {/* Clear Non-Critical Logs */}
-              <button
-                onClick={() => {
-                  clearNotifications(activeTab === 'all' ? undefined : activeTab);
-                  showFeedback('Cleared non-critical history logs.');
-                }}
-                className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-[11px] border border-stone-700 transition-colors"
-                title="Clear non-critical logs (preserves unresolved critical alerts)"
-              >
-                Clear Log
-              </button>
-            </div>
-          </div>
+              {/* Search Box Bar */}
+              <div className="bg-stone-950 px-4 py-2 border-b border-stone-800 flex items-center gap-2">
+                <span className="text-stone-500 text-xs">🔍</span>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Filter alerts by keyword, plot #, worker name, or symptom..."
+                  className="w-full bg-transparent text-xs text-stone-200 placeholder-stone-500 focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-stone-500 hover:text-stone-300 text-xs px-1"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </>
+          )}
 
-          {/* Search Box Bar */}
-          <div className="bg-stone-950 px-4 py-2 border-b border-stone-800 flex items-center gap-2">
-            <span className="text-stone-500 text-xs">🔍</span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Filter alerts by keyword, plot #, worker name, or symptom..."
-              className="w-full bg-transparent text-xs text-stone-200 placeholder-stone-500 focus:outline-none"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="text-stone-500 hover:text-stone-300 text-xs px-1"
-              >
-                ✕
-              </button>
+          {/* Active Main View Content */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* === 1. GAME MANAGER & OFFLINE STATUS DASHBOARD === */}
+            {mainSection === 'manager' && (
+              <div className="space-y-4">
+                {/* Interactive Online/Offline Controller Card */}
+                <div className={`p-4 sm:p-5 rounded-2xl border transition-all shadow-xl ${
+                  isOfflineMode
+                    ? 'bg-gradient-to-r from-amber-950/80 via-stone-900 to-amber-950/70 border-amber-500/60 ring-2 ring-amber-500/20'
+                    : 'bg-gradient-to-r from-emerald-950/70 via-stone-900 to-teal-950/70 border-emerald-500/50'
+                }`}>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1.5 ${
+                          isOfflineMode
+                            ? 'bg-amber-500 text-stone-950 border-amber-300 animate-pulse'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-400'
+                        }`}>
+                          <span>{isOfflineMode ? '🌙' : '🟢'}</span>
+                          <span>{isOfflineMode ? 'OFFLINE CARETAKER MODE ACTIVE' : 'LIVE ONLINE MODE ACTIVE'}</span>
+                        </span>
+                        {isOfflineMode && (
+                          <span className="font-mono text-xs text-amber-300 font-bold bg-stone-950 px-2 py-0.5 rounded-md border border-amber-500/30">
+                            ⏱️ {formatDuration(Math.max(1, Math.floor((now - (offlineStartTime || now)) / 1000)))} away
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-stone-300 max-w-xl leading-relaxed">
+                        {isOfflineMode
+                          ? 'Game Manager is actively automating your estate. Sluice gate load-shedding is armed to prevent crop rot, specimen incubators are locked in cryo-preservation, and worker strikes are frozen.'
+                          : 'Your farm is running live real-time simulation. When you step away or close the browser, Game Manager will oversee all production and water management.'}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={toggleOfflineMode}
+                        className={`px-5 py-2.5 rounded-xl font-black text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 ${
+                          isOfflineMode
+                            ? 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 ring-2 ring-amber-400/60 shadow-amber-500/20'
+                            : 'bg-gradient-to-r from-stone-800 to-stone-700 hover:from-stone-700 hover:to-stone-600 text-amber-300 border border-amber-400/40'
+                        }`}
+                      >
+                        <span>{isOfflineMode ? '⚡' : '🌙'}</span>
+                        <span>{isOfflineMode ? 'Resume Online & Catch Up' : 'Switch to Offline Mode'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Simulation Presets Toolbar */}
+                  <div className="mt-4 pt-3.5 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="text-[11px] text-stone-400 font-bold flex items-center gap-1.5">
+                      <span>⏱️</span>
+                      <span>Simulate Absence Interval:</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {[
+                        { label: '+15 Mins', secs: 15 * 60 },
+                        { label: '+1 Hour', secs: 60 * 60 },
+                        { label: '+4 Hours', secs: 4 * 3600 },
+                        { label: '+8 Hours (Overnight)', secs: 8 * 3600 },
+                      ].map(preset => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            simulateOfflineAbsence(preset.secs);
+                            showFeedback(`⚡ Fast-forwarded ${preset.label} offline progress!`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-cyan-300 hover:text-cyan-200 text-xs font-bold border border-cyan-500/30 transition-all active:scale-95 cursor-pointer"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status of Game When You Go Offline */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-white flex items-center gap-2">
+                        <span>📊</span>
+                        <span>Status When You Go Offline (Estate Readiness)</span>
+                      </h3>
+                      <p className="text-[11px] text-stone-400">
+                        Continuous automation health check across all 6 estate systems.
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-[10px] font-black uppercase">
+                      🛡️ 100% Zero-Loss Protection Active
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                    {/* 1. Hydrology & Water Reserves */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>💧 Hydrology & Reserves</span>
+                        <span className={towerLiters > 200 ? 'text-emerald-400' : 'text-amber-400'}>
+                          {towerLiters > 200 ? 'Stage 0: Nominal' : 'Stage 1: Conserve'}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Elevated Tower:</span>
+                          <span className="font-mono font-bold text-cyan-300">{towerLiters}L / {towerMax}L</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Deep Aquifer:</span>
+                          <span className="font-mono font-bold text-teal-300">{aquiferLiters.toLocaleString()}L / {aquiferMax.toLocaleString()}L</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Siphon Float Valve:</span>
+                          <span className={hasEmergencySiphon ? 'text-emerald-400 font-bold' : 'text-stone-500'}>
+                            {hasEmergencySiphon ? '✅ Ready (<=80L)' : '❌ Not Installed'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Mean Plot Moisture:</span>
+                          <span className="font-mono text-cyan-200">{avgMoisture}%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Field Crops Status */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>🌾 Field Crops Status</span>
+                        <span className="text-emerald-400 font-mono">{plantedPlots.length}/{activePlots.length} Planted</span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Ready to Harvest:</span>
+                          <span className="font-bold text-amber-300">{readyPlots.length} Plots</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Actively Growing:</span>
+                          <span className="font-bold text-emerald-300">{growingPlots.length} Plots</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Root Rot Protection:</span>
+                          <span className="text-emerald-400 font-bold">Auto-Cutoff Armed</span>
+                        </div>
+                        <div className="text-[10px] text-stone-400 truncate">
+                          Crops: {growingPlots.map(p => p.crop).filter(Boolean).slice(0, 3).join(', ') || 'No active crops'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Barn & Livestock Cycles */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>🐮 Barn & Livestock</span>
+                        <span className="text-amber-400 font-mono">{fedAnimals.length}/{animals.length} Producing</span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Yields Waiting:</span>
+                          <span className="font-bold text-amber-300">{readyAnimals.length} Ready</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Fed & In Production:</span>
+                          <span className="font-bold text-emerald-300">{fedAnimals.length} Animals</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Silo Feed Storage:</span>
+                          <span className="font-mono text-cyan-200">
+                            {silo?.wheat || 0}🌾 {silo?.corn || 0}🌽 {silo?.carrot || 0}🥕
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Workshop Queues */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>⚙️ Workshop Queues</span>
+                        <span className="text-cyan-400 font-mono">{activeQueueCount} Active</span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Recipes Crafting:</span>
+                          <span className="font-bold text-emerald-300">{activeQueueCount} Slots</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Finished Artisan Goods:</span>
+                          <span className="font-bold text-amber-300">{finishedQueueCount} Ready</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Offline Completion:</span>
+                          <span className="text-emerald-400 font-bold">100% Progress Retained</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 5. Workforce & Commissary */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>👥 Workforce & Crew</span>
+                        <span className="text-emerald-400 font-mono">{onDutyWorkersCount}/{totalHiredCount} on Duty</span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Canteen Hydration:</span>
+                          <span className="font-mono text-cyan-300">{canteenLiters}/{canteenCap}L</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Strike Countdown:</span>
+                          <span className="text-emerald-400 font-bold">Frozen While Offline</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Labor Disputes:</span>
+                          <span className={strikingWorkers.length > 0 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
+                            {strikingWorkers.length > 0 ? `${strikingWorkers.length} Striking` : 'None'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 6. Prehistoric Bio-Lab */}
+                    <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center justify-between text-stone-400 font-bold text-[11px] uppercase tracking-wider">
+                        <span>🦖 Amber Bio-Lab</span>
+                        <span className="text-teal-300 font-mono">{activeChambersCount} Incubating</span>
+                      </div>
+                      <div className="space-y-1 text-stone-200">
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Specimen Chambers:</span>
+                          <span className="font-bold text-cyan-300">{activeChambersCount} Active</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Cryo-Standby Lock:</span>
+                          <span className="text-emerald-400 font-bold">Zero Decay Guarantee</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-stone-400">Grace Window:</span>
+                          <span className="font-mono text-stone-300">24 Hours Preserved</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* What Was Done When Offline */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-white flex items-center gap-2">
+                        <span>📋</span>
+                        <span>What Was Done When Offline (Activity Log)</span>
+                      </h3>
+                      <p className="text-[11px] text-stone-400">
+                        Chronological report of harvests, livestock yields, water actions, and fail-safes executed while away.
+                      </p>
+                    </div>
+
+                    {lastOfflineSummary && (
+                      <button
+                        type="button"
+                        onClick={dismissOfflineSummary}
+                        className="text-[11px] text-stone-400 hover:text-stone-200 transition-colors"
+                      >
+                        Clear Current Report
+                      </button>
+                    )}
+                  </div>
+
+                  {lastOfflineSummary ? (
+                    <div className="bg-stone-900 border-2 border-cyan-500/40 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl">
+                      {/* Summary Header Ribbon */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-stone-800">
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 font-black text-xs">
+                            ⏱️ {formatDuration(lastOfflineSummary.durationSeconds)} Absence Window
+                          </span>
+                          <span className="text-xs text-stone-400">
+                            Recorded {new Date(lastOfflineSummary.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                          Stage {lastOfflineSummary.loadSheddingStage}: Load-Shedding Preserved
+                        </span>
+                      </div>
+
+                      {/* Yield & Accomplishments Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                        {/* Crops Matured */}
+                        <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800">
+                          <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Crops Matured</span>
+                          <span className="font-mono text-base font-black text-emerald-400">
+                            +{lastOfflineSummary.totalCropsMaturedCount}
+                          </span>
+                          <div className="text-[10px] text-stone-400 truncate mt-0.5">
+                            {lastOfflineSummary.cropsMatured.map(c => `${c.count}x ${c.crop}`).join(', ') || 'Preserved in ground'}
+                          </div>
+                        </div>
+
+                        {/* Animal Yields */}
+                        <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800">
+                          <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Animal Products</span>
+                          <span className="font-mono text-base font-black text-amber-400">
+                            +{lastOfflineSummary.totalAnimalProductsCount}
+                          </span>
+                          <div className="text-[10px] text-stone-400 truncate mt-0.5">
+                            {lastOfflineSummary.animalProductsReady.map(a => `${a.count}x ${a.product}`).join(', ') || 'No cycles completed'}
+                          </div>
+                        </div>
+
+                        {/* Production Finished */}
+                        <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800">
+                          <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Artisan Goods</span>
+                          <span className="font-mono text-base font-black text-cyan-400">
+                            +{lastOfflineSummary.totalProductionFinishedCount}
+                          </span>
+                          <div className="text-[10px] text-stone-400 truncate mt-0.5">
+                            {lastOfflineSummary.productionFinished.map(p => `${p.count}x ${p.recipe}`).join(', ') || 'No crafts finished'}
+                          </div>
+                        </div>
+
+                        {/* Water Management */}
+                        <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800">
+                          <span className="text-[10px] text-stone-400 uppercase tracking-wider block">Water Conserved</span>
+                          <span className="font-mono text-base font-black text-teal-300">
+                            {lastOfflineSummary.finalTowerLiters}L / 800L
+                          </span>
+                          <div className="text-[10px] text-cyan-300 truncate mt-0.5">
+                            {lastOfflineSummary.waterSiphonedLiters > 0
+                              ? `+${lastOfflineSummary.waterSiphonedLiters}L Siphoned from Aquifer`
+                              : 'Gravity Tower nominal'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Automated Actions Log */}
+                      <div className="bg-stone-950/60 rounded-xl p-3 border border-stone-800 space-y-1.5 text-xs">
+                        <span className="font-bold text-stone-300 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                          <span>🛡️</span> Actions Executed by Game Manager
+                        </span>
+                        <ul className="space-y-1 text-stone-300 text-xs">
+                          {lastOfflineSummary.notes.map((note, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-cyan-400 font-bold">•</span>
+                              <span>{note}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-stone-950/60 border border-stone-800 rounded-2xl p-6 text-center space-y-2">
+                      <div className="text-3xl">☕</div>
+                      <h4 className="font-bold text-white text-sm">No Offline Sessions Recorded Yet</h4>
+                      <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
+                        Toggle into <strong>Offline Mode</strong> when leaving the game, or simulate an absence interval above to test how Game Manager automates your farm.
+                      </p>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            simulateOfflineAbsence(3600);
+                            showFeedback('⚡ Simulated 1 hour offline session!');
+                          }}
+                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs transition-all shadow-md active:scale-95 cursor-pointer"
+                        >
+                          Simulate 1 Hour Offline Session Now
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Past Offline Sessions History */}
+                  {offlineHistory.length > 1 && (
+                    <div className="bg-stone-950/50 rounded-xl p-3 border border-stone-800/80 space-y-2">
+                      <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>📜</span> Past Offline Session Records ({offlineHistory.length})
+                      </span>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar">
+                        {offlineHistory.map((hist, i) => (
+                          <div key={hist.id || i} className="flex items-center justify-between p-2 rounded-lg bg-stone-900/60 border border-stone-800 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-cyan-300 font-bold">⏱️ {formatDuration(hist.durationSeconds)}</span>
+                              <span className="text-stone-400 text-[11px]">{new Date(hist.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[11px] text-stone-300">
+                              <span>🌾 +{hist.totalCropsMaturedCount}</span>
+                              <span>🥛 +{hist.totalAnimalProductsCount}</span>
+                              <span>⚙️ +{hist.totalProductionFinishedCount}</span>
+                              <span className="text-cyan-400">💧 {hist.finalTowerLiters}L</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
-          </div>
 
-          {/* Active Live Alerts & Chronological Dispatch Feed */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {/* === 2. DISPATCH SHORTCUTS OR ALERTS VIEW === */}
+            {mainSection !== 'manager' && (
+              <>
             {/* --- LIVE SITUATIONAL ACTION DECK (Top Priority Cards) --- */}
-            {(activeTab === 'all' || activeTab === 'hazards') && (
+            {(mainSection === 'dispatch_actions' || activeTab === 'all' || activeTab === 'hazards') && (
               <>
                 {/* 1. Flash Flood Crisis Card */}
                 {isFlashFlood && (
@@ -1195,6 +1732,8 @@ export function EstateDispatchCenterModal({
                 </div>
               )}
             </div>
+            </>
+          )}
           </div>
 
           {/* Modal Footer */}

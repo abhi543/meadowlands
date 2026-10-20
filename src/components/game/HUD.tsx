@@ -32,6 +32,9 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     setDispatchModalOpen,
     hydrology,
     prehistoricSanctuary,
+    isOfflineMode,
+    offlineStartTime,
+    toggleOfflineMode,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -137,20 +140,49 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
           </button>
         )}
 
-        {/* Dedicated Estate Notification & Dispatch Center Button */}
+        {/* Online / Offline Status Toggle Button */}
+        <button
+          onClick={toggleOfflineMode}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black transition-all shadow-sm border backdrop-blur-sm cursor-pointer select-none active:scale-95 ${
+            isOfflineMode
+              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 border-amber-300 ring-2 ring-amber-400/50 animate-pulse'
+              : 'bg-emerald-600/70 hover:bg-emerald-500 text-white border-emerald-400/60'
+          }`}
+          title={
+            isOfflineMode
+              ? `Estate in Offline Mode (${Math.max(0, Math.floor((now - (offlineStartTime || now)) / 1000))}s elapsed). Click to resume online mode and catch up!`
+              : 'Status: Live Online. Click to go Offline (Game Manager automated caretaker).'
+          }
+        >
+          <span className="text-xs">{isOfflineMode ? '🌙' : '🟢'}</span>
+          <span>
+            {isOfflineMode ? (
+              <span className="flex items-center gap-1">
+                <span>Offline</span>
+                <span className="font-mono text-[10px] bg-stone-950/80 text-amber-300 px-1 py-0.2 rounded font-black">
+                  {Math.max(0, Math.floor((now - (offlineStartTime || now)) / 1000))}s
+                </span>
+              </span>
+            ) : (
+              'Online'
+            )}
+          </span>
+        </button>
+
+        {/* Dedicated Game Manager & Dispatch Console Button */}
         <button
           onClick={() => setDispatchModalOpen(true)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm border backdrop-blur-sm cursor-pointer ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm border backdrop-blur-sm cursor-pointer select-none ${
             criticalCount > 0
               ? 'bg-rose-700 hover:bg-rose-600 text-white border-rose-400 animate-pulse'
               : warningCount > 0
               ? 'bg-amber-500/85 hover:bg-amber-400 text-stone-950 border-amber-300'
               : 'bg-white/20 hover:bg-white/30 text-white border-white/20'
           }`}
-          title={`Estate Notification & Dispatch Center (${criticalCount} Critical, ${warningCount} Warnings) · Click to open`}
+          title={`Game Manager & Estate Console (${criticalCount} Critical, ${warningCount} Warnings) · Click to open`}
         >
-          <span className="text-sm">📡</span>
-          <span className="font-extrabold hidden sm:inline">Dispatch</span>
+          <span className="text-sm">🎮</span>
+          <span className="font-extrabold hidden sm:inline">Game Manager</span>
           {criticalCount > 0 ? (
             <span className="px-1.5 py-0.2 rounded-full bg-white text-rose-700 font-black text-[10px] leading-tight">
               {criticalCount}
