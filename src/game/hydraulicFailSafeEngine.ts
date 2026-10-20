@@ -200,6 +200,165 @@ export function simulateSiphonTick(params: {
   };
 }
 
+export const OVERFLOW_SURGE_RATE_LPS = 15.0; // 15 L/s
+
+export interface SimulateOverflowSurgeTickParams {
+  towerLiters: number;
+  towerCapacityLiters?: number;
+  cisternLiters: number;
+  cisternMaxLiters: number;
+  aquiferLiters: number;
+  aquiferCapacityLiters: number;
+  deltaSeconds: number;
+  isOverflowSurgeActive: boolean;
+  overflowSurgeSource: 'cistern' | 'aquifer' | null;
+  surgeRateLps?: number;
+}
+
+export interface OverflowSurgeTickResult {
+  newTowerLiters: number;
+  newCisternLiters: number;
+  newAquiferLiters: number;
+  isOverflowSurgeActive: boolean;
+  overflowSurgeSource: 'cistern' | 'aquifer' | null;
+  transferredLiters: number;
+  justTriggered: boolean;
+  justCompleted: boolean;
+  triggerSourceName?: string;
+}
+
+/**
+ * Automated Hydraulic Rule: "Full-Reserve Pressure Surge"
+ * 
+ * Rules:
+ * 1. Strict Trigger: Dormant at sub-capacity (e.g. 90%, 98%, 99%). Triggers ONLY when either Cistern or Aquifer hits 100% capacity.
+ * 2. Full-Tower Suppression: If Tower is already at 800L when a source hits 100%, NO transfer occurs.
+ * 3. Priority & Collision Resolution: If both Cistern and Aquifer are full at the same time, prioritize Cistern first. Switch to Aquifer if Cistern empties before Tower hits 800L.
+ * 4. Run to Completion: Once activated, pumping continues continuously at 15L/s until Tower reaches 800L (or source empties).
+ * 5. Clean Auto-Shutoff: Exactly at 800L, pump immediately stops with 0L waste.
+ */
+export function simulateOverflowSurgeTick(params: SimulateOverflowSurgeTickParams): OverflowSurgeTickResult {
+  const {
+    towerLiters,
+    towerCapacityLiters = ELEVATED_TOWER_CAPACITY,
+    cisternLiters,
+    cisternMaxLiters,
+    aquiferLiters,
+    aquiferCapacityLiters,
+    deltaSeconds,
+    isOverflowSurgeActive,
+    overflowSurgeSource,
+    surgeRateLps = OVERFLOW_SURGE_RATE_LPS,
+  } = params;
+
+  let currentTower = Math.max(0, towerLiters);
+  let currentCistern = Math.max(0, cisternLiters);
+  let currentAquifer = Math.max(0, aquiferLiters);
+  let isActive = Boolean(isOverflowSurgeActive);
+  let activeSource = overflowSurgeSource;
+  let justTriggered = false;
+  let justCompleted = false;
+  let transferredLiters = 0;
+  let triggerSourceName: string | undefined;
+
+  // Strict 100% maximum capacity check (tolerance 0.001)
+  const isCistern100Pct = cisternMaxLiters > 0 && currentCistern >= (cisternMaxLiters - 0.001);
+  const isAquifer100Pct = aquiferCapacityLiters > 0 && currentAquifer >= (aquiferCapacityLiters - 0.001);
+
+  // 1. Trigger evaluation if currently dormant
+  if (!isActive) {
+    // Full-Tower Suppression: If tower is already 800L, DO NOT activate
+    if (currentTower < towerCapacityLiters) {
+      if (isCistern100Pct) {
+        // Priority 1: Rain Catchment Cistern
+        isActive = true;
+        activeSource = 'cistern';
+        justTriggered = true;
+        triggerSourceName = 'Rain Catchment Cistern';
+      } else if (isAquifer100Pct) {
+        // Priority 2: Deep Groundwater Aquifer
+        isActive = true;
+        activeSource = 'aquifer';
+        justTriggered = true;
+        triggerSourceName = 'Deep Groundwater Aquifer';
+      }
+    }
+  }
+
+  // 2. Active Transfer Simulation
+  if (isActive) {
+    // If tower is already at or above capacity, auto-shutoff immediately
+    if (currentTower >= towerCapacityLiters) {
+      isActive = false;
+      activeSource = null;
+      justCompleted = true;
+    } else {
+      // Collision / Source switching: if active source is empty, check alternative
+      if (activeSource === 'cistern') {
+        if (currentCistern <= 0) {
+          if (currentAquifer > 0) {
+            // Switch to Deep Aquifer only if Cistern empties before Gravity Tower reaches 800L
+            activeSource = 'aquifer';
+          } else {
+            // No water in either reservoir
+            isActive = false;
+            activeSource = null;
+          }
+        }
+      } else if (activeSource === 'aquifer') {
+        if (currentAquifer <= 0) {
+          isActive = false;
+          activeSource = null;
+        }
+      } else {
+        // Fallback resolution
+        activeSource = currentCistern > 0 ? 'cistern' : (currentAquifer > 0 ? 'aquifer' : null);
+        if (!activeSource) {
+          isActive = false;
+        }
+      }
+
+      // Execute hydraulic pumping transfer
+      if (isActive && activeSource && deltaSeconds > 0) {
+        const availableInSource = activeSource === 'cistern' ? currentCistern : currentAquifer;
+        const towerSpace = Math.max(0, towerCapacityLiters - currentTower);
+        const requestedTransfer = surgeRateLps * deltaSeconds;
+        const actualTransfer = Math.min(requestedTransfer, availableInSource, towerSpace);
+
+        if (actualTransfer > 0) {
+          if (activeSource === 'cistern') {
+            currentCistern = Math.max(0, currentCistern - actualTransfer);
+          } else {
+            currentAquifer = Math.max(0, currentAquifer - actualTransfer);
+          }
+          currentTower = Math.min(towerCapacityLiters, currentTower + actualTransfer);
+          transferredLiters = actualTransfer;
+        }
+
+        // Clean Cutoff: as soon as tower reaches 800L ceiling, disengage pump instantly
+        if (currentTower >= towerCapacityLiters) {
+          currentTower = towerCapacityLiters;
+          isActive = false;
+          activeSource = null;
+          justCompleted = true;
+        }
+      }
+    }
+  }
+
+  return {
+    newTowerLiters: Math.round(currentTower * 10) / 10,
+    newCisternLiters: Math.round(currentCistern * 10) / 10,
+    newAquiferLiters: Math.round(currentAquifer * 10) / 10,
+    isOverflowSurgeActive: isActive,
+    overflowSurgeSource: activeSource,
+    transferredLiters: Math.round(transferredLiters * 10) / 10,
+    justTriggered,
+    justCompleted,
+    triggerSourceName,
+  };
+}
+
 export interface OfflineHydrologyResolutionResult {
   initialTowerLiters: number;
   finalTowerLiters: number;

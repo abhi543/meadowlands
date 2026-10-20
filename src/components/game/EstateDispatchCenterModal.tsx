@@ -662,6 +662,12 @@ export function EstateDispatchCenterModal({
                   -{evapInfo.evapRatePctPerMin}%/m
                 </span>
               </div>
+              {hydrology?.isOverflowSurgeActive && (
+                <div className="text-[10px] font-mono text-cyan-300 font-bold flex items-center justify-between mt-1 pt-1 border-t border-stone-800 animate-pulse">
+                  <span>⚡ Overflow Surge</span>
+                  <span>+15L/s Pumping</span>
+                </div>
+              )}
             </div>
 
             {/* Workforce & Hydration Telemetry */}

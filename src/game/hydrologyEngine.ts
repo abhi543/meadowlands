@@ -7,6 +7,7 @@
  */
 
 import { type CircadianClockInfo } from '@/game/shiftEngine';
+import { simulateOverflowSurgeTick } from '@/game/hydraulicFailSafeEngine';
 import {
   WEATHER_PROFILES,
   type WeatherProfileId,
@@ -323,6 +324,11 @@ export interface HydrologyState {
   siphonTransferRateLps?: number;
   totalSiphonedLiters?: number;
   
+  // G. Automated Hydraulic Rule: Full-Reserve Pressure Surge
+  isOverflowSurgeActive?: boolean;
+  overflowSurgeSource?: 'cistern' | 'aquifer' | null;
+  overflowSurgeLps?: number;
+  
   // Telemetry
   totalWaterDischargedLiters: number;
   totalPercolatedLiters: number;
@@ -372,6 +378,10 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     isSiphonActive: false,
     siphonTransferRateLps: 0,
     totalSiphonedLiters: 0,
+
+    isOverflowSurgeActive: false,
+    overflowSurgeSource: null,
+    overflowSurgeLps: 0,
     
     totalWaterDischargedLiters: 0,
     totalPercolatedLiters: 0,
@@ -1022,6 +1032,39 @@ export function stepHydrologySimulation(params: {
     }
   }
 
+  // 8.5. Automated Hydraulic Rule: "Full-Reserve Pressure Surge"
+  const surgeResult = simulateOverflowSurgeTick({
+    towerLiters: currentTower,
+    towerCapacityLiters: hydrology.towerCapacityLiters || ELEVATED_TOWER_CAPACITY,
+    cisternLiters: currentCistern,
+    cisternMaxLiters: effectiveCisternMax,
+    aquiferLiters: currentAquifer,
+    aquiferCapacityLiters: hydrology.aquiferCapacityLiters,
+    deltaSeconds: dt,
+    isOverflowSurgeActive: Boolean(hydrology.isOverflowSurgeActive),
+    overflowSurgeSource: hydrology.overflowSurgeSource || null,
+  });
+
+  currentTower = surgeResult.newTowerLiters;
+  currentCistern = surgeResult.newCisternLiters;
+  currentAquifer = surgeResult.newAquiferLiters;
+
+  if (surgeResult.justTriggered) {
+    notifications.push({
+      text: '💧 [HYDROLOGY SURGE]: Reservoir reached 100% capacity. Automated overflow surge engaged — pumping water to fill Elevated Gravity Tower (800L).',
+      icon: '💧',
+      type: 'event',
+    });
+  }
+
+  if (surgeResult.justCompleted) {
+    notifications.push({
+      text: '✅ [HYDROLOGY SURGE]: Elevated Gravity Tower reached 800L capacity. Surge pump disengaged.',
+      icon: '✅',
+      type: 'info',
+    });
+  }
+
   return {
     updatedHydrology: {
       ...hydrology,
@@ -1055,6 +1098,11 @@ export function stepHydrologySimulation(params: {
       floodHazardRemainingSec: Math.round(floodHazardRemainingSec * 10) / 10,
       wasFloodControlled,
       floodTriggeredAt,
+
+      // Automated Hydraulic Rule: Full-Reserve Pressure Surge
+      isOverflowSurgeActive: surgeResult.isOverflowSurgeActive,
+      overflowSurgeSource: surgeResult.overflowSurgeSource,
+      overflowSurgeLps: surgeResult.isOverflowSurgeActive ? 15.0 : 0,
 
       totalWaterDischargedLiters: Math.round((totalDischarged + Number.EPSILON) * 10) / 10,
       totalPercolatedLiters: Math.round((totalPercolated + Number.EPSILON) * 10) / 10,

@@ -1042,6 +1042,7 @@ export interface GameState {
   toggleEmergencySpillway: () => void;
   openEmergencySpillway: () => void;
   closeEmergencySpillway: () => void;
+  setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => void;
 
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
@@ -9883,6 +9884,20 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         state.addNotification('🛑 Emergency Spillway Closed: Off-map runoff diversion secured.', '🛑', 'info');
+      },
+
+      setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const updated = { ...currentHydro };
+        if (reservoir === 'cistern') {
+          updated.cisternLiters = Math.max(0, Math.min(updated.cisternMaxLiters, Math.round(liters * 10) / 10));
+        } else if (reservoir === 'aquifer') {
+          updated.aquiferLiters = Math.max(0, Math.min(updated.aquiferCapacityLiters, Math.round(liters * 10) / 10));
+        } else if (reservoir === 'tower') {
+          updated.towerLiters = Math.max(0, Math.min(updated.towerCapacityLiters, Math.round(liters * 10) / 10));
+        }
+        set({ hydrology: updated, isDirty: true });
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {
