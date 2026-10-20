@@ -7176,18 +7176,9 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Update animal production (with Overclocking & Mutation modifiers)
+        // Update animal production (with Overclocking, Mutation & Trough modifiers)
         let newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
-            // Check if trough is empty: if empty, pause harvest timer safely without decaying progress
-            const tr = updatedDomesticTroughs[a.species];
-            if (tr && tr.foodUnits <= 0) {
-              return {
-                ...a,
-                fedAt: a.fedAt + 1000, // pause progress cleanly
-              };
-            }
-
             const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
             const isAnimalExhausted = Boolean(
               (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
@@ -7196,13 +7187,24 @@ export const useGameStore = create<GameState>()(
             if (isAnimalExhausted) {
               return a; // Production halted during exhaustion
             }
+
+            // Trough Comfort Buff: full communal troughs grant +25% speed bonus!
+            // When trough is empty, animals still produce at normal speed (or -15% in hardcore mode)
+            const tr = updatedDomesticTroughs[a.species];
+            const hasTroughFood = tr && tr.foodUnits > 0;
+            const troughSpeedMultiplier = hasTroughFood ? 1.25 : (state.isHardcoreMode ? 0.85 : 1.0);
+
             const isOverclocked = Boolean(
               (aOverclock?.isOverclocked && (!aOverclock.expiresAt || now < aOverclock.expiresAt)) ||
               (a.isOverclocked && a.overclockExpiresAt && now < a.overclockExpiresAt)
             );
             const overclockMultiplier = aOverclock?.isOverclocked ? aOverclock.speedMultiplier : (isOverclocked ? 3.0 : 1.0);
             const mutationMultiplier = a.isMutated ? (a.mutationBonus || 1.5) : 1.0;
-            const elapsed = ((now - a.fedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier;
+
+            // Sanitize fedAt: if fedAt was previously pushed into the future by the bug, clamp it to now
+            const safeFedAt = Math.min(a.fedAt, now);
+            const elapsed = ((now - safeFedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier * troughSpeedMultiplier;
+
             // Use breed-specific production time from BREED_REGISTRY if available
             const breedDef = BREED_REGISTRY[a.breedId];
             const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
@@ -7210,6 +7212,13 @@ export const useGameStore = create<GameState>()(
               return {
                 ...a,
                 productReady: true,
+                fedAt: safeFedAt,
+              };
+            }
+            if (safeFedAt !== a.fedAt) {
+              return {
+                ...a,
+                fedAt: safeFedAt,
               };
             }
           }

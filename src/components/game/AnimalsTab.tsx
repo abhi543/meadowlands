@@ -342,7 +342,8 @@ export function AnimalsTab() {
                   const prodTimeSec = breedDef ? breedDef.baseIntervalMs / 1000 : def.productionTimeSec;
                   let prodProgress = 0;
                   if (animal.fed && animal.fedAt && !animal.productReady) {
-                    prodProgress = Math.min(1, (Date.now() - animal.fedAt) / (prodTimeSec * 1000));
+                    const safeFedAt = Math.min(Date.now(), animal.fedAt);
+                    prodProgress = Math.max(0, Math.min(1, (Date.now() - safeFedAt) / (prodTimeSec * 1000)));
                   }
 
                   const isMutated = Boolean(animal.isMutated);
