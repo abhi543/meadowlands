@@ -7810,74 +7810,19 @@ export const useGameStore = create<GameState>()(
             };
 
             newNextSurpriseEventTime = null;
-            newSurpriseAlert = { id: pickedId, timestamp: now };
+            newSurpriseAlert = null;
 
             state.addNotification(`⚡ SURPRISE EVENT: ${def.name} approaches!`, def.emoji, 'event');
             sendLocalEventPushNotification(`⚡ Horizon Alert: ${def.name}`, def.premise);
           }
         }
 
-        // High-Stakes Sudden Event Engine Tick Logic (8-15 min window, high-urgency alarms)
-        let currentSuddenEvent = state.activeSuddenEvent;
-        let newSuddenEventTime = state.nextSuddenEventTime;
-        let newSuddenFlash = state.suddenEventFlash;
-        let newSuddenModalOpen = state.isSuddenEventModalOpen;
+        // High-Stakes Sudden Events disabled per user request (no intrusive popping modals or penalties)
+        let currentSuddenEvent: ActiveEventInstance | null = null;
+        let newSuddenEventTime: number | null = null;
+        let newSuddenFlash: any = null;
+        let newSuddenModalOpen = false;
         let updatedWorkersPaused = state.workersPausedUntil;
-
-        // 1. Check expiration of active event (Consequence Resolution)
-        if (currentSuddenEvent && !currentSuddenEvent.resolved && now >= currentSuddenEvent.expiresAt) {
-          const penalty = currentSuddenEvent.penaltyOnFail;
-          if (penalty.lossType === 'CROPS') {
-            const cropPlots = newPlots.filter(p => p.crop !== null);
-            const countToRemove = Math.max(1, Math.floor(cropPlots.length * (penalty.amountPercentage / 100)));
-            let removed = 0;
-            for (let i = 0; i < newPlots.length && removed < countToRemove; i++) {
-              if (newPlots[i].crop !== null) {
-                newPlots[i] = { ...newPlots[i], crop: null, plantedAt: null, ready: false };
-                removed++;
-              }
-            }
-          } else if (penalty.lossType === 'COINS') {
-            const loss = Math.floor(newCoins * (penalty.amountPercentage / 100));
-            newCoins = Math.max(0, newCoins - loss);
-          } else if (penalty.lossType === 'WORKER_PAUSE') {
-            updatedWorkersPaused = now + 180_000; // 3 min pause
-          }
-
-          playDefeatSound();
-          state.addNotification(`💥 Time Expired! ${penalty.description}`, '⚠️', 'event');
-
-          currentSuddenEvent = null;
-          newSuddenModalOpen = false;
-          newSuddenFlash = null;
-          newSuddenEventTime = now + getNextSuddenEventDelay();
-        }
-        // 2. Schedule or trigger sudden events within 8-15 min active playtime window
-        else if (!currentSuddenEvent) {
-          if (!newSuddenEventTime) {
-            newSuddenEventTime = now + getNextSuddenEventDelay();
-          } else if (now >= newSuddenEventTime) {
-            const instance = createSuddenEventInstance(undefined, state.level);
-            currentSuddenEvent = instance;
-            newSuddenFlash = instance.type;
-            newSuddenModalOpen = true;
-            newSuddenEventTime = now + instance.durationSeconds * 1000 + getNextSuddenEventDelay();
-
-            if (instance.type === 'CRISIS') {
-              playCrisisAlarm();
-            } else {
-              playGoldRushFanfare();
-            }
-
-            state.addNotification(
-              instance.type === 'CRISIS'
-                ? `🚨 CRISIS: ${instance.title} - ${instance.durationSeconds}s remaining!`
-                : `⚡ GOLD RUSH: ${instance.title} - ${instance.durationSeconds}s bounty!`,
-              instance.emoji,
-              'event'
-            );
-          }
-        }
 
         // --- Specialist Workers Diurnal Labor Telemetry & Clock-Out Settlement ---
         for (const spId of Object.keys(updatedSpecialistWorkers) as SpecialistWorkerId[]) {
@@ -8297,36 +8242,9 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Active Radar Crisis System Tick (Step 1)
-        let currentCrisis = state.activeCrisis;
-        let newCrisisTime = state.nextCrisisTime;
-        const baseInterval = 180;
-        const crisisFrequencySec = Math.max(45, baseInterval - (state.level * 3));
-
-        if (currentCrisis && currentCrisis.resolvedStatus === 'pending') {
-          const remainingSec = Math.max(0, Math.ceil((currentCrisis.expiresAt - now) / 1000));
-          if (now >= currentCrisis.expiresAt) {
-            state.resolveCrisisFailure();
-            currentCrisis = null;
-            newCrisisTime = now + crisisFrequencySec * 1000;
-          } else {
-            currentCrisis = {
-              ...currentCrisis,
-              timer: remainingSec,
-              infectionProgress: currentCrisis.type === 'crop_blight'
-                ? Math.min(100, Math.floor(((45 - remainingSec) / 45) * 100))
-                : undefined,
-            };
-          }
-        } else if (!currentCrisis) {
-          if (!newCrisisTime) {
-            newCrisisTime = now + crisisFrequencySec * 1000;
-          } else if (now >= newCrisisTime) {
-            state.triggerCrisis();
-            currentCrisis = get().activeCrisis;
-            newCrisisTime = now + crisisFrequencySec * 1000;
-          }
-        }
+        // Active Radar Crisis System disabled per user request (no intrusive popping modals or crop/animal penalties)
+        let currentCrisis: CrisisEvent | null = null;
+        let newCrisisTime: number = state.nextCrisisTime || (now + 86400000);
 
         // Check VIP rush & advance futures orders countdown and sanitize any overlevel orders
         let ordersModified = false;
@@ -9077,8 +8995,8 @@ export const useGameStore = create<GameState>()(
         );
         set({
           activeSuddenEvent: instance,
-          suddenEventFlash: instance.type,
-          isSuddenEventModalOpen: true,
+          suddenEventFlash: null,
+          isSuddenEventModalOpen: false,
           nextSuddenEventTime: Date.now() + instance.durationSeconds * 1000 + getNextSuddenEventDelay(),
           isDirty: true,
         });
@@ -10055,13 +9973,10 @@ export const useGameStore = create<GameState>()(
           alarmTaps: 0,
         };
 
-        playSirenSting();
-        state.addNotification(`🚨 RADAR ALERT: ${newCrisis.title}! 45s countdown active!`, newCrisis.emoji, 'event');
-
         set({
           activeCrisis: newCrisis,
-          isCrisisModalOpen: true,
-          suddenEventFlash: 'CRISIS',
+          isCrisisModalOpen: false,
+          suddenEventFlash: null,
           isDirty: true,
         });
       },
@@ -11436,12 +11351,13 @@ export const useGameStore = create<GameState>()(
         if (merged.lastSystemicEventCompletedAt === undefined) merged.lastSystemicEventCompletedAt = null;
         if (!merged.relics) merged.relics = DEFAULT_RELICS;
 
-        // Migration: high-stakes sudden event engine
-        if (merged.activeSuddenEvent === undefined) merged.activeSuddenEvent = null;
-        if (merged.nextSuddenEventTime === undefined) merged.nextSuddenEventTime = null;
-        if (merged.workersPausedUntil === undefined) merged.workersPausedUntil = null;
-        if (merged.suddenEventFlash === undefined) merged.suddenEventFlash = null;
-        if (merged.isSuddenEventModalOpen === undefined) merged.isSuddenEventModalOpen = false;
+        // Migration: high-stakes sudden event engine disabled per user request
+        merged.activeSuddenEvent = null;
+        merged.nextSuddenEventTime = null;
+        merged.workersPausedUntil = null;
+        merged.suddenEventFlash = null;
+        merged.isSuddenEventModalOpen = false;
+        merged.surpriseEventAlert = null;
 
         // Migration: water system & farm well
         if (merged.waterLevel === undefined) merged.waterLevel = 10;
@@ -11449,10 +11365,10 @@ export const useGameStore = create<GameState>()(
         if (merged.wellLevel === undefined) merged.wellLevel = 1;
         if (merged.lastWellAutoRefill === undefined) merged.lastWellAutoRefill = null;
 
-        // Migration: Step 1-4 Thrill & Crisis System
-        if (merged.activeCrisis === undefined) merged.activeCrisis = null;
-        if (merged.nextCrisisTime === undefined) merged.nextCrisisTime = Date.now() + 180000;
-        if (merged.isCrisisModalOpen === undefined) merged.isCrisisModalOpen = false;
+        // Migration: Step 1-4 Thrill & Crisis System disabled per user request
+        merged.activeCrisis = null;
+        merged.nextCrisisTime = Date.now() + 86400000;
+        merged.isCrisisModalOpen = false;
         if (!merged.wildExpedition) merged.wildExpedition = createDefaultWildExpedition();
         if (!merged.marketTrends) merged.marketTrends = createInitialMarketTrends();
         if (!merged.marketNextRefresh) merged.marketNextRefresh = Date.now() + 180000;
