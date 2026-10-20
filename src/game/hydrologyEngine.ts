@@ -65,18 +65,18 @@ export interface StorageTierConfig {
 
 export const CISTERN_STORAGE_TIERS: Record<number, StorageTierConfig> = {
   1: { tier: 1, name: 'Basic Rain Catchment Cistern', shortName: 'Tier 1 • Rain Basin', capacityLiters: 1500, costCoins: 0, minLevel: 1, description: 'Hand-hewn clay lined surface collection basin (1,500L).', badge: 'Tier 1 • 1,500L', icon: '🌧️' },
-  2: { tier: 2, name: 'Deep Ground Brick Cistern', shortName: 'Tier 2 • Brick Cistern', capacityLiters: 5000, costCoins: 1500, minLevel: 3, description: 'Fired brick retention vault collecting overland runoff (5,000L).', badge: 'Tier 2 • 5,000L', icon: '🧱' },
-  3: { tier: 3, name: 'Monolithic Stone Basin', shortName: 'Tier 3 • Stone Basin', capacityLiters: 15000, costCoins: 5500, minLevel: 5, description: 'Durable granite reservoir holding 15,000L with silt traps.', badge: 'Tier 3 • 15,000L', icon: '🏺' },
-  4: { tier: 4, name: 'Industrial Subsoil Vault', shortName: 'Tier 4 • Subsoil Vault', capacityLiters: 35000, costCoins: 16000, minLevel: 7, description: 'Massive subterranean concrete vault storing 35,000L of precipitation.', badge: 'Tier 4 • 35,000L', icon: '🏭' },
-  5: { tier: 5, name: 'Colossal Hydro-Retention Citadel', shortName: 'Tier 5 • Mega-Basin', capacityLiters: 75000, costCoins: 40000, minLevel: 10, description: 'Titan estate storm lake holding 75,000L of pure captured rainwater!', badge: 'Tier 5 • 75,000L', icon: '🌊' },
+  2: { tier: 2, name: 'Deep Ground Brick Cistern', shortName: 'Tier 2 • Brick Cistern', capacityLiters: 5000, costCoins: 30000, minLevel: 3, description: 'Fired brick retention vault collecting overland runoff (5,000L).', badge: 'Tier 2 • 5,000L', icon: '🧱' },
+  3: { tier: 3, name: 'Monolithic Stone Basin', shortName: 'Tier 3 • Stone Basin', capacityLiters: 15000, costCoins: 95000, minLevel: 5, description: 'Durable granite reservoir holding 15,000L with silt traps.', badge: 'Tier 3 • 15,000L', icon: '🏺' },
+  4: { tier: 4, name: 'Industrial Subsoil Vault', shortName: 'Tier 4 • Subsoil Vault', capacityLiters: 35000, costCoins: 280000, minLevel: 7, description: 'Massive subterranean concrete vault storing 35,000L of precipitation.', badge: 'Tier 4 • 35,000L', icon: '🏭' },
+  5: { tier: 5, name: 'Colossal Hydro-Retention Citadel', shortName: 'Tier 5 • Mega-Basin', capacityLiters: 75000, costCoins: 850000, minLevel: 10, description: 'Titan estate storm lake holding 75,000L of pure captured rainwater!', badge: 'Tier 5 • 75,000L', icon: '🌊' },
 };
 
 export const AQUIFER_STORAGE_TIERS: Record<number, StorageTierConfig> = {
   1: { tier: 1, name: 'Natural Groundwater Table', shortName: 'Tier 1 • Water Table', capacityLiters: 3000, costCoins: 0, minLevel: 1, description: 'Natural shallow water table baseline capacity (3,000L).', badge: 'Tier 1 • 3,000L', icon: '🚰' },
-  2: { tier: 2, name: 'Perforated Casing Borehole', shortName: 'Tier 2 • Borehole Well', capacityLiters: 7500, costCoins: 1800, minLevel: 3, description: 'Steel-sleeved deep borehole reaching pressurized strata (7,500L).', badge: 'Tier 2 • 7,500L', icon: '🔩' },
-  3: { tier: 3, name: 'Subterranean Cavern Reservoir', shortName: 'Tier 3 • Limestone Cavern', capacityLiters: 18000, costCoins: 6500, minLevel: 5, description: 'Tapped subterranean limestone chamber storing 18,000L groundwater.', badge: 'Tier 3 • 18,000L', icon: '🪨' },
-  4: { tier: 4, name: 'Artesian Geothermal Aquifer', shortName: 'Tier 4 • Artesian Table', capacityLiters: 35000, costCoins: 18000, minLevel: 7, description: 'High-pressure self-rising artesian strata holding 35,000L.', badge: 'Tier 4 • 35,000L', icon: '🌋' },
-  5: { tier: 5, name: 'Abyssal Hydro-Titan Vault', shortName: 'Tier 5 • Abyssal Reserve', capacityLiters: 80000, costCoins: 45000, minLevel: 10, description: 'Infinite-depth planetary crust aquifer storing 80,000L subterranean reserve!', badge: 'Tier 5 • 80,000L', icon: '💎' },
+  2: { tier: 2, name: 'Perforated Casing Borehole', shortName: 'Tier 2 • Borehole Well', capacityLiters: 7500, costCoins: 35000, minLevel: 3, description: 'Steel-sleeved deep borehole reaching pressurized strata (7,500L).', badge: 'Tier 2 • 7,500L', icon: '🔩' },
+  3: { tier: 3, name: 'Subterranean Cavern Reservoir', shortName: 'Tier 3 • Limestone Cavern', capacityLiters: 18000, costCoins: 110000, minLevel: 5, description: 'Tapped subterranean limestone chamber storing 18,000L groundwater.', badge: 'Tier 3 • 18,000L', icon: '🪨' },
+  4: { tier: 4, name: 'Artesian Geothermal Aquifer', shortName: 'Tier 4 • Artesian Table', capacityLiters: 35000, costCoins: 320000, minLevel: 7, description: 'High-pressure self-rising artesian strata holding 35,000L.', badge: 'Tier 4 • 35,000L', icon: '🌋' },
+  5: { tier: 5, name: 'Abyssal Hydro-Titan Vault', shortName: 'Tier 5 • Abyssal Reserve', capacityLiters: 80000, costCoins: 1000000, minLevel: 10, description: 'Infinite-depth planetary crust aquifer storing 80,000L subterranean reserve!', badge: 'Tier 5 • 80,000L', icon: '💎' },
 };
 
 // Homestead Rain Cistern Capacities scaling with Farm Level or Cistern Tier
@@ -110,6 +110,7 @@ export interface CanalTierConfig {
   name: string;
   shortName: string;
   minLevel: number;
+  costCoins: number;
   seepageLossFraction: number; // Tier 1: 0.35, Tier 2+: 0.0
   morningEvaporationRatePctPerMin: number; // Tier 1-2: 3.0%, Tier 3+: 1.5%
   maxSaturationCapPct: number; // Tier 1-2: 100.0%, Tier 3+: 80.0% (No Root Rot possible)
@@ -126,6 +127,7 @@ export const CANAL_TIER_CONFIGS: Record<CanalTier, CanalTierConfig> = {
     name: 'Hand-Dug Earthen Furrows',
     shortName: 'Earthen Furrows',
     minLevel: 1,
+    costCoins: 0,
     seepageLossFraction: 0.35, // 35% seepage loss
     morningEvaporationRatePctPerMin: 3.0,
     maxSaturationCapPct: 100.0,
@@ -140,6 +142,7 @@ export const CANAL_TIER_CONFIGS: Record<CanalTier, CanalTierConfig> = {
     name: 'Clay-Lined Canals & Mechanical Sluices',
     shortName: 'Clay-Lined Canals',
     minLevel: 3,
+    costCoins: 20000,
     seepageLossFraction: 0.0, // 0% transit seepage
     morningEvaporationRatePctPerMin: 3.0,
     maxSaturationCapPct: 100.0,
@@ -154,6 +157,7 @@ export const CANAL_TIER_CONFIGS: Record<CanalTier, CanalTierConfig> = {
     name: 'Subterranean Porous Tile Drains',
     shortName: 'Porous Tile Drains',
     minLevel: 5,
+    costCoins: 75000,
     seepageLossFraction: 0.0,
     morningEvaporationRatePctPerMin: 1.5, // 50% evaporation discount during morning heat
     maxSaturationCapPct: 80.0, // Caps at 80% -> Root Rot physically impossible!
@@ -168,6 +172,7 @@ export const CANAL_TIER_CONFIGS: Record<CanalTier, CanalTierConfig> = {
     name: 'Pressurized Brass Sprinkler Lattice',
     shortName: 'Brass Sprinklers',
     minLevel: 7,
+    costCoins: 220000,
     seepageLossFraction: 0.0,
     morningEvaporationRatePctPerMin: 1.5,
     maxSaturationCapPct: 80.0,

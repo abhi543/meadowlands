@@ -1056,6 +1056,8 @@ export interface GameState {
   setTowerStorageTier: (tier: number) => void;
   setCisternStorageTier: (tier: number) => void;
   setAquiferStorageTier: (tier: number) => void;
+  upgradeCanalTier: () => boolean;
+  setCanalTier: (tier: CanalTier) => void;
 
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
@@ -10055,6 +10057,51 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         state.addNotification(`Deep Groundwater Aquifer storage tier calibrated to ${config.badge}.`, config.icon, 'info');
+      },
+
+      upgradeCanalTier: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentTier = (currentHydro.canalTier || 1) as CanalTier;
+        const nextTier = (currentTier + 1) as CanalTier;
+        const nextConfig = CANAL_TIER_CONFIGS[nextTier];
+        if (!nextConfig) {
+          state.addNotification('Irrigation Canal network is already at maximum Tier 4 (Pressurized Brass Sprinkler Lattice)!', '⚙️', 'info');
+          return false;
+        }
+        if (state.coins < nextConfig.costCoins) {
+          state.addNotification(`Insufficient coins! Upgrading to ${nextConfig.name} requires 🪙${nextConfig.costCoins.toLocaleString()}.`, '⚠️', 'info');
+          return false;
+        }
+        if (state.level < nextConfig.minLevel) {
+          state.addNotification(`Farm level too low! Requires Farm Level ${nextConfig.minLevel}.`, '🔒', 'info');
+          return false;
+        }
+        set({
+          coins: state.coins - nextConfig.costCoins,
+          hydrology: {
+            ...currentHydro,
+            canalTier: nextTier,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🏗️ Canal Infrastructure Upgraded! Network modernized to ${nextConfig.name} (0% seepage loss, ${nextConfig.badge}).`, nextConfig.icon, 'event');
+        return true;
+      },
+
+      setCanalTier: (tier: CanalTier) => {
+        const state = get();
+        const config = CANAL_TIER_CONFIGS[tier];
+        if (!config) return;
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            canalTier: tier,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`Canal infrastructure tier calibrated to ${config.badge}.`, config.icon, 'info');
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {

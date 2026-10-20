@@ -43,6 +43,8 @@ export function SluiceGateControlModal() {
     setTowerStorageTier,
     setCisternStorageTier,
     setAquiferStorageTier,
+    upgradeCanalTier,
+    setCanalTier,
     coins,
     plots,
     unlockedPlots,
@@ -872,12 +874,13 @@ export function SluiceGateControlModal() {
             {([1, 2, 3, 4] as CanalTier[]).map((t) => {
               const cfg = CANAL_TIER_CONFIGS[t];
               const isCurrent = canalTier === t;
+              const isNext = t === canalTier + 1;
               const isUnlocked = level >= cfg.minLevel;
 
               return (
                 <div
                   key={t}
-                  className={`rounded-xl p-3 border text-left transition-all relative ${
+                  className={`rounded-xl p-3 border text-left transition-all relative flex flex-col justify-between ${
                     isCurrent
                       ? 'bg-cyan-950/60 border-cyan-400 shadow-md shadow-cyan-950/50'
                       : isUnlocked
@@ -885,38 +888,70 @@ export function SluiceGateControlModal() {
                       : 'bg-stone-950/40 border-stone-800/50 opacity-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="text-lg">{cfg.icon}</span>
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
-                      isCurrent
-                        ? 'bg-cyan-500 text-stone-950 font-black'
-                        : isUnlocked
-                        ? 'bg-stone-800 text-stone-300'
-                        : 'bg-stone-800 text-stone-500'
-                    }`}>
-                      {isCurrent ? 'ACTIVE' : `Lv ${cfg.minLevel}+`}
-                    </span>
-                  </div>
-                  <div className="font-bold text-xs text-white leading-tight mt-1">{cfg.name}</div>
-                  <div className="text-[10px] text-stone-400 mt-1 leading-snug">{cfg.description}</div>
+                  <div>
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="text-lg">{cfg.icon}</span>
+                      <div className="flex items-center gap-1">
+                        {cfg.costCoins > 0 && (
+                          <span className="text-[9px] font-mono font-bold text-amber-300">
+                            🪙{cfg.costCoins.toLocaleString()}
+                          </span>
+                        )}
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded ${
+                          isCurrent
+                            ? 'bg-cyan-500 text-stone-950 font-black'
+                            : isUnlocked
+                            ? 'bg-stone-800 text-stone-300'
+                            : 'bg-stone-800 text-stone-500'
+                        }`}>
+                          {isCurrent ? 'ACTIVE' : `Lv ${cfg.minLevel}+`}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="font-bold text-xs text-white leading-tight mt-1">{cfg.name}</div>
+                    <div className="text-[10px] text-stone-400 mt-1 leading-snug">{cfg.description}</div>
 
-                  <div className="mt-2 pt-2 border-t border-stone-800 text-[9px] space-y-0.5 font-mono">
-                    <div className="flex justify-between">
-                      <span className="text-stone-400">Transit Seepage:</span>
-                      <span className={cfg.seepageLossFraction > 0 ? 'text-amber-400' : 'text-emerald-400'}>
-                        {cfg.seepageLossFraction > 0 ? `-${Math.round(cfg.seepageLossFraction * 100)}%` : '0%'}
-                      </span>
+                    <div className="mt-2 pt-2 border-t border-stone-800 text-[9px] space-y-0.5 font-mono">
+                      <div className="flex justify-between">
+                        <span className="text-stone-400">Transit Seepage:</span>
+                        <span className={cfg.seepageLossFraction > 0 ? 'text-amber-400' : 'text-emerald-400'}>
+                          {cfg.seepageLossFraction > 0 ? `-${Math.round(cfg.seepageLossFraction * 100)}%` : '0%'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-stone-400">Morning Evap:</span>
+                        <span className="text-cyan-300">-{cfg.morningEvaporationRatePctPerMin}%/min</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-stone-400">Max Saturation:</span>
+                        <span className={cfg.maxSaturationCapPct <= 80 ? 'text-emerald-400' : 'text-stone-300'}>
+                          {cfg.maxSaturationCapPct}% {cfg.maxSaturationCapPct <= 80 ? '(No Rot)' : ''}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-stone-400">Morning Evap:</span>
-                      <span className="text-cyan-300">-{cfg.morningEvaporationRatePctPerMin}%/min</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-stone-400">Max Saturation:</span>
-                      <span className={cfg.maxSaturationCapPct <= 80 ? 'text-emerald-400' : 'text-stone-300'}>
-                        {cfg.maxSaturationCapPct}% {cfg.maxSaturationCapPct <= 80 ? '(No Rot)' : ''}
-                      </span>
-                    </div>
+                  </div>
+
+                  <div className="mt-2 pt-2 border-t border-stone-800 flex items-center gap-1">
+                    {isNext && (
+                      <button
+                        type="button"
+                        onClick={upgradeCanalTier}
+                        className="w-full py-1 px-2 rounded-lg text-[10px] font-bold bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 text-amber-200 transition-all active:scale-95 text-center flex items-center justify-center gap-1"
+                      >
+                        <span>⬆️ Upgrade</span>
+                        <span className="font-mono text-amber-300">🪙{cfg.costCoins.toLocaleString()}</span>
+                      </button>
+                    )}
+                    {!isCurrent && (
+                      <button
+                        type="button"
+                        onClick={() => setCanalTier(t)}
+                        className="py-0.5 px-1.5 rounded text-[9px] font-mono text-stone-400 hover:text-stone-200 border border-stone-800 hover:border-stone-700 ml-auto"
+                        title="Calibrate active tier"
+                      >
+                        Select
+                      </button>
+                    )}
                   </div>
                 </div>
               );
