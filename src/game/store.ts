@@ -42,6 +42,9 @@ import {
   ELEVATED_TOWER_CAPACITY,
   AQUIFER_CAPACITY,
   getCisternCapacity,
+  CISTERN_STORAGE_TIERS,
+  AQUIFER_STORAGE_TIERS,
+  type StorageTierConfig,
   resolveWeatherProfileId,
   WEATHER_PROFILES,
   type WeatherProfileId,
@@ -55,6 +58,8 @@ import {
   type OfflineHydrologyResolutionResult,
   getTowerLoadSheddingStage,
   STAGE_THRESHOLDS,
+  TOWER_STORAGE_TIERS,
+  type TowerStorageTierConfig,
 } from '@/game/hydraulicFailSafeEngine';
 import {
   type ZoneEcosystemData,
@@ -1043,6 +1048,14 @@ export interface GameState {
   openEmergencySpillway: () => void;
   closeEmergencySpillway: () => void;
   setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => void;
+
+  // High-Capacity Water Storage Progression Actions
+  upgradeTowerStorageTier: () => boolean;
+  upgradeCisternStorageTier: () => boolean;
+  upgradeAquiferStorageTier: () => boolean;
+  setTowerStorageTier: (tier: number) => void;
+  setCisternStorageTier: (tier: number) => void;
+  setAquiferStorageTier: (tier: number) => void;
 
   // Worker Strike Resolution & Sabbatical Actions
   resolveWorkerStrikeAccord: (workerId: string) => boolean;
@@ -9898,6 +9911,150 @@ export const useGameStore = create<GameState>()(
           updated.towerLiters = Math.max(0, Math.min(updated.towerCapacityLiters, Math.round(liters * 10) / 10));
         }
         set({ hydrology: updated, isDirty: true });
+      },
+
+      upgradeTowerStorageTier: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentTier = currentHydro.towerTier || 1;
+        const nextTier = currentTier + 1;
+        const nextConfig = TOWER_STORAGE_TIERS[nextTier];
+        if (!nextConfig) {
+          state.addNotification('Elevated Gravity Tower is already at maximum Tier 5 (50,000L Mega-Citadel)!', '🏰', 'info');
+          return false;
+        }
+        if (state.coins < nextConfig.costCoins) {
+          state.addNotification(`Insufficient coins! Upgrading to ${nextConfig.name} requires 🪙${nextConfig.costCoins.toLocaleString()}.`, '⚠️', 'info');
+          return false;
+        }
+        if (state.level < nextConfig.minLevel) {
+          state.addNotification(`Farm level too low! Requires Farm Level ${nextConfig.minLevel}.`, '🔒', 'info');
+          return false;
+        }
+        set({
+          coins: state.coins - nextConfig.costCoins,
+          hydrology: {
+            ...currentHydro,
+            towerTier: nextTier,
+            towerCapacityLiters: nextConfig.capacityLiters,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🏗️ Reservoir Upgraded! Elevated Gravity Tower expanded to ${nextConfig.name} (${nextConfig.capacityLiters.toLocaleString()}L, +${nextConfig.surgeLps} L/s surge throughput).`, nextConfig.icon, 'event');
+        return true;
+      },
+
+      upgradeCisternStorageTier: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentTier = currentHydro.cisternTier || 1;
+        const nextTier = currentTier + 1;
+        const nextConfig = CISTERN_STORAGE_TIERS[nextTier];
+        if (!nextConfig) {
+          state.addNotification('Rain Catchment Cistern is already at maximum Tier 5 (75,000L Mega-Basin)!', '🌊', 'info');
+          return false;
+        }
+        if (state.coins < nextConfig.costCoins) {
+          state.addNotification(`Insufficient coins! Upgrading to ${nextConfig.name} requires 🪙${nextConfig.costCoins.toLocaleString()}.`, '⚠️', 'info');
+          return false;
+        }
+        if (state.level < nextConfig.minLevel) {
+          state.addNotification(`Farm level too low! Requires Farm Level ${nextConfig.minLevel}.`, '🔒', 'info');
+          return false;
+        }
+        set({
+          coins: state.coins - nextConfig.costCoins,
+          hydrology: {
+            ...currentHydro,
+            cisternTier: nextTier,
+            cisternMaxLiters: nextConfig.capacityLiters,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🏗️ Basin Upgraded! Rain Catchment Cistern expanded to ${nextConfig.name} (${nextConfig.capacityLiters.toLocaleString()}L capacity).`, nextConfig.icon, 'event');
+        return true;
+      },
+
+      upgradeAquiferStorageTier: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentTier = currentHydro.aquiferTier || 1;
+        const nextTier = currentTier + 1;
+        const nextConfig = AQUIFER_STORAGE_TIERS[nextTier];
+        if (!nextConfig) {
+          state.addNotification('Deep Groundwater Aquifer is already at maximum Tier 5 (80,000L Abyssal Reserve)!', '💎', 'info');
+          return false;
+        }
+        if (state.coins < nextConfig.costCoins) {
+          state.addNotification(`Insufficient coins! Upgrading to ${nextConfig.name} requires 🪙${nextConfig.costCoins.toLocaleString()}.`, '⚠️', 'info');
+          return false;
+        }
+        if (state.level < nextConfig.minLevel) {
+          state.addNotification(`Farm level too low! Requires Farm Level ${nextConfig.minLevel}.`, '🔒', 'info');
+          return false;
+        }
+        set({
+          coins: state.coins - nextConfig.costCoins,
+          hydrology: {
+            ...currentHydro,
+            aquiferTier: nextTier,
+            aquiferCapacityLiters: nextConfig.capacityLiters,
+          },
+          isDirty: true,
+        });
+        state.addNotification(`🏗️ Aquifer Upgraded! Deep Groundwater Aquifer expanded to ${nextConfig.name} (${nextConfig.capacityLiters.toLocaleString()}L capacity).`, nextConfig.icon, 'event');
+        return true;
+      },
+
+      setTowerStorageTier: (tier: number) => {
+        const state = get();
+        const config = TOWER_STORAGE_TIERS[tier];
+        if (!config) return;
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            towerTier: tier,
+            towerCapacityLiters: config.capacityLiters,
+            towerLiters: Math.min(currentHydro.towerLiters, config.capacityLiters),
+          },
+          isDirty: true,
+        });
+        state.addNotification(`Gravity Tower storage tier calibrated to ${config.badge}.`, config.icon, 'info');
+      },
+
+      setCisternStorageTier: (tier: number) => {
+        const state = get();
+        const config = CISTERN_STORAGE_TIERS[tier];
+        if (!config) return;
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            cisternTier: tier,
+            cisternMaxLiters: config.capacityLiters,
+            cisternLiters: Math.min(currentHydro.cisternLiters, config.capacityLiters),
+          },
+          isDirty: true,
+        });
+        state.addNotification(`Rain Catchment Cistern storage tier calibrated to ${config.badge}.`, config.icon, 'info');
+      },
+
+      setAquiferStorageTier: (tier: number) => {
+        const state = get();
+        const config = AQUIFER_STORAGE_TIERS[tier];
+        if (!config) return;
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            aquiferTier: tier,
+            aquiferCapacityLiters: config.capacityLiters,
+            aquiferLiters: Math.min(currentHydro.aquiferLiters, config.capacityLiters),
+          },
+          isDirty: true,
+        });
+        state.addNotification(`Deep Groundwater Aquifer storage tier calibrated to ${config.badge}.`, config.icon, 'info');
       },
 
       resolveWorkerStrikeAccord: (workerId: string) => {

@@ -32,14 +32,22 @@ export type WeatherProfileId =
   | 'cyclone'
   // E. Freezing & Arid
   | 'frost'
-  | 'snow';
+  | 'snow'
+  // F. Extreme Weather & Cataclysmic Anomalies
+  | 'supercell_deluge'
+  | 'plasma_firestorm'
+  | 'polar_vortex'
+  | 'hyper_cyclone'
+  | 'alchemical_monsoon'
+  | 'haboob_sandstorm';
 
 export type WeatherCategoryId =
   | 'clear_thermal'
   | 'overcast_humid'
   | 'precipitation'
   | 'severe_convective'
-  | 'freezing_arid';
+  | 'freezing_arid'
+  | 'extreme_weather';
 
 export interface WeatherProfileDef {
   id: WeatherProfileId;
@@ -395,7 +403,130 @@ export const WEATHER_PROFILES: Record<WeatherProfileId, WeatherProfileDef> = {
     phenologyNotes: 'Thermal dormancy. Warm crops freeze and perish unless sheltered by Alchemical Soil / Greenhouse.',
     visualHazeClass: 'from-indigo-100/25 via-slate-200/15 to-sky-900/25',
   },
+
+  // F. Extreme Weather & Cataclysmic Anomalies
+  supercell_deluge: {
+    id: 'supercell_deluge',
+    name: 'Supercell Atmospheric Deluge',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '🌊⛈️',
+    description: 'Catastrophic atmospheric river and supercell downpour (+450 L/min). Floods surface furrows rapidly and fills high-level reservoirs in minutes.',
+    tempRangeC: [16, 21],
+    defaultTempC: 18.5,
+    humidityRangePct: [100, 100],
+    defaultHumidityPct: 100,
+    precipitationInflowLPerMin: 450,
+    windSpeedKmH: 65,
+    cloudCoverPct: 100,
+    barometricPressureHPa: 970,
+    plotDirectMoistureGainPctPerMin: 12.0,
+    baseEvaporativeFactor: 0.0,
+    phenologyNotes: 'Massive inundation! Floods plots instantly (100%). Triggers emergency spillway bypasses and fills high-capacity mega-towers at record speed.',
+    visualHazeClass: 'from-blue-950/60 via-cyan-900/40 to-slate-950/60 animate-pulse',
+  },
+  plasma_firestorm: {
+    id: 'plasma_firestorm',
+    name: 'Solar Thermal Firestorm',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '☄️🔥',
+    description: 'Blistering solar plasma heatwave (52°C, 5% RH). Extreme thermal scorching causes surface cisterns to boil away at -30 L/min!',
+    tempRangeC: [48, 56],
+    defaultTempC: 52,
+    humidityRangePct: [2, 10],
+    defaultHumidityPct: 5,
+    precipitationInflowLPerMin: 0,
+    windSpeedKmH: 35,
+    cloudCoverPct: 0,
+    barometricPressureHPa: 1002,
+    plotDirectMoistureGainPctPerMin: 0,
+    baseEvaporativeFactor: 4.5, // -10.5% moisture per min
+    phenologyNotes: 'Catastrophic thermal wilt! Unprotected plots lose moisture rapidly; crops wilt immediately unless continuously quenched from high-level towers.',
+    visualHazeClass: 'from-red-600/30 via-orange-600/20 to-amber-500/20 animate-pulse',
+  },
+  polar_vortex: {
+    id: 'polar_vortex',
+    name: 'Cryogenic Polar Vortex',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '🧊🥶',
+    description: 'Sub-zero glacial vortex (-18°C). Surface canals freeze solid and uninsulated pipes lock up. Requires high-level thermal cores or geothermal heat.',
+    tempRangeC: [-25, -12],
+    defaultTempC: -18,
+    humidityRangePct: [30, 45],
+    defaultHumidityPct: 38,
+    precipitationInflowLPerMin: 0,
+    windSpeedKmH: 52,
+    cloudCoverPct: 20,
+    barometricPressureHPa: 1040,
+    plotDirectMoistureGainPctPerMin: 0,
+    baseEvaporativeFactor: 0.05,
+    phenologyNotes: 'Absolute zero freeze: All surface furrows lock solid; warm-season crops suffer severe frostbite unless insulated by Greenhouses.',
+    visualHazeClass: 'from-cyan-300/30 via-blue-900/30 to-indigo-950/40 backdrop-blur-[1px]',
+  },
+  hyper_cyclone: {
+    id: 'hyper_cyclone',
+    name: 'Category 5 Hyper-Cyclone',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '🌪️⚡',
+    description: 'Cataclysmic mega-tempest (165 km/h winds, +320 L/min deluge, 935 hPa). Shuts down outdoor labor while supercharging windmills at 4x speed.',
+    tempRangeC: [18, 22],
+    defaultTempC: 20,
+    humidityRangePct: [100, 100],
+    defaultHumidityPct: 100,
+    precipitationInflowLPerMin: 320,
+    windSpeedKmH: 165,
+    cloudCoverPct: 100,
+    barometricPressureHPa: 935,
+    plotDirectMoistureGainPctPerMin: 10.0,
+    baseEvaporativeFactor: 0.0,
+    phenologyNotes: 'Extreme kinetic force! Crop growth halted; unharvested grains risk mechanical lodging damage without protective windbreaks.',
+    visualHazeClass: 'from-purple-950/60 via-slate-900/50 to-blue-950/60 animate-pulse',
+  },
+  alchemical_monsoon: {
+    id: 'alchemical_monsoon',
+    name: 'Alchemical Spore Monsoon',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '🧪✨',
+    description: 'Luminescent iridescent precipitation (+200 L/min) carrying fertile alchemical spore mist. Supercharges crop metabolism and yields!',
+    tempRangeC: [22, 26],
+    defaultTempC: 24,
+    humidityRangePct: [90, 98],
+    defaultHumidityPct: 94,
+    precipitationInflowLPerMin: 200,
+    windSpeedKmH: 18,
+    cloudCoverPct: 75,
+    barometricPressureHPa: 1008,
+    plotDirectMoistureGainPctPerMin: 5.0,
+    baseEvaporativeFactor: 0.1,
+    phenologyNotes: 'Alchemical Mana Infusion: +50% crop maturation speed and +25% Gold/Prismatic harvest quality rolls on all active plots!',
+    visualHazeClass: 'from-emerald-500/25 via-teal-400/20 to-purple-500/20 animate-pulse',
+  },
+  haboob_sandstorm: {
+    id: 'haboob_sandstorm',
+    name: 'Great Arid Haboob',
+    category: 'extreme_weather',
+    categoryLabel: 'Extreme Atmospheric Event',
+    emoji: '🏜️🌪️',
+    description: 'Towering 3,000ft wall of desert silt and red dust (85 km/h, 40°C). Clogs canal grates, blocks sunlight, and triples crew thirst.',
+    tempRangeC: [37, 44],
+    defaultTempC: 40,
+    humidityRangePct: [5, 12],
+    defaultHumidityPct: 8,
+    precipitationInflowLPerMin: 0,
+    windSpeedKmH: 85,
+    cloudCoverPct: 100,
+    barometricPressureHPa: 998,
+    plotDirectMoistureGainPctPerMin: 0,
+    baseEvaporativeFactor: 3.0,
+    phenologyNotes: 'Solar dust blockage: -25% crop growth speed. Silt quickly clogs canal beds and workers consume hydration at 3x normal rate.',
+    visualHazeClass: 'from-amber-800/40 via-orange-950/30 to-stone-900/40',
+  },
 };
+
 
 // --- Multi-Variable Atmospheric Weather State ---
 export interface AtmosphericWeatherState {
@@ -598,6 +729,53 @@ export function evaluateCropPhenology(params: {
     badgeEmoji = '🌀';
     badgeText = 'Tempest Halted (0x)';
     description = 'Catastrophic cyclonic gale halts all crop metabolic processes.';
+  } else if (weather === 'supercell_deluge') {
+    speedMult *= 0.5;
+    badgeEmoji = '🌊⛈️';
+    badgeText = 'Deluge Inundation';
+    description = 'Supercell rain (+450 L/min) saturates beds to maximum; excess runoff requires immediate drainage.';
+  } else if (weather === 'plasma_firestorm') {
+    if (moistureLevel >= 70.0) {
+      speedMult *= 1.30;
+      badgeEmoji = '☄️🔥';
+      badgeText = 'Solar Plasma Surge (+30%)';
+      description = 'Extreme solar radiation accelerated by heavy irrigation produces explosive growth!';
+    } else {
+      isWilted = true;
+      speedMult = 0.0;
+      badgeEmoji = '🥀';
+      badgeText = 'Thermal Scorched (0x)';
+      description = '52°C Plasma firestorm scorched soil! Irrigate immediately to prevent crop death.';
+    }
+  } else if (weather === 'polar_vortex') {
+    if (!isProtectedByGreenhouse && !hasAlchemicalAsh) {
+      isFrostbitten = true;
+      speedMult = 0.0;
+      yieldMult *= 0.40; // -60% yield penalty
+      badgeEmoji = '🧊🥶';
+      badgeText = 'Cryo-Glaciation (-60%)';
+      description = '-18°C Polar vortex froze plant cellular walls! Requires Geothermal heat or Greenhouse.';
+    }
+  } else if (weather === 'hyper_cyclone') {
+    speedMult = 0.0;
+    if (!isProtectedByGreenhouse) {
+      yieldMult *= 0.70;
+    }
+    badgeEmoji = '🌪️⚡';
+    badgeText = 'Hyper-Cyclone Halted (0x)';
+    description = 'Cataclysmic 165 km/h hurricane winds force complete suspension of growth and labor.';
+  } else if (weather === 'alchemical_monsoon') {
+    speedMult *= 1.50; // +50% acceleration!
+    bonusPrismatic += 0.25; // +25% Gold/Prismatic roll chance!
+    extraQty += 1;
+    badgeEmoji = '🧪✨';
+    badgeText = 'Alchemical Infusion (+50% Speed)';
+    description = 'Mana-infused precipitation supercharges crop biology and doubles harvest yields!';
+  } else if (weather === 'haboob_sandstorm') {
+    speedMult *= 0.75; // -25% dust penalty
+    badgeEmoji = '🏜️🌪️';
+    badgeText = 'Dust Choked (-25%)';
+    description = 'Red dust wall obscures sunlight and silts up furrow water beds.';
   }
 
   // 3. Category & Thermal Adaptations
@@ -782,14 +960,16 @@ export function rollNextNaturalWeather(current: WeatherProfileId): WeatherProfil
       return 'sunshower';
 
     case 'heatwave':
-      if (roll < 0.50) return 'drought';
-      if (roll < 0.80) return 'humid';
+      if (roll < 0.45) return 'drought';
+      if (roll < 0.75) return 'humid';
+      if (roll < 0.90) return 'plasma_firestorm';
       return 'sunny';
 
     case 'drought':
-      if (roll < 0.40) return 'sunny';
-      if (roll < 0.70) return 'cloudy';
-      return 'heatwave';
+      if (roll < 0.35) return 'sunny';
+      if (roll < 0.65) return 'cloudy';
+      if (roll < 0.85) return 'heatwave';
+      return 'haboob_sandstorm';
 
     case 'cloudy':
       if (roll < 0.35) return 'drizzle';
@@ -820,14 +1000,16 @@ export function rollNextNaturalWeather(current: WeatherProfileId): WeatherProfil
       return 'sunshower';
 
     case 'monsoon':
-      if (roll < 0.60) return 'rain';
-      if (roll < 0.85) return 'thunderstorm';
-      return 'cyclone';
+      if (roll < 0.50) return 'rain';
+      if (roll < 0.75) return 'thunderstorm';
+      if (roll < 0.90) return 'cyclone';
+      return 'supercell_deluge';
 
     case 'sunshower':
-      if (roll < 0.60) return 'sunny';
-      if (roll < 0.85) return 'cloudy';
-      return 'rain';
+      if (roll < 0.50) return 'sunny';
+      if (roll < 0.75) return 'cloudy';
+      if (roll < 0.90) return 'rain';
+      return 'alchemical_monsoon';
 
     case 'gale':
       if (roll < 0.50) return 'cloudy';
@@ -845,18 +1027,51 @@ export function rollNextNaturalWeather(current: WeatherProfileId): WeatherProfil
       return 'rain';
 
     case 'cyclone':
-      if (roll < 0.70) return 'monsoon';
-      return 'gale';
+      if (roll < 0.60) return 'monsoon';
+      if (roll < 0.85) return 'gale';
+      return 'hyper_cyclone';
 
     case 'frost':
-      if (roll < 0.45) return 'snow';
-      if (roll < 0.80) return 'foggy';
-      return 'cloudy';
+      if (roll < 0.40) return 'snow';
+      if (roll < 0.75) return 'foggy';
+      if (roll < 0.90) return 'cloudy';
+      return 'polar_vortex';
 
     case 'snow':
-      if (roll < 0.50) return 'frost';
-      if (roll < 0.85) return 'cloudy';
-      return 'drizzle';
+      if (roll < 0.45) return 'frost';
+      if (roll < 0.80) return 'cloudy';
+      if (roll < 0.90) return 'drizzle';
+      return 'polar_vortex';
+
+    case 'supercell_deluge':
+      if (roll < 0.50) return 'monsoon';
+      if (roll < 0.80) return 'rain';
+      return 'thunderstorm';
+
+    case 'plasma_firestorm':
+      if (roll < 0.50) return 'heatwave';
+      if (roll < 0.80) return 'drought';
+      return 'sunny';
+
+    case 'polar_vortex':
+      if (roll < 0.50) return 'snow';
+      if (roll < 0.80) return 'frost';
+      return 'cloudy';
+
+    case 'hyper_cyclone':
+      if (roll < 0.50) return 'cyclone';
+      if (roll < 0.80) return 'monsoon';
+      return 'gale';
+
+    case 'alchemical_monsoon':
+      if (roll < 0.50) return 'sunshower';
+      if (roll < 0.80) return 'rain';
+      return 'cloudy';
+
+    case 'haboob_sandstorm':
+      if (roll < 0.50) return 'drought';
+      if (roll < 0.80) return 'heatwave';
+      return 'sunny';
 
     default:
       return 'sunny';

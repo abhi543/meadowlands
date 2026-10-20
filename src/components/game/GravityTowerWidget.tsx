@@ -6,6 +6,7 @@ import {
   calculateHydraulicConsumers,
   ELEVATED_TOWER_CAPACITY,
   OVERFLOW_SURGE_RATE_LPS,
+  TOWER_STORAGE_TIERS,
 } from '@/game/hydraulicFailSafeEngine';
 
 function formatCountdown(seconds: number | null): string {
@@ -28,6 +29,8 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
   const workshopLoadout = useGameStore(state => state.workshopLoadout);
   const setSluiceModalOpen = useGameStore(state => state.setSluiceModalOpen);
   const setHydrologyReservoirLevel = useGameStore(state => state.setHydrologyReservoirLevel);
+  const setTowerStorageTier = useGameStore(state => state.setTowerStorageTier);
+  const upgradeTowerStorageTier = useGameStore(state => state.upgradeTowerStorageTier);
 
   const [showTestPanel, setShowTestPanel] = useState(false);
 
@@ -122,25 +125,28 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
     ? 'Deep Groundwater Aquifer'
     : 'Full Reservoir';
 
+  const towerTier = hydrology?.towerTier || 1;
+  const currentTierConfig = TOWER_STORAGE_TIERS[towerTier] || TOWER_STORAGE_TIERS[1];
+
   if (compact) {
     return (
       <button
         type="button"
         onClick={() => setSluiceModalOpen(true)}
         className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-stone-900/90 border border-cyan-500/30 hover:border-cyan-400 text-left transition-all active:scale-95 cursor-pointer shadow-sm relative group"
-        title="Elevated Gravity Tower (800L): Tap to open Sluice & Hydrology Deck"
+        title={`Elevated Gravity Tower (${towerCapacity.toLocaleString()}L): Tap to open Sluice & Hydrology Deck`}
       >
         <span className="text-sm">🗼</span>
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-white">
             <span>Tower:</span>
-            <span className={towerLiters <= 80 ? 'text-rose-400' : towerLiters <= 200 ? 'text-amber-300' : 'text-emerald-300'}>
-              {towerLiters} / {towerCapacity}L
+            <span className={towerLiters <= (towerCapacity * 0.10) ? 'text-rose-400' : towerLiters <= (towerCapacity * 0.25) ? 'text-amber-300' : 'text-emerald-300'}>
+              {towerLiters.toLocaleString()} / {towerCapacity.toLocaleString()}L
             </span>
             {isOverflowSurgeActive && (
               <span className="text-[9px] font-extrabold text-cyan-300 bg-cyan-950/80 border border-cyan-400/80 px-1 py-0.2 rounded-full animate-pulse flex items-center gap-0.5">
                 <span>⚡</span>
-                <span>SURGE +15L/s</span>
+                <span>SURGE +{overflowSurgeLps}L/s</span>
               </span>
             )}
           </div>
@@ -165,10 +171,12 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
           <div>
             <div className="font-bold text-xs uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
               <span>Elevated Gravity Tower</span>
-              <span className="text-[10px] text-stone-400 font-mono">({towerCapacity}L Cap)</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-mono">
+                {currentTierConfig.badge}
+              </span>
             </div>
             <div className="text-[11px] text-stone-400">
-              Pressurized delivery head for crops, Bio-Lab chillers &amp; crew.
+              {currentTierConfig.name} • {towerCapacity.toLocaleString()}L pressurized head pressure (+{currentTierConfig.surgeLps} L/s surge).
             </div>
           </div>
         </div>
@@ -254,7 +262,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
           <div className="flex-1 max-w-xs flex flex-col items-center justify-center px-3 py-1 bg-black/40 rounded-lg border border-stone-800/80">
             <div className="text-[9px] font-mono uppercase tracking-wider text-stone-400 flex items-center gap-1 mb-0.5">
               <span>Upward Hydraulic Conduit</span>
-              {isOverflowSurgeActive && <span className="text-cyan-300 font-bold">(+15 L/s)</span>}
+              {isOverflowSurgeActive && <span className="text-cyan-300 font-bold">(+{overflowSurgeLps} L/s)</span>}
             </div>
 
             {/* Visual animated upward arrows */}
@@ -400,12 +408,41 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
             </span>
             <span className="text-[9px] text-stone-400 font-mono">Simulates exact 5 checklist criteria</span>
           </div>
+
+          {/* Quick Storage Tier Calibration */}
+          <div className="p-1.5 rounded-lg bg-stone-900/80 border border-stone-800">
+            <div className="text-[9px] font-mono uppercase text-stone-400 font-bold mb-1">
+              📐 Calibrate Water Storage Levels (Tiers 1–5):
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {[1, 2, 3, 4, 5].map(t => {
+                const cfg = TOWER_STORAGE_TIERS[t];
+                const isSelected = towerTier === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTowerStorageTier(t)}
+                    className={`px-1 py-1 rounded text-[10px] font-bold text-center border transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-cyan-600 text-white border-cyan-400 shadow-sm shadow-cyan-500/40'
+                        : 'bg-stone-950 text-stone-400 border-stone-800 hover:text-stone-200'
+                    }`}
+                  >
+                    <span>{cfg.icon} T{t}</span>
+                    <span className="block text-[8px] font-mono opacity-80">{cfg.capacityLiters >= 1000 ? `${cfg.capacityLiters / 1000}kL` : `${cfg.capacityLiters}L`}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 text-[11px]">
             <button
               type="button"
               onClick={() => {
                 setHydrologyReservoirLevel('cistern', Math.floor(cisternMax * 0.99));
-                setHydrologyReservoirLevel('tower', 200);
+                setHydrologyReservoirLevel('tower', Math.round(towerCapacity * 0.25));
               }}
               className="px-2 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded text-stone-300 text-left cursor-pointer"
               title="Verify Cistern at 99% does NOT trigger surge"
@@ -416,7 +453,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
               type="button"
               onClick={() => {
                 setHydrologyReservoirLevel('cistern', cisternMax);
-                setHydrologyReservoirLevel('tower', 200);
+                setHydrologyReservoirLevel('tower', Math.round(towerCapacity * 0.25));
               }}
               className="px-2 py-1 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/60 rounded text-cyan-200 text-left font-bold cursor-pointer"
               title="Push Cistern from 99% to 100% to immediately trigger surge"
@@ -427,7 +464,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
               type="button"
               onClick={() => {
                 setHydrologyReservoirLevel('aquifer', Math.floor(aquiferCapacity * 0.99));
-                setHydrologyReservoirLevel('tower', 200);
+                setHydrologyReservoirLevel('tower', Math.round(towerCapacity * 0.25));
               }}
               className="px-2 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded text-stone-300 text-left cursor-pointer"
               title="Verify Aquifer at 99% does NOT trigger surge"
@@ -438,7 +475,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
               type="button"
               onClick={() => {
                 setHydrologyReservoirLevel('aquifer', aquiferCapacity);
-                setHydrologyReservoirLevel('tower', 200);
+                setHydrologyReservoirLevel('tower', Math.round(towerCapacity * 0.25));
               }}
               className="px-2 py-1 bg-sky-950/80 hover:bg-sky-900 border border-sky-500/60 rounded text-sky-200 text-left font-bold cursor-pointer"
               title="Push Aquifer from 99% to 100% to immediately trigger surge"
@@ -448,23 +485,23 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
             <button
               type="button"
               onClick={() => {
-                setHydrologyReservoirLevel('tower', 800);
+                setHydrologyReservoirLevel('tower', towerCapacity);
                 setHydrologyReservoirLevel('cistern', cisternMax);
               }}
               className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/60 rounded text-emerald-200 text-left font-bold cursor-pointer"
-              title="Verify pre-filled 800L tower suppresses surge when reservoir hits 100%"
+              title={`Verify pre-filled ${towerCapacity}L tower suppresses surge when reservoir hits 100%`}
             >
-              5. Tower 800L <span className="text-[9px] text-emerald-300 block">(Suppression/Cutoff)</span>
+              5. Tower Full <span className="text-[9px] text-emerald-300 block">({towerCapacity.toLocaleString()}L Cutoff)</span>
             </button>
             <button
               type="button"
               onClick={() => {
-                setHydrologyReservoirLevel('tower', 200);
+                setHydrologyReservoirLevel('tower', Math.round(towerCapacity * 0.25));
               }}
               className="px-2 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded text-amber-300 text-left cursor-pointer"
-              title="Drain tower to 200L to observe full continuous surge up to 800L"
+              title={`Drain tower to 25% (${Math.round(towerCapacity * 0.25)}L) to observe full continuous surge up to ${towerCapacity}L`}
             >
-              6. Tower 200L <span className="text-[9px] text-stone-400 block">(Reset Headroom)</span>
+              6. Drain Tower <span className="text-[9px] text-stone-400 block">({Math.round(towerCapacity * 0.25).toLocaleString()}L Headroom)</span>
             </button>
           </div>
         </div>

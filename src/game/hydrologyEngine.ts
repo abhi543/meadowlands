@@ -7,7 +7,11 @@
  */
 
 import { type CircadianClockInfo } from '@/game/shiftEngine';
-import { simulateOverflowSurgeTick } from '@/game/hydraulicFailSafeEngine';
+import {
+  simulateOverflowSurgeTick,
+  TOWER_STORAGE_TIERS,
+  getTowerLoadSheddingStage,
+} from '@/game/hydraulicFailSafeEngine';
 import {
   WEATHER_PROFILES,
   type WeatherProfileId,
@@ -46,13 +50,47 @@ export const AQUIFER_CAPACITY = 3000; // Liters (groundwater table)
 export const AQUIFER_NATURAL_RECHARGE_RATE_L_MIN = 8.0; // +8 Liters / real minute (+0.1333 L/sec)
 export const PERCOLATION_FEEDBACK_FRACTION = 0.30; // 30% of applied irrigation returns to aquifer
 
-// Homestead Rain Cistern Capacities scaling with Farm Level
-export function getCisternCapacity(farmLevel: number): number {
-  if (farmLevel <= 1) return 500;
-  if (farmLevel <= 3) return 1500;
-  if (farmLevel <= 5) return 4000;
-  return 10000;
+// --- High-Level Water Storage Capacity Tiers ---
+export interface StorageTierConfig {
+  tier: number;
+  name: string;
+  shortName: string;
+  capacityLiters: number;
+  costCoins: number;
+  minLevel: number;
+  description: string;
+  badge: string;
+  icon: string;
 }
+
+export const CISTERN_STORAGE_TIERS: Record<number, StorageTierConfig> = {
+  1: { tier: 1, name: 'Basic Rain Catchment Cistern', shortName: 'Tier 1 • Rain Basin', capacityLiters: 1500, costCoins: 0, minLevel: 1, description: 'Hand-hewn clay lined surface collection basin (1,500L).', badge: 'Tier 1 • 1,500L', icon: '🌧️' },
+  2: { tier: 2, name: 'Deep Ground Brick Cistern', shortName: 'Tier 2 • Brick Cistern', capacityLiters: 5000, costCoins: 1500, minLevel: 3, description: 'Fired brick retention vault collecting overland runoff (5,000L).', badge: 'Tier 2 • 5,000L', icon: '🧱' },
+  3: { tier: 3, name: 'Monolithic Stone Basin', shortName: 'Tier 3 • Stone Basin', capacityLiters: 15000, costCoins: 5500, minLevel: 5, description: 'Durable granite reservoir holding 15,000L with silt traps.', badge: 'Tier 3 • 15,000L', icon: '🏺' },
+  4: { tier: 4, name: 'Industrial Subsoil Vault', shortName: 'Tier 4 • Subsoil Vault', capacityLiters: 35000, costCoins: 16000, minLevel: 7, description: 'Massive subterranean concrete vault storing 35,000L of precipitation.', badge: 'Tier 4 • 35,000L', icon: '🏭' },
+  5: { tier: 5, name: 'Colossal Hydro-Retention Citadel', shortName: 'Tier 5 • Mega-Basin', capacityLiters: 75000, costCoins: 40000, minLevel: 10, description: 'Titan estate storm lake holding 75,000L of pure captured rainwater!', badge: 'Tier 5 • 75,000L', icon: '🌊' },
+};
+
+export const AQUIFER_STORAGE_TIERS: Record<number, StorageTierConfig> = {
+  1: { tier: 1, name: 'Natural Groundwater Table', shortName: 'Tier 1 • Water Table', capacityLiters: 3000, costCoins: 0, minLevel: 1, description: 'Natural shallow water table baseline capacity (3,000L).', badge: 'Tier 1 • 3,000L', icon: '🚰' },
+  2: { tier: 2, name: 'Perforated Casing Borehole', shortName: 'Tier 2 • Borehole Well', capacityLiters: 7500, costCoins: 1800, minLevel: 3, description: 'Steel-sleeved deep borehole reaching pressurized strata (7,500L).', badge: 'Tier 2 • 7,500L', icon: '🔩' },
+  3: { tier: 3, name: 'Subterranean Cavern Reservoir', shortName: 'Tier 3 • Limestone Cavern', capacityLiters: 18000, costCoins: 6500, minLevel: 5, description: 'Tapped subterranean limestone chamber storing 18,000L groundwater.', badge: 'Tier 3 • 18,000L', icon: '🪨' },
+  4: { tier: 4, name: 'Artesian Geothermal Aquifer', shortName: 'Tier 4 • Artesian Table', capacityLiters: 35000, costCoins: 18000, minLevel: 7, description: 'High-pressure self-rising artesian strata holding 35,000L.', badge: 'Tier 4 • 35,000L', icon: '🌋' },
+  5: { tier: 5, name: 'Abyssal Hydro-Titan Vault', shortName: 'Tier 5 • Abyssal Reserve', capacityLiters: 80000, costCoins: 45000, minLevel: 10, description: 'Infinite-depth planetary crust aquifer storing 80,000L subterranean reserve!', badge: 'Tier 5 • 80,000L', icon: '💎' },
+};
+
+// Homestead Rain Cistern Capacities scaling with Farm Level or Cistern Tier
+export function getCisternCapacity(farmLevel: number, tier?: number): number {
+  if (tier && CISTERN_STORAGE_TIERS[tier]) {
+    return CISTERN_STORAGE_TIERS[tier].capacityLiters;
+  }
+  if (farmLevel <= 1) return 1500;
+  if (farmLevel <= 3) return 5000;
+  if (farmLevel <= 5) return 15000;
+  if (farmLevel <= 7) return 35000;
+  return 75000;
+}
+
 
 // Inflow rates for precipitation (Liters / real minute)
 export const WEATHER_INFLOW_RATES = {
@@ -293,6 +331,9 @@ export interface HydrologyState {
   // C. Elevated Gravity Cistern Tower
   towerLiters: number;
   towerCapacityLiters: number;
+  towerTier?: number;
+  cisternTier?: number;
+  aquiferTier?: number;
   
   // D. Canals & Sluice Gates
   canalTier: CanalTier;
@@ -351,6 +392,9 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     
     towerLiters: 650, // 650 / 800L
     towerCapacityLiters: ELEVATED_TOWER_CAPACITY,
+    towerTier: 1,
+    cisternTier: 1,
+    aquiferTier: 1,
     
     canalTier: getCanalTierForLevel(farmLevel),
     sluiceGatesOpen: false,
@@ -533,6 +577,12 @@ export function stepHydrologySimulation(params: {
         cyclone: 'monsoon',
         frost: 'sunny',
         snow: 'frost',
+        supercell_deluge: 'monsoon',
+        plasma_firestorm: 'heatwave',
+        polar_vortex: 'frost',
+        hyper_cyclone: 'gale',
+        alchemical_monsoon: 'drizzle',
+        haboob_sandstorm: 'drought',
       };
       nextWeatherId = fallbackNeighbors[activeProfileId] || 'sunny';
     }
@@ -1033,9 +1083,14 @@ export function stepHydrologySimulation(params: {
   }
 
   // 8.5. Automated Hydraulic Rule: "Full-Reserve Pressure Surge"
+  const towerTier = hydrology.towerTier || 1;
+  const towerTierConfig = TOWER_STORAGE_TIERS[towerTier] || TOWER_STORAGE_TIERS[1];
+  const towerCap = hydrology.towerCapacityLiters || towerTierConfig.capacityLiters;
+  const surgeRate = towerTierConfig.surgeLps;
+
   const surgeResult = simulateOverflowSurgeTick({
     towerLiters: currentTower,
-    towerCapacityLiters: hydrology.towerCapacityLiters || ELEVATED_TOWER_CAPACITY,
+    towerCapacityLiters: towerCap,
     cisternLiters: currentCistern,
     cisternMaxLiters: effectiveCisternMax,
     aquiferLiters: currentAquifer,
@@ -1043,6 +1098,7 @@ export function stepHydrologySimulation(params: {
     deltaSeconds: dt,
     isOverflowSurgeActive: Boolean(hydrology.isOverflowSurgeActive),
     overflowSurgeSource: hydrology.overflowSurgeSource || null,
+    surgeRateLps: surgeRate,
   });
 
   currentTower = surgeResult.newTowerLiters;
@@ -1051,7 +1107,7 @@ export function stepHydrologySimulation(params: {
 
   if (surgeResult.justTriggered) {
     notifications.push({
-      text: '💧 [HYDROLOGY SURGE]: Reservoir reached 100% capacity. Automated overflow surge engaged — pumping water to fill Elevated Gravity Tower (800L).',
+      text: `💧 [HYDROLOGY SURGE]: Reservoir reached 100% capacity. Automated overflow surge engaged — pumping water to fill Elevated Gravity Tower (${towerCap.toLocaleString()}L).`,
       icon: '💧',
       type: 'event',
     });
@@ -1059,11 +1115,13 @@ export function stepHydrologySimulation(params: {
 
   if (surgeResult.justCompleted) {
     notifications.push({
-      text: '✅ [HYDROLOGY SURGE]: Elevated Gravity Tower reached 800L capacity. Surge pump disengaged.',
+      text: `✅ [HYDROLOGY SURGE]: Elevated Gravity Tower reached ${towerCap.toLocaleString()}L capacity. Surge pump disengaged.`,
       icon: '✅',
       type: 'info',
     });
   }
+
+  const dynamicStage = getTowerLoadSheddingStage(currentTower, towerCap);
 
   return {
     updatedHydrology: {
@@ -1079,7 +1137,7 @@ export function stepHydrologySimulation(params: {
       isAquiferStressed,
       hasSedimentInLine,
       towerLiters: Math.round(currentTower * 10) / 10,
-      towerCapacityLiters: hydrology.towerCapacityLiters,
+      towerCapacityLiters: towerCap,
       canalTier: effectiveTier,
       sluiceGatesOpen,
       autoShutoffMoisture: hydrology.autoShutoffMoisture,
@@ -1102,15 +1160,15 @@ export function stepHydrologySimulation(params: {
       // Automated Hydraulic Rule: Full-Reserve Pressure Surge
       isOverflowSurgeActive: surgeResult.isOverflowSurgeActive,
       overflowSurgeSource: surgeResult.overflowSurgeSource,
-      overflowSurgeLps: surgeResult.isOverflowSurgeActive ? 15.0 : 0,
+      overflowSurgeLps: surgeResult.isOverflowSurgeActive ? surgeRate : 0,
 
       totalWaterDischargedLiters: Math.round((totalDischarged + Number.EPSILON) * 10) / 10,
       totalPercolatedLiters: Math.round((totalPercolated + Number.EPSILON) * 10) / 10,
 
       // Fail-Safe Load-Shedding Status
-      loadSheddingStage: currentTower > 200 ? 0 : currentTower > 80 ? 1 : currentTower > 0 ? 2 : 3,
-      isCropConservationActive: currentTower <= 200,
-      isCrewRationingActive: currentTower <= 80 && currentTower > 0,
+      loadSheddingStage: dynamicStage,
+      isCropConservationActive: currentTower <= (towerCap * 0.25),
+      isCrewRationingActive: currentTower <= (towerCap * 0.10) && currentTower > 0,
       isCryoStandbyActive: currentTower <= 0,
     },
     updatedPlots: newPlots,

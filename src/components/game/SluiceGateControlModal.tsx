@@ -8,6 +8,8 @@ import {
   ELEVATED_TOWER_CAPACITY,
   AQUIFER_CAPACITY,
   getCisternCapacity,
+  CISTERN_STORAGE_TIERS,
+  AQUIFER_STORAGE_TIERS,
   WEATHER_INFLOW_RATES,
   type CanalTier,
   WEATHER_PROFILES,
@@ -16,6 +18,7 @@ import {
   type WeatherCategoryId,
   canOpenGates,
 } from '@/game/hydrologyEngine';
+import { TOWER_STORAGE_TIERS } from '@/game/hydraulicFailSafeEngine';
 import { GravityTowerWidget } from './GravityTowerWidget';
 
 export function SluiceGateControlModal() {
@@ -34,6 +37,13 @@ export function SluiceGateControlModal() {
     toggleEmergencySpillway,
     openEmergencySpillway,
     closeEmergencySpillway,
+    upgradeTowerStorageTier,
+    upgradeCisternStorageTier,
+    upgradeAquiferStorageTier,
+    setTowerStorageTier,
+    setCisternStorageTier,
+    setAquiferStorageTier,
+    coins,
     plots,
     unlockedPlots,
     level,
@@ -47,16 +57,22 @@ export function SluiceGateControlModal() {
   const canalTier = (hydro?.canalTier || 1) as CanalTier;
   const tierConfig = CANAL_TIER_CONFIGS[canalTier];
 
+  const towerTier = hydro?.towerTier || 1;
+  const towerTierConfig = TOWER_STORAGE_TIERS[towerTier] || TOWER_STORAGE_TIERS[1];
   const towerLiters = Math.round(hydro?.towerLiters ?? 0);
-  const towerCapacity = hydro?.towerCapacityLiters ?? ELEVATED_TOWER_CAPACITY;
+  const towerCapacity = hydro?.towerCapacityLiters ?? towerTierConfig.capacityLiters;
   const towerPct = Math.min(100, Math.round((towerLiters / towerCapacity) * 100));
 
+  const cisternTier = hydro?.cisternTier || 1;
+  const cisternTierConfig = CISTERN_STORAGE_TIERS[cisternTier] || CISTERN_STORAGE_TIERS[1];
   const cisternLiters = Math.round(hydro?.cisternLiters ?? 0);
-  const cisternMax = hydro?.cisternMaxLiters ?? getCisternCapacity(level);
+  const cisternMax = hydro?.cisternMaxLiters ?? cisternTierConfig.capacityLiters;
   const cisternPct = Math.min(100, Math.round((cisternLiters / cisternMax) * 100));
 
+  const aquiferTier = hydro?.aquiferTier || 1;
+  const aquiferTierConfig = AQUIFER_STORAGE_TIERS[aquiferTier] || AQUIFER_STORAGE_TIERS[1];
   const aquiferLiters = Math.round(hydro?.aquiferLiters ?? 0);
-  const aquiferCapacity = hydro?.aquiferCapacityLiters ?? AQUIFER_CAPACITY;
+  const aquiferCapacity = hydro?.aquiferCapacityLiters ?? aquiferTierConfig.capacityLiters;
   const aquiferDepthPct = Math.min(100, Math.round((aquiferLiters / aquiferCapacity) * 100));
 
   const gatesOpen = Boolean(hydro?.sluiceGatesOpen);
@@ -412,12 +428,17 @@ export function SluiceGateControlModal() {
           </div>
         </div>
 
-        {/* 3 Interconnected Reservoirs Overview */}
+        {/* 3 Interconnected Reservoirs Overview with High-Capacity Storage Tiers */}
         <div className="mt-5">
-          <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 mb-3 flex items-center gap-1.5">
-            <span>💧</span>
-            <span>Closed-Loop Hydrological Reservoirs</span>
-          </h3>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+            <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1.5">
+              <span>💧</span>
+              <span>Closed-Loop Hydrological Reservoirs • High-Capacity Levels</span>
+            </h3>
+            <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-700/50">
+              🪙 Estate Wealth: {coins.toLocaleString()}
+            </span>
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             {/* 1. Elevated Gravity Cistern Tower */}
@@ -425,23 +446,61 @@ export function SluiceGateControlModal() {
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-cyan-300 flex items-center gap-1">
-                    <span>🗼</span>
+                    <span>{towerTierConfig.icon}</span>
                     <span>Elevated Gravity Tower</span>
                   </span>
-                  <span className="font-mono text-cyan-200 font-bold">{towerLiters} / {towerCapacity} L</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-cyan-900/60 text-cyan-200 border border-cyan-500/40">
+                    {towerTierConfig.badge}
+                  </span>
                 </div>
-                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1.5 border border-cyan-900/50">
+                <div className="text-[11px] font-bold text-stone-200">{towerTierConfig.name}</div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-cyan-200 font-bold mt-1">
+                  <span>Capacity: {towerCapacity.toLocaleString()} L</span>
+                  <span>{towerLiters.toLocaleString()} L ({towerPct}%)</span>
+                </div>
+                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1 border border-cyan-900/50">
                   <div
                     className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-300"
                     style={{ width: `${towerPct}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-stone-400 mt-2">
-                  Header tank built above plot grade. Drives gravity flow across the canal furrows with 0 continuous labor.
+                  {towerTierConfig.description} Pressure surge throughput: +{towerTierConfig.surgeLps} L/s.
                 </p>
+
+                {/* Quick Storage Level Selectors */}
+                <div className="mt-2 pt-2 border-t border-stone-800/80">
+                  <span className="text-[9px] font-mono uppercase text-stone-400 block mb-1">Select Storage Level:</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[1, 2, 3, 4, 5].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTowerStorageTier(t)}
+                        className={`py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                          towerTier === t
+                            ? 'bg-cyan-600 text-white border-cyan-400'
+                            : 'bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200'
+                        }`}
+                      >
+                        T{t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-3 flex flex-col gap-1.5">
+                {towerTier < 5 && TOWER_STORAGE_TIERS[towerTier + 1] && (
+                  <button
+                    type="button"
+                    onClick={upgradeTowerStorageTier}
+                    className="py-1 px-2 rounded-lg text-[10px] font-bold bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 text-amber-200 transition-all active:scale-95 text-center flex items-center justify-center gap-1"
+                  >
+                    <span>⬆️ Upgrade to T{towerTier + 1} ({TOWER_STORAGE_TIERS[towerTier + 1].capacityLiters.toLocaleString()}L)</span>
+                    <span className="text-amber-300 font-mono">🪙{TOWER_STORAGE_TIERS[towerTier + 1].costCoins.toLocaleString()}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={cisternLiters <= 0 || towerLiters >= towerCapacity}
@@ -466,23 +525,61 @@ export function SluiceGateControlModal() {
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-sky-300 flex items-center gap-1">
-                    <span>🌧️</span>
+                    <span>{cisternTierConfig.icon}</span>
                     <span>Rain Catchment Cistern</span>
                   </span>
-                  <span className="font-mono text-sky-200 font-bold">{cisternLiters} / {cisternMax} L</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-sky-900/60 text-sky-200 border border-sky-500/40">
+                    {cisternTierConfig.badge}
+                  </span>
                 </div>
-                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1.5 border border-sky-900/50">
+                <div className="text-[11px] font-bold text-stone-200">{cisternTierConfig.name}</div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-sky-200 font-bold mt-1">
+                  <span>Capacity: {cisternMax.toLocaleString()} L</span>
+                  <span>{cisternLiters.toLocaleString()} L ({cisternPct}%)</span>
+                </div>
+                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1 border border-sky-900/50">
                   <div
                     className="h-full bg-gradient-to-r from-sky-400 to-cyan-500 rounded-full transition-all duration-300"
                     style={{ width: `${cisternPct}%` }}
                   />
                 </div>
                 <p className="text-[10px] text-stone-400 mt-2">
-                  Captures overland precipitation and roof runoff. Capacity scales with Farm Level ({cisternMax}L at Lv {level}).
+                  {cisternTierConfig.description} Auto-overflow surge pumps into Gravity Tower when full!
                 </p>
+
+                {/* Quick Storage Level Selectors */}
+                <div className="mt-2 pt-2 border-t border-stone-800/80">
+                  <span className="text-[9px] font-mono uppercase text-stone-400 block mb-1">Select Storage Level:</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[1, 2, 3, 4, 5].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setCisternStorageTier(t)}
+                        className={`py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                          cisternTier === t
+                            ? 'bg-sky-600 text-white border-sky-400'
+                            : 'bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200'
+                        }`}
+                      >
+                        T{t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-3 flex flex-col gap-1.5">
+                {cisternTier < 5 && CISTERN_STORAGE_TIERS[cisternTier + 1] && (
+                  <button
+                    type="button"
+                    onClick={upgradeCisternStorageTier}
+                    className="py-1 px-2 rounded-lg text-[10px] font-bold bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 text-amber-200 transition-all active:scale-95 text-center flex items-center justify-center gap-1"
+                  >
+                    <span>⬆️ Upgrade to T{cisternTier + 1} ({CISTERN_STORAGE_TIERS[cisternTier + 1].capacityLiters.toLocaleString()}L)</span>
+                    <span className="text-amber-300 font-mono">🪙{CISTERN_STORAGE_TIERS[cisternTier + 1].costCoins.toLocaleString()}</span>
+                  </button>
+                )}
                 <div className="flex items-center justify-between text-[11px] bg-black/30 p-2 rounded-lg border border-stone-800">
                   <span className="text-stone-300">Active Atmospheric Inflow:</span>
                   <span className="font-bold text-sky-300 font-mono flex items-center gap-1">
@@ -493,13 +590,13 @@ export function SluiceGateControlModal() {
 
                 {cisternLiters >= cisternMax ? (
                   <div className="text-[10px] font-bold text-cyan-300 bg-cyan-950/60 p-1.5 rounded border border-cyan-500/40 text-center flex items-center justify-center gap-1">
-                    <span>🌊</span>
-                    <span>Overflowing: +20 L/min recharging Deep Aquifer!</span>
+                    <span>⚡</span>
+                    <span>Full (100%): Automated Overflow Surge to Tower active!</span>
                   </div>
-                ) : activeWeatherId === 'heatwave' ? (
+                ) : activeWeatherId === 'heatwave' || activeWeatherId === 'plasma_firestorm' ? (
                   <div className="text-[10px] font-bold text-rose-300 bg-rose-950/60 p-1.5 rounded border border-rose-500/40 text-center flex items-center justify-center gap-1">
                     <span>🔥</span>
-                    <span>Thermal Boil: -10 L/min evaporating into dry air!</span>
+                    <span>Thermal Boil: Extreme evaporation into dry atmosphere!</span>
                   </div>
                 ) : (
                   <div className="text-[10px] text-stone-400 text-center">
@@ -514,12 +611,19 @@ export function SluiceGateControlModal() {
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-emerald-300 flex items-center gap-1">
-                    <span>🚰</span>
+                    <span>{aquiferTierConfig.icon}</span>
                     <span>Deep Groundwater Aquifer</span>
                   </span>
-                  <span className="font-mono text-emerald-200 font-bold">{aquiferLiters} / {aquiferCapacity} L</span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-emerald-900/60 text-emerald-200 border border-emerald-500/40">
+                    {aquiferTierConfig.badge}
+                  </span>
                 </div>
-                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1.5 border border-emerald-900/50">
+                <div className="text-[11px] font-bold text-stone-200">{aquiferTierConfig.name}</div>
+                <div className="flex items-center justify-between text-[11px] font-mono text-emerald-200 font-bold mt-1">
+                  <span>Capacity: {aquiferCapacity.toLocaleString()} L</span>
+                  <span>{aquiferLiters.toLocaleString()} L ({aquiferDepthPct}%)</span>
+                </div>
+                <div className="h-2 w-full bg-stone-800 rounded-full overflow-hidden mt-1 border border-emerald-900/50">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
                       isStressed ? 'bg-rose-500' : 'bg-gradient-to-r from-emerald-400 to-teal-400'
@@ -528,11 +632,42 @@ export function SluiceGateControlModal() {
                   />
                 </div>
                 <p className="text-[10px] text-stone-400 mt-2">
-                  Natural water table. Recharges at +8 L/min plus 30% of applied plot irrigation via subsoil percolation.
+                  {aquiferTierConfig.description} Recharges at +8 L/min + 30% percolation.
                 </p>
+
+                {/* Quick Storage Level Selectors */}
+                <div className="mt-2 pt-2 border-t border-stone-800/80">
+                  <span className="text-[9px] font-mono uppercase text-stone-400 block mb-1">Select Storage Level:</span>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[1, 2, 3, 4, 5].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setAquiferStorageTier(t)}
+                        className={`py-0.5 rounded text-[9px] font-bold border transition-all cursor-pointer ${
+                          aquiferTier === t
+                            ? 'bg-emerald-600 text-white border-emerald-400'
+                            : 'bg-stone-900/80 text-stone-400 border-stone-800 hover:text-stone-200'
+                        }`}
+                      >
+                        T{t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="mt-3 flex flex-col gap-1.5">
+                {aquiferTier < 5 && AQUIFER_STORAGE_TIERS[aquiferTier + 1] && (
+                  <button
+                    type="button"
+                    onClick={upgradeAquiferStorageTier}
+                    className="py-1 px-2 rounded-lg text-[10px] font-bold bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/60 text-amber-200 transition-all active:scale-95 text-center flex items-center justify-center gap-1"
+                  >
+                    <span>⬆️ Upgrade to T{aquiferTier + 1} ({AQUIFER_STORAGE_TIERS[aquiferTier + 1].capacityLiters.toLocaleString()}L)</span>
+                    <span className="text-amber-300 font-mono">🪙{AQUIFER_STORAGE_TIERS[aquiferTier + 1].costCoins.toLocaleString()}</span>
+                  </button>
+                )}
                 <div className="flex items-center justify-between text-[11px] bg-black/30 p-2 rounded-lg border border-stone-800">
                   <span className="text-stone-300">Table Status:</span>
                   <span className={`font-bold font-mono ${isStressed ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -570,7 +705,7 @@ export function SluiceGateControlModal() {
                 Auto-Cycles Every 3–5 Min
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                16 Deterministic Meteorologic States
+                22 Meteorologic States (6 Extreme Cataclysms)
               </span>
             </div>
           </div>
@@ -641,12 +776,24 @@ export function SluiceGateControlModal() {
               </div>
             </div>
 
-            {/* Weather State Selector across 5 Categories */}
+            {/* Weather State Selector across 6 Categories */}
             <div className="lg:col-span-2 space-y-2.5">
               <div className="text-[11px] font-mono text-cyan-300/90 bg-cyan-950/40 border border-cyan-800/50 p-2 rounded-xl flex items-center justify-between gap-2">
                 <span>🔄 <strong>Autonomous Climate Engine:</strong> Shifts naturally every 3–5 minutes. Click any weather below for manual atmospheric test:</span>
               </div>
               {[
+                {
+                  id: 'extreme_weather' as WeatherCategoryId,
+                  title: '🚨 Extreme Cataclysms & Severe Hazards (Deluge, Firestorm, Vortex)',
+                  profiles: [
+                    'supercell_deluge',
+                    'plasma_firestorm',
+                    'polar_vortex',
+                    'hyper_cyclone',
+                    'alchemical_monsoon',
+                    'haboob_sandstorm',
+                  ] as WeatherProfileId[],
+                },
                 {
                   id: 'clear_thermal' as WeatherCategoryId,
                   title: 'Clear & Thermal Category',

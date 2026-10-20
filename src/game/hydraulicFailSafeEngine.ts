@@ -38,24 +38,110 @@ export interface HydraulicConsumersBreakdown {
   isCryoStandbyActive: boolean;
 }
 
-export function getTowerLoadSheddingStage(towerLiters: number): TowerLoadSheddingStage {
-  if (towerLiters > STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN) {
-    return 0; // Nominal (>200L)
+export interface TowerStorageTierConfig {
+  tier: number;
+  name: string;
+  shortName: string;
+  capacityLiters: number;
+  surgeLps: number;
+  costCoins: number;
+  costItems: Record<string, number>;
+  minLevel: number;
+  description: string;
+  badge: string;
+  icon: string;
+}
+
+export const TOWER_STORAGE_TIERS: Record<number, TowerStorageTierConfig> = {
+  1: {
+    tier: 1,
+    name: 'Timber Stilt Cistern (Standard)',
+    shortName: 'Tier 1 • Stilt Cistern',
+    capacityLiters: 800,
+    surgeLps: 15.0,
+    costCoins: 0,
+    costItems: {},
+    minLevel: 1,
+    description: 'Hand-hewn timber framework with baseline gravity head pressure (800L).',
+    badge: 'Tier 1 • 800L',
+    icon: '🪵',
+  },
+  2: {
+    tier: 2,
+    name: 'Reinforced Oak Reservoir',
+    shortName: 'Tier 2 • Oak Reservoir',
+    capacityLiters: 2500,
+    surgeLps: 25.0,
+    costCoins: 1200,
+    costItems: { wood: 20 },
+    minLevel: 3,
+    description: 'Double-staved oak vat reinforced with iron hoops. Expands capacity to 2,500L with +25 L/s surge.',
+    badge: 'Tier 2 • 2,500L',
+    icon: '🛢️',
+  },
+  3: {
+    tier: 3,
+    name: 'Riveted Cast-Iron Silo',
+    shortName: 'Tier 3 • Iron Silo',
+    capacityLiters: 7500,
+    surgeLps: 40.0,
+    costCoins: 4500,
+    costItems: { iron_bar: 25 },
+    minLevel: 5,
+    description: 'Pressurized industrial steel vessel holding 7,500L with high-velocity +40 L/s manifold surge.',
+    badge: 'Tier 3 • 7,500L',
+    icon: '⚙️',
+  },
+  4: {
+    tier: 4,
+    name: 'Monolithic Granite Standpipe',
+    shortName: 'Tier 4 • Granite Standpipe',
+    capacityLiters: 20000,
+    surgeLps: 65.0,
+    costCoins: 12000,
+    costItems: { stone: 60, clay: 30 },
+    minLevel: 7,
+    description: 'High-elevation architectural aqueduct standpipe holding 20,000L with massive hydrostatic head (+65 L/s).',
+    badge: 'Tier 4 • 20,000L',
+    icon: '🏛️',
+  },
+  5: {
+    tier: 5,
+    name: 'Hydro-Pneumatic Mega-Citadel',
+    shortName: 'Tier 5 • Mega-Citadel',
+    capacityLiters: 50000,
+    surgeLps: 100.0,
+    costCoins: 35000,
+    costItems: { refined_glass: 30, steel_beam: 20 },
+    minLevel: 10,
+    description: 'Colossal pressurized mega-reservoir holding 50,000L! Unbeatable drought resilience and +100 L/s surge throughput.',
+    badge: 'Tier 5 • 50,000L',
+    icon: '🏰',
+  },
+};
+
+export function getTowerLoadSheddingStage(towerLiters: number, towerCapacity: number = ELEVATED_TOWER_CAPACITY): TowerLoadSheddingStage {
+  const nominalMin = towerCapacity * 0.25;
+  const conservationMin = towerCapacity * 0.10;
+  if (towerLiters > nominalMin) {
+    return 0; // Nominal (>25%)
   }
-  if (towerLiters >= STAGE_THRESHOLDS.STAGE_1_CONSERVATION_MIN) {
-    return 1; // Crop Conservation (80L to 200L)
+  if (towerLiters >= conservationMin) {
+    return 1; // Crop Conservation (10% to 25%)
   }
-  if (towerLiters > STAGE_THRESHOLDS.STAGE_3_EMPTY) {
-    return 2; // Crew Rationing (1L to 79L)
+  if (towerLiters > 0) {
+    return 2; // Crew Rationing (1L to 10%)
   }
   return 3; // Full Lockdown & Preservation (0L)
 }
+
 
 /**
  * Calculates current real-time consumption rates across all 3 estate systems
  */
 export function calculateHydraulicConsumers(params: {
   towerLiters: number;
+  towerCapacity?: number;
   sluiceGatesOpen: boolean;
   sluiceDischargeRateLps: number;
   activeBioLabChambersCount: number;
@@ -65,6 +151,7 @@ export function calculateHydraulicConsumers(params: {
 }): HydraulicConsumersBreakdown {
   const {
     towerLiters,
+    towerCapacity = ELEVATED_TOWER_CAPACITY,
     sluiceGatesOpen,
     sluiceDischargeRateLps,
     activeBioLabChambersCount,
@@ -73,7 +160,7 @@ export function calculateHydraulicConsumers(params: {
     siphonTrickleRateLps = 2.0,
   } = params;
 
-  const stage = getTowerLoadSheddingStage(towerLiters);
+  const stage = getTowerLoadSheddingStage(towerLiters, towerCapacity);
   const isCropConservationActive = stage >= 1;
   const isCrewRationingActive = stage >= 2;
   const isCryoStandbyActive = stage >= 3;
