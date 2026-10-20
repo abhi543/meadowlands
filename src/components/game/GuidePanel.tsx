@@ -22,7 +22,7 @@ import {
   type SystemicEventId,
 } from '@/game/eventsData';
 import { SUDDEN_EVENT_TEMPLATES } from '@/lib/eventDirector';
-import { ALL_ANIMAL_DROPS } from './AnimalProductsQuickReference';
+import { FARM_TIER_DROPS, PREHISTORIC_DROPS } from './AnimalProductsQuickReference';
 
 type GuideTab =
   | 'overview'
@@ -467,72 +467,124 @@ function AnimalsGuide() {
         })}
       </div>
 
-      {/* Complete Master Reference Table: All Items Given by Animals */}
-      <div className="bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 rounded-xl p-3.5 space-y-2.5">
+      {/* Complete Master Reference Table: All Items Given by Animals across All 4 Tiers */}
+      <div className="bg-stone-50 dark:bg-stone-900/60 border border-stone-200 dark:border-stone-800 rounded-xl p-3.5 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">
             <span className="text-lg">📋</span>
             <h5 className="font-bold text-sm text-stone-800 dark:text-stone-100">
-              Complete Master Reference: All Items Given by Animals
+              Complete Master Reference: Farm Animals by Tier (Common, Uncommon, Rare &amp; Legendary)
             </h5>
           </div>
           <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
-            Farm &amp; Sanctuary Animals
+            16 Breeds Across 4 Tiers
           </span>
         </div>
         <p className="text-xs text-stone-500 dark:text-stone-400">
-          Everything your animals eat, produce, and yield—all in one place:
+          Full breakdown of primary yields, bonus drops, and feed requirements across every tier:
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold">
-                <th className="py-2 px-2.5">Animal</th>
-                <th className="py-2 px-2.5">Feed / Diet</th>
+                <th className="py-2 px-2.5">Tier &amp; Breed</th>
+                <th className="py-2 px-2.5">Feed Required</th>
                 <th className="py-2 px-2.5">Primary Item Given</th>
-                <th className="py-2 px-2.5">Rare / Mutation Items</th>
-                <th className="py-2 px-2.5">Cycle Time</th>
+                <th className="py-2 px-2.5">Rare Bonus Drop / Perks</th>
+                <th className="py-2 px-2.5">Cycles &amp; Speed</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
-              {ALL_ANIMAL_DROPS.map(animal => (
-                <tr key={animal.id} className="hover:bg-stone-100/50 dark:hover:bg-stone-800/40 transition-colors">
+              {FARM_TIER_DROPS.map((b, idx) => (
+                <tr key={`${b.species}_${b.tier}_${idx}`} className="hover:bg-stone-100/50 dark:hover:bg-stone-800/40 transition-colors">
                   <td className="py-2.5 px-2.5 font-bold text-stone-800 dark:text-stone-200 whitespace-nowrap">
-                    <span className="mr-1.5">{animal.emoji}</span>
-                    {animal.name}
+                    <span className="mr-1.5">{b.speciesEmoji}</span>
+                    <span>{b.breedName}</span>
+                    <span className={`ml-1.5 text-[9px] font-black uppercase px-1.5 py-0.2 rounded border ${b.badgeClass}`}>
+                      {b.tierLabel}
+                    </span>
                   </td>
                   <td className="py-2.5 px-2.5 text-stone-600 dark:text-stone-300">
-                    <span className="mr-1">{animal.feedEmoji}</span>
-                    {animal.feedRequired}
+                    <span className="mr-1">{b.feedEmoji}</span>
+                    {b.feedRequired}
                   </td>
                   <td className="py-2.5 px-2.5">
                     <span className="font-bold text-amber-700 dark:text-amber-300">
-                      {animal.primaryDrop.emoji} {animal.primaryDrop.name}
+                      {b.primaryItem.emoji} {b.primaryItem.name}
                     </span>
                     <span className="ml-1 text-[10px] text-stone-500 font-mono">
-                      ({animal.primaryDrop.sellPrice}🪙)
+                      {b.primaryItem.yieldCount}x ({b.primaryItem.sellPrice}🪙)
                     </span>
                   </td>
                   <td className="py-2.5 px-2.5 text-stone-600 dark:text-stone-300">
-                    {animal.rareDrops && animal.rareDrops.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {animal.rareDrops.map((rd, idx) => (
-                          <span key={idx} className="text-[11px] font-medium bg-stone-200 dark:bg-stone-800 px-1.5 py-0.2 rounded">
-                            {rd.emoji} {rd.name} ({rd.sellPrice}🪙)
-                          </span>
-                        ))}
-                      </div>
+                    {b.bonusItem ? (
+                      <span className="text-[11px] font-semibold bg-stone-200 dark:bg-stone-800 px-1.5 py-0.5 rounded text-stone-700 dark:text-stone-200">
+                        {b.bonusItem.emoji} {b.bonusItem.name} ({b.bonusItem.chance})
+                      </span>
                     ) : (
-                      <span className="text-stone-400 italic text-[11px]">—</span>
+                      <span className="text-stone-400 italic text-[11px]">Base Yield Only</span>
+                    )}
+                    {b.gemMilestone && (
+                      <div className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                        {b.gemMilestone}
+                      </div>
                     )}
                   </td>
                   <td className="py-2.5 px-2.5 font-mono text-stone-500 text-[11px] whitespace-nowrap">
-                    {animal.cycleTime}
+                    ⏱️ {b.cycleTimeSec}s ({b.maxCycles} cycles)
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Prehistoric Sanctuary Table */}
+        <div className="pt-3 border-t border-stone-200 dark:border-stone-800">
+          <h6 className="font-bold text-xs uppercase tracking-wide text-cyan-700 dark:text-cyan-400 mb-1.5">
+            🦖 Prehistoric Reserve Creatures &amp; Drops
+          </h6>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold">
+                  <th className="py-2 px-2.5">Creature</th>
+                  <th className="py-2 px-2.5">Diet Required</th>
+                  <th className="py-2 px-2.5">Harvest Item Produced</th>
+                  <th className="py-2 px-2.5">Macro Estate Passive</th>
+                  <th className="py-2 px-2.5">Cycle Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-200 dark:divide-stone-800">
+                {PREHISTORIC_DROPS.map(c => (
+                  <tr key={c.id} className="hover:bg-stone-100/50 dark:hover:bg-stone-800/40 transition-colors">
+                    <td className="py-2.5 px-2.5 font-bold text-stone-800 dark:text-stone-200 whitespace-nowrap">
+                      <span className="mr-1.5">{c.emoji}</span>
+                      {c.name}
+                    </td>
+                    <td className="py-2.5 px-2.5 text-stone-600 dark:text-stone-300">
+                      <span className="mr-1">{c.feedEmoji}</span>
+                      {c.feedRequired}
+                    </td>
+                    <td className="py-2.5 px-2.5">
+                      <span className="font-bold text-cyan-700 dark:text-cyan-300">
+                        {c.harvestItem.emoji} {c.harvestItem.name}
+                      </span>
+                      <span className="ml-1 text-[10px] text-stone-500 font-mono">
+                        ({c.harvestItem.sellPrice}🪙)
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-2.5 text-stone-600 dark:text-stone-300 text-[11px]">
+                      {c.passiveAura}
+                    </td>
+                    <td className="py-2.5 px-2.5 font-mono text-stone-500 text-[11px] whitespace-nowrap">
+                      ⏱️ {c.cycleTimeSec}s ({Math.round(c.cycleTimeSec / 60)}m)
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
