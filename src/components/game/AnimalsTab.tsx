@@ -54,6 +54,7 @@ export function AnimalsTab() {
     isAllWorkersPaused,
     specialistWorkers,
     wranglerPolicy,
+    setMenagerieModalOpen,
   } = useGameStore();
 
   const isTessaActive = Boolean(
@@ -253,6 +254,15 @@ export function AnimalsTab() {
           >
             <span>➕</span>
             <span className="hidden sm:inline">Adopt</span>
+          </button>
+
+          <button
+            onClick={() => setMenagerieModalOpen(true)}
+            className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-stone-950 shadow-xs border border-amber-300/80 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+            title="Open Consolidated Estate Menagerie & Fauna Codex"
+          >
+            <span>📖</span>
+            <span className="hidden sm:inline">Menagerie</span>
           </button>
         </div>
       </div>

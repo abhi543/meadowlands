@@ -20,6 +20,7 @@ export function PrehistoricSanctuaryPanel() {
     collectRevivedSpecimen,
     depositEnclosureFeed,
     collectEnclosureHarvest,
+    setMenagerieModalOpen,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<EnclosureTypeId | 'biolab'>('enclosure_silt_terrarium');
@@ -73,11 +74,20 @@ export function PrehistoricSanctuaryPanel() {
             </div>
 
             <button
+              onClick={() => setMenagerieModalOpen(true)}
+              className="py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 text-stone-950 font-black text-xs tracking-wider uppercase shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center space-x-2 cursor-pointer"
+              title="Open Unified Estate Menagerie & Fauna Codex Compendium"
+            >
+              <span>📖</span>
+              <span>Estate Menagerie</span>
+            </button>
+
+            <button
               onClick={() => setIsTrailModalOpen(true)}
-              className="py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 hover:from-amber-400 hover:to-yellow-500 text-stone-950 font-black text-xs tracking-wider uppercase shadow-lg shadow-amber-500/20 active:scale-95 transition flex items-center space-x-2"
+              className="py-3 px-4 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-black text-xs tracking-wider uppercase shadow-lg active:scale-95 transition flex items-center space-x-2"
             >
               <span>🧭</span>
-              <span>Launch Frontier Trail</span>
+              <span>Launch Trail</span>
             </button>
           </div>
         </div>

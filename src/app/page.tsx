@@ -33,6 +33,7 @@ import { EstateHydrologyGauge } from '@/components/game/EstateHydrologyGauge';
 import { SluiceGateControlModal } from '@/components/game/SluiceGateControlModal';
 import { EstateDispatchCenterModal } from '@/components/game/EstateDispatchCenterModal';
 import { OfflineHydrologyReturnModal } from '@/components/game/OfflineHydrologyReturnModal';
+import { EstateMenagerieModal } from '@/components/game/EstateMenagerieModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -349,6 +350,8 @@ export default function Home() {
       />
       {/* Offline Return Modal (Estate Dispatch Center Fail-Safe Engine) */}
       <OfflineHydrologyReturnModal />
+      {/* Consolidated Estate Menagerie & Fauna Codex Compendium Modal */}
+      <EstateMenagerieModal />
 
       {/** Floating Notifications */}
       <FloatingNumbers />

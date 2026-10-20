@@ -802,6 +802,12 @@ export interface GameState {
   prehistoricSanctuary: PrehistoricSanctuaryState;
   activeTrailRun: FrontierTrailRun | null;
 
+  // Unified Estate Menagerie & Fauna Codex State
+  domesticTroughs: Record<AnimalSpecies, { foodUnits: number; maxUnits: number; isPaused?: boolean }>;
+  totalFaunaHarvests: number;
+  faunaHarvestStats: Record<string, number>;
+  isMenagerieModalOpen: boolean;
+
   // Time
   lastTick: number;
 
@@ -939,6 +945,13 @@ export interface GameState {
   collectRevivedSpecimen: (chamberId: number) => boolean;
   depositEnclosureFeed: (enclosureId: EnclosureTypeId, qty: number) => boolean;
   collectEnclosureHarvest: (enclosureId: EnclosureTypeId) => number;
+
+  // Unified Estate Menagerie & Fauna Codex Operations
+  setMenagerieModalOpen: (open: boolean) => void;
+  refillDomesticTrough: (species: AnimalSpecies, qty?: number) => boolean;
+  collectDomesticHarvest: (species: AnimalSpecies) => number;
+  refillAllFaunaTroughs: () => { refilledDomestic: number; refilledPrehistoric: number };
+  collectAllFaunaHarvests: () => { collectedDomestic: number; collectedPrehistoric: number };
 
   // Habitat
   upgradeHabitat: (species: AnimalSpecies) => void;
@@ -1471,6 +1484,17 @@ export const useGameStore = create<GameState>()(
       amberBioLab: createDefaultAmberBioLab(),
       prehistoricSanctuary: createDefaultSanctuary(),
       activeTrailRun: null,
+
+      // Unified Estate Menagerie & Fauna Codex State
+      domesticTroughs: {
+        chicken: { foodUnits: 65, maxUnits: 100 },
+        cow: { foodUnits: 55, maxUnits: 100 },
+        sheep: { foodUnits: 45, maxUnits: 100 },
+        pig: { foodUnits: 35, maxUnits: 100 },
+      },
+      totalFaunaHarvests: 0,
+      faunaHarvestStats: {},
+      isMenagerieModalOpen: false,
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -5750,15 +5774,280 @@ export const useGameStore = create<GameState>()(
         playVictoryChime();
         state.addNotification(`✨ Harvested ${harvestCount}x ${spec.harvestName} from ${spec.name}!`, spec.harvestEmoji, 'discovery');
 
+        const newTotalFaunaHarvests = (state.totalFaunaHarvests || 0) + harvestCount;
+        const newFaunaHarvestStats = {
+          ...(state.faunaHarvestStats || {}),
+          [spec.harvestProductId]: ((state.faunaHarvestStats || {})[spec.harvestProductId] || 0) + harvestCount,
+        };
+
         set({
           barn: newBarn,
           prehistoricSanctuary: {
             ...sanctuary,
             enclosures: updatedEnclosures,
           },
+          totalFaunaHarvests: newTotalFaunaHarvests,
+          faunaHarvestStats: newFaunaHarvestStats,
           isDirty: true,
         });
         return harvestCount;
+      },
+
+      // --- Unified Estate Menagerie & Fauna Codex Operations ---
+      setMenagerieModalOpen: (open: boolean) => set({ isMenagerieModalOpen: open }),
+
+      refillDomesticTrough: (species: AnimalSpecies, qty?: number) => {
+        const state = get();
+        const currentTroughs = state.domesticTroughs || {
+          chicken: { foodUnits: 65, maxUnits: 100 },
+          cow: { foodUnits: 55, maxUnits: 100 },
+          sheep: { foodUnits: 45, maxUnits: 100 },
+          pig: { foodUnits: 35, maxUnits: 100 },
+        };
+        const trough = currentTroughs[species] || { foodUnits: 0, maxUnits: 100 };
+        const capacitySpace = trough.maxUnits - trough.foodUnits;
+        if (capacitySpace <= 0) {
+          state.addNotification(`${species.toUpperCase()} trough is already full!`, '🥣', 'info');
+          return false;
+        }
+
+        const dietCandidates: Record<AnimalSpecies, string[]> = {
+          chicken: ['feed', 'wheat'],
+          cow: ['feed', 'wheat'],
+          sheep: ['feed', 'wheat'],
+          pig: ['feed', 'carrot', 'soybean', 'corn'],
+        };
+
+        const candidates = dietCandidates[species] || ['feed', 'wheat'];
+        const targetAmount = qty ? Math.min(qty, capacitySpace) : capacitySpace;
+
+        const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
+        let depositAmount = 0;
+
+        for (const dietId of candidates) {
+          const availInSilo = newSilo[dietId] || 0;
+          const availInBarn = newBarn[dietId] || 0;
+          const totalAvail = availInSilo + availInBarn;
+          if (totalAvail > 0) {
+            const needed = targetAmount - depositAmount;
+            const take = Math.min(needed, totalAvail);
+            let rem = take;
+            if (newSilo[dietId] && newSilo[dietId] > 0) {
+              const fromSilo = Math.min(newSilo[dietId], rem);
+              newSilo[dietId] -= fromSilo;
+              rem -= fromSilo;
+            }
+            if (rem > 0 && newBarn[dietId] && newBarn[dietId] > 0) {
+              const fromBarn = Math.min(newBarn[dietId], rem);
+              newBarn[dietId] -= fromBarn;
+              rem -= fromBarn;
+            }
+            depositAmount += take;
+            if (depositAmount >= targetAmount) break;
+          }
+        }
+
+        if (depositAmount <= 0) {
+          state.addNotification(`No suitable feed or crops available for ${species} in barn or silo!`, '⚠️', 'info');
+          return false;
+        }
+
+        const now = Date.now();
+        const updatedTroughs = {
+          ...currentTroughs,
+          [species]: {
+            ...trough,
+            foodUnits: Math.min(trough.maxUnits, trough.foodUnits + depositAmount),
+            isPaused: false,
+          },
+        };
+
+        // Also feed any unfed animals of this species immediately
+        const updatedAnimals = state.animals.map(a => {
+          if (a.species === species && !a.fed && !a.productReady && a.age !== 'elder') {
+            return { ...a, fed: true, fedAt: now };
+          }
+          return a;
+        });
+
+        playCashRegisterSound();
+        state.addNotification(`🥣 Refilled ${species} trough with ${depositAmount} units! Animals actively feeding.`, '🌾', 'event');
+
+        set({
+          silo: newSilo,
+          barn: newBarn,
+          domesticTroughs: updatedTroughs,
+          animals: updatedAnimals,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      collectDomesticHarvest: (species: AnimalSpecies) => {
+        const state = get();
+        const readyAnimals = state.animals.filter(a => a.species === species && a.productReady);
+        if (readyAnimals.length <= 0) return 0;
+
+        const newBarn = { ...state.barn };
+        const newCodex = { ...state.codex };
+        let collectedCount = 0;
+        let additionalCoins = 0;
+        let additionalGems = 0;
+        let additionalXp = 0;
+        const now = Date.now();
+
+        const currentTroughs = state.domesticTroughs || {
+          chicken: { foodUnits: 65, maxUnits: 100 },
+          cow: { foodUnits: 55, maxUnits: 100 },
+          sheep: { foodUnits: 45, maxUnits: 100 },
+          pig: { foodUnits: 35, maxUnits: 100 },
+        };
+        const trough = currentTroughs[species] || { foodUnits: 0, maxUnits: 100 };
+        const feedCostPerAnimal = ANIMALS[species]?.feedPerCycle || 1;
+        let remainingTrough = trough.foodUnits;
+
+        const updatedAnimals = state.animals.map(a => {
+          if (a.species === species && a.productReady) {
+            collectedCount++;
+            const breedDef = BREED_REGISTRY[a.breedId];
+            const speciesDef = ANIMALS[a.species];
+            const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
+            const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
+
+            if (breedDef) {
+              newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
+            } else {
+              newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
+            }
+
+            if (breedDef?.bonusDrop && Math.random() < breedDef.bonusDrop.chance) {
+              if (breedDef.bonusDrop.itemKey) {
+                newBarn[breedDef.bonusDrop.itemKey] = (newBarn[breedDef.bonusDrop.itemKey] || 0) + 1;
+              }
+              if (breedDef.bonusDrop.directCoins) {
+                additionalCoins += breedDef.bonusDrop.directCoins;
+              }
+            }
+
+            const totalCompleted = a.cyclesCompletedTotal + 1;
+            if (breedDef?.gemMilestoneEveryN && totalCompleted % breedDef.gemMilestoneEveryN === 0) {
+              additionalGems += a.species === 'pig' ? 2 : 1;
+            }
+
+            const codexKey = a.breedId;
+            if (!newCodex[codexKey]) {
+              newCodex[codexKey] = true;
+              if (breedDef) additionalGems += breedDef.codexGemReward;
+            }
+
+            additionalXp += a.tier === 'legendary' ? 25 : a.tier === 'rare' ? 15 : a.tier === 'uncommon' ? 8 : 5;
+
+            const newCyclesRemaining = a.cyclesRemaining - 1;
+            const isElder = newCyclesRemaining <= 0;
+
+            // Auto-refeed from trough if trough has food
+            let willAutoRefeed = false;
+            if (!isElder && remainingTrough >= feedCostPerAnimal) {
+              remainingTrough -= feedCostPerAnimal;
+              willAutoRefeed = true;
+            }
+
+            return {
+              ...a,
+              fed: willAutoRefeed,
+              fedAt: willAutoRefeed ? now : null,
+              productReady: false,
+              cyclesRemaining: newCyclesRemaining,
+              cyclesCompletedTotal: totalCompleted,
+              age: isElder ? ('elder' as const) : a.age,
+              isOverclocked: false,
+              overclockExpiresAt: null,
+            };
+          }
+          return a;
+        });
+
+        const newTotalFaunaHarvests = (state.totalFaunaHarvests || 0) + collectedCount;
+        const mainDropId = ANIMALS[species]?.product || 'egg';
+        const newFaunaHarvestStats = {
+          ...(state.faunaHarvestStats || {}),
+          [mainDropId]: ((state.faunaHarvestStats || {})[mainDropId] || 0) + collectedCount,
+        };
+
+        const updatedTroughs = {
+          ...currentTroughs,
+          [species]: {
+            ...trough,
+            foodUnits: Math.max(0, remainingTrough),
+          },
+        };
+
+        const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
+
+        playVictoryChime();
+        state.addNotification(`✨ Harvested ${collectedCount} outputs from ${species}! Deposited to barn.`, ANIMALS[species]?.productEmoji || '📦', 'discovery');
+
+        set({
+          barn: newBarn,
+          animals: updatedAnimals,
+          domesticTroughs: updatedTroughs,
+          totalFaunaHarvests: newTotalFaunaHarvests,
+          faunaHarvestStats: newFaunaHarvestStats,
+          xp: newXp,
+          level: newLevel,
+          coins: state.coins + additionalCoins,
+          gems: state.gems + additionalGems,
+          codex: newCodex,
+          isDirty: true,
+        });
+        return collectedCount;
+      },
+
+      refillAllFaunaTroughs: () => {
+        const state = get();
+        let refilledDomestic = 0;
+        let refilledPrehistoric = 0;
+
+        const speciesList: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
+        for (const sp of speciesList) {
+          const trough = state.domesticTroughs?.[sp] || { foodUnits: 0, maxUnits: 100 };
+          if (trough.foodUnits < trough.maxUnits) {
+            const ok = get().refillDomesticTrough(sp);
+            if (ok) refilledDomestic++;
+          }
+        }
+
+        const sanctuary = state.prehistoricSanctuary || createDefaultSanctuary();
+        for (const enc of Object.values(sanctuary.enclosures || {})) {
+          if (enc.troughFoodLiters < enc.maxTroughLiters) {
+            const ok = get().depositEnclosureFeed(enc.enclosureId, enc.maxTroughLiters - enc.troughFoodLiters);
+            if (ok) refilledPrehistoric++;
+          }
+        }
+
+        return { refilledDomestic, refilledPrehistoric };
+      },
+
+      collectAllFaunaHarvests: () => {
+        let collectedDomestic = 0;
+        let collectedPrehistoric = 0;
+
+        const speciesList: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
+        for (const sp of speciesList) {
+          const c = get().collectDomesticHarvest(sp);
+          collectedDomestic += c;
+        }
+
+        const sanctuary = get().prehistoricSanctuary || createDefaultSanctuary();
+        for (const enc of Object.values(sanctuary.enclosures || {})) {
+          if (enc.harvestReadyCount > 0) {
+            const c = get().collectEnclosureHarvest(enc.enclosureId);
+            collectedPrehistoric += c;
+          }
+        }
+
+        return { collectedDomestic, collectedPrehistoric };
       },
 
       // ---- Workshop Active Installations & Tool Loadout Actions ----
@@ -6538,9 +6827,40 @@ export const useGameStore = create<GameState>()(
           return p;
         });
 
+        // Update animal production and domestic troughs
+        const currentDomesticTroughs = state.domesticTroughs || {
+          chicken: { foodUnits: 65, maxUnits: 100 },
+          cow: { foodUnits: 55, maxUnits: 100 },
+          sheep: { foodUnits: 45, maxUnits: 100 },
+          pig: { foodUnits: 35, maxUnits: 100 },
+        };
+        const updatedDomesticTroughs = { ...currentDomesticTroughs };
+        const dSpeciesList: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
+        for (const sp of dSpeciesList) {
+          const activeProducers = state.animals.filter(a => a.species === sp && a.fed && !a.productReady).length;
+          if (activeProducers > 0) {
+            const tr = updatedDomesticTroughs[sp] || { foodUnits: 0, maxUnits: 100 };
+            const drain = 0.05 * activeProducers;
+            updatedDomesticTroughs[sp] = {
+              ...tr,
+              foodUnits: Math.max(0, tr.foodUnits - drain),
+              isPaused: tr.foodUnits <= 0,
+            };
+          }
+        }
+
         // Update animal production (with Overclocking & Mutation modifiers)
         let newAnimals = state.animals.map(a => {
           if (a.fed && a.fedAt && !a.productReady) {
+            // Check if trough is empty: if empty, pause harvest timer safely without decaying progress
+            const tr = updatedDomesticTroughs[a.species];
+            if (tr && tr.foodUnits <= 0) {
+              return {
+                ...a,
+                fedAt: a.fedAt + 1000, // pause progress cleanly
+              };
+            }
+
             const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
             const isAnimalExhausted = Boolean(
               (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && now < aOverclock.exhaustedUntil) ||
@@ -8047,6 +8367,7 @@ export const useGameStore = create<GameState>()(
         set({
           plots: newPlots,
           animals: newAnimals,
+          domesticTroughs: updatedDomesticTroughs,
           productionQueues: newQueues,
           barn: newBarn,
           silo: newSilo,

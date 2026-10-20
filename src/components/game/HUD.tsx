@@ -31,6 +31,8 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     notifications = [],
     setDispatchModalOpen,
     hydrology,
+    prehistoricSanctuary,
+    setMenagerieModalOpen,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -40,6 +42,11 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
   }, []);
 
   const clock = getCircadianClock(now, farmEpochStart);
+
+  // Ready harvest count across all fauna
+  const readyAnimalCount = animals.filter(a => a.productReady).length;
+  const readySanctuaryCount = Object.values(prehistoricSanctuary?.enclosures || {}).reduce((sum, enc) => sum + (enc.harvestReadyCount || 0), 0);
+  const readyMenagerieCount = readyAnimalCount + readySanctuaryCount;
 
   // Active Critical & Warning count calculation
   const hasFlashFlood = Boolean(hydrology?.isFlashFloodActive);
@@ -159,6 +166,23 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             </span>
           ) : (
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+          )}
+        </button>
+
+        {/* Dedicated Estate Menagerie & Fauna Codex Compendium */}
+        <button
+          onClick={() => setMenagerieModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-stone-950 shadow-md border border-amber-300/80 active:scale-95 transition-all cursor-pointer backdrop-blur-sm group select-none"
+          title="Open Unified Estate Menagerie & Fauna Codex Compendium"
+        >
+          <span className="text-sm group-hover:scale-110 transition-transform">📖</span>
+          <span className="tracking-tight font-extrabold">Estate Menagerie</span>
+          {readyMenagerieCount > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full bg-stone-950 text-amber-300 font-black text-[10px] leading-tight animate-bounce">
+              {readyMenagerieCount}
+            </span>
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full bg-stone-950/40" />
           )}
         </button>
 
