@@ -1130,7 +1130,6 @@ export interface GameState {
 
   // Hardcore Survival Mode
   isHardcoreMode: boolean;
-  toggleHardcoreMode: () => void;
 
   tick: () => void;
   resetGame: () => void;
@@ -6411,18 +6410,6 @@ export const useGameStore = create<GameState>()(
         get().toggleOfflineMode();
       },
 
-      toggleHardcoreMode: () => {
-        const next = !get().isHardcoreMode;
-        set({ isHardcoreMode: next, isDirty: true });
-        get().addNotification(
-          next
-            ? '💀 Hardcore Survival Mode: Monoculture exhaustion, 75s withering & rot, 2x weather hazard pay, and strict contract fines ACTIVE!'
-            : '🌱 Standard Mode: Hardcore constraints eased.',
-          next ? '💀' : '🌱',
-          'event'
-        );
-      },
-
       dismissOfflineSummary: () => {
         set({ lastOfflineSummary: null, isDirty: true });
       },
@@ -11548,9 +11535,8 @@ export const useGameStore = create<GameState>()(
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
         const merged = { ...currentState, ...persisted };
-        if (merged.isHardcoreMode === undefined) {
-          merged.isHardcoreMode = true;
-        }
+        // Hardcore Survival Mode is permanent across all sessions
+        merged.isHardcoreMode = true;
 
         // Migration: if fishery doesn't exist, create it
         if (!merged.fishery) {

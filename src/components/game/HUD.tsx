@@ -36,7 +36,6 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     offlineStartTime,
     toggleOfflineMode,
     isHardcoreMode,
-    toggleHardcoreMode,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -198,25 +197,14 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
           )}
         </button>
 
-        {/* Hardcore Survival Mode Badge & Toggle */}
-        <button
-          onClick={toggleHardcoreMode}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black transition-all shadow-sm border backdrop-blur-sm cursor-pointer select-none active:scale-95 ${
-            isHardcoreMode
-              ? 'bg-red-950/90 hover:bg-red-900 text-red-200 border-red-500/80 ring-2 ring-red-600/40'
-              : 'bg-stone-800/80 hover:bg-stone-700 text-stone-300 border-stone-600/60'
-          }`}
-          title={
-            isHardcoreMode
-              ? '💀 Hardcore Mode ACTIVE: Monoculture Exhaustion (+35% time), 75s Crop Withering & Rot, 2x Weather Hazard Pay, 2.5L/min Aquifer Recharge, 20% Contract Breach Fine. Click to toggle Standard Mode.'
-              : '🌱 Standard Mode ACTIVE: Normal crop resistance and baseline economics. Click to enable Hardcore Mode.'
-          }
+        {/* Permanent Hardcore Survival Mode Badge */}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black shadow-sm border backdrop-blur-sm select-none bg-red-950/90 text-red-200 border-red-500/80 ring-2 ring-red-600/30"
+          title="💀 Hardcore Survival Mode PERMANENT: Monoculture Exhaustion (+35% time), 75s Crop Withering & Rot, 2x Weather Hazard Pay, 2.5L/min Aquifer Recharge, 20% Contract Breach Fine."
         >
-          <span className="text-xs">{isHardcoreMode ? '💀' : '🌱'}</span>
-          <span className="tracking-wide hidden sm:inline">
-            {isHardcoreMode ? 'HARDCORE' : 'CASUAL'}
-          </span>
-        </button>
+          <span className="text-xs">💀</span>
+          <span className="tracking-wider hidden sm:inline">HARDCORE</span>
+        </div>
 
 
         {/* Workers Timing Display Widget (On Top Header) */}

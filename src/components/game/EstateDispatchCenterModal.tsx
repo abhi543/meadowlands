@@ -79,7 +79,6 @@ export function EstateDispatchCenterModal({
     amberBioLab,
     workshopLoadout,
     isHardcoreMode,
-    toggleHardcoreMode,
   } = useGameStore();
 
   const [mainSection, setMainSection] = useState<'manager' | 'dispatch_actions' | 'alerts' | 'grievances'>('manager');
@@ -924,42 +923,28 @@ export function EstateDispatchCenterModal({
                 </div>
 
                 {/* Hardcore Survival Directive Card */}
-                <div className={`p-4 sm:p-5 rounded-2xl border transition-all shadow-xl ${
-                  isHardcoreMode
-                    ? 'bg-gradient-to-r from-red-950/80 via-stone-900 to-rose-950/70 border-red-500/60 ring-2 ring-red-500/20'
-                    : 'bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 border-stone-700/60'
-                }`}>
+                <div className="p-4 sm:p-5 rounded-2xl border transition-all shadow-xl bg-gradient-to-r from-red-950/80 via-stone-900 to-rose-950/70 border-red-500/60 ring-2 ring-red-500/20">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1.5 ${
-                          isHardcoreMode
-                            ? 'bg-red-500 text-stone-950 border-red-300 shadow-md shadow-red-500/20'
-                            : 'bg-stone-800 text-stone-400 border-stone-600'
-                        }`}>
-                          <span>{isHardcoreMode ? '💀' : '🌱'}</span>
-                          <span>{isHardcoreMode ? 'HARDCORE SURVIVAL MODE ACTIVE' : 'STANDARD CASUAL MODE ACTIVE'}</span>
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider border flex items-center gap-1.5 bg-red-500 text-stone-950 border-red-300 shadow-md shadow-red-500/20">
+                          <span>💀</span>
+                          <span>HARDCORE SURVIVAL MODE ACTIVE</span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-red-900/60 text-red-300 border border-red-700/50">
+                          Permanent
                         </span>
                       </div>
                       <p className="text-xs text-stone-300 max-w-xl leading-relaxed">
-                        {isHardcoreMode
-                          ? 'All 6 estate survival pillars are actively punishing inefficiency: rapid 75s withering/rot, monoculture soil exhaustion, 2.5 L/min aquifer recharge, 2x weather hazard pay, and strict market penalties.'
-                          : 'Standard simulation parameters enabled. Crop withering relaxed to 30 mins, baseline wages, and standard market returns.'}
+                        All 6 estate survival pillars are permanently locked and actively punishing inefficiency: rapid 75s withering/rot, monoculture soil exhaustion, 2.5 L/min aquifer recharge, 2x weather hazard pay, and strict market penalties.
                       </p>
                     </div>
 
                     <div className="shrink-0 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={toggleHardcoreMode}
-                        className={`px-4 py-2 rounded-xl font-black text-xs transition-all shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 ${
-                          isHardcoreMode
-                            ? 'bg-red-600 hover:bg-red-500 text-white ring-2 ring-red-400/50'
-                            : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-600'
-                        }`}
-                      >
-                        <span>{isHardcoreMode ? '⚙️ Ease to Standard' : '💀 Enable Hardcore'}</span>
-                      </button>
+                      <span className="px-3.5 py-2 rounded-xl font-black text-xs bg-red-950/90 text-red-300 border border-red-600/60 shadow-inner flex items-center gap-1.5 select-none">
+                        <span>🔒</span>
+                        <span>Mode Locked</span>
+                      </span>
                     </div>
                   </div>
 
