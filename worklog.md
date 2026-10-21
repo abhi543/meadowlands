@@ -209,3 +209,26 @@ Work Log:
 Stage Summary:
 - Complete implementation of the Dynamic Gas Tick System (CO₂, O₂, N) across the simulation engine, store, and visual UI with live dynamic arrows, active penalty zone alerts, and exact prompt modifier breakdowns.
 
+---
+Task ID: 12
+Agent: Main Agent
+Task: Consolidate All Plot Gas Percentages in One Centralized Console (Declutter Individual Tiles)
+
+Work Log:
+- Removed individual plot tile gas clutter from `src/components/game/FarmGrid.tsx`:
+  - Removed `Mini Dynamic Gas Meter Live Indicator Strip` (`C:.. O:.. N:..`) from every plot tile.
+  - Removed `Gas Metric Penalty Flash Alert` pill from every plot tile.
+  - Removed `Dynamic Gas Tick Live Hover Inspection Card` that previously overlaid each plot tile.
+  - Preserved the subtle warning yellow border pulse (`ring-2 ring-yellow-400 border-yellow-400 animate-pulse`) when a plot enters an active penalty zone.
+- Built the Centralized Atmospheric Soil Gas Console above the Farm Grid in `src/components/game/FarmGrid.tsx`:
+  - Displays estate-wide real-time averages across all unlocked plots for CO₂, O₂, and Nitrogen with live arrows and active modifier descriptions.
+  - Interactive Inspector: Hovering over any plot below instantly focuses the console on that specific plot (`🔎 Plot #X Gas Metrics`), showing its exact CO₂/O₂/Nitrogen percentages, dynamic live arrows, and active environmental modifiers.
+  - Penalty Zone banner alert notifying players whenever any plot enters an active penalty zone (`⚠️ X in Penalty Zone`).
+  - Expandable "All Plots Table" modal/drawer (`[ 📊 View All Plots ]`) listing every single plot's real-time gas percentages, arrows, and yield/velocity status side-by-side in one organized view.
+- Verified TypeScript type checks (`npx tsc --noEmit`) pass with 0 errors.
+- Verified Next.js Turbopack production build (`npm run build`) succeeds with 0 errors in 6.3s.
+
+Stage Summary:
+- Successfully consolidated all plot gas metrics into a single dedicated console above the grid with interactive hover inspection and an expandable all-plots matrix, eliminating visual clutter on individual plot tiles.
+
+
