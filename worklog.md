@@ -231,4 +231,22 @@ Work Log:
 Stage Summary:
 - Successfully consolidated all plot gas metrics into a single dedicated console above the grid with interactive hover inspection and an expandable all-plots matrix, eliminating visual clutter on individual plot tiles.
 
+---
+Task ID: 13
+Agent: Main Agent
+Task: Remove Sluice and Restore Soil Completely From Farm Page
+
+Work Log:
+- Removed Sluice button from the environmental weather banner in `src/components/game/FarmGrid.tsx`.
+- Removed `Restore Soil (Compost Bailout)` button from the action buttons row in `src/components/game/FarmGrid.tsx`.
+- Removed `Gravity Sluice Console Button` from the action buttons row in `src/components/game/FarmGrid.tsx`.
+- Repositioned `Upgrade Soil` into the action bar row alongside `Harvest All`, `Plant All`, `Water All`, and `Pump Well`, creating a clean, balanced single row of 5 action buttons.
+- Cleaned up unused `applyCompostToAllPlots` and `setSluiceModalOpen` references from `FarmGrid.tsx`.
+- Verified TypeScript type checks (`npx tsc --noEmit`) pass with 0 errors.
+- Verified Next.js Turbopack production build (`npm run build`) succeeds in 5.1s with 0 errors.
+
+Stage Summary:
+- Successfully removed Sluice and Restore Soil completely from the Farm page while preserving their dedicated functionality on the Water/Hydrology and Barn tabs.
+
+
 

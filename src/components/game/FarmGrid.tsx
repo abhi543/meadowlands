@@ -41,7 +41,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     plantAllCrops,
     harvestAllPlots,
     applyCompostToProps,
-    applyCompostToAllPlots,
     flushPlotBed,
     applyUniversalBioDressing,
     waterPlot,
@@ -63,7 +62,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     cureEntityExhaustion,
     unlockNextPlot,
     hydrology,
-    setSluiceModalOpen,
     toggleEmergencySpillway,
     clearWitheredCrop,
     animals = [],
@@ -221,24 +219,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               <span>{estateModifier.bannerText}</span>
             </p>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
-          <button
-            type="button"
-            onClick={() => {
-              if (onSelectTab) onSelectTab('water');
-              else setSluiceModalOpen(true);
-            }}
-            className="px-3 py-1.5 rounded-xl bg-black/40 hover:bg-black/60 border border-white/20 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
-            title="Open Estate Hydrology & Sluice Console"
-          >
-            <span>🌊 Sluice:</span>
-            <span className={hydrology?.sluiceGatesOpen ? 'text-emerald-300 font-black' : 'text-stone-400'}>
-              {hydrology?.sluiceGatesOpen ? 'OPEN' : 'CLOSED'}
-            </span>
-            <span className="text-[10px] opacity-75">({Math.round(hydrology?.towerLiters || 0)}L Tower)</span>
-          </button>
         </div>
       </div>
       {/* Flash Flood Crisis Warning Banner */}
@@ -430,26 +410,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           )}
         </button>
 
-        {/* Restore Soil (Compost Bailout) */}
-        <button
-          onClick={() => applyCompostToAllPlots()}
-          disabled={tiredPlotsCount === 0}
-          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 ${
-            tiredPlotsCount > 0
-              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-emerald-400 shadow-md shadow-emerald-500/20 active:scale-95 animate-pulse cursor-pointer'
-              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
-          }`}
-          title={tiredPlotsCount > 0 ? `Apply organic compost to all ${tiredPlotsCount} tired plots to refill battery to 100% full` : 'All plot batteries are at 100% energy!'}
-        >
-          <span className="text-base sm:text-lg">{'💩'}</span>
-          <span>Restore Soil</span>
-          {tiredPlotsCount > 0 && (
-            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
-              {tiredPlotsCount} Tired
-            </span>
-          )}
-        </button>
-
         {/* Plant All */}
         <button
           onClick={() => plantAllCrops(selectedCrop)}
@@ -532,32 +492,12 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             setSelectedPlotForUpgrade(null);
             setIsUpgradeModalOpen(true);
           }}
-          className="col-span-2 sm:col-span-4 lg:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-500 hover:to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/20 cursor-pointer"
+          className="col-span-2 sm:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-500 hover:to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/20 cursor-pointer"
         >
           <span className="text-base sm:text-lg">{'🌱'}</span>
           <span>Upgrade Soil</span>
           <span className="bg-black/25 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold text-amber-200">
             🪙 L1–5
-          </span>
-        </button>
-
-        {/* Gravity Sluice Console Button */}
-        <button
-          onClick={() => {
-            if (onSelectTab) onSelectTab('water');
-            else setSluiceModalOpen(true);
-          }}
-          className="col-span-2 sm:col-span-4 lg:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-cyan-800 via-sky-800 to-blue-900 hover:from-cyan-700 hover:to-sky-700 text-white border-cyan-500 shadow-md shadow-cyan-950/40 cursor-pointer"
-          title="Open Estate Hydrological Sluice & Canal Console"
-        >
-          <span className="text-base sm:text-lg">{'🌊'}</span>
-          <span>Sluice</span>
-          <span className={`px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold border ${
-            hydrology?.sluiceGatesOpen
-              ? 'bg-emerald-500/30 text-emerald-300 border-emerald-400 animate-pulse'
-              : 'bg-black/25 text-stone-300 border-stone-600'
-          }`}>
-            {hydrology?.sluiceGatesOpen ? 'OPEN' : 'CLOSED'}
           </span>
         </button>
       </div>
