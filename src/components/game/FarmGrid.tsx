@@ -12,7 +12,7 @@ import { getMoistureZone } from '@/game/hydrologyEngine';
 const CROP_LIST = Object.values(CROPS);
 
 interface FarmGridProps {
-  onSelectTab?: (tab: 'animals' | 'market') => void;
+  onSelectTab?: (tab: 'animals' | 'market' | 'water') => void;
 }
 
 export function FarmGrid({ onSelectTab }: FarmGridProps) {
@@ -333,7 +333,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
         {/* Gravity Sluice Console Button */}
         <button
-          onClick={() => setSluiceModalOpen(true)}
+          onClick={() => {
+            if (onSelectTab) onSelectTab('water');
+            else setSluiceModalOpen(true);
+          }}
           className="col-span-2 sm:col-span-4 lg:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-cyan-800 via-sky-800 to-blue-900 hover:from-cyan-700 hover:to-sky-700 text-white border-cyan-500 shadow-md shadow-cyan-950/40 cursor-pointer"
           title="Open Estate Hydrological Sluice & Canal Console"
         >
