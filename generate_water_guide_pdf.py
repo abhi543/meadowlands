@@ -477,11 +477,12 @@ def build_pdf(output_path: str):
     siphon_box_data = [
         [
             Paragraph(
-                "<b>🚰 THE AQUIFER SIPHON FEED VALVE (CONTINUOUS & EMERGENCY MODES):</b><br/>"
-                "&bull; <b>Installation:</b> Crafted in the Workshop or installed directly via the Water Tab (Cost: 250 Coins).<br/>"
-                "&bull; <b>Continuous Artesian Feed (Default):</b> Siphons clean groundwater from the Deep Aquifer at <b>+2.0 L/s</b> continuously whenever the Elevated Gravity Tower has headroom, maintaining 100% full capacity and constant pressurized head.<br/>"
-                "&bull; <b>Emergency Reserve Mode (Toggleable):</b> For water conservation, can be switched to trigger only when the tower drops &le; 80L (refilling up to 200L).<br/>"
-                "&bull; <b>Total Drought & Offline Immunity:</b> As long as the Aquifer contains water, the Gravity Tower is continuously replenished and specimens never enter Cryo-Standby!",
+                "<b>🚰 THE SMART SIPHON DUAL-INTAKE MANIFOLD (SMART HIGHEST-LEVEL & DUAL-SOURCE FEED):</b><br/>"
+                "&bull; <b>Smart Dual-Intake Manifold:</b> The siphon automatically monitors both the Rain Catchment Cistern and Deep Groundwater Aquifer, drawing from whichever reservoir has the higher relative water level % (saving subterranean groundwater when surface rainwater is abundant).<br/>"
+                "&bull; <b>Intake Routing Preferences:</b> Switch on-the-fly between <b>Smart Auto</b> (highest level %), <b>Cistern Priority</b>, and <b>Deep Aquifer Priority</b> with instant zero-headroom failover if one empties.<br/>"
+                "&bull; <b>Continuous Feed (+2.0 L/s):</b> Supplies the Elevated Gravity Tower continuously up to 100% capacity whenever headroom exists, ensuring maximum pressure for all canal furrows.<br/>"
+                "&bull; <b>Emergency Reserve Mode (Optional):</b> Triggers only when the tower drops &le; 80L (refilling up to 200L) for extreme conservation.<br/>"
+                "&bull; <b>Offline & Drought Protection:</b> As long as either reservoir contains water, the Gravity Tower remains pressurized and Bio-Lab specimens never suffer cryo-decay!",
                 callout_style
             )
         ]

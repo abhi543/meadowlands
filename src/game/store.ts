@@ -1069,6 +1069,8 @@ export interface GameState {
   openEmergencySpillway: () => void;
   closeEmergencySpillway: () => void;
   toggleSiphonMode: () => void;
+  cycleSiphonSourcePreference: () => void;
+  setSiphonSourcePreference: (preference: 'smart_highest' | 'cistern' | 'aquifer') => void;
   setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => void;
 
   // High-Capacity Water Storage Progression Actions
@@ -7011,6 +7013,9 @@ export const useGameStore = create<GameState>()(
         const catchup = resolveOfflineHydrologyCatchUp({
           initialTowerLiters: currentHydro.towerLiters,
           initialAquiferLiters: currentHydro.aquiferLiters,
+          initialCisternLiters: currentHydro.cisternLiters,
+          cisternMaxLiters: currentHydro.cisternMaxLiters || 1200,
+          aquiferCapacityLiters: currentHydro.aquiferCapacityLiters || 3000,
           elapsedOfflineSeconds: elapsedSeconds,
           isSluiceOpen: currentHydro.sluiceGatesOpen,
           sluiceDischargeRateLps: currentHydro.liveDischargeLitersPerSec || 1.5,
@@ -7018,12 +7023,15 @@ export const useGameStore = create<GameState>()(
           activeWorkerCount: activeWorkers,
           hasEmergencySiphon: Boolean(loadout.emergencySiphonInstalled),
           hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+          siphonMode: currentHydro.siphonMode || 'continuous',
+          siphonSourcePreference: currentHydro.siphonSourcePreference || 'smart_highest',
         });
 
         const updatedHydro = {
           ...currentHydro,
           towerLiters: catchup.finalTowerLiters,
           aquiferLiters: catchup.finalAquiferLiters,
+          cisternLiters: catchup.finalCisternLiters !== undefined ? catchup.finalCisternLiters : currentHydro.cisternLiters,
           totalSiphonedLiters: (currentHydro.totalSiphonedLiters || 0) + catchup.totalSiphonedLiters,
           loadSheddingStage: catchup.stageReached,
           isCropConservationActive: catchup.stageReached >= 1,
@@ -7456,6 +7464,9 @@ export const useGameStore = create<GameState>()(
           const offlineCatchup = resolveOfflineHydrologyCatchUp({
             initialTowerLiters: currentHydrology.towerLiters,
             initialAquiferLiters: currentHydrology.aquiferLiters,
+            initialCisternLiters: currentHydrology.cisternLiters,
+            cisternMaxLiters: currentHydrology.cisternMaxLiters || 1200,
+            aquiferCapacityLiters: currentHydrology.aquiferCapacityLiters || 3000,
             elapsedOfflineSeconds,
             isSluiceOpen: currentHydrology.sluiceGatesOpen,
             sluiceDischargeRateLps: currentHydrology.liveDischargeLitersPerSec || 1.5,
@@ -7464,12 +7475,16 @@ export const useGameStore = create<GameState>()(
             hasEmergencySiphon: Boolean(workshopLoadout.emergencySiphonInstalled),
             hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
             siphonMode: currentHydrology.siphonMode || 'continuous',
+            siphonSourcePreference: currentHydrology.siphonSourcePreference || 'smart_highest',
             towerCapacityLiters: currentHydrology.towerCapacityLiters || 800,
           });
 
           offlineHydrologyReportToSet = offlineCatchup;
           currentHydrology.towerLiters = offlineCatchup.finalTowerLiters;
           currentHydrology.aquiferLiters = offlineCatchup.finalAquiferLiters;
+          if (offlineCatchup.finalCisternLiters !== undefined) {
+            currentHydrology.cisternLiters = offlineCatchup.finalCisternLiters;
+          }
           currentHydrology.totalSiphonedLiters = (currentHydrology.totalSiphonedLiters || 0) + offlineCatchup.totalSiphonedLiters;
           currentHydrology.loadSheddingStage = offlineCatchup.stageReached;
           currentHydrology.isCropConservationActive = offlineCatchup.stageReached >= 1;
@@ -7487,19 +7502,26 @@ export const useGameStore = create<GameState>()(
           aquiferCapacityLiters: Math.max(currentHydrology.aquiferCapacityLiters || 3000, targetAquifer),
         };
 
-        // Real-Time Emergency Siphon Float Valve simulation
+        // Real-Time Siphon Float Valve simulation (Smart Dual-Intake Manifold)
         const hasEmergencySiphon = Boolean(workshopLoadout.emergencySiphonInstalled);
         const siphonSim = simulateSiphonTick({
           towerLiters: effectiveHydrology.towerLiters,
           towerCapacityLiters: effectiveHydrology.towerCapacityLiters || 800,
           aquiferLiters: effectiveHydrology.aquiferLiters,
+          aquiferCapacityLiters: effectiveHydrology.aquiferCapacityLiters || 3000,
+          cisternLiters: effectiveHydrology.cisternLiters,
+          cisternMaxLiters: effectiveHydrology.cisternMaxLiters || 1200,
           deltaSeconds,
           hasEmergencySiphon,
           siphonMode: effectiveHydrology.siphonMode || 'continuous',
+          siphonSourcePreference: effectiveHydrology.siphonSourcePreference || 'smart_highest',
         });
         effectiveHydrology.towerLiters = siphonSim.newTowerLiters;
         effectiveHydrology.aquiferLiters = siphonSim.newAquiferLiters;
+        effectiveHydrology.cisternLiters = siphonSim.newCisternLiters;
         effectiveHydrology.isSiphonActive = siphonSim.isSiphonActive;
+        effectiveHydrology.siphonActiveSource = siphonSim.siphonActiveSource;
+        effectiveHydrology.siphonSourceBreakdown = siphonSim.siphonSourceBreakdown;
         if (siphonSim.siphonedLiters > 0) {
           effectiveHydrology.totalSiphonedLiters = (effectiveHydrology.totalSiphonedLiters || 0) + siphonSim.siphonedLiters;
         }
@@ -9330,6 +9352,9 @@ export const useGameStore = create<GameState>()(
           offlineHydrologyReport = resolveOfflineHydrologyCatchUp({
             initialTowerLiters: currentHydro.towerLiters,
             initialAquiferLiters: currentHydro.aquiferLiters,
+            initialCisternLiters: currentHydro.cisternLiters,
+            cisternMaxLiters: currentHydro.cisternMaxLiters || 1200,
+            aquiferCapacityLiters: currentHydro.aquiferCapacityLiters || 3000,
             elapsedOfflineSeconds: elapsedSec,
             isSluiceOpen: currentHydro.sluiceGatesOpen,
             sluiceDischargeRateLps: currentHydro.liveDischargeLitersPerSec || 1.5,
@@ -9337,10 +9362,16 @@ export const useGameStore = create<GameState>()(
             activeWorkerCount: activeWorkers,
             hasEmergencySiphon: Boolean(loadout.emergencySiphonInstalled),
             hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+            siphonMode: currentHydro.siphonMode || 'continuous',
+            siphonSourcePreference: currentHydro.siphonSourcePreference || 'smart_highest',
+            towerCapacityLiters: currentHydro.towerCapacityLiters || 800,
           });
 
           hydroOffline.updatedHydrology.towerLiters = offlineHydrologyReport.finalTowerLiters;
           hydroOffline.updatedHydrology.aquiferLiters = offlineHydrologyReport.finalAquiferLiters;
+          if (offlineHydrologyReport.finalCisternLiters !== undefined) {
+            hydroOffline.updatedHydrology.cisternLiters = offlineHydrologyReport.finalCisternLiters;
+          }
           hydroOffline.updatedHydrology.totalSiphonedLiters = (hydroOffline.updatedHydrology.totalSiphonedLiters || 0) + offlineHydrologyReport.totalSiphonedLiters;
           hydroOffline.updatedHydrology.loadSheddingStage = offlineHydrologyReport.stageReached;
           hydroOffline.updatedHydrology.isCropConservationActive = offlineHydrologyReport.stageReached >= 1;
@@ -10612,6 +10643,46 @@ export const useGameStore = create<GameState>()(
         } else {
           state.addNotification('🛡️ Siphon Valve: Emergency Reserve Mode Active (activates only when tower ≤ 80L).', '🛡️', 'info');
         }
+      },
+
+      cycleSiphonSourcePreference: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const currentPref = currentHydro.siphonSourcePreference || 'smart_highest';
+        const nextPref: 'smart_highest' | 'cistern' | 'aquifer' =
+          currentPref === 'smart_highest'
+            ? 'cistern'
+            : currentPref === 'cistern'
+            ? 'aquifer'
+            : 'smart_highest';
+
+        set({
+          hydrology: {
+            ...currentHydro,
+            siphonSourcePreference: nextPref,
+          },
+          isDirty: true,
+        });
+
+        if (nextPref === 'smart_highest') {
+          state.addNotification('🔄 Siphon Manifold: Smart Auto Mode (Draws from whichever reservoir has higher water level %)!', '💧', 'discovery');
+        } else if (nextPref === 'cistern') {
+          state.addNotification('🌧️ Siphon Manifold: Rain Cistern Priority (Prioritizes surface rain catchment).', '🌧️', 'info');
+        } else {
+          state.addNotification('🚰 Siphon Manifold: Deep Aquifer Priority (Prioritizes deep subterranean aquifer).', '🚰', 'info');
+        }
+      },
+
+      setSiphonSourcePreference: (preference: 'smart_highest' | 'cistern' | 'aquifer') => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        set({
+          hydrology: {
+            ...currentHydro,
+            siphonSourcePreference: preference,
+          },
+          isDirty: true,
+        });
       },
 
       setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => {

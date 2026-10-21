@@ -50,6 +50,7 @@ export function WaterTab() {
     workshopLoadout,
     installEmergencySiphonValve,
     toggleSiphonMode,
+    cycleSiphonSourcePreference,
     barn,
   } = useGameStore();
 
@@ -104,6 +105,9 @@ export function WaterTab() {
 
   const hasEmergencySiphon = Boolean(workshopLoadout?.emergencySiphonInstalled);
   const siphonMode = hydro?.siphonMode || 'continuous';
+  const siphonSourcePreference = hydro?.siphonSourcePreference || 'smart_highest';
+  const siphonActiveSource = hydro?.siphonActiveSource;
+  const isSiphonActive = Boolean(hydro?.isSiphonActive);
   const siphonInBag = barn?.emergency_siphon_valve || 0;
 
   const handleShutoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,7 +143,7 @@ export function WaterTab() {
               )}
             </div>
             <p className="text-xs text-sky-100 dark:text-cyan-200/90 mt-1 font-medium">
-              Real-time Fluid Dynamics • Gravity-Fed Irrigation • Mass Conservation • Aquifer Siphon Protection
+              Real-time Fluid Dynamics • Gravity-Fed Irrigation • Mass Conservation • Smart Dual-Intake Siphon
             </p>
           </div>
         </div>
@@ -182,8 +186,8 @@ export function WaterTab() {
         <GravityTowerWidget />
       </div>
 
-      {/* Dedicated Emergency Siphon Float Valve Quick Install Banner */}
-      <div className="p-4 sm:p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border border-sky-200/80 dark:border-cyan-800/60 shadow-md hover:shadow-lg transition-all flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Dedicated Smart Siphon Dual-Intake Manifold Banner */}
+      <div className="p-4 sm:p-5 rounded-3xl bg-white/90 dark:bg-stone-900/90 backdrop-blur-md border border-sky-200/80 dark:border-cyan-800/60 shadow-md hover:shadow-lg transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-400 to-cyan-500 text-white flex items-center justify-center text-2xl shadow-md shadow-sky-500/20 shrink-0">
             🚰
@@ -191,18 +195,25 @@ export function WaterTab() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-black text-stone-900 dark:text-white uppercase tracking-wider">
-                Aquifer Siphon Feed Valve
+                Smart Siphon Dual-Intake Manifold
               </span>
               {hasEmergencySiphon ? (
-                siphonMode === 'continuous' ? (
-                  <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 border border-cyan-400 font-bold flex items-center gap-1 animate-pulse">
-                    <span>⚡</span> Continuous Artesian Feed Active (+2.0 L/s)
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-600 font-bold flex items-center gap-1">
-                    <span>🛡️</span> Emergency Reserve Only (≤80L)
-                  </span>
-                )
+                <>
+                  {siphonMode === 'continuous' ? (
+                    <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 border border-cyan-400 font-bold flex items-center gap-1 animate-pulse">
+                      <span>⚡</span> Continuous Artesian Feed (+2.0 L/s)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-600 font-bold flex items-center gap-1">
+                      <span>🛡️</span> Emergency Reserve Only (≤80L)
+                    </span>
+                  )}
+                  {isSiphonActive && (
+                    <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/80 text-blue-900 dark:text-blue-200 border border-blue-400 font-extrabold flex items-center gap-1 shadow-xs">
+                      <span>💧</span> Active Intake: {siphonActiveSource === 'cistern' ? '🌧️ Rain Cistern (Higher %)' : '🚰 Deep Groundwater'}
+                    </span>
+                  )}
+                </>
               ) : (
                 <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-600 font-bold animate-pulse flex items-center gap-1">
                   <span>⚠️</span> Standby: Not Installed
@@ -210,16 +221,35 @@ export function WaterTab() {
               )}
             </div>
             <p className="text-xs text-stone-600 dark:text-stone-300 mt-1 leading-relaxed">
-              {hasEmergencySiphon && siphonMode === 'continuous'
-                ? 'Continuously siphoning clean groundwater (+2.0 L/s) from Deep Aquifer to keep Gravity Tower pressurized and properly supplied at all times.'
-                : 'Automatically draws 2.0 L/s groundwater from Deep Aquifer to keep Gravity Tower pressurized whenever volume drops ≤ 80L (refilling up to 200L).'}
+              {hasEmergencySiphon
+                ? (siphonSourcePreference === 'smart_highest'
+                    ? `🔄 Smart Auto-Intake: Draws automatically from whichever reservoir is higher (${cisternPct}% Cistern vs ${aquiferDepthPct}% Aquifer) to prioritize collected rainwater and prevent groundwater depletion.`
+                    : siphonSourcePreference === 'cistern'
+                    ? `🌧️ Cistern Priority: Prioritizes surface rainwater (${cisternPct}% full) into the tower before tapping the groundwater aquifer.`
+                    : `🚰 Aquifer Priority: Prioritizes subterranean groundwater (${aquiferDepthPct}% full) via deep artesian vacuum.`)
+                : 'Automatically siphons 2.0 L/s from whichever reservoir has the higher water level to keep the Gravity Tower pressurized and crops hydrated.'}
             </p>
           </div>
         </div>
 
         <div className="shrink-0 flex items-center gap-2 flex-wrap">
           {hasEmergencySiphon ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => cycleSiphonSourcePreference()}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs bg-sky-50 hover:bg-sky-100 dark:bg-stone-800 dark:hover:bg-stone-700 border-sky-300 dark:border-stone-700 text-sky-900 dark:text-cyan-200"
+                title="Click to change siphon intake source: Smart Auto (Highest Level %) | Cistern Priority | Deep Aquifer Priority"
+              >
+                <span>
+                  {siphonSourcePreference === 'smart_highest'
+                    ? '🔄 Intake: Smart Auto (Highest %)'
+                    : siphonSourcePreference === 'cistern'
+                    ? '🌧️ Intake: Cistern Priority'
+                    : '🚰 Intake: Deep Aquifer'}
+                </span>
+                <span className="text-[10px] opacity-75 font-normal">(Change)</span>
+              </button>
               <button
                 type="button"
                 onClick={() => toggleSiphonMode()}
@@ -228,9 +258,9 @@ export function WaterTab() {
                     ? 'bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-950/70 dark:hover:bg-cyan-900 border-cyan-400 text-cyan-900 dark:text-cyan-200'
                     : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
                 }`}
-                title="Toggle between Continuous Artesian Inflow vs Emergency Reserve (≤80L only)"
+                title="Toggle between Continuous Feed vs Emergency Reserve (≤80L only)"
               >
-                <span>{siphonMode === 'continuous' ? '⚡ Mode: Continuous Feed' : '🛡️ Mode: Emergency (≤80L)'}</span>
+                <span>{siphonMode === 'continuous' ? '⚡ Continuous' : '🛡️ Emergency'}</span>
                 <span className="text-[10px] opacity-75 font-normal">(Switch)</span>
               </button>
             </div>

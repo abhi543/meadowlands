@@ -370,6 +370,9 @@ export interface HydrologyState {
   siphonTransferRateLps?: number;
   totalSiphonedLiters?: number;
   siphonMode?: 'continuous' | 'emergency';
+  siphonSourcePreference?: 'smart_highest' | 'cistern' | 'aquifer';
+  siphonActiveSource?: 'cistern' | 'aquifer' | null;
+  siphonSourceBreakdown?: { fromCistern: number; fromAquifer: number };
   
   // G. Automated Hydraulic Rule: Full-Reserve Pressure Surge
   isOverflowSurgeActive?: boolean;
@@ -460,6 +463,10 @@ export function createDefaultHydrologyState(farmLevel: number = 1): HydrologySta
     isSiphonActive: false,
     siphonTransferRateLps: 0,
     totalSiphonedLiters: 0,
+    siphonMode: 'continuous',
+    siphonSourcePreference: 'smart_highest',
+    siphonActiveSource: null,
+    siphonSourceBreakdown: { fromCistern: 0, fromAquifer: 0 },
 
     isOverflowSurgeActive: false,
     overflowSurgeSource: null,

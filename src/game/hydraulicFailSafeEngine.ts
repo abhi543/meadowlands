@@ -222,39 +222,62 @@ export function calculateHydraulicConsumers(params: {
 }
 
 /**
- * Simulates real-time Emergency Siphon Float Valve dynamics.
- * Opens automatically when tower <= 80L, pulls from Deep Aquifer until tower reaches 200L or aquifer hits 0L.
+ * Simulates real-time Siphon Float Valve dynamics.
+ * Supports Smart Dual-Intake Manifold: automatically draws from whichever reservoir
+ * has a higher water level percentage (Rain Catchment Cistern vs Deep Groundwater Aquifer),
+ * or follows player preference ('smart_highest' | 'cistern' | 'aquifer') with seamless failover.
  */
 export function simulateSiphonTick(params: {
   towerLiters: number;
   towerCapacityLiters?: number;
   aquiferLiters: number;
+  aquiferCapacityLiters?: number;
+  cisternLiters?: number;
+  cisternMaxLiters?: number;
   deltaSeconds: number;
   hasEmergencySiphon: boolean;
   trickleRateLps?: number;
   siphonMode?: 'continuous' | 'emergency';
+  siphonSourcePreference?: 'smart_highest' | 'cistern' | 'aquifer';
 }): {
   newTowerLiters: number;
   newAquiferLiters: number;
+  newCisternLiters: number;
   siphonedLiters: number;
   isSiphonActive: boolean;
+  siphonActiveSource: 'cistern' | 'aquifer' | null;
+  siphonSourceBreakdown: {
+    fromCistern: number;
+    fromAquifer: number;
+  };
 } {
   const {
     towerLiters,
     towerCapacityLiters = ELEVATED_TOWER_CAPACITY,
     aquiferLiters,
+    aquiferCapacityLiters = 3000,
+    cisternLiters = 0,
+    cisternMaxLiters = 1200,
     deltaSeconds,
     hasEmergencySiphon,
     trickleRateLps = 2.0,
     siphonMode = 'continuous',
+    siphonSourcePreference = 'smart_highest',
   } = params;
 
-  if (!hasEmergencySiphon || aquiferLiters <= 0) {
+  const currentAquifer = Math.max(0, aquiferLiters);
+  const currentCistern = Math.max(0, cisternLiters);
+  const totalAvailable = currentAquifer + currentCistern;
+
+  if (!hasEmergencySiphon || totalAvailable <= 0) {
     return {
       newTowerLiters: towerLiters,
-      newAquiferLiters: aquiferLiters,
+      newAquiferLiters: currentAquifer,
+      newCisternLiters: currentCistern,
       siphonedLiters: 0,
       isSiphonActive: false,
+      siphonActiveSource: null,
+      siphonSourceBreakdown: { fromCistern: 0, fromAquifer: 0 },
     };
   }
 
@@ -270,30 +293,98 @@ export function simulateSiphonTick(params: {
   if (!shouldSiphon) {
     return {
       newTowerLiters: towerLiters,
-      newAquiferLiters: aquiferLiters,
+      newAquiferLiters: currentAquifer,
+      newCisternLiters: currentCistern,
       siphonedLiters: 0,
       isSiphonActive: false,
+      siphonActiveSource: null,
+      siphonSourceBreakdown: { fromCistern: 0, fromAquifer: 0 },
     };
   }
 
   const requestedTransfer = trickleRateLps * deltaSeconds;
   const towerDeficit = Math.max(0, targetCeiling - towerLiters);
-  const actualTransfer = Math.min(requestedTransfer, aquiferLiters, towerDeficit);
+  const transferNeeded = Math.min(requestedTransfer, totalAvailable, towerDeficit);
 
-  if (actualTransfer <= 0) {
+  if (transferNeeded <= 0) {
     return {
       newTowerLiters: towerLiters,
-      newAquiferLiters: aquiferLiters,
+      newAquiferLiters: currentAquifer,
+      newCisternLiters: currentCistern,
       siphonedLiters: 0,
       isSiphonActive: false,
+      siphonActiveSource: null,
+      siphonSourceBreakdown: { fromCistern: 0, fromAquifer: 0 },
     };
   }
 
+  // --- Dynamic Level Determination & Priority Routing ---
+  const cisternPct = cisternMaxLiters > 0 ? (currentCistern / cisternMaxLiters) : 0;
+  const aquiferPct = aquiferCapacityLiters > 0 ? (currentAquifer / aquiferCapacityLiters) : 0;
+
+  let primary: 'cistern' | 'aquifer';
+  let secondary: 'cistern' | 'aquifer';
+
+  if (siphonSourcePreference === 'cistern') {
+    primary = currentCistern > 0 ? 'cistern' : 'aquifer';
+    secondary = 'aquifer';
+  } else if (siphonSourcePreference === 'aquifer') {
+    primary = currentAquifer > 0 ? 'aquifer' : 'cistern';
+    secondary = 'cistern';
+  } else {
+    // 'smart_highest': automatically select reservoir with higher relative water fullness
+    if (cisternPct >= aquiferPct) {
+      primary = currentCistern > 0 ? 'cistern' : 'aquifer';
+      secondary = 'aquifer';
+    } else {
+      primary = currentAquifer > 0 ? 'aquifer' : 'cistern';
+      secondary = 'cistern';
+    }
+  }
+
+  let fromCistern = 0;
+  let fromAquifer = 0;
+
+  if (primary === 'cistern') {
+    fromCistern = Math.min(currentCistern, transferNeeded);
+    const remainder = transferNeeded - fromCistern;
+    if (remainder > 0 && secondary === 'aquifer') {
+      fromAquifer = Math.min(currentAquifer, remainder);
+    }
+  } else {
+    fromAquifer = Math.min(currentAquifer, transferNeeded);
+    const remainder = transferNeeded - fromAquifer;
+    if (remainder > 0 && secondary === 'cistern') {
+      fromCistern = Math.min(currentCistern, remainder);
+    }
+  }
+
+  const actualTransfer = fromCistern + fromAquifer;
+  if (actualTransfer <= 0) {
+    return {
+      newTowerLiters: towerLiters,
+      newAquiferLiters: currentAquifer,
+      newCisternLiters: currentCistern,
+      siphonedLiters: 0,
+      isSiphonActive: false,
+      siphonActiveSource: null,
+      siphonSourceBreakdown: { fromCistern: 0, fromAquifer: 0 },
+    };
+  }
+
+  const activeSource: 'cistern' | 'aquifer' = fromCistern >= fromAquifer ? 'cistern' : 'aquifer';
+
   return {
     newTowerLiters: Math.round((towerLiters + actualTransfer) * 10) / 10,
-    newAquiferLiters: Math.max(0, Math.round((aquiferLiters - actualTransfer) * 10) / 10),
+    newAquiferLiters: Math.max(0, Math.round((currentAquifer - fromAquifer) * 10) / 10),
+    newCisternLiters: Math.max(0, Math.round((currentCistern - fromCistern) * 10) / 10),
     siphonedLiters: Math.round(actualTransfer * 10) / 10,
     isSiphonActive: true,
+    siphonActiveSource: activeSource,
+    siphonSourceBreakdown: {
+      fromCistern: Math.round(fromCistern * 10) / 10,
+      fromAquifer: Math.round(fromAquifer * 10) / 10,
+    },
   };
 }
 
@@ -461,6 +552,8 @@ export interface OfflineHydrologyResolutionResult {
   finalTowerLiters: number;
   initialAquiferLiters: number;
   finalAquiferLiters: number;
+  initialCisternLiters?: number;
+  finalCisternLiters?: number;
   stageReached: TowerLoadSheddingStage;
   cropConservationEngagedSec: number | null; // seconds into offline period when Stage 1 triggered
   totalSiphonedLiters: number;
@@ -480,13 +573,16 @@ export interface OfflineHydrologyResolutionResult {
  * Computes exact piecewise drain through the 3-Stage Load-Shedding Ladder:
  * - Phase 1: Tower > 200L -> Furrows + Bio-Lab + Crew (Crop growth runs)
  * - Phase 2: Tower 80L..200L -> Crop growth PAUSED, Sluice closed, Bio-Lab + Crew
- * - Siphon draws from Aquifer to refill Tower up to 200L if valve installed
+ * - Siphon draws from whichever reservoir is higher (Rain Cistern vs Aquifer) to refill Tower up to 200L if valve installed
  * - Phase 3: Tower 1L..79L -> Crew rationing, Bio-Lab priority
  * - Phase 4: Tower 0L -> Cryo-Standby engaged, 100% specimen safety within 24h grace window
  */
 export function resolveOfflineHydrologyCatchUp(params: {
   initialTowerLiters: number;
   initialAquiferLiters: number;
+  initialCisternLiters?: number;
+  cisternMaxLiters?: number;
+  aquiferCapacityLiters?: number;
   elapsedOfflineSeconds: number;
   isSluiceOpen: boolean;
   sluiceDischargeRateLps: number;
@@ -495,11 +591,15 @@ export function resolveOfflineHydrologyCatchUp(params: {
   hasEmergencySiphon: boolean;
   hasInsulationSleeves?: boolean;
   siphonMode?: 'continuous' | 'emergency';
+  siphonSourcePreference?: 'smart_highest' | 'cistern' | 'aquifer';
   towerCapacityLiters?: number;
 }): OfflineHydrologyResolutionResult {
   const {
     initialTowerLiters,
     initialAquiferLiters,
+    initialCisternLiters = 0,
+    cisternMaxLiters = 1200,
+    aquiferCapacityLiters = 3000,
     elapsedOfflineSeconds,
     isSluiceOpen,
     sluiceDischargeRateLps,
@@ -508,11 +608,13 @@ export function resolveOfflineHydrologyCatchUp(params: {
     hasEmergencySiphon,
     hasInsulationSleeves = false,
     siphonMode = 'continuous',
+    siphonSourcePreference = 'smart_highest',
     towerCapacityLiters = ELEVATED_TOWER_CAPACITY,
   } = params;
 
   let tower = Math.max(0, initialTowerLiters);
   let aquifer = Math.max(0, initialAquiferLiters);
+  let cistern = Math.max(0, initialCisternLiters);
   let timeLeft = Math.max(0, elapsedOfflineSeconds);
 
   let cropConservationEngagedSec: number | null = null;
@@ -528,7 +630,46 @@ export function resolveOfflineHydrologyCatchUp(params: {
   const R_crew_nominal = activeWorkerCount * 0.015;
   const R_crew_rationed = R_crew_nominal * 0.5;
 
-  const isContinuousSiphon = hasEmergencySiphon && siphonMode !== 'emergency' && aquifer > 0;
+  const totalAvailableSiphon = aquifer + cistern;
+  const isContinuousSiphon = hasEmergencySiphon && siphonMode !== 'emergency' && totalAvailableSiphon > 0;
+
+  // Helper function to draw water from preferred reservoir with fallback
+  const drawSiphonTransfer = (requested: number): number => {
+    if (requested <= 0) return 0;
+    const totalAvail = cistern + aquifer;
+    const toTransfer = Math.min(requested, totalAvail);
+    if (toTransfer <= 0) return 0;
+
+    const cPct = cisternMaxLiters > 0 ? (cistern / cisternMaxLiters) : 0;
+    const aPct = aquiferCapacityLiters > 0 ? (aquifer / aquiferCapacityLiters) : 0;
+    
+    let primary: 'cistern' | 'aquifer' = 'aquifer';
+    if (siphonSourcePreference === 'cistern') {
+      primary = cistern > 0 ? 'cistern' : 'aquifer';
+    } else if (siphonSourcePreference === 'aquifer') {
+      primary = aquifer > 0 ? 'aquifer' : 'cistern';
+    } else {
+      primary = (cPct >= aPct && cistern > 0) ? 'cistern' : 'aquifer';
+    }
+
+    let fromC = 0;
+    let fromA = 0;
+    if (primary === 'cistern') {
+      fromC = Math.min(cistern, toTransfer);
+      const rem = toTransfer - fromC;
+      if (rem > 0) fromA = Math.min(aquifer, rem);
+    } else {
+      fromA = Math.min(aquifer, toTransfer);
+      const rem = toTransfer - fromA;
+      if (rem > 0) fromC = Math.min(cistern, rem);
+    }
+
+    cistern -= fromC;
+    aquifer -= fromA;
+    const drawn = fromC + fromA;
+    totalSiphonedLiters += drawn;
+    return drawn;
+  };
 
   // --- PHASE 1: DRAIN DOWN TO STAGE 1 (200L) ---
   if (tower > STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN && timeLeft > 0) {
@@ -539,9 +680,8 @@ export function resolveOfflineHydrologyCatchUp(params: {
 
     if (R_net_drain <= 0) {
       // Continuous siphon replenishes faster than or equal to drain! Tower stays stable.
-      const transferNeeded = Math.min(aquifer, R_total_1 * timeLeft);
-      aquifer -= transferNeeded;
-      totalSiphonedLiters += transferNeeded;
+      const transferNeeded = R_total_1 * timeLeft;
+      drawSiphonTransfer(transferNeeded);
       tower = Math.min(towerCapacityLiters, tower + (Math.abs(R_net_drain) * timeLeft));
       effectiveCropGrowthSeconds = timeLeft;
       timeLeft = 0;
@@ -550,18 +690,14 @@ export function resolveOfflineHydrologyCatchUp(params: {
       if (timeLeft <= timeToStage1) {
         tower -= timeLeft * R_net_drain;
         if (isContinuousSiphon) {
-          const transferred = Math.min(aquifer, R_siphon * timeLeft);
-          aquifer -= transferred;
-          totalSiphonedLiters += transferred;
+          drawSiphonTransfer(R_siphon * timeLeft);
         }
         effectiveCropGrowthSeconds = timeLeft;
         timeLeft = 0;
       } else {
         tower = STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN;
         if (isContinuousSiphon) {
-          const transferred = Math.min(aquifer, R_siphon * timeToStage1);
-          aquifer -= transferred;
-          totalSiphonedLiters += transferred;
+          drawSiphonTransfer(R_siphon * timeToStage1);
         }
         effectiveCropGrowthSeconds = timeToStage1;
         cropConservationEngagedSec = Math.round(timeToStage1);
@@ -599,27 +735,23 @@ export function resolveOfflineHydrologyCatchUp(params: {
   }
 
   // --- EMERGENCY SIPHON ENGAGEMENT (when tower reaches or is <= 80L) ---
-  if (hasEmergencySiphon && aquifer > 0 && timeLeft > 0 && tower <= STAGE_THRESHOLDS.STAGE_1_CONSERVATION_MIN) {
-    // Siphon pulls from aquifer at 2.0 L/s up to 200L
+  const currentTotalWater = aquifer + cistern;
+  if (hasEmergencySiphon && currentTotalWater > 0 && timeLeft > 0 && tower <= STAGE_THRESHOLDS.STAGE_1_CONSERVATION_MIN) {
     const siphonRate = 2.0;
     const consumptionRate = R_biolab + R_crew_nominal;
     const netFillingRate = siphonRate - consumptionRate;
 
     const towerDeficit = Math.max(0, STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN - tower);
-    const maxTransferPossible = Math.min(aquifer, towerDeficit);
+    const maxTransferPossible = Math.min(currentTotalWater, towerDeficit);
 
     if (maxTransferPossible > 0 && netFillingRate > 0) {
       const timeToRefill = maxTransferPossible / netFillingRate;
       if (timeLeft <= timeToRefill) {
-        const transferred = Math.min(aquifer, timeLeft * siphonRate);
-        aquifer -= transferred;
-        totalSiphonedLiters += transferred;
+        drawSiphonTransfer(timeLeft * siphonRate);
         tower = Math.min(STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN, tower + (timeLeft * netFillingRate));
         timeLeft = 0;
       } else {
-        const transferred = maxTransferPossible;
-        aquifer -= transferred;
-        totalSiphonedLiters += transferred;
+        drawSiphonTransfer(maxTransferPossible);
         tower = STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN;
         timeLeft -= timeToRefill;
 
@@ -657,6 +789,7 @@ export function resolveOfflineHydrologyCatchUp(params: {
   // Final stage
   const finalTowerLiters = Math.max(0, Math.round(tower * 10) / 10);
   const finalAquiferLiters = Math.max(0, Math.round(aquifer * 10) / 10);
+  const finalCisternLiters = Math.max(0, Math.round(cistern * 10) / 10);
   const stageReached = getTowerLoadSheddingStage(finalTowerLiters);
   const isCryoStandbyActive = stageReached === 3;
 
@@ -669,6 +802,8 @@ export function resolveOfflineHydrologyCatchUp(params: {
     finalTowerLiters,
     initialAquiferLiters,
     finalAquiferLiters,
+    initialCisternLiters,
+    finalCisternLiters,
     stageReached,
     cropConservationEngagedSec,
     totalSiphonedLiters: Math.round(totalSiphonedLiters * 10) / 10,
