@@ -678,7 +678,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 }
               }}
               onClick={handlePlotClick}
-              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses}`}
+              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses} ${
+                plot.gases?.hasAnyPenalty
+                  ? 'ring-2 ring-yellow-400 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.75)] animate-pulse'
+                  : ''
+              }`}
             >
               {/* Crisis Overlay 0: Crop Blight */}
               {hasBlight ? (
@@ -758,6 +762,53 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                       <span className="text-[9px] animate-pulse" title="Root Rot: Yield halved (-50%)!">🪱</span>
                     )}
                   </div>
+
+                  {/* Gas Metric Penalty Flash Alert (Yellow alert when any gas enters penalty zone) */}
+                  {plot.gases?.hasAnyPenalty && (
+                    <div
+                      className="absolute top-5 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded bg-yellow-500/30 border border-yellow-400 text-yellow-300 text-[7px] sm:text-[8px] font-black animate-pulse z-20 shadow-xs"
+                      title={
+                        plot.gases.isAnoxiaSuffocated
+                          ? 'Root Anoxia / Suffocation: Crop timer completely paused!'
+                          : plot.gases.isParchedDoubleDrain
+                          ? 'Parched Ground: Crop water consumption doubled!'
+                          : plot.gases.isPenaltyNitrogen
+                          ? 'Low Nitrogen: 1x Harvest yield penalty!'
+                          : 'Gas Penalty Alert'
+                      }
+                    >
+                      <span>⚠️</span>
+                      <span>
+                        {plot.gases.isAnoxiaSuffocated
+                          ? 'Anoxia'
+                          : plot.gases.isParchedDoubleDrain
+                          ? 'Parched'
+                          : plot.gases.isPenaltyNitrogen
+                          ? 'Low N'
+                          : 'Gas Alert'}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Mini Dynamic Gas Meter Live Indicator Strip */}
+                  {plot.gases && (
+                    <div
+                      className="absolute top-5 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded bg-stone-950/85 backdrop-blur-xs border border-stone-700/80 text-[7px] sm:text-[8px] font-mono z-15 pointer-events-none select-none text-stone-300 shadow-2xs"
+                      title={`Dynamic Atmospheric Gases:\nCO₂: ${plot.gases.co2}% ${plot.gases.co2Arrow} (${plot.gases.co2BreakdownText})\nO₂:  ${plot.gases.o2}% ${plot.gases.o2Arrow} (${plot.gases.o2BreakdownText})\nN:   ${plot.gases.nitrogen}% ${plot.gases.nitrogenArrow} (${plot.gases.nitrogenBreakdownText})`}
+                    >
+                      <span className={plot.gases.isPenaltyCo2 ? 'text-yellow-400 font-bold' : plot.gases.co2 > 60 ? 'text-emerald-300 font-bold' : ''}>
+                        C{plot.gases.co2}%{plot.gases.co2Arrow}
+                      </span>
+                      <span className="text-stone-600">·</span>
+                      <span className={plot.gases.isPenaltyO2 ? 'text-yellow-400 font-bold' : ''}>
+                        O{plot.gases.o2}%{plot.gases.o2Arrow}
+                      </span>
+                      <span className="text-stone-600">·</span>
+                      <span className={plot.gases.isPenaltyNitrogen ? 'text-yellow-400 font-bold' : plot.gases.nitrogen >= 70 ? 'text-teal-300 font-bold' : ''}>
+                        N{plot.gases.nitrogen}%{plot.gases.nitrogenArrow}
+                      </span>
+                    </div>
+                  )}
 
                   {/* 3-Color Soil Battery Persistent Mini-Bar (Floating Plot Meter) */}
                   <div
@@ -1225,6 +1276,95 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     <span>{soilTier.emoji}</span>
                     <span>L{plotLevel}</span>
                   </button>
+
+                  {/* Dynamic Gas Tick Live Hover Inspection Card */}
+                  {isHovered && plot.gases && (
+                    <div
+                      className={`absolute inset-x-1 bottom-1 z-50 bg-stone-950/95 border-2 rounded-xl p-2 shadow-2xl backdrop-blur-md pointer-events-none select-none text-left animate-in fade-in zoom-in-95 duration-100 ${
+                        plot.gases.hasAnyPenalty
+                          ? 'border-yellow-400 shadow-[0_0_18px_rgba(250,204,21,0.65)]'
+                          : 'border-amber-400/80 shadow-black/80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between pb-1 mb-1 border-b border-stone-800">
+                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                          <span>💨</span> Gas Tick Cycle
+                        </span>
+                        {plot.gases.hasAnyPenalty ? (
+                          <span className="px-1.5 py-0.2 rounded bg-yellow-400 text-stone-950 text-[8px] font-black animate-pulse flex items-center gap-0.5">
+                            <span>⚠️</span> PENALTY ZONE
+                          </span>
+                        ) : (
+                          <span className="text-[8px] font-mono text-emerald-400 font-bold">
+                            LIVE
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Metric lines with dynamic live arrows and active modifiers */}
+                      <div className="space-y-0.5 font-mono text-[9px] sm:text-[10px] leading-tight">
+                        {/* Carbon Dioxide */}
+                        <div className={`flex items-center justify-between gap-1 ${
+                          plot.gases.isPenaltyCo2 ? 'text-yellow-300 font-bold' : plot.gases.co2 > 60 ? 'text-emerald-300' : 'text-stone-200'
+                        }`}>
+                          <span className="font-bold">CO₂: {plot.gases.co2}% {plot.gases.co2Arrow}</span>
+                          <span className="text-[8px] sm:text-[9px] text-stone-300 font-sans truncate">
+                            ({plot.gases.co2BreakdownText})
+                          </span>
+                        </div>
+
+                        {/* Oxygen */}
+                        <div className={`flex items-center justify-between gap-1 ${
+                          plot.gases.isPenaltyO2 ? 'text-yellow-300 font-bold' : 'text-cyan-300'
+                        }`}>
+                          <span className="font-bold">O₂:  {plot.gases.o2}% {plot.gases.o2Arrow}</span>
+                          <span className="text-[8px] sm:text-[9px] text-stone-300 font-sans truncate">
+                            ({plot.gases.o2BreakdownText})
+                          </span>
+                        </div>
+
+                        {/* Nitrogen */}
+                        <div className={`flex items-center justify-between gap-1 ${
+                          plot.gases.isPenaltyNitrogen ? 'text-yellow-300 font-bold' : plot.gases.nitrogen >= 70 ? 'text-teal-300' : 'text-stone-200'
+                        }`}>
+                          <span className="font-bold">N:   {plot.gases.nitrogen}% {plot.gases.nitrogenArrow}</span>
+                          <span className="text-[8px] sm:text-[9px] text-stone-300 font-sans truncate">
+                            ({plot.gases.nitrogenBreakdownText})
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Net Gameplay Output Summary */}
+                      <div className="mt-1 pt-1 border-t border-stone-800 text-[8px] leading-tight">
+                        {plot.gases.isAnoxiaSuffocated ? (
+                          <div className="text-yellow-300 font-black flex items-center gap-1 animate-pulse">
+                            <span>🛑</span>
+                            <span>Root Anoxia — Crop timer paused!</span>
+                          </div>
+                        ) : plot.gases.isParchedDoubleDrain ? (
+                          <div className="text-yellow-300 font-black flex items-center gap-1">
+                            <span>🔥</span>
+                            <span>Parched Ground — 2x water drain!</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between text-stone-400">
+                            <span>
+                              {plot.gases.growthSpeedMultiplier > 1 ? (
+                                <strong className="text-emerald-300">
+                                  ⚡ Boosted (+{((plot.gases.growthSpeedMultiplier - 1) * 100).toFixed(0)}% spd)
+                                </strong>
+                              ) : (
+                                'Standard Speed'
+                              )}
+                            </span>
+                            <span className="font-mono text-teal-300 font-bold">
+                              {plot.gases.nitrogenYieldMultiplier}x Harvest Yield
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

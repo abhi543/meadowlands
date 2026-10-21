@@ -71,6 +71,12 @@ import {
   rechargeSoilBatteryFull,
 } from '@/game/soilEnergyEngine';
 import {
+  type PlotGasState,
+  createDefaultPlotGases,
+  stepPlotGasSimulation,
+  applyHarvestGasModifiers,
+} from '@/game/gasTickEngine';
+import {
   type ZoneEcosystemData,
   createDefaultZoneEcosystem,
   isZoneFishingPaused,
@@ -401,6 +407,8 @@ export interface PlotState {
   // Soil Battery Energy System (Module 1: Agronomy)
   soilBattery?: PlotSoilBattery;
   plantedInDepletedSoil?: boolean;
+  // Dynamic Soil Atmospheric Gas System (CO2, O2, Nitrogen)
+  gases?: PlotGasState;
 }
 
 export interface AnimalInstance {
@@ -1336,6 +1344,7 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
   hasRootRot: false,
   soilBattery: { green: true, yellow: true, red: true },
   plantedInDepletedSoil: false,
+  gases: createDefaultPlotGases(),
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -1815,14 +1824,33 @@ export const useGameStore = create<GameState>()(
         const baseTotalYield = isDepletedPenalty
           ? 1 // Depleted soil penalty: drops to 1x harvest
           : (cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity);
+
+        // Dynamic Gas System: Nitrogen Yield Tier (70-100%: 3x, 35-69%: 2x, 0-34%: 1x)
+        const plotNitrogen = plot.gases?.nitrogen ?? 85;
+        const nitrogenTierMultiplier = plotNitrogen >= 70 ? 3 : (plotNitrogen >= 35 ? 2 : 1);
+        const nitrogenYield = isDepletedPenalty
+          ? 1
+          : Math.max(1, Math.round(baseTotalYield * (nitrogenTierMultiplier / 3)));
+
         const qualityAdjusted = isDepletedPenalty
           ? 1
-          : Math.max(1, Math.round(baseTotalYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
+          : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
         const totalYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
 
         // Soil Battery Energy Update (Consumption or Restorative Legume Recharge)
         const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
         const newBattery = batteryRes.newBattery;
+
+        // Dynamic Gas System: Post-Harvest Gas Modifiers (Heavy Feeder -35% N, Legume +50% N, Root +20% O2)
+        const gasMods = applyHarvestGasModifiers(plot.crop, plot.gases);
+        const postHarvestGases: PlotGasState = {
+          ...(plot.gases || createDefaultPlotGases()),
+          o2: gasMods.newO2,
+          nitrogen: gasMods.newNitrogen,
+        };
+        if (gasMods.notificationMsg) {
+          state.addNotification(gasMods.notificationMsg, '💨', 'discovery');
+        }
 
         // Deposit into dedicated quality-tier slot in Silo if silver/gold/prismatic
         const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
@@ -1857,6 +1885,7 @@ export const useGameStore = create<GameState>()(
           isMonoculture: false,
           soilBattery: newBattery,
           plantedInDepletedSoil: false,
+          gases: postHarvestGases,
         };
 
         if (isDepletedPenalty) {
@@ -2060,15 +2089,31 @@ export const useGameStore = create<GameState>()(
             const singleYield = isDepletedPenalty
               ? 1
               : (cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity);
+
+            // Dynamic Gas System: Nitrogen Yield Tier (70-100%: 3x, 35-69%: 2x, 0-34%: 1x)
+            const plotNitrogen = plot.gases?.nitrogen ?? 85;
+            const nitrogenTierMultiplier = plotNitrogen >= 70 ? 3 : (plotNitrogen >= 35 ? 2 : 1);
+            const nitrogenYield = isDepletedPenalty
+              ? 1
+              : Math.max(1, Math.round(singleYield * (nitrogenTierMultiplier / 3)));
+
             const qualityAdjusted = isDepletedPenalty
               ? 1
-              : Math.max(1, Math.round(singleYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
+              : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
             const plotYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (!isDepletedPenalty ? (bonus + soilTier.bonusYield) : 0);
 
             // Soil battery energy update
             const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
             const newBattery = batteryRes.newBattery;
+
+            // Dynamic Gas System: Post-Harvest Gas Modifiers
+            const gasMods = applyHarvestGasModifiers(plot.crop, plot.gases);
+            const postHarvestGases: PlotGasState = {
+              ...(plot.gases || createDefaultPlotGases()),
+              o2: gasMods.newO2,
+              nitrogen: gasMods.newNitrogen,
+            };
 
             const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
             newSilo[harvestItemKey] = (newSilo[harvestItemKey] || 0) + plotYield;
@@ -2100,6 +2145,7 @@ export const useGameStore = create<GameState>()(
               isMonoculture: false,
               soilBattery: newBattery,
               plantedInDepletedSoil: false,
+              gases: postHarvestGases,
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -2195,6 +2241,10 @@ export const useGameStore = create<GameState>()(
           ...plot,
           soilBattery: rechargeSoilBatteryFull(),
           plantedInDepletedSoil: false, // Compost instantly revitalizes tired crops too!
+          gases: {
+            ...(plot.gases || createDefaultPlotGases()),
+            nitrogen: 100, // Organic Manure / Compost Applied: Instantly sets to 100%
+          },
         };
 
         set({
@@ -2231,6 +2281,10 @@ export const useGameStore = create<GameState>()(
               ...plot,
               soilBattery: rechargeSoilBatteryFull(),
               plantedInDepletedSoil: false,
+              gases: {
+                ...(plot.gases || createDefaultPlotGases()),
+                nitrogen: 100,
+              },
             };
             rechargedCount++;
           }
@@ -2345,6 +2399,10 @@ export const useGameStore = create<GameState>()(
           isWithered: false,
           hasRootRot: false,
           isMonoculture: false,
+          gases: {
+            ...(plot.gases || createDefaultPlotGases()),
+            o2: 60, // Tilling Action (Tool use): Instantly restores to 60%
+          },
         };
 
         playFloodWashSound();
@@ -2429,6 +2487,11 @@ export const useGameStore = create<GameState>()(
           waterloggedSeconds: 0,
           moistureLevel: Math.max(85, plot.moistureLevel !== undefined ? plot.moistureLevel : 85),
           isWatered: true,
+          gases: {
+            ...(plot.gases || createDefaultPlotGases()),
+            nitrogen: 100,
+            o2: 60,
+          },
         };
 
         playBioDressingSound();
@@ -7943,10 +8006,33 @@ export const useGameStore = create<GameState>()(
             (workshopLoadout.sluiceGateSealsInstalled || 0) >= 2
           );
 
-          // Soil Battery dynamic checks for all plots:
-          // Rule 2: Heatwave Battery Burnout
-          // Evaporation rate triples: Plot water requirement jumps from 1x to 3x per cycle.
-          // If water is not supplied via the Gravity Tower, plot batteries burn out twice as fast and turn into depleted ⚪ hollow rings.
+          // Step Dynamic Gas Simulation for every plot
+          const cropProgress = (p.crop && p.plantedAt && !p.ready)
+            ? Math.min(1.0, (now - p.plantedAt) / ((CROPS[p.crop]?.growTimeSec || 60) * 1000))
+            : 0;
+
+          const currentGases = stepPlotGasSimulation(
+            {
+              crop: p.crop,
+              ready: p.ready,
+              moistureLevel: p.moistureLevel,
+              cropProgress,
+              currentGases: p.gases,
+            },
+            {
+              activeWeatherId,
+              isRainstormActive: state.activeEvent?.type === 'rainstorm',
+              hasAnimalsOrCompost: (state.animals && state.animals.length > 0) || ((state.barn?.organic_compost || 0) + (state.barn?.compost || 0) + (state.barn?.manure || 0)) > 0,
+              deltaSeconds,
+            }
+          );
+
+          // Oxygen Above 85%: "Parched Ground" — Crop water consumption doubles
+          let currentMoisture = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
+          if (currentGases.isParchedDoubleDrain && p.crop && !p.ready) {
+            currentMoisture = Math.max(0, currentMoisture - (0.35 * deltaSeconds));
+          }
+
           let currentBattery = p.soilBattery || { green: true, yellow: true, red: true };
           const isHeatHazard = activeWeatherId === 'heatwave' || activeWeatherId === 'drought' || activeWeatherId === 'plasma_firestorm';
           const isTowerSupplying = Boolean(hydroSimResult.updatedHydrology.sluiceGatesOpen && hydroSimResult.updatedHydrology.towerLiters > 200);
@@ -7968,13 +8054,10 @@ export const useGameStore = create<GameState>()(
           }
 
           // Rule 3: Torrential Downpour Nutrient Leaching
-          // Open furrow plots (level <= 2, canalTier 1, no casing) suffer nutrient leaching
-          // (solid nutrient lights risk reverting to depleted ⚪ gray lights unless shielded or trenched)
           const isDownpour = activeWeatherId === 'rain' || activeWeatherId === 'monsoon' || activeWeatherId === 'supercell_deluge' || activeWeatherId === 'thunderstorm';
           const isOpenFurrow = pLevel <= 2 && hydroSimResult.updatedHydrology.canalTier === 1 && !workshopLoadout.aquiferCasingsInstalled && (workshopLoadout.sluiceGateSealsInstalled || 0) < 2;
 
           if (isDownpour && isOpenFurrow) {
-            // Downpour leaching roll (~0.6% per second per open furrow plot)
             if (Math.random() < 0.006 * deltaSeconds) {
               if (currentBattery.green) {
                 currentBattery = { ...currentBattery, green: false };
@@ -7992,12 +8075,25 @@ export const useGameStore = create<GameState>()(
           if (p.crop && p.plantedAt && !p.ready) {
             // Under barn_fire, unwatered/burning plots are frozen
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
-              return { ...p, soilBattery: currentBattery };
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
             }
+
+            // Gas Rule: Root Anoxia / Suffocation (O2 < 20%) — Crop timer completely pauses.
+            if (currentGases.isAnoxiaSuffocated) {
+              return {
+                ...p,
+                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze crop timer cleanly
+                isTimerFrozen: true,
+                phenologyBadgeEmoji: '🫧⚠️',
+                phenologyBadgeText: 'Root Anoxia (O₂ < 20%): Growth Paused',
+                weatherModifierText: '🫧 Root Anoxia: Depleted Soil Oxygen (Timer Paused)',
+                soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
+              };
+            }
+
             // Fail-Safe Stage 1+ Crop Conservation Mode (Tower <= 200L)
-            // Canal gates are auto-closed to protect remaining tower reserve.
-            // Dry/unwatered plots (moisture <= 15%) pause cleanly in place without withering.
-            // If the plot is watered or has active moisture (> 15%), the crop consumes that water and grows normally!
             if (loadSheddingStage >= 1 && !p.isWatered && (p.moistureLevel ?? 0) <= 15) {
               return {
                 ...p,
@@ -8009,22 +8105,24 @@ export const useGameStore = create<GameState>()(
                 weatherModifierText: '🛡️ Crop Conservation: Dry Plot Frozen (Tower ≤ 200L)',
                 isTimerFrozen: true,
                 soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
               };
             }
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
             if (isPlotExhausted) {
-              return { ...p, soilBattery: currentBattery }; // Growth halted during soil exhaustion
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
             }
             if (p.isWithered) {
-              return { ...p, soilBattery: currentBattery }; // Growth halted if crop withered from prolonged desiccation
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
             }
 
             // Direct Atmospheric Crop Phenology evaluation
             let pheno = evaluateCropPhenology({
               cropId: p.crop,
               weather: activeWeatherId,
-              moistureLevel: p.moistureLevel !== undefined ? p.moistureLevel : 60.0,
+              moistureLevel: currentMoisture,
               isProtectedByGreenhouse: false,
               hasHeatSource,
               isWindbreakProtected: hasWindbreak,
@@ -8043,8 +8141,6 @@ export const useGameStore = create<GameState>()(
               };
             }
 
-            // Rule 1: Frost / Cold Snap: Plots without a nearby heat source have their crop timers frozen.
-            // Crop hover stamp displays: ❄️ Frozen: Requires heat source to continue growth
             if (pheno.isTimerFrozen || (pheno.isFrostbitten && !hasHeatSource)) {
               return {
                 ...p,
@@ -8057,10 +8153,11 @@ export const useGameStore = create<GameState>()(
                 isHeatWilted: false,
                 isDormant: false,
                 soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
               };
             }
 
-            // Growth halted if crop is thermal-wilted or in winter dormancy
             if (pheno.isWilted || pheno.isDormant) {
               return {
                 ...p,
@@ -8072,6 +8169,8 @@ export const useGameStore = create<GameState>()(
                 isDormant: pheno.isDormant,
                 isTimerFrozen: false,
                 soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
               };
             }
 
@@ -8081,34 +8180,30 @@ export const useGameStore = create<GameState>()(
             const elapsed = (now - p.plantedAt) / 1000;
             const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
 
-            // Soil Moisture Zone Multipliers (0x Desiccated, 0.6x Parched, 1.15x Optimal Sweet Spot)
-            const mZone = getMoistureZone(p.moistureLevel !== undefined ? p.moistureLevel : 60.0);
+            const mZone = getMoistureZone(currentMoisture);
             const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
-            // Prismatic Light Lens: completely eliminates nighttime crop growth slowdown and grants +25% ambient boost
             const hasLightLens = Boolean(workshopLoadout.prismaticLensMounted || (state.barn?.prismatic_light_lens || 0) > 0);
             const isNight = currentClock.currentPeriod === 'night';
             const nightFactor = isNight ? (hasLightLens ? 1.0 : 0.70) : 1.0;
             const lightLensMultiplier = hasLightLens ? 1.25 : 1.0;
 
-            // Hardened Chitin Trowel: +30% faster planting, tilling, and crop development
             const hasChitinTrowel = Boolean(workshopLoadout.equippedTool === 'hardened_chitin_trowel' || (state.barn?.hardened_chitin_trowel || 0) > 0);
             const trowelCropSpeedMultiplier = hasChitinTrowel ? 1.30 : 1.0;
 
-            // Monoculture nutrient exhaustion penalty (+35% grow duration = 0.74x effective speed)
             const monocultureMultiplier = (state.isHardcoreMode && p.isMonoculture) ? 0.74 : 1.0;
-
-            // Soil Battery Depletion penalty: Growth duration doubles (0.50x effective speed)
             const soilBatterySpeedMultiplier = p.plantedInDepletedSoil ? 0.50 : 1.0;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier;
+            // Gas Dynamic Output: CO2 Boosted Velocity (Above 60%: +1% crop growth speed per 2% above 60%)
+            const gasSpeedMultiplier = currentGases.growthSpeedMultiplier;
+
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * gasSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
-            // Under alchemical_bloom: All crop growth times drop to a flat 30 seconds
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
-            const badgeEmoji = p.plantedInDepletedSoil ? '🥀⚡' : (p.isMonoculture ? '🥀⚠️' : pheno.badgeEmoji);
-            const badgeText = p.plantedInDepletedSoil ? 'Tired Soil (-50% Speed & 1x Harvest)' : (p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : pheno.badgeText);
+            const badgeEmoji = p.plantedInDepletedSoil ? '🥀⚡' : (p.isMonoculture ? '🥀⚠️' : (currentGases.co2 > 60 ? '⚡🌱' : pheno.badgeEmoji));
+            const badgeText = p.plantedInDepletedSoil ? 'Tired Soil (-50% Speed & 1x Harvest)' : (p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : (currentGases.co2 > 60 ? `Boosted Velocity (+${((currentGases.co2 - 60)/2).toFixed(0)}% Spd)` : pheno.badgeText));
             if (effectiveElapsed >= growTime) {
               return {
                 ...p,
@@ -8121,6 +8216,8 @@ export const useGameStore = create<GameState>()(
                 isHeatWilted: false,
                 isDormant: false,
                 soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
               };
             }
 
@@ -8134,11 +8231,15 @@ export const useGameStore = create<GameState>()(
               isHeatWilted: false,
               isDormant: false,
               soilBattery: currentBattery,
+              gases: currentGases,
+              moistureLevel: currentMoisture,
             };
           }
           return {
             ...p,
             soilBattery: currentBattery,
+            gases: currentGases,
+            moistureLevel: currentMoisture,
           };
         });
 
@@ -13217,6 +13318,14 @@ export const useGameStore = create<GameState>()(
         }
         if (merged.offlineHydrologyReport === undefined) {
           merged.offlineHydrologyReport = null;
+        }
+
+        // Migration: Plot Atmospheric Gas System (CO2, O2, Nitrogen)
+        if (merged.plots) {
+          merged.plots = merged.plots.map((p: any) => ({
+            ...p,
+            gases: p.gases || createDefaultPlotGases(),
+          }));
         }
 
         return merged as GameState;

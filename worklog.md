@@ -178,3 +178,34 @@ Work Log:
 
 Stage Summary:
 - Successfully removed all Till Under buttons, scythe animations, and handlers from the farm grid to prevent accidental crop destruction.
+
+---
+Task ID: 11
+Agent: Main Agent
+Task: Dynamic Gas Tick System (CO2, O2, N) Tied to Weather, Soil, and Crops
+
+Work Log:
+- Created `src/game/gasTickEngine.ts` with complete mathematical models and simulation engine for all three atmospheric soil gases:
+  - **Carbon Dioxide (CO₂: 0–100%)**: Base ambient 25%. Modifiers: Nearby Animal Pen/Compost (+40%), Sunny/Heatwave Weather (+15%), High Gale/Storm Weather (-25%), Vegetative Canopy (+10%). Gameplay output: Above 60% grants "Boosted Velocity" (+1% crop growth speed per 2% above 60%); Below 20%: Standard baseline speed.
+  - **Oxygen (O₂: 0–100%)**: Target optimal range 45%–75%. Modifiers: Over-irrigation/Heavy Rain (-10% per 10s flooding risk), Dry Weather/Drought (+15% per cycle), Tilling Action/Flush Bed (instantly restores to 60%), Harvesting Root Crops (Carrots +20% aeration bonus). Gameplay output: Below 20%: "Root Anoxia / Suffocation" (crop growth timer completely pauses); Above 85%: "Parched Ground" (crop water consumption doubles).
+  - **Nitrogen (N: 0–100%)**: Target optimal range 70%–100%. Modifiers: Heavy Feeder Harvest (Wheat/Cotton -35%), Restorative Legume Harvest (Peas/Soybeans +50%), Organic Manure/Compost Applied (instantly sets to 100%), Uncovered/Fallow Soil in Heavy Rain (leaches -5% every 30s). Gameplay output: 70%–100% (Full 3x Harvest Yield), 35%–69% (2x Harvest Yield), 0%–34% (1x Penalty Harvest Yield).
+- Integrated `stepPlotGasSimulation` into Zustand store tick cycle in `src/game/store.ts`:
+  - Added `PlotGasState` to `PlotState` with default baseline values and backward-compatible migration.
+  - Connected harvest yield multipliers: Nitrogen tier (3x, 2x, 1x) scales crop yield in `harvestPlot` and `harvestAllPlots`.
+  - Connected harvest gas modifiers: Wheat/Cotton depletes N by -35%, Peas/Soybeans fixes N by +50%, Carrots aerates O₂ by +20%.
+  - Connected remediation tools: Compost/Manure sets N to 100%, Flush Bed / Tilling resets O₂ to 60%, Universal Bio-Dressing sets N to 100% and O₂ to 60%.
+  - Connected simulation dynamics in `tick()`: O₂ Anoxia timer freeze, O₂ Parched double water consumption, and CO₂ Boosted Velocity growth multiplier.
+- Updated `src/components/game/FarmGrid.tsx`:
+  - Added pulsing yellow alert ring and border (`ring-2 ring-yellow-400 border-yellow-400 animate-pulse`) to plot tiles whenever any gas metric enters an active penalty zone (`co2 < 20`, `o2 < 20`, `o2 > 85`, `nitrogen < 35`).
+  - Added flashing yellow alert pill on plot tile displaying active hazard (`⚠️ Anoxia`, `⚠️ Parched`, `⚠️ Low N`, `⚠️ Low CO₂`).
+  - Added mini dynamic atmospheric gas meter strip to plot tile (`C:{co2}%{arrow} · O:{o2}%{arrow} · N:{nitrogen}%{arrow}`).
+  - Added live dynamic hover inspection card matching the exact prompt format:
+    - `CO₂: 75% ▲ (+15% Heatwave)`
+    - `O₂:  25% ▼▼ (-40% Flooded)`
+    - `N:   40% ▼ (-35% Wheat Drain)`
+  - Included net gameplay output footer showing real-time speed boost, timer freeze, parched water drain, or harvest yield multiplier.
+- Verified TypeScript checks (`npx tsc --noEmit`) and Next.js Turbopack build pass with 0 errors.
+
+Stage Summary:
+- Complete implementation of the Dynamic Gas Tick System (CO₂, O₂, N) across the simulation engine, store, and visual UI with live dynamic arrows, active penalty zone alerts, and exact prompt modifier breakdowns.
+
