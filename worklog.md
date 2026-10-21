@@ -149,3 +149,17 @@ Work Log:
 Stage Summary:
 - Fixed contradictory hydrology logic and updated comprehensive in-game Farm Guide documentation covering all new soil battery, water decoupling, and soil remediation features.
 
+---
+Task ID: 9
+Agent: Main Agent
+Task: Remove Soil Fuel and Favor Shop sections from Farm Page
+
+Work Log:
+- Removed Soil Fuel legend banner from crop selector toolbar header in `src/components/game/FarmGrid.tsx`.
+- Removed top Favor Utilities command bar (with Favor Shop shortcut) from above the farm plots in `src/components/game/FarmGrid.tsx`.
+- Removed bottom Favor Shop Inventory ribbon (with Favor Shop shortcut) from below the farm plots and silo in `src/components/game/FarmGrid.tsx`.
+- Cleaned up unused Favor Shop state selectors (`crisisShields`, `freeOverclocks`, `bonusStorageCapacity`, `purchaseFavorItem`) and unused bulk helper (`handleApplyBioDressingAll`) in `FarmGrid.tsx`.
+- Verified TypeScript type checks (`npx tsc --noEmit`) and Next.js Turbopack production build (`npm run build`) pass with 0 errors.
+
+Stage Summary:
+- Successfully decluttered the Farm page by removing Soil Fuel legend and both Favor Shop UI ribbons while preserving full core farming gameplay, plot management, and dedicated shop tabs.
