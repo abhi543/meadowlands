@@ -1498,8 +1498,8 @@ export const useGameStore = create<GameState>()(
       lastOfflineSummary: null,
       offlineHistory: [],
 
-      // Hardcore Survival Mode (Default: Active)
-      isHardcoreMode: true,
+      // Hardcore Survival Mode disabled
+      isHardcoreMode: false,
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
       barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
@@ -12148,8 +12148,10 @@ export const useGameStore = create<GameState>()(
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<GameState>;
         const merged = { ...currentState, ...persisted };
-        // Hardcore Survival Mode is permanent across all sessions
-        merged.isHardcoreMode = true;
+        // Hardcore, Game Manager Dispatch, and Offline Modes disabled
+        merged.isHardcoreMode = false;
+        merged.isOfflineMode = false;
+        merged.isDispatchModalOpen = false;
 
         if (!merged.highStakesContracts || merged.highStakesContracts.length === 0) {
           merged.highStakesContracts = [

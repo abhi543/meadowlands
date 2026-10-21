@@ -29,13 +29,8 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     specialistWorkers,
     isAllWorkersPaused,
     notifications = [],
-    setDispatchModalOpen,
     hydrology,
     prehistoricSanctuary,
-    isOfflineMode,
-    offlineStartTime,
-    toggleOfflineMode,
-    isHardcoreMode,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -45,20 +40,6 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
   }, []);
 
   const clock = getCircadianClock(now, farmEpochStart);
-
-
-  // Active Critical & Warning count calculation
-  const hasFlashFlood = Boolean(hydrology?.isFlashFloodActive);
-  const hasStrikes = Boolean(
-    Object.values(unifiedWorkers || {}).some(w => w?.isHired && w?.moraleTier === 'striking') ||
-    Object.values(specialistWorkers || {}).some(sp => sp?.isHired && (sp?.moraleTier === 'striking' || sp?.isStriking))
-  );
-  const criticalNotifications = notifications.filter(n => n.priority === 'critical' && !n.resolved).length;
-  const criticalCount = criticalNotifications + (hasFlashFlood ? 1 : 0) + (hasStrikes ? 1 : 0);
-
-  const warningNotifications = notifications.filter(n => n.priority === 'warning' && !n.resolved).length;
-  const hasLowTower = Boolean(hydrology && hydrology.towerLiters < 100);
-  const warningCount = warningNotifications + (hasLowTower ? 1 : 0);
 
   // Count active/hired workforce
   let totalHired = 0;
@@ -140,71 +121,6 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             <span>Backup</span>
           </button>
         )}
-
-        {/* Online / Offline Status Toggle Button */}
-        <button
-          onClick={toggleOfflineMode}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black transition-all shadow-sm border backdrop-blur-sm cursor-pointer select-none active:scale-95 ${
-            isOfflineMode
-              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 border-amber-300 ring-2 ring-amber-400/50 animate-pulse'
-              : 'bg-emerald-600/70 hover:bg-emerald-500 text-white border-emerald-400/60'
-          }`}
-          title={
-            isOfflineMode
-              ? `Estate in Offline Mode (${Math.max(0, Math.floor((now - (offlineStartTime || now)) / 1000))}s elapsed). Click to resume online mode and catch up!`
-              : 'Status: Live Online. Click to go Offline (Game Manager automated caretaker).'
-          }
-        >
-          <span className="text-xs">{isOfflineMode ? '🌙' : '🟢'}</span>
-          <span>
-            {isOfflineMode ? (
-              <span className="flex items-center gap-1">
-                <span>Offline</span>
-                <span className="font-mono text-[10px] bg-stone-950/80 text-amber-300 px-1 py-0.2 rounded font-black">
-                  {Math.max(0, Math.floor((now - (offlineStartTime || now)) / 1000))}s
-                </span>
-              </span>
-            ) : (
-              'Online'
-            )}
-          </span>
-        </button>
-
-        {/* Dedicated Game Manager & Dispatch Console Button */}
-        <button
-          onClick={() => setDispatchModalOpen(true)}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm border backdrop-blur-sm cursor-pointer select-none ${
-            criticalCount > 0
-              ? 'bg-rose-700 hover:bg-rose-600 text-white border-rose-400 animate-pulse'
-              : warningCount > 0
-              ? 'bg-amber-500/85 hover:bg-amber-400 text-stone-950 border-amber-300'
-              : 'bg-white/20 hover:bg-white/30 text-white border-white/20'
-          }`}
-          title={`Game Manager & Estate Console (${criticalCount} Critical, ${warningCount} Warnings) · Click to open`}
-        >
-          <span className="text-sm">🎮</span>
-          <span className="font-extrabold hidden sm:inline">Game Manager</span>
-          {criticalCount > 0 ? (
-            <span className="px-1.5 py-0.2 rounded-full bg-white text-rose-700 font-black text-[10px] leading-tight">
-              {criticalCount}
-            </span>
-          ) : warningCount > 0 ? (
-            <span className="px-1.5 py-0.2 rounded-full bg-stone-950 text-amber-300 font-black text-[10px] leading-tight">
-              {warningCount}
-            </span>
-          ) : (
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
-          )}
-        </button>
-
-        {/* Permanent Hardcore Survival Mode Badge */}
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black shadow-sm border backdrop-blur-sm select-none bg-red-950/90 text-red-200 border-red-500/80 ring-2 ring-red-600/30"
-          title="💀 Hardcore Survival Mode PERMANENT: Monoculture Exhaustion (+35% time), 75s Crop Withering & Rot, 2x Weather Hazard Pay, 2.5L/min Aquifer Recharge, 20% Contract Breach Fine."
-        >
-          <span className="text-xs">💀</span>
-          <span className="tracking-wider hidden sm:inline">HARDCORE</span>
-        </div>
 
 
         {/* Workers Timing Display Widget (On Top Header) */}
