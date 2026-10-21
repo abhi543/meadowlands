@@ -7926,11 +7926,13 @@ export const useGameStore = create<GameState>()(
               return p;
             }
             // Fail-Safe Stage 1+ Crop Conservation Mode (Tower <= 200L)
-            // Canal gates auto-closed; growth timers pause cleanly in place without drying out or withering
-            if (loadSheddingStage >= 1) {
+            // Canal gates are auto-closed to protect remaining tower reserve.
+            // Dry/unwatered plots (moisture <= 15%) pause cleanly in place without withering.
+            // If the plot is watered or has active moisture (> 15%), the crop consumes that water and grows normally!
+            if (loadSheddingStage >= 1 && !p.isWatered && (p.moistureLevel ?? 0) <= 15) {
               return {
                 ...p,
-                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze growth cleanly without resetting
+                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze dry plots cleanly without resetting
                 desiccatedSeconds: 0,
                 isWithered: false,
                 phenologyBadgeEmoji: '🛡️💧',

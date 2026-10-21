@@ -130,3 +130,22 @@ Work Log:
 Stage Summary:
 - Seamless single-hub order experience combining the classic client persona order board with high-stakes rewards, water logistics, perishable quality mechanics, and full item procurement assistance.
 
+---
+Task ID: 8
+Agent: Main Agent
+Task: Fix Contradictory Water Logic: Decouple Watered Plot Growth from Canal Tower Load-Shedding
+
+Work Log:
+- Diagnosed game logic contradiction where Stage 1 Load-Shedding (`loadSheddingStage >= 1` when Elevated Gravity Tower <= 200L) was globally freezing all crop growth across the estate, even on plots that were manually hydrated via the well and had 100% soil energy.
+- Modified `src/game/store.ts` tick loop to decouple watered/hydrated plots: Stage 1 Crop Conservation freeze now only applies to dry, unwatered plots (`!p.isWatered && (p.moistureLevel ?? 0) <= 15`) to protect them from desiccation without canal irrigation.
+- Watered plots and plots with active moisture (>15%) now correctly consume their moisture and grow at full speed with their 2x hydration multiplier.
+- Updated `src/components/game/GuidePanel.tsx` (FarmGuide) with comprehensive documentation covering:
+  - 3-Color Soil Battery system (🟢 Leaf, 🟡 Root, 🔴 Fruit) and restorative legume mechanics.
+  - Complete Soil Remediation toolkit (Till Under Green Manure, Flush Bed, Bio-Dressing, Organic Compost).
+  - Explicit water planting rules: confirming planting never requires water, and crops always grow at 2.0x when watered.
+  - Decoupled canal tower fail-safe rules and the 5-tier soil moisture spectrum.
+- Verified TypeScript compilation (`npx tsc --noEmit`) and Next.js Turbopack production build pass with 0 errors.
+
+Stage Summary:
+- Fixed contradictory hydrology logic and updated comprehensive in-game Farm Guide documentation covering all new soil battery, water decoupling, and soil remediation features.
+

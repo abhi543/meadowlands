@@ -278,61 +278,124 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
 // -------------------------------------------------------------
 function FarmGuide() {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
         <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          🌾 Farm Plots &amp; Farm Well Hydration Guide
+          🌾 Farm Plots, Soil Battery &amp; Hydrology Engine
         </h4>
         <p className="text-xs text-stone-500 dark:text-gray-400">
-          The foundation of your entire agricultural supply chain, now boosted by soil hydration.
+          Complete guide to planting, soil nutrient channels, closed-loop hydration, and soil remediation.
         </p>
       </div>
 
-      <div className="bg-stone-50 dark:bg-stone-900/40 rounded-lg p-3 text-xs space-y-1.5">
-        <h5 className="font-bold text-stone-800 dark:text-gray-200">How Soil Plots Work:</h5>
+      {/* 1. Core Farmland Grid & Upgrades */}
+      <div className="bg-stone-50 dark:bg-stone-900/40 rounded-xl p-3 text-xs space-y-2 border border-stone-200 dark:border-stone-800">
+        <h5 className="font-bold text-stone-800 dark:text-gray-200 flex items-center gap-1.5">
+          <span>🌱</span> How Farmland Plots Work:
+        </h5>
         <ul className="list-disc ml-4 space-y-1 text-stone-600 dark:text-stone-300">
-          <li><strong>Plots:</strong> You start with farmland plots arranged in an expandable grid.</li>
-          <li><strong>Planting:</strong> Select a crop seed selector at the top, then tap an empty plot, or click <strong>Plant All</strong> to plant every empty plot in a single click.</li>
-          <li><strong>Growth Progress:</strong> Each plot has an animated real-time progress bar. Once filled, the crop sparkles and displays a <strong>Harvest</strong> button.</li>
-          <li><strong>Batch Harvesting:</strong> Use <strong>Harvest All</strong> to collect all ready crops simultaneously and gain instant player XP.</li>
-          <li><strong>🌱 Soil Quality Upgrades (🪙 Coins):</strong> Upgrade individual or all plots through 5 persistent soil tiers (Basic &rarr; Enriched Loam &rarr; Fertilized Humus &rarr; Volcanic Bed &rarr; Celestial Soil). Higher tiers award up to <strong>+75% Growth Speed, +3 Bonus Yields</strong>, 35% double-harvest chance, and permanent self-watering!</li>
-          <li><strong>🗺️ Plot Expansion (🪙 Coins):</strong> Expand your farm from 12 up to <strong>24 plots</strong> using coins! Click the locked plot slot or the <strong>Upgrade Soil</strong> button to clear and till more land.</li>
-          <li><strong>Instant Harvest Chance:</strong> Regional Sovereign Territory aura provides a 10% chance for instant maturity right after planting!</li>
+          <li><strong>Plot Layout &amp; Expansion:</strong> You start with 12 tillable plots, expandable up to <strong>24 plots</strong> using coins. Click any locked plot to till additional land.</li>
+          <li><strong>Planting Rules (No Water Needed to Plant):</strong> Planting seeds <em>never requires water</em>. You only need an empty plot and enough coins for the seed (Wheat &amp; Corn are 🪙0 free!).</li>
+          <li><strong>Batch Sowing &amp; Harvesting:</strong> Use <strong>Plant All</strong> to sow your selected seed across every empty plot with one click, and <strong>Harvest All</strong> to collect all mature crops simultaneously.</li>
+          <li><strong>5 Soil Quality Tiers (🪙 Coins):</strong> Upgrade individual or batch plots through 5 persistent soil tiers (Basic &rarr; Enriched Loam &rarr; Fertilized Humus &rarr; Volcanic Bed &rarr; Celestial Soil) for up to <strong>+75% Speed, +3 Bonus Yields, 35% Double-Proc</strong>, and permanent self-watering at Celestial Tier!</li>
         </ul>
       </div>
 
-      {/* Farm Well & Soil Hydration Engine */}
-      <div className="bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800/40 rounded-lg p-3 text-xs text-cyan-800 dark:text-cyan-200 space-y-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xl">⛲</span>
-          <h5 className="font-bold text-sm">Farm Well &amp; Soil Hydration System (2.0x Boost)</h5>
+      {/* 2. Soil Battery Agronomy System */}
+      <div className="bg-gradient-to-r from-emerald-950/20 via-amber-950/20 to-rose-950/20 border border-emerald-500/40 rounded-xl p-3 text-xs space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🔋</span>
+            <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100">3-Color Soil Battery System</h5>
+          </div>
+          <span className="text-[10px] bg-stone-900 text-stone-300 font-mono px-2 py-0.5 rounded-full border border-stone-700">
+            Nutrient Channels
+          </span>
         </div>
         <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
-          The Farm Well sits directly beside your plots, holding pressurized groundwater to irrigate parched soil.
+          Each plot displays a 3-light battery indicating its nutrient reserves. Planting matching crops ensures fast growth and full yield:
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-stone-700 dark:text-stone-300">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-emerald-400/60 shadow-xs">
+            <span className="font-bold text-emerald-700 dark:text-emerald-400">🟢 Leaf &amp; Stem Fuel</span>
+            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Wheat</strong> &amp; <strong>Corn</strong>.</p>
+          </div>
+          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-amber-400/60 shadow-xs">
+            <span className="font-bold text-amber-700 dark:text-amber-400">🟡 Root Fuel</span>
+            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Carrots</strong>.</p>
+          </div>
+          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-rose-400/60 shadow-xs">
+            <span className="font-bold text-rose-700 dark:text-rose-400">🔴 Fruit &amp; Flower Fuel</span>
+            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Strawberry, Cotton, Pumpkin</strong>.</p>
+          </div>
+        </div>
+        <div className="bg-teal-50 dark:bg-teal-950/40 p-2 rounded-lg border border-teal-300 dark:border-teal-700/60 text-teal-800 dark:text-teal-200">
+          <strong>🫛 Restorative Legumes (Peas &amp; Soybeans):</strong> Require <em>zero fuel</em> to plant! Harvesting or tilling them under automatically recharges the <strong>🟢 Green Light to 100% full</strong>.
+        </div>
+        <div className="text-[11px] text-stone-500 dark:text-stone-400">
+          ⚠️ <strong>Tired Soil Penalty:</strong> Sowing a crop into an empty channel doubles growth duration and caps harvest yield at a flat 1x. Sowing in empty tired plots displays treatment buttons instead of planting immediately.
+        </div>
+      </div>
+
+      {/* 3. Soil Remediation Toolkit */}
+      <div className="bg-stone-50 dark:bg-stone-900/40 border border-stone-200 dark:border-stone-800 rounded-xl p-3 text-xs space-y-2">
+        <h5 className="font-bold text-stone-800 dark:text-gray-200 flex items-center gap-1.5">
+          <span>🛠️</span> Soil Restoration &amp; Remediation Toolkit:
+        </h5>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-amber-700 dark:text-amber-300">💩 Organic Compost (Restore Soil):</span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Use barn compost or 🪙5 coins to refill all 3 battery channels (🟢, 🟡, 🔴) to 100% full instantly.</p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-blue-700 dark:text-blue-300">🌊 Flush Bed:</span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Draws 15L from the Elevated Gravity Tower to flush depleted salts, setting 100% nutrients and 80%+ moisture.</p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-teal-700 dark:text-teal-300">🚜 Till Under Crop (Green Manure):</span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Cleanses Crop Blight crises and enriches the bed. Tilling Peas instantly recharges 🟢 Leaf Energy.</p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-emerald-700 dark:text-emerald-300">🧪 Universal Bio-Dressing:</span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Emergency panacea (Favor/Coins): Cures Root Rot, Frostbite, Wilting, Blight, restores 100% battery, and sets 85% moisture.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Hydrology, Farm Well & Water Decoupling */}
+      <div className="bg-cyan-50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-800/40 rounded-xl p-3 text-xs text-cyan-800 dark:text-cyan-200 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">⛲</span>
+          <h5 className="font-bold text-sm">Farm Well &amp; Hydration Engine (2.0x Speed Boost)</h5>
+        </div>
+        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+          Watering crops doubles their growth speed (2.0x boost, cutting remaining timers by a full <strong>50%</strong>).
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-stone-700 dark:text-stone-300 text-[11px]">
           <div className="bg-white/70 dark:bg-gray-800/60 p-2 rounded border border-cyan-200/60 dark:border-cyan-800/40">
-            <span className="font-bold text-cyan-700 dark:text-cyan-300">💧 Manual Pumping &amp; Tank:</span>
-            <p className="mt-0.5 text-[11px]">
-              Tap the Well handle to pump fresh water (+1 💧 per tap). The well also naturally replenishes itself over time up to its maximum capacity (Base 50 💧).
+            <span className="font-bold text-cyan-700 dark:text-cyan-300">💧 Farm Well Pumping:</span>
+            <p className="mt-0.5">
+              Tap <strong>Pump Well</strong> to draw fresh water (+1 💧 per click). Click <strong>Water All Plots</strong> to apply water across all dry beds.
             </p>
           </div>
           <div className="bg-white/70 dark:bg-gray-800/60 p-2 rounded border border-cyan-200/60 dark:border-cyan-800/40">
-            <span className="font-bold text-cyan-700 dark:text-cyan-300">⚡ 2.0x Growth Speed (Watered):</span>
-            <p className="mt-0.5 text-[11px]">
-              Click <strong>Water All Plots</strong> to consume 1 💧 per plot. Hydrated soil sparkles blue and doubles growth speed — cutting crop timers by a full <strong>50%</strong>!
+            <span className="font-bold text-cyan-700 dark:text-cyan-300">⚡ Decoupled Growth Guarantee:</span>
+            <p className="mt-0.5">
+              Watered crops and plots with active moisture (&gt;15%) <strong>always grow at full speed</strong>, even if the canal Elevated Gravity Tower enters Stage 1 Crop Conservation.
             </p>
           </div>
           <div className="bg-white/70 dark:bg-gray-800/60 p-2 rounded border border-cyan-200/60 dark:border-cyan-800/40">
-            <span className="font-bold text-cyan-700 dark:text-cyan-300">🪙 Well Capacity Upgrades:</span>
-            <p className="mt-0.5 text-[11px]">
-              Invest farm coins to upgrade the Well Level. Each level expands total tank capacity (+25 💧) and quickens natural refill speed.
+            <span className="font-bold text-cyan-700 dark:text-cyan-300">💧 Soil Moisture Spectrum:</span>
+            <p className="mt-0.5">
+              • <strong>40%–80% (Optimal Sweet Spot):</strong> +15% Speed &amp; unlocks Silver/Gold/Prismatic quality rolls!<br />
+              • <strong>15%–40% (Parched):</strong> -40% Speed penalty.<br />
+              • <strong>0%–15% (Desiccated):</strong> Halted (0x speed) until watered.
             </p>
           </div>
           <div className="bg-white/70 dark:bg-gray-800/60 p-2 rounded border border-cyan-200/60 dark:border-cyan-800/40">
-            <span className="font-bold text-cyan-700 dark:text-cyan-300">🔥 Crisis Defense:</span>
-            <p className="mt-0.5 text-[11px]">
-              During Drought and Brushfire phenomena, unwatered crops halt their timers completely. Keeping water stored in your well is essential to quench fires and protect harvests!
+            <span className="font-bold text-cyan-700 dark:text-cyan-300">🗼 Gravity Tower &amp; Siphon:</span>
+            <p className="mt-0.5">
+              If the Elevated Tower drops to &le;200L, canal gates close. Refill via the Water tab (<strong>Pump 50L &rarr; Tower</strong>) or install the <strong>Auto-Siphon</strong> to keep the tower pressurized automatically.
             </p>
           </div>
         </div>
