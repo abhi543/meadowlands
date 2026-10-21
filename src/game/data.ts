@@ -235,7 +235,7 @@ export const CROPS: Record<CropId, CropDef> = {
   soybean:     { id: 'soybean',     name: 'Soybean',     emoji: '\u{1FADB}', growTimeSec: 360, yieldCount: 8,  seedCost: 15 },
   pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 1200, yieldCount: 10, seedCost: 25 },
   cotton:      { id: 'cotton',      name: 'Cotton',      emoji: '\u{1F33F}', growTimeSec: 300, yieldCount: 16, seedCost: 12 },
-  peas:        { id: 'peas',        name: 'Peas (Restorative)', emoji: '\u{1FADB}', growTimeSec: 60,  yieldCount: 4,  seedCost: 2 },
+  peas:        { id: 'peas',        name: 'Peas (Restorative)', emoji: '\u{1FADB}', growTimeSec: 30,  yieldCount: 4,  seedCost: 2 },
 };
 
 // --- Animals ---

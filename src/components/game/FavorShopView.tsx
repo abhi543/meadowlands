@@ -13,6 +13,7 @@ export function FavorShopView() {
     purchaseFavorItem,
     workshopLoadout,
     barn,
+    coins,
   } = useGameStore();
 
   const isSiphonInstalled = Boolean(workshopLoadout?.emergencySiphonInstalled);
@@ -70,7 +71,10 @@ export function FavorShopView() {
       {/* Catalog Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
         {FAVOR_SHOP_CATALOG.map((item) => {
-          const canAfford = spendableFavor >= item.costFavor;
+          const isBioDressing = item.type === 'universal_bio_dressing';
+          const canAffordFavor = spendableFavor >= item.costFavor;
+          const canAffordCoins = isBioDressing && coins >= 25;
+          const canAfford = canAffordFavor || canAffordCoins;
           return (
             <div
               key={item.id}
@@ -96,6 +100,11 @@ export function FavorShopView() {
                     <span className="font-black text-xs font-mono text-amber-900 dark:text-amber-200">
                       {item.costFavor} 🎖️
                     </span>
+                    {isBioDressing && (
+                      <div className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">
+                        or 25 🪙
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -125,7 +134,13 @@ export function FavorShopView() {
                   }`}
                 >
                   <span>{item.icon}</span>
-                  <span>{canAfford ? 'Purchase' : `Need ${item.costFavor - spendableFavor} More`}</span>
+                  <span>
+                    {canAffordFavor
+                      ? 'Purchase (10 🎖️)'
+                      : canAffordCoins
+                      ? 'Emergency Buy (25 🪙)'
+                      : `Need ${item.costFavor - spendableFavor} Favor`}
+                  </span>
                 </button>
               </div>
             </div>

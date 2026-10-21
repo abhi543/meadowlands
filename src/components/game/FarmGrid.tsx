@@ -49,6 +49,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     silo,
     barn = {},
     coins,
+    globalReputation,
     systemicEvent,
     extinguishBrushfire,
     captureLocust,
@@ -735,12 +736,15 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                                 ? 'ring-2 ring-white scale-125 animate-pulse'
                                 : ''
                             }`
+                          : plot.crop === 'peas'
+                          ? 'bg-emerald-400 border border-white ring-2 ring-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]'
                           : `border-2 border-stone-500 bg-stone-900 ${
                               isHovered && selectedProfile?.fuelType === 'green'
                                 ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
                                 : ''
                             }`
                       }`}
+                      title={plot.crop === 'peas' && !battery.green ? '🟢 Recharging Leaf Fuel via Peas (Active)!' : undefined}
                     />
 
                     {/* 🟡 Yellow Light (Root fuel) */}
@@ -872,38 +876,48 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                           >
                             <button
                               type="button"
-                              disabled={towerWater < 200}
+                              disabled={towerWater < 15}
                               onClick={(e) => handleFlushBed(plot.id, e)}
                               className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight flex items-center gap-0.5 shadow-md border ${
-                                towerWater >= 200
-                                  ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 text-white border-blue-400 cursor-pointer'
+                                towerWater >= 15
+                                  ? towerWater >= 200
+                                    ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 text-white border-blue-400 cursor-pointer'
+                                    : 'bg-amber-600 hover:bg-amber-500 active:scale-95 text-white border-amber-400 cursor-pointer'
                                   : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
                               }`}
                               title={
                                 towerWater >= 200
                                   ? 'Flush bed with 15L Tower Water to instantly restore all nutrients'
-                                  : `Tower Water below 200L (${Math.round(towerWater)}L) — Stage 1 Load-Shedding Active`
+                                  : towerWater >= 15
+                                  ? `Stage 1 Override: Uses 15L Tower Water (${Math.round(towerWater)}L available)`
+                                  : `Tower Water below 15L (${Math.round(towerWater)}L) — Refill Tower first`
                               }
                             >
                               <span>🌊</span>
                               <span>Flush Bed</span>
                             </button>
-                            {(barn?.universal_bio_dressing || 0) > 0 && (
-                              <button
-                                type="button"
-                                onClick={(e) => handleApplyBioDressing(plot.id, e)}
-                                className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md border border-emerald-400"
-                                title="Apply Universal Bio-Dressing (Instant 100% Recharge)"
-                              >
-                                <span>🧪</span>
-                                <span>Bio-Dress ({barn.universal_bio_dressing})</span>
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                              className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md border border-emerald-400"
+                              title="Apply Universal Bio-Dressing (Instant 100% Recharge, uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
+                            >
+                              <span>🧪</span>
+                              <span>
+                                {(barn?.universal_bio_dressing || 0) > 0
+                                  ? `Bio-Dress (${barn.universal_bio_dressing})`
+                                  : (globalReputation?.spendableFavor || 0) >= 10
+                                  ? 'Bio-Dress (10🎖️)'
+                                  : coins >= 25
+                                  ? 'Bio-Dress (25🪙)'
+                                  : 'Bio-Dress'}
+                              </span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => applyCompostToProps(plot.id)}
                               className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                              title="Add compost/manure to instantly refill battery"
+                              title="Add compost/manure to instantly refill battery (5🪙 or free from barn)"
                             >
                               <span>💩</span>
                               <span>Compost</span>
@@ -915,7 +929,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                                 plantCrop(plot.id, 'peas');
                               }}
                               className="px-1.5 py-0.5 rounded bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                              title="Plant restorative Peas to recharge 🟢 Leaf/Stem fuel"
+                              title="Plant restorative Peas to recharge 🟢 Leaf/Stem fuel in 30s"
                             >
                               <span>🫛</span>
                               <span>Peas</span>
@@ -934,33 +948,55 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     >
                       <button
                         type="button"
-                        disabled={towerWater < 200}
+                        disabled={towerWater < 15}
                         onClick={(e) => handleFlushBed(plot.id, e)}
                         className={`px-2 py-0.5 rounded-lg text-white text-[9px] font-black tracking-tight flex items-center gap-1 shadow-md transition-all border ${
-                          towerWater >= 200
-                            ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 border-blue-400 cursor-pointer'
+                          towerWater >= 15
+                            ? towerWater >= 200
+                              ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 border-blue-400 cursor-pointer'
+                              : 'bg-amber-600 hover:bg-amber-500 active:scale-95 border-amber-400 cursor-pointer'
                             : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
                         }`}
                         title={
                           towerWater >= 200
                             ? 'Instantly restore all depleted nutrient lights using 15L Gravity Tower water'
-                            : `Gravity Tower below 200L (${Math.round(towerWater)}L) — Hydraulic Load-Shedding Stage 1 Active`
+                            : towerWater >= 15
+                            ? `Stage 1 Override: Uses 15L Tower Water (${Math.round(towerWater)}L available)`
+                            : `Tower Water too low (<15L available)`
                         }
                       >
                         <span>🌊</span>
                         <span>Flush Bed (-15L Tower Water)</span>
                       </button>
-                      {(barn?.universal_bio_dressing || 0) > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleApplyBioDressing(plot.id, e)}
-                          className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
-                          title="Apply Universal Bio-Dressing from Favor Shop: 100% nutrient recharge & blight cleanse"
-                        >
-                          <span>🧪</span>
-                          <span>Bio-Dressing ({barn.universal_bio_dressing})</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
+                        title="Apply Universal Bio-Dressing: 100% nutrient recharge & blight cleanse (Uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
+                      >
+                        <span>🧪</span>
+                        <span>
+                          {(barn?.universal_bio_dressing || 0) > 0
+                            ? `Bio-Dressing (${barn.universal_bio_dressing})`
+                            : (globalReputation?.spendableFavor || 0) >= 10
+                            ? 'Bio-Dress (10 🎖️)'
+                            : coins >= 25
+                            ? 'Bio-Dress (25 🪙)'
+                            : 'Bio-Dress (Shop)'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          applyCompostToProps(plot.id);
+                        }}
+                        className="px-1.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[9px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
+                        title="Add compost/manure to instantly refill battery (5🪙 or free from barn)"
+                      >
+                        <span>💩</span>
+                        <span>Compost</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -991,17 +1027,23 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         <span>❌</span>
                         <span>Uproot & Till Under</span>
                       </button>
-                      {(barn?.universal_bio_dressing || 0) > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleApplyBioDressing(plot.id, e)}
-                          className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
-                          title="Apply Universal Bio-Dressing: restores 100% soil energy & clears negative modifiers"
-                        >
-                          <span>🧪</span>
-                          <span>Bio-Dressing ({barn.universal_bio_dressing})</span>
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
+                        title="Apply Universal Bio-Dressing: restores 100% soil energy & clears negative modifiers (Uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
+                      >
+                        <span>🧪</span>
+                        <span>
+                          {(barn?.universal_bio_dressing || 0) > 0
+                            ? `Bio-Dressing (${barn.universal_bio_dressing})`
+                            : (globalReputation?.spendableFavor || 0) >= 10
+                            ? 'Bio-Dress (10 🎖️)'
+                            : coins >= 25
+                            ? 'Bio-Dress (25 🪙)'
+                            : 'Bio-Dress (Shop)'}
+                        </span>
+                      </button>
                       {!isWatered && waterLevel > 0 && (
                         <button
                           type="button"
@@ -1090,6 +1132,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                       }`}>
                         {plot.isFrostbitten ? '🧊 Frostbitten' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
                       </span>
+                      {plot.crop === 'peas' && (
+                        <span className="text-[8px] font-black text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded-full border border-emerald-400/80 animate-pulse mt-0.5">
+                          ⚡ Recharging 🟢 Leaf
+                        </span>
+                      )}
 
                       {/* Quick Till Under Button for active growing plot */}
                       <button

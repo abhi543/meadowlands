@@ -2281,7 +2281,9 @@ export const useGameStore = create<GameState>()(
           isFrostbitten: false,
           isHeatWilted: false,
           isDormant: false,
-          soilBattery: plot.soilBattery || { green: true, yellow: true, red: true },
+          soilBattery: plot.crop === 'peas'
+            ? { ...(plot.soilBattery || { green: true, yellow: true, red: true }), green: true }
+            : (plot.soilBattery || { green: true, yellow: true, red: true }),
         };
 
         set({
@@ -2290,7 +2292,11 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
 
-        state.addNotification(`🌱 Plot #${plotId + 1}: Crop tilled under as green manure! Blight cleansed & bed prepped for restorative planting.`, '🚜', 'discovery');
+        if (plot.crop === 'peas') {
+          state.addNotification(`🌱 Plot #${plotId + 1}: Restorative Peas tilled under as green manure! Recharged 🟢 Leaf Fuel to 100% full!`, '🚜', 'discovery');
+        } else {
+          state.addNotification(`🌱 Plot #${plotId + 1}: Crop tilled under as green manure! Blight cleansed & bed prepped for restorative planting.`, '🚜', 'discovery');
+        }
         return true;
       },
 
@@ -2306,11 +2312,12 @@ export const useGameStore = create<GameState>()(
         }
 
         const currentTowerLiters = state.hydrology?.towerLiters || 0;
-        if (currentTowerLiters < 200) {
-          state.addNotification(`⚠️ Hydraulic Load-Shedding Active: Gravity Tower volume (${Math.round(currentTowerLiters)}L) is below the 200L safety threshold!`, '⚠️', 'event');
+        if (currentTowerLiters < 15) {
+          state.addNotification(`⚠️ Elevated Gravity Tower needs at least 15L to flush bed (Current: ${Math.round(currentTowerLiters)}L)!`, '⚠️', 'event');
           return false;
         }
 
+        const isLoadSheddingWarning = currentTowerLiters < 200;
         const newTowerLiters = Math.max(0, Math.round((currentTowerLiters - 15) * 10) / 10);
 
         const newPlots = [...state.plots];
@@ -2337,7 +2344,11 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
 
-        state.addNotification(`🌊 Soil Flushed — Nutrients Restored! Deducted 15L from Elevated Gravity Tower (Tower remaining: ${newTowerLiters}L).`, '🌊', 'discovery');
+        if (isLoadSheddingWarning) {
+          state.addNotification(`🌊 Soil Flushed — Nutrients Restored! (⚠️ 15L drawn from Tower during Load-Shedding Stage 1, ${newTowerLiters}L remaining)`, '🌊', 'discovery');
+        } else {
+          state.addNotification(`🌊 Soil Flushed — Nutrients Restored! Deducted 15L from Elevated Gravity Tower (Tower remaining: ${newTowerLiters}L).`, '🌊', 'discovery');
+        }
         return true;
       },
 
@@ -2346,16 +2357,34 @@ export const useGameStore = create<GameState>()(
         const plot = state.plots[plotId];
         if (!plot || plotId >= state.unlockedPlots) return false;
 
-        const doses = state.barn?.universal_bio_dressing || 0;
-        if (doses <= 0) {
-          state.addNotification('No Universal Bio-Dressing available! Purchase a pack from the Favor Shop.', 'ℹ️', 'info');
-          return false;
-        }
+        let doses = state.barn?.universal_bio_dressing || 0;
+        const newBarn = { ...state.barn };
+        let purchaseMethod = '';
 
-        const newBarn = {
-          ...state.barn,
-          universal_bio_dressing: doses - 1,
-        };
+        if (doses <= 0) {
+          const favor = state.globalReputation?.spendableFavor || 0;
+          if (favor >= 10) {
+            set({
+              globalReputation: {
+                ...state.globalReputation,
+                spendableFavor: favor - 10,
+              },
+            });
+            doses = 3;
+            newBarn.universal_bio_dressing = 2; // used 1, kept 2
+            purchaseMethod = ' (Purchased pack of 3 for 10 Favor)';
+          } else if (state.coins >= 25) {
+            set({ coins: state.coins - 25 });
+            doses = 3;
+            newBarn.universal_bio_dressing = 2; // used 1, kept 2
+            purchaseMethod = ' (Emergency relief buy: 3-pack for 🪙 25 Coins)';
+          } else {
+            state.addNotification('Need at least 1 dose of Universal Bio-Dressing (or 10 Favor / 25 Coins)!', 'ℹ️', 'info');
+            return false;
+          }
+        } else {
+          newBarn.universal_bio_dressing = doses - 1;
+        }
 
         let updatedActiveCrisis = state.activeCrisis;
         if (state.activeCrisis?.type === 'crop_blight') {
@@ -2397,7 +2426,7 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
 
-        state.addNotification(`✨ Universal Bio-Dressing applied to Plot #${plotId + 1}! All 3 nutrient lights recharged to 100% Solid Full & soil health cleansed. (${doses - 1} doses left)`, '🧪', 'discovery');
+        state.addNotification(`✨ Universal Bio-Dressing applied to Plot #${plotId + 1}! All 3 nutrient lights recharged to 100% Solid Full & soil health cleansed.${purchaseMethod} (${newBarn.universal_bio_dressing} doses left)`, '🧪', 'discovery');
         return true;
       },
 
@@ -12276,6 +12305,18 @@ export const useGameStore = create<GameState>()(
 
         const favor = state.globalReputation?.spendableFavor || 0;
         if (favor < item.costFavor) {
+          if (item.type === 'universal_bio_dressing' && state.coins >= 25) {
+            const newBarn = { ...state.barn };
+            newBarn.universal_bio_dressing = (newBarn.universal_bio_dressing || 0) + 3;
+            set({
+              coins: state.coins - 25,
+              barn: newBarn,
+              isDirty: true,
+            });
+            playVictoryChime();
+            state.addNotification(`🧪 Emergency Relief Buy: Purchased Universal Bio-Dressing (Pack of 3) for 🪙 25 Coins! Doses available: ${newBarn.universal_bio_dressing}`, '🧪', 'event');
+            return true;
+          }
           state.addNotification(`Need ${item.costFavor} Favor Tokens! Fulfill delivery contracts to earn more.`, '⚠️', 'info');
           return false;
         }
