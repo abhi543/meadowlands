@@ -126,12 +126,12 @@ export function calculatePlotCo2(
     total += 15;
   }
 
-  // High Gale / Storm Weather: -25%
+  // High Gale / Storm Weather: -30%
   const isGaleStorm = ['gale', 'thunderstorm', 'cyclone', 'hyper_cyclone', 'hailstorm', 'haboob_sandstorm'].includes(ctx.activeWeatherId);
   if (isGaleStorm) {
     const stormName = ctx.activeWeatherId === 'gale' ? 'High Gale' : 'Storm';
-    modifiers.push({ label: `-25% ${stormName}`, value: -25 });
-    total -= 25;
+    modifiers.push({ label: `-30% ${stormName}`, value: -30 });
+    total -= 30;
   }
 
   // Vegetative Canopy (Plot has mature/advanced crop): +10%
@@ -154,9 +154,15 @@ export function calculatePlotCo2(
     arrow = '▼';
   }
 
-  // Speed calculation: Above 60%: "Boosted Velocity" (+1% speed per 2% above 60%)
-  const speedBonusPct = finalCo2 > 60 ? ((finalCo2 - 60) / 2) : 0;
-  const speedMultiplier = 1 + (speedBonusPct / 100);
+  // Speed calculation: Above 60%: "Boosted Velocity" (+1% speed per 2% above 60%, capped at +40% at 100%)
+  // Below 20%: Thin air penalty (+20% longer duration, 0.833x speed)
+  let speedMultiplier = 1;
+  if (finalCo2 > 60) {
+    const boostPct = Math.min(40, (finalCo2 - 60) / 2);
+    speedMultiplier = 1 + (boostPct / 100);
+  } else if (finalCo2 < 20) {
+    speedMultiplier = 1 / 1.2; // 0.833x speed (+20% duration)
+  }
 
   // Breakdown text
   let breakdownText = '+15% Heatwave';
@@ -390,8 +396,8 @@ export function applyHarvestGasModifiers(
   let newN = gases.nitrogen;
   const notes: string[] = [];
 
-  // Heavy Feeders (Wheat/Cotton)
-  if (crop === 'wheat' || crop === 'cotton') {
+  // Heavy Feeders (Wheat/Corn/Cotton)
+  if (crop === 'wheat' || crop === 'corn' || crop === 'cotton') {
     newN = Math.max(5, Math.round(newN - 35));
     notes.push(`🌾 Heavy Feeder (${crop}): Depleted -35% Nitrogen (Now ${newN}%)`);
   }

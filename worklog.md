@@ -245,8 +245,38 @@ Work Log:
 - Verified TypeScript type checks (`npx tsc --noEmit`) pass with 0 errors.
 - Verified Next.js Turbopack production build (`npm run build`) succeeds in 5.1s with 0 errors.
 
+---
+Task ID: 14
+Agent: Main Agent
+Task: Update Game Design Guide & Add Dynamic Gas Ecosystem Rules (CO2, O2, N) with Pre-Plant Stamp Feedback
+
+Work Log:
+- Authored comprehensive standalone design guide in `docs/DYNAMIC_GAS_ECOSYSTEM_DESIGN_GUIDE.md`:
+  - 1. System Overview & Core Philosophy (dynamic 3-gas balance 0%–100%, weather, plot proximity, saturation, and crop rotation).
+  - 2. Core Gas Specifications & Rulebook:
+    - CO₂ (0%–100%): "The Canopy Speed Engine" (Ambient 25%, +40% Pasture/Sanctuary, +25% Compost/Fermentation, +15% Sunny/Heatwave, +10% Canopy; -30% Gale, -15% Isolated, -10% Barren; >60% optimal speed boost up to +40%, 20–59% standard, <20% thin air +20% duration).
+    - O₂ (0%–100%): "The Soil Breath & Drainage Meter" (Optimal 45%–75%; +60% manual tilling reset, +20% root crop aeration, +25% furrow, +15% drought; -10%/10s torrential rain, -30% excessive irrigation, -15% compaction; <20% critical anoxia pause with root suffocation alert, >85% parched 2x tower water drain).
+    - Nitrogen (0%–100%): "The Soil Yield Battery" (Optimal 70%–100%; +50% restorative legumes, 100% manure/compost reset, 100% humus/dressing, +15% cover crop; -35% heavy feeders [Wheat, Corn, Cotton], -10% monoculture repeat, -15% rain leaching; 70–100% 3x yield, 35–69% 2x yield, <35% critical deficit with 1x yield, 2x duration, and 50% weed risk).
+  - 3. UI Display & Hover Mechanics (🟢 Green, 🟡 Yellow, 🔴 Red/Flashing percentage bars, Pre-Plant Stamp Feedback).
+  - 4. Tactical Crop Rotation & Agronomy Puzzles.
+- Expanded in-game `FarmGuide` in `src/components/game/GuidePanel.tsx`:
+  - Added dedicated interactive section "Dynamic Gas Ecosystem Engine (CO₂, O₂, N) — 0%–100% Atmospheric Grid" with 3 detailed cards, positive boost sources, negative drain sources, and gameplay thresholds.
+- Updated `src/game/gasTickEngine.ts`:
+  - Refined High Gale/Storm modifier to -30%.
+  - Added Corn to heavy feeders alongside Wheat and Cotton (-35% N depletion on harvest).
+  - Aligned speedMultiplier calculation to support the exact capped +40% boost at 100% CO₂ and 0.833x speed (<20% thin air penalty).
+- Upgraded Centralized Gas Console in `src/components/game/FarmGrid.tsx`:
+  - Added clean percentage progress bars with strict color-coded ranges (🟢 Green: Optimal, 🟡 Yellow: Warning/Moderate, 🔴 Red/Flashing: Critical Penalty).
+  - Added status tags and target thresholds (Target: >60% for CO₂, 45%–75% for O₂, 70%–100% for N).
+  - Added 🟢/🟡/🔴 indicators inside the expandable All Plots matrix table.
+- Added Pre-Plant Stamp Feedback to Crop Selector toolbar in `src/components/game/FarmGrid.tsx`:
+  - Hovering any seed button (or active selected crop) dynamically previews modifier arrows and net output against the inspected plot or farm baseline (`CO₂: 80% ▲ (+10% Spd) | O₂: 65% (Optimal) | N: 85% (3x Yield)`).
+  - Dynamic warning banners pop up immediately if any threshold is violated before sowing (e.g., `⚠️ WARNING: O₂ at 15% (Roots Choking) — Drain water before planting!`).
+- Verified TypeScript type checking (`npx tsc --noEmit`) passes with 0 errors.
+- Verified Next.js Turbopack production build (`npm run build`) passes in 6.1s with 0 errors.
+
 Stage Summary:
-- Successfully removed Sluice and Restore Soil completely from the Farm page while preserving their dedicated functionality on the Water/Hydrology and Barn tabs.
+- Complete update of the Game Design Guide and in-game agronomy guide with dynamic three-gas balance ecosystem rules, clean color-coded percentage bars, and pre-plant stamp tactical feedback.
 
 
 
