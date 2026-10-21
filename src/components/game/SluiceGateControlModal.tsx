@@ -49,6 +49,9 @@ export function SluiceGateControlModal() {
     plots,
     unlockedPlots,
     level,
+    workshopLoadout,
+    installEmergencySiphonValve,
+    barn,
   } = useGameStore();
 
   const [customShutoff, setCustomShutoff] = useState(hydrology?.autoShutoffMoisture ?? 75);
@@ -158,6 +161,58 @@ export function SluiceGateControlModal() {
         <div className="mt-4">
           <GravityTowerWidget />
         </div>
+
+        {/* Dedicated Emergency Siphon Float Valve Quick Install Banner */}
+        {(() => {
+          const hasEmergencySiphon = Boolean(workshopLoadout?.emergencySiphonInstalled);
+          const siphonInBag = barn?.emergency_siphon_valve || 0;
+          return (
+            <div className="mt-3 p-3 rounded-2xl bg-gradient-to-r from-sky-950/80 via-cyan-950/60 to-stone-900 border border-cyan-500/40 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-xl shrink-0">
+                  🚰
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-cyan-200 uppercase tracking-wide">
+                      Emergency Aquifer Siphon Float Valve
+                    </span>
+                    {hasEmergencySiphon ? (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/60 font-bold">
+                        ✅ Armed &amp; Guarding Tower (≤80L)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/60 font-bold animate-pulse">
+                        ⚠️ Not Installed
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-stone-300 mt-0.5">
+                    Automatically pulls 2.0 L/s groundwater from Deep Aquifer to keep Gravity Tower pressurized whenever volume drops ≤ 80L (refills up to 200L).
+                  </p>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-2">
+                {hasEmergencySiphon ? (
+                  <div className="text-xs font-bold text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                    <span>🛡️</span>
+                    <span>Active Protection</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => installEmergencySiphonValve()}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-stone-950 shadow-md border border-cyan-200 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>⚡</span>
+                    <span>{siphonInBag > 0 ? 'Install Valve (1 in Bag)' : 'Quick Install Siphon (250 Coins)'}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Central Master Valve & Live Flow Display */}
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">

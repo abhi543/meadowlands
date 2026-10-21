@@ -337,19 +337,24 @@ export const WorkshopInstallationsPanel: React.FC = () => {
 
             <button
               onClick={() => installEmergencySiphonValve()}
-              disabled={isSiphonInstalled || siphonInBag <= 0}
+              disabled={isSiphonInstalled}
               className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5 ${
                 isSiphonInstalled
                   ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 cursor-default'
-                  : 'bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white cursor-pointer disabled:cursor-not-allowed active:scale-95'
+                  : 'bg-cyan-600 hover:bg-cyan-500 text-white cursor-pointer active:scale-95'
               }`}
             >
               {isSiphonInstalled ? (
                 <>✅ Float Valve Installed &amp; Guarding Tower</>
-              ) : (
+              ) : siphonInBag > 0 ? (
                 <>
                   <span>🚰 Install Siphon Valve</span>
-                  <span className="text-[10px] opacity-80">(Requires 1 Valve, Bag: {siphonInBag})</span>
+                  <span className="text-[10px] opacity-80">(1 in Bag)</span>
+                </>
+              ) : (
+                <>
+                  <span>⚡ Quick Install Siphon Valve</span>
+                  <span className="text-[10px] opacity-80">(250 Coins)</span>
                 </>
               )}
             </button>

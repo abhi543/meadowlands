@@ -16,7 +16,7 @@ export interface ClientData {
   tiers: ReputationTier[];
 }
 
-export type FavorShopItemType = 'crisis_shield' | 'instant_overclock' | 'order_reroll' | 'barn_permit';
+export type FavorShopItemType = 'crisis_shield' | 'instant_overclock' | 'order_reroll' | 'barn_permit' | 'siphon_valve';
 
 export interface FavorShopItem {
   id: string;
@@ -106,6 +106,14 @@ export const FAVOR_SHOP_CATALOG: FavorShopItem[] = [
     costFavor: 80,
     icon: '📜',
     type: 'barn_permit',
+  },
+  {
+    id: 'favor_siphon_valve',
+    title: 'Emergency Siphon Float Valve',
+    description: 'Instantly grants 1 Siphon Float Valve for the Gravity Tower. Automatically draws 2.0 L/s groundwater when tower volume drops ≤80L.',
+    costFavor: 15,
+    icon: '🚰',
+    type: 'siphon_valve',
   },
 ];
 

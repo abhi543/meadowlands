@@ -11,7 +11,12 @@ export function FavorShopView() {
     freeOverclocks,
     bonusStorageCapacity,
     purchaseFavorItem,
+    workshopLoadout,
+    barn,
   } = useGameStore();
+
+  const isSiphonInstalled = Boolean(workshopLoadout?.emergencySiphonInstalled);
+  const siphonInBag = barn?.emergency_siphon_valve || 0;
 
   const spendableFavor = globalReputation?.spendableFavor || 0;
 
@@ -101,6 +106,7 @@ export function FavorShopView() {
                   {item.type === 'instant_overclock' && `Vouchers: ${freeOverclocks || 0}`}
                   {item.type === 'order_reroll' && `Refreshes all 6 orders`}
                   {item.type === 'barn_permit' && `Permit Bonus: +${bonusStorageCapacity || 0}`}
+                  {item.type === 'siphon_valve' && (isSiphonInstalled ? '✅ Installed in Tower' : siphonInBag > 0 ? `In Bag: ${siphonInBag}` : 'Not Installed')}
                 </span>
 
                 <button

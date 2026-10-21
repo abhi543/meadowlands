@@ -29,6 +29,18 @@ export const ITEM_PROCUREMENT_REGISTRY: Record<string, ItemProcurementInfo> = {
     timeEstimate: 'Instant / Auto-pumping',
     instructions: 'Open the Hydrology tab. Activate the Deep Well manual pump or draw pressurized water directly from the Elevated Gravity Tower & Rain Cistern.',
   },
+  emergency_siphon_valve: {
+    id: 'emergency_siphon_valve',
+    name: 'Emergency Siphon Float Valve',
+    emoji: '🚰',
+    category: 'hydrology',
+    categoryLabel: 'Hydrology Equipment',
+    facility: 'Sluice Console / Workshop / Favor Shop',
+    tabTarget: 'Hydrology Gauge (💧) or Workshop',
+    timeEstimate: 'Instant (1-Click Install) or 30s craft',
+    ingredients: '2 Mineral Slabs + 4 Wheat (or 250 Coins Quick-Install)',
+    instructions: 'Click the Gravity Tower or open Sluice Console to 1-click Quick Install for 250 Coins (or 1 in Bag), buy in Town Favor Shop (15 Favor), or craft in the Workshop!',
+  },
 
   // Raw Crops
   wheat: {

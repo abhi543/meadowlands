@@ -31,6 +31,9 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
   const setHydrologyReservoirLevel = useGameStore(state => state.setHydrologyReservoirLevel);
   const setTowerStorageTier = useGameStore(state => state.setTowerStorageTier);
   const upgradeTowerStorageTier = useGameStore(state => state.upgradeTowerStorageTier);
+  const barn = useGameStore(state => state.barn);
+  const installEmergencySiphonValve = useGameStore(state => state.installEmergencySiphonValve);
+  const siphonInBag = barn?.emergency_siphon_valve || 0;
 
   const [showTestPanel, setShowTestPanel] = useState(false);
 
@@ -377,10 +380,21 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
 
       {/* Siphon Status & Calibration Toggle Row */}
       <div className="pt-1.5 flex items-center justify-between text-[11px] border-t border-stone-800/80 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`px-2 py-0.5 rounded-md border text-[10px] ${siphonBadge.color} ${siphonBadge.border}`}>
             {siphonBadge.text}
           </span>
+          {!hasEmergencySiphon && (
+            <button
+              type="button"
+              onClick={() => installEmergencySiphonValve()}
+              className="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-stone-950 shadow-sm border border-cyan-200 flex items-center gap-1 transition-all active:scale-95 cursor-pointer animate-pulse"
+              title="Click to install Emergency Siphon Float Valve instantly"
+            >
+              <span>🚰</span>
+              <span>{siphonInBag > 0 ? 'Install Siphon (1 in Bag)' : 'Quick Install Siphon (250 Coins)'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setShowTestPanel(!showTestPanel)}

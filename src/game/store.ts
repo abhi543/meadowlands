@@ -1130,7 +1130,8 @@ export interface GameState {
   unmountPrismaticLens: () => void;
   mountThermalCore: () => boolean;
   unmountThermalCore: () => void;
-  installEmergencySiphonValve: () => boolean;
+  installEmergencySiphonValve: (allowCoinPurchase?: boolean) => boolean;
+  buySiphonValve: (costCoins?: number) => boolean;
 
   // Elevated Gravity Tower Fail-Safe & Offline Protection
   offlineHydrologyReport: OfflineHydrologyResolutionResult | null;
@@ -1502,7 +1503,7 @@ export const useGameStore = create<GameState>()(
       isHardcoreMode: false,
 
       silo: { wheat: 5, corn: 3, carrot: 0, strawberry: 0, soybean: 0, pumpkin: 0, cotton: 0, feed: 3, honey_comb: 0, wild_berries: 0, gold_nugget: 0 },
-      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2 },
+      barn: { egg: 2, milk: 1, wool: 0, truffle: 0, fish: 0, bread: 0, cheese: 0, pie: 0, sweater: 0, truffle_oil: 0, yarn: 0, quilted_blanket: 0, savory_fish_pie: 0, crab_bisque: 0, honey: 0, silk: 0, chitin_molt_plates: 4, mineral_slab: 4, fired_hardwood: 2, tempered_glass: 2, emergency_siphon_valve: 1 },
 
       plots: initialPlots,
       unlockedPlots: GRID_SIZE,
@@ -6844,25 +6845,51 @@ export const useGameStore = create<GameState>()(
         });
       },
 
-      installEmergencySiphonValve: () => {
+      installEmergencySiphonValve: (allowCoinPurchase = true) => {
         const state = get();
         const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
         if (loadout.emergencySiphonInstalled) return false;
         const have = state.barn.emergency_siphon_valve || 0;
-        if (have <= 0) return false;
 
-        const newBarn = { ...state.barn };
-        newBarn.emergency_siphon_valve = Math.max(0, have - 1);
+        let newBarn = { ...state.barn };
+        let newCoins = state.coins;
+
+        if (have > 0) {
+          newBarn.emergency_siphon_valve = Math.max(0, have - 1);
+        } else if (allowCoinPurchase) {
+          const cost = Math.min(250, state.coins);
+          newCoins = Math.max(0, state.coins - cost);
+        } else {
+          return false;
+        }
 
         playVictoryChime();
         state.addNotification('🚰 Emergency Aquifer Siphon Valve installed! Automatic hydraulic transfer will protect tower from dropping below 80L.', '🛡️💧', 'discovery');
 
         set({
+          coins: newCoins,
           barn: newBarn,
           workshopLoadout: {
             ...loadout,
             emergencySiphonInstalled: true,
           },
+          isDirty: true,
+        });
+        return true;
+      },
+
+      buySiphonValve: (costCoins = 250) => {
+        const state = get();
+        const effectiveCost = Math.min(costCoins, state.coins);
+        const newBarn = { ...state.barn };
+        newBarn.emergency_siphon_valve = (newBarn.emergency_siphon_valve || 0) + 1;
+
+        playVictoryChime();
+        state.addNotification('🚰 Purchased Emergency Siphon Float Valve! Ready for installation at the Gravity Tower or Workshop.', '💧', 'discovery');
+
+        set({
+          coins: Math.max(0, state.coins - effectiveCost),
+          barn: newBarn,
           isDirty: true,
         });
         return true;
@@ -11888,6 +11915,19 @@ export const useGameStore = create<GameState>()(
           return true;
         }
 
+        if (item.type === 'siphon_valve') {
+          const newBarn = { ...state.barn };
+          newBarn.emergency_siphon_valve = (newBarn.emergency_siphon_valve || 0) + 1;
+          set({
+            globalReputation: updatedGlobalRep,
+            barn: newBarn,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`🚰 Purchased Emergency Siphon Float Valve! Ready for installation in Gravity Tower / Sluice Gate console.`, '🚰', 'event');
+          return true;
+        }
+
         return false;
       },
 
@@ -12592,6 +12632,10 @@ export const useGameStore = create<GameState>()(
           if (merged.workshopLoadout.emergencySiphonInstalled === undefined) {
             merged.workshopLoadout.emergencySiphonInstalled = false;
           }
+        }
+        if (!merged.workshopLoadout.emergencySiphonInstalled && !merged.barn?.emergency_siphon_valve) {
+          if (!merged.barn) merged.barn = {} as any;
+          merged.barn.emergency_siphon_valve = 1;
         }
         if (merged.offlineHydrologyReport === undefined) {
           merged.offlineHydrologyReport = null;
