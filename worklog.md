@@ -163,3 +163,18 @@ Work Log:
 
 Stage Summary:
 - Successfully decluttered the Farm page by removing Soil Fuel legend and both Favor Shop UI ribbons while preserving full core farming gameplay, plot management, and dedicated shop tabs.
+
+---
+Task ID: 10
+Agent: Main Agent
+Task: Remove Till Under from Farm Page
+
+Work Log:
+- Removed "Uproot & Till Under" button from the contextual hover/click action bubble on growing plots in `src/components/game/FarmGrid.tsx`.
+- Removed the "Quick Till Under" button (`[ ❌ Till Under ]`) centered on growing crop plots in `src/components/game/FarmGrid.tsx`.
+- Removed tilling dust animation (`tillingPlotId`) and brief floating notification (`clearedFloatingTextPlotId`) from `src/components/game/FarmGrid.tsx`.
+- Cleaned up unused `handleTillUnder`, `playTillSoilSound`, and `tillUnderCrop` imports/bindings in `FarmGrid.tsx`.
+- Verified TypeScript checks (`npx tsc --noEmit`) and Next.js Turbopack production build (`npm run build`) pass with 0 errors.
+
+Stage Summary:
+- Successfully removed all Till Under buttons, scythe animations, and handlers from the farm grid to prevent accidental crop destruction.
