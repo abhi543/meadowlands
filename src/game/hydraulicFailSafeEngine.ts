@@ -227,10 +227,12 @@ export function calculateHydraulicConsumers(params: {
  */
 export function simulateSiphonTick(params: {
   towerLiters: number;
+  towerCapacityLiters?: number;
   aquiferLiters: number;
   deltaSeconds: number;
   hasEmergencySiphon: boolean;
   trickleRateLps?: number;
+  siphonMode?: 'continuous' | 'emergency';
 }): {
   newTowerLiters: number;
   newAquiferLiters: number;
@@ -239,10 +241,12 @@ export function simulateSiphonTick(params: {
 } {
   const {
     towerLiters,
+    towerCapacityLiters = ELEVATED_TOWER_CAPACITY,
     aquiferLiters,
     deltaSeconds,
     hasEmergencySiphon,
     trickleRateLps = 2.0,
+    siphonMode = 'continuous',
   } = params;
 
   if (!hasEmergencySiphon || aquiferLiters <= 0) {
@@ -254,8 +258,14 @@ export function simulateSiphonTick(params: {
     };
   }
 
-  // Float valve activates at or below 80L and remains open until 200L is restored
-  const shouldSiphon = towerLiters <= STAGE_THRESHOLDS.STAGE_1_CONSERVATION_MIN || (towerLiters < STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN && towerLiters > 0);
+  // Continuous mode: maintains continuous inflow whenever tower < towerCapacityLiters!
+  // Emergency mode: only activates when tower <= 80L (or returning to 200L)
+  const isContinuous = siphonMode !== 'emergency';
+  const targetCeiling = isContinuous ? towerCapacityLiters : STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN;
+
+  const shouldSiphon = isContinuous
+    ? towerLiters < targetCeiling
+    : (towerLiters <= STAGE_THRESHOLDS.STAGE_1_CONSERVATION_MIN || (towerLiters < STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN && towerLiters > 0));
 
   if (!shouldSiphon) {
     return {
@@ -267,8 +277,8 @@ export function simulateSiphonTick(params: {
   }
 
   const requestedTransfer = trickleRateLps * deltaSeconds;
-  const towerDeficitToNominal = Math.max(0, STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN - towerLiters);
-  const actualTransfer = Math.min(requestedTransfer, aquiferLiters, towerDeficitToNominal);
+  const towerDeficit = Math.max(0, targetCeiling - towerLiters);
+  const actualTransfer = Math.min(requestedTransfer, aquiferLiters, towerDeficit);
 
   if (actualTransfer <= 0) {
     return {
@@ -484,6 +494,8 @@ export function resolveOfflineHydrologyCatchUp(params: {
   activeWorkerCount: number;
   hasEmergencySiphon: boolean;
   hasInsulationSleeves?: boolean;
+  siphonMode?: 'continuous' | 'emergency';
+  towerCapacityLiters?: number;
 }): OfflineHydrologyResolutionResult {
   const {
     initialTowerLiters,
@@ -495,6 +507,8 @@ export function resolveOfflineHydrologyCatchUp(params: {
     activeWorkerCount,
     hasEmergencySiphon,
     hasInsulationSleeves = false,
+    siphonMode = 'continuous',
+    towerCapacityLiters = ELEVATED_TOWER_CAPACITY,
   } = params;
 
   let tower = Math.max(0, initialTowerLiters);
@@ -514,21 +528,41 @@ export function resolveOfflineHydrologyCatchUp(params: {
   const R_crew_nominal = activeWorkerCount * 0.015;
   const R_crew_rationed = R_crew_nominal * 0.5;
 
+  const isContinuousSiphon = hasEmergencySiphon && siphonMode !== 'emergency' && aquifer > 0;
+
   // --- PHASE 1: DRAIN DOWN TO STAGE 1 (200L) ---
   if (tower > STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN && timeLeft > 0) {
     const R_total_1 = R_furrow + R_biolab + R_crew_nominal;
+    const R_siphon = isContinuousSiphon ? 2.0 : 0;
+    const R_net_drain = R_total_1 - R_siphon;
     const deltaV = tower - STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN;
 
-    if (R_total_1 > 0) {
-      const timeToStage1 = deltaV / R_total_1;
+    if (R_net_drain <= 0) {
+      // Continuous siphon replenishes faster than or equal to drain! Tower stays stable.
+      const transferNeeded = Math.min(aquifer, R_total_1 * timeLeft);
+      aquifer -= transferNeeded;
+      totalSiphonedLiters += transferNeeded;
+      tower = Math.min(towerCapacityLiters, tower + (Math.abs(R_net_drain) * timeLeft));
+      effectiveCropGrowthSeconds = timeLeft;
+      timeLeft = 0;
+    } else if (R_net_drain > 0) {
+      const timeToStage1 = deltaV / R_net_drain;
       if (timeLeft <= timeToStage1) {
-        // Did not reach Stage 1 during entire absence
-        tower -= timeLeft * R_total_1;
+        tower -= timeLeft * R_net_drain;
+        if (isContinuousSiphon) {
+          const transferred = Math.min(aquifer, R_siphon * timeLeft);
+          aquifer -= transferred;
+          totalSiphonedLiters += transferred;
+        }
         effectiveCropGrowthSeconds = timeLeft;
         timeLeft = 0;
       } else {
-        // Reached Stage 1 at timeToStage1
         tower = STAGE_THRESHOLDS.STAGE_0_NOMINAL_MIN;
+        if (isContinuousSiphon) {
+          const transferred = Math.min(aquifer, R_siphon * timeToStage1);
+          aquifer -= transferred;
+          totalSiphonedLiters += transferred;
+        }
         effectiveCropGrowthSeconds = timeToStage1;
         cropConservationEngagedSec = Math.round(timeToStage1);
         timeLeft -= timeToStage1;

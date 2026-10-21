@@ -1068,6 +1068,7 @@ export interface GameState {
   toggleEmergencySpillway: () => void;
   openEmergencySpillway: () => void;
   closeEmergencySpillway: () => void;
+  toggleSiphonMode: () => void;
   setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => void;
 
   // High-Capacity Water Storage Progression Actions
@@ -7462,6 +7463,8 @@ export const useGameStore = create<GameState>()(
             activeWorkerCount: activeWorkers,
             hasEmergencySiphon: Boolean(workshopLoadout.emergencySiphonInstalled),
             hasInsulationSleeves: Boolean(state.amberBioLab?.cryoInsulationInstalled),
+            siphonMode: currentHydrology.siphonMode || 'continuous',
+            towerCapacityLiters: currentHydrology.towerCapacityLiters || 800,
           });
 
           offlineHydrologyReportToSet = offlineCatchup;
@@ -7488,9 +7491,11 @@ export const useGameStore = create<GameState>()(
         const hasEmergencySiphon = Boolean(workshopLoadout.emergencySiphonInstalled);
         const siphonSim = simulateSiphonTick({
           towerLiters: effectiveHydrology.towerLiters,
+          towerCapacityLiters: effectiveHydrology.towerCapacityLiters || 800,
           aquiferLiters: effectiveHydrology.aquiferLiters,
           deltaSeconds,
           hasEmergencySiphon,
+          siphonMode: effectiveHydrology.siphonMode || 'continuous',
         });
         effectiveHydrology.towerLiters = siphonSim.newTowerLiters;
         effectiveHydrology.aquiferLiters = siphonSim.newAquiferLiters;
@@ -10589,6 +10594,24 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
         state.addNotification('🛑 Emergency Spillway Closed: Off-map runoff diversion secured.', '🛑', 'info');
+      },
+
+      toggleSiphonMode: () => {
+        const state = get();
+        const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const newMode = currentHydro.siphonMode === 'emergency' ? 'continuous' : 'emergency';
+        set({
+          hydrology: {
+            ...currentHydro,
+            siphonMode: newMode,
+          },
+          isDirty: true,
+        });
+        if (newMode === 'continuous') {
+          state.addNotification('⚡ Siphon Valve: Continuous Artesian Inflow Engaged (+2.0 L/s maintaining full tower pressure)!', '🚰', 'discovery');
+        } else {
+          state.addNotification('🛡️ Siphon Valve: Emergency Reserve Mode Active (activates only when tower ≤ 80L).', '🛡️', 'info');
+        }
       },
 
       setHydrologyReservoirLevel: (reservoir: 'cistern' | 'aquifer' | 'tower', liters: number) => {

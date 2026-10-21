@@ -477,11 +477,11 @@ def build_pdf(output_path: str):
     siphon_box_data = [
         [
             Paragraph(
-                "<b>🚰 THE EMERGENCY AQUIFER SIPHON FLOAT VALVE:</b><br/>"
-                "&bull; <b>Installation:</b> Crafted in the Workshop or installed via the Water Tab (Cost: 250 Coins).<br/>"
-                "&bull; <b>Automated Trigger:</b> The moment Elevated Gravity Tower water drops &le; 80 Liters, the mechanical float valve unseats.<br/>"
-                "&bull; <b>Continuous Siphon:</b> Automatically draws <b>+2.0 L/s</b> clean groundwater from the Deep Aquifer into the Gravity Tower until 200 Liters (Stage 0) is restored.<br/>"
-                "&bull; <b>Drought Immunity:</b> As long as the Aquifer contains water, the Gravity Tower can <i>never</i> drop into Stage 3 Cryo-Standby!",
+                "<b>🚰 THE AQUIFER SIPHON FEED VALVE (CONTINUOUS & EMERGENCY MODES):</b><br/>"
+                "&bull; <b>Installation:</b> Crafted in the Workshop or installed directly via the Water Tab (Cost: 250 Coins).<br/>"
+                "&bull; <b>Continuous Artesian Feed (Default):</b> Siphons clean groundwater from the Deep Aquifer at <b>+2.0 L/s</b> continuously whenever the Elevated Gravity Tower has headroom, maintaining 100% full capacity and constant pressurized head.<br/>"
+                "&bull; <b>Emergency Reserve Mode (Toggleable):</b> For water conservation, can be switched to trigger only when the tower drops &le; 80L (refilling up to 200L).<br/>"
+                "&bull; <b>Total Drought & Offline Immunity:</b> As long as the Aquifer contains water, the Gravity Tower is continuously replenished and specimens never enter Cryo-Standby!",
                 callout_style
             )
         ]

@@ -9,8 +9,9 @@ import {
   TOWER_STORAGE_TIERS,
 } from '@/game/hydraulicFailSafeEngine';
 
-function formatCountdown(seconds: number | null): string {
-  if (seconds === null) return 'Stable (0 L/s)';
+function formatCountdown(seconds: number | null, netFlowLps?: number): string {
+  if (netFlowLps && netFlowLps > 0) return `Replenishing (+${netFlowLps.toFixed(1)} L/s)`;
+  if (seconds === null) return 'Stable Supply';
   if (seconds <= 0) return 'Depleted (0s)';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -33,6 +34,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
   const upgradeTowerStorageTier = useGameStore(state => state.upgradeTowerStorageTier);
   const barn = useGameStore(state => state.barn);
   const installEmergencySiphonValve = useGameStore(state => state.installEmergencySiphonValve);
+  const toggleSiphonMode = useGameStore(state => state.toggleSiphonMode);
   const siphonInBag = barn?.emergency_siphon_valve || 0;
 
   const [showTestPanel, setShowTestPanel] = useState(false);
@@ -112,14 +114,21 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
     }
   })();
 
+  const siphonMode = hydrology?.siphonMode || 'continuous';
   const siphonBadge = (() => {
     if (!hasEmergencySiphon) {
       return { text: 'Auto-Siphon: Not Installed', color: 'text-stone-500', border: 'border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800' };
     }
-    if (isSiphonActive) {
-      return { text: 'Auto-Siphon: Active (+2.0 L/s)', color: 'text-cyan-700 dark:text-cyan-300 animate-pulse font-bold', border: 'border-cyan-400 bg-cyan-50 dark:bg-cyan-950/60' };
+    if (siphonMode === 'continuous' && isSiphonActive) {
+      return { text: 'Continuous Artesian Feed: Active (+2.0 L/s)', color: 'text-cyan-800 dark:text-cyan-300 animate-pulse font-bold', border: 'border-cyan-400 bg-cyan-100 dark:bg-cyan-950/60' };
     }
-    return { text: 'Auto-Siphon: Standby Idle', color: 'text-teal-700 dark:text-teal-400', border: 'border-teal-300 dark:border-teal-600/40 bg-teal-50 dark:bg-teal-950/40' };
+    if (isSiphonActive) {
+      return { text: 'Emergency Siphon: Active (+2.0 L/s)', color: 'text-cyan-800 dark:text-cyan-300 animate-pulse font-bold', border: 'border-cyan-400 bg-cyan-100 dark:bg-cyan-950/60' };
+    }
+    if (siphonMode === 'continuous') {
+      return { text: 'Continuous Siphon: Standby (Tower Full)', color: 'text-teal-800 dark:text-teal-300 font-semibold', border: 'border-teal-300 dark:border-teal-600/40 bg-teal-50 dark:bg-teal-950/40' };
+    }
+    return { text: 'Emergency Siphon: Standby (≤80L)', color: 'text-teal-800 dark:text-teal-300 font-semibold', border: 'border-teal-300 dark:border-teal-600/40 bg-teal-50 dark:bg-teal-950/40' };
   })();
 
   const activeSourceName = overflowSurgeSource === 'cistern'
@@ -341,7 +350,7 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
             Time Until Empty
           </span>
           <span className="font-mono font-black text-sky-800 dark:text-cyan-300 text-xs">
-            {formatCountdown(breakdown.estimatedSecondsUntilEmpty)}
+            {formatCountdown(breakdown.estimatedSecondsUntilEmpty, breakdown.netFlowLps)}
           </span>
         </div>
 
@@ -379,6 +388,20 @@ export const GravityTowerWidget: React.FC<{ compact?: boolean }> = ({ compact = 
           <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${siphonBadge.color} ${siphonBadge.border}`}>
             {siphonBadge.text}
           </span>
+          {hasEmergencySiphon && (
+            <button
+              type="button"
+              onClick={toggleSiphonMode}
+              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center gap-1 shadow-xs ${
+                siphonMode === 'continuous'
+                  ? 'bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-950/80 border-cyan-400 text-cyan-900 dark:text-cyan-200'
+                  : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+              }`}
+              title="Toggle between Continuous Artesian Feed vs Emergency Reserve Mode"
+            >
+              <span>{siphonMode === 'continuous' ? '⚡ Continuous Feed' : '🛡️ Emergency Mode'}</span>
+            </button>
+          )}
           {!hasEmergencySiphon && (
             <button
               type="button"

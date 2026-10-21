@@ -49,6 +49,7 @@ export function WaterTab() {
     level,
     workshopLoadout,
     installEmergencySiphonValve,
+    toggleSiphonMode,
     barn,
   } = useGameStore();
 
@@ -102,6 +103,7 @@ export function WaterTab() {
   };
 
   const hasEmergencySiphon = Boolean(workshopLoadout?.emergencySiphonInstalled);
+  const siphonMode = hydro?.siphonMode || 'continuous';
   const siphonInBag = barn?.emergency_siphon_valve || 0;
 
   const handleShutoffChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,12 +191,18 @@ export function WaterTab() {
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-black text-stone-900 dark:text-white uppercase tracking-wider">
-                Emergency Aquifer Siphon Float Valve
+                Aquifer Siphon Feed Valve
               </span>
               {hasEmergencySiphon ? (
-                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-600 font-bold flex items-center gap-1">
-                  <span>✅</span> Armed &amp; Guarding Tower (≤80L)
-                </span>
+                siphonMode === 'continuous' ? (
+                  <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-cyan-100 dark:bg-cyan-950/80 text-cyan-800 dark:text-cyan-300 border border-cyan-400 font-bold flex items-center gap-1 animate-pulse">
+                    <span>⚡</span> Continuous Artesian Feed Active (+2.0 L/s)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-600 font-bold flex items-center gap-1">
+                    <span>🛡️</span> Emergency Reserve Only (≤80L)
+                  </span>
+                )
               ) : (
                 <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-600 font-bold animate-pulse flex items-center gap-1">
                   <span>⚠️</span> Standby: Not Installed
@@ -202,16 +210,29 @@ export function WaterTab() {
               )}
             </div>
             <p className="text-xs text-stone-600 dark:text-stone-300 mt-1 leading-relaxed">
-              Automatically draws 2.0 L/s groundwater from Deep Aquifer to keep Gravity Tower pressurized whenever volume drops ≤ 80L (refilling up to 200L).
+              {hasEmergencySiphon && siphonMode === 'continuous'
+                ? 'Continuously siphoning clean groundwater (+2.0 L/s) from Deep Aquifer to keep Gravity Tower pressurized and properly supplied at all times.'
+                : 'Automatically draws 2.0 L/s groundwater from Deep Aquifer to keep Gravity Tower pressurized whenever volume drops ≤ 80L (refilling up to 200L).'}
             </p>
           </div>
         </div>
 
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2 flex-wrap">
           {hasEmergencySiphon ? (
-            <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-600 px-4 py-2 rounded-xl flex items-center gap-2 shadow-xs">
-              <span>🛡️</span>
-              <span>Active Protection</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggleSiphonMode()}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                  siphonMode === 'continuous'
+                    ? 'bg-cyan-100 hover:bg-cyan-200 dark:bg-cyan-950/70 dark:hover:bg-cyan-900 border-cyan-400 text-cyan-900 dark:text-cyan-200'
+                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+                }`}
+                title="Toggle between Continuous Artesian Inflow vs Emergency Reserve (≤80L only)"
+              >
+                <span>{siphonMode === 'continuous' ? '⚡ Mode: Continuous Feed' : '🛡️ Mode: Emergency (≤80L)'}</span>
+                <span className="text-[10px] opacity-75 font-normal">(Switch)</span>
+              </button>
             </div>
           ) : (
             <button

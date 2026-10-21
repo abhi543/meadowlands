@@ -369,6 +369,7 @@ export interface HydrologyState {
   isSiphonActive?: boolean;
   siphonTransferRateLps?: number;
   totalSiphonedLiters?: number;
+  siphonMode?: 'continuous' | 'emergency';
   
   // G. Automated Hydraulic Rule: Full-Reserve Pressure Surge
   isOverflowSurgeActive?: boolean;
