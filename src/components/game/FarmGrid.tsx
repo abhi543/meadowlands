@@ -50,6 +50,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     barn = {},
     coins,
     globalReputation,
+    crisisShields,
+    freeOverclocks,
+    bonusStorageCapacity,
+    purchaseFavorItem,
     systemicEvent,
     extinguishBrushfire,
     captureLocust,
@@ -121,6 +125,28 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     setTimeout(() => {
       setBioDressingFloatingTextPlotId(null);
     }, 2200);
+  };
+
+  const handleApplyBioDressingAll = () => {
+    let doses = barn?.universal_bio_dressing || 0;
+    if (doses <= 0) {
+      const success = purchaseFavorItem('favor_universal_bio_dressing');
+      if (!success) return;
+      doses = (barn?.universal_bio_dressing || 0) + 3;
+    }
+    let count = 0;
+    for (let i = 0; i < unlockedPlots; i++) {
+      const p = plots[i];
+      if (!p) continue;
+      const isFull = p.soilBattery?.green && p.soilBattery?.yellow && p.soilBattery?.red && !p.plantedInDepletedSoil;
+      if (!isFull) {
+        applyUniversalBioDressing(i);
+        count++;
+      }
+    }
+    if (count === 0) {
+      useGameStore.getState().addNotification('All plots already have 100% full nutrient reserves!', 'ℹ️', 'info');
+    }
   };
 
   const visiblePlots = plots.slice(0, unlockedPlots);
@@ -489,6 +515,88 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           }`}>
             {hydrology?.sluiceGatesOpen ? 'OPEN' : 'CLOSED'}
           </span>
+        </button>
+      </div>
+
+      {/* Town Favor & Estate Utility Command Bar */}
+      <div className="bg-gradient-to-r from-stone-900 via-stone-950 to-stone-900 border border-amber-500/40 rounded-2xl p-2.5 sm:p-3 shadow-lg flex flex-wrap items-center justify-between gap-2.5 text-white select-none">
+        {/* Left: Favor Shop Items & Soil Recovery Shortcuts */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <div className="flex items-center gap-1.5 font-black text-amber-300 text-xs mr-1">
+            <span className="text-base">🏛️</span>
+            <span>Favor Utilities:</span>
+          </div>
+
+          {/* 🧪 Universal Bio-Dressing Button / Badge */}
+          <button
+            type="button"
+            onClick={handleApplyBioDressingAll}
+            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-md border ${
+              (barn?.universal_bio_dressing || 0) > 0
+                ? 'bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white border-teal-300 active:scale-95 animate-pulse'
+                : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-600'
+            }`}
+            title={
+              (barn?.universal_bio_dressing || 0) > 0
+                ? `You have ${barn.universal_bio_dressing} Bio-Dressing doses. Tap to apply to all tired plots!`
+                : 'Tap to purchase Universal Bio-Dressing (Pack of 3 for 10 Favor or 25 Coins)'
+            }
+          >
+            <span className="text-sm">🧪</span>
+            <span className="font-mono font-black text-teal-200">
+              {barn?.universal_bio_dressing || 0}
+            </span>
+            <span>Bio-Dressing</span>
+            {(barn?.universal_bio_dressing || 0) === 0 && (
+              <span className="text-[10px] font-mono text-amber-300 bg-amber-950 px-1.5 py-0.2 rounded-md border border-amber-500/50">
+                +Buy (10🎖️/25🪙)
+              </span>
+            )}
+          </button>
+
+          {/* 🛡️ Crisis Shields Badge */}
+          <div
+            className="px-2.5 py-1.5 rounded-xl bg-stone-900/90 border border-sky-600/40 text-xs font-bold flex items-center gap-1.5 text-sky-200 shadow-sm"
+            title="Emergency Crisis Shields in reserve (Absorbs incoming disasters automatically)"
+          >
+            <span>🛡️</span>
+            <span className="font-mono font-black text-sky-300">{crisisShields || 0}</span>
+            <span className="hidden sm:inline text-stone-400 text-[11px]">Shields</span>
+          </div>
+
+          {/* ⚡ Overdrive Vouchers Badge */}
+          <div
+            className="px-2.5 py-1.5 rounded-xl bg-stone-900/90 border border-amber-600/40 text-xs font-bold flex items-center gap-1.5 text-amber-200 shadow-sm"
+            title="Instant Overdrive Vouchers: Free Tier 3 Overclock with 0% burnout risk"
+          >
+            <span>⚡</span>
+            <span className="font-mono font-black text-amber-300">{freeOverclocks || 0}</span>
+            <span className="hidden sm:inline text-stone-400 text-[11px]">Overdrives</span>
+          </div>
+
+          {/* 💩 Compost Stock */}
+          <div
+            className="px-2.5 py-1.5 rounded-xl bg-stone-900/90 border border-stone-700 text-xs font-bold flex items-center gap-1.5 text-stone-200 shadow-sm"
+            title="Organic Compost in Barn for soil recharging"
+          >
+            <span>💩</span>
+            <span className="font-mono font-black text-amber-300">
+              {(barn?.organic_compost || 0) + (barn?.compost || 0) + (barn?.manure || 0)}
+            </span>
+            <span className="hidden sm:inline text-stone-400 text-[11px]">Compost</span>
+          </div>
+        </div>
+
+        {/* Right: Spendable Favor Token Balance & 1-Click Link to Favor Shop */}
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('market')}
+          className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 active:scale-95 text-stone-950 font-black text-xs flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+          title="Visit Town Favor Shop to exchange tokens for VIP utilities"
+        >
+          <span className="text-sm">🎖️</span>
+          <span className="font-mono font-black">{globalReputation?.spendableFavor || 0}</span>
+          <span className="uppercase text-[10px] tracking-wide">Favor Shop ➔</span>
         </button>
       </div>
 
@@ -1246,6 +1354,111 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             </span>
           );
         })}
+      </div>
+
+      {/* Town Favor & Outpost Purchased Items Ribbon */}
+      <div className="p-2.5 rounded-xl bg-gradient-to-r from-stone-900 via-stone-950 to-stone-900 border border-amber-500/30 text-xs flex flex-wrap items-center justify-between gap-2 shadow-sm text-white">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-black text-amber-300 flex items-center gap-1 text-[11px] uppercase tracking-wider">
+            <span>🏛️</span>
+            <span>Favor Shop Inventory:</span>
+          </span>
+
+          {/* 🧪 Bio-Dressing */}
+          <button
+            type="button"
+            onClick={handleApplyBioDressingAll}
+            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 transition-all text-xs border ${
+              (barn?.universal_bio_dressing || 0) > 0
+                ? 'bg-teal-900/50 hover:bg-teal-800/60 text-teal-200 border-teal-500/50 cursor-pointer shadow-xs active:scale-95'
+                : 'bg-stone-850 hover:bg-stone-800 text-stone-400 border-stone-700 cursor-pointer'
+            }`}
+            title={
+              (barn?.universal_bio_dressing || 0) > 0
+                ? `You have ${barn.universal_bio_dressing} Bio-Dressing doses. Click to restore all tired plots instantly!`
+                : 'Click to buy Universal Bio-Dressing (Pack of 3 for 10 Favor or 25 Coins)'
+            }
+          >
+            <span>🧪</span>
+            <span className="font-mono font-black text-teal-300">
+              {barn?.universal_bio_dressing || 0}
+            </span>
+            <span className="text-[11px]">Bio-Dressing</span>
+            {(barn?.universal_bio_dressing || 0) === 0 && (
+              <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-500/40">
+                +Buy
+              </span>
+            )}
+          </button>
+
+          {/* 🛡️ Shields */}
+          <div
+            className="px-2.5 py-1 rounded-lg bg-sky-950/40 border border-sky-600/40 font-bold flex items-center gap-1.5 text-sky-200 text-xs"
+            title="Crisis Shields ready (Absorbs incoming disasters automatically)"
+          >
+            <span>🛡️</span>
+            <span className="font-mono font-black text-sky-300">{crisisShields || 0}</span>
+            <span className="text-[11px] text-stone-300">Shields</span>
+          </div>
+
+          {/* ⚡ Overdrive Vouchers */}
+          <div
+            className="px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-600/40 font-bold flex items-center gap-1.5 text-amber-200 text-xs"
+            title="Instant Overdrive Vouchers (Free Tier 3 Overclock with 0% burnout risk)"
+          >
+            <span>⚡</span>
+            <span className="font-mono font-black text-amber-300">{freeOverclocks || 0}</span>
+            <span className="text-[11px] text-stone-300">Overdrives</span>
+          </div>
+
+          {/* 📜 Granary Permits */}
+          {(bonusStorageCapacity || 0) > 0 && (
+            <div
+              className="px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-600/40 font-bold flex items-center gap-1.5 text-emerald-200 text-xs"
+              title="Bonus storage capacity unlocked from Favor Shop Granary Expansion Permits"
+            >
+              <span>📜</span>
+              <span className="font-mono font-black text-emerald-300">+{bonusStorageCapacity}</span>
+              <span className="text-[11px] text-stone-300">Storage</span>
+            </div>
+          )}
+
+          {/* 🚰 Emergency Siphon Valve */}
+          {(barn?.emergency_siphon_valve || 0) > 0 && (
+            <div
+              className="px-2.5 py-1 rounded-lg bg-cyan-950/40 border border-cyan-600/40 font-bold flex items-center gap-1.5 text-cyan-200 text-xs"
+              title="Emergency Siphon Valves stored in Barn for hydraulic pressure override"
+            >
+              <span>🚰</span>
+              <span className="font-mono font-black text-cyan-300">{barn?.emergency_siphon_valve}</span>
+              <span className="text-[11px] text-stone-300">Siphon</span>
+            </div>
+          )}
+
+          {/* 💩 Soil Compost / Manure */}
+          <div
+            className="px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-700 font-bold flex items-center gap-1.5 text-stone-200 text-xs"
+            title="Compost & Manure stock for plot fertilization"
+          >
+            <span>💩</span>
+            <span className="font-mono font-black text-amber-300">
+              {(barn?.organic_compost || 0) + (barn?.compost || 0) + (barn?.manure || 0)}
+            </span>
+            <span className="text-[11px] text-stone-400">Compost</span>
+          </div>
+        </div>
+
+        {/* Right: Spendable Favor Token Shortcut */}
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('market')}
+          className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 hover:text-amber-100 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+          title="Visit Town Favor Shop to spend tokens on VIP upgrades"
+        >
+          <span>🎖️</span>
+          <span className="font-mono font-black text-amber-300">{globalReputation?.spendableFavor || 0}</span>
+          <span className="text-[10px] uppercase font-bold text-amber-300">Favor Shop ➔</span>
+        </button>
       </div>
 
       {/* Plot Upgrade Modal */}
