@@ -59,8 +59,8 @@ export function SluiceGateControlModal() {
   if (!isSluiceModalOpen) return null;
 
   const hydro = hydrology;
-  const canalTier = (hydro?.canalTier || 1) as CanalTier;
-  const tierConfig = CANAL_TIER_CONFIGS[canalTier];
+  const canalTier = (Math.min(4, Math.max(1, hydro?.canalTier || 1))) as CanalTier;
+  const tierConfig = CANAL_TIER_CONFIGS[canalTier] || CANAL_TIER_CONFIGS[1];
 
   const towerTier = hydro?.towerTier || 1;
   const towerTierConfig = TOWER_STORAGE_TIERS[towerTier] || TOWER_STORAGE_TIERS[1];
