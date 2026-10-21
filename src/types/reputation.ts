@@ -16,7 +16,7 @@ export interface ClientData {
   tiers: ReputationTier[];
 }
 
-export type FavorShopItemType = 'crisis_shield' | 'instant_overclock' | 'order_reroll' | 'barn_permit' | 'siphon_valve';
+export type FavorShopItemType = 'crisis_shield' | 'instant_overclock' | 'order_reroll' | 'barn_permit' | 'siphon_valve' | 'universal_bio_dressing';
 
 export interface FavorShopItem {
   id: string;
@@ -114,6 +114,14 @@ export const FAVOR_SHOP_CATALOG: FavorShopItem[] = [
     costFavor: 15,
     icon: '🚰',
     type: 'siphon_valve',
+  },
+  {
+    id: 'favor_universal_bio_dressing',
+    title: 'Universal Bio-Dressing (Pack of 3)',
+    description: 'Instant-recovery organic fertilizer pack. Applies to any empty or growing plot to instantly reset all 3 nutrient lights (🟢 Leaf, 🟡 Root, 🔴 Fruit) to 100% Solid Full, clear crop sickness, and restore dark fertile loam.',
+    costFavor: 10,
+    icon: '🧪',
+    type: 'universal_bio_dressing',
   },
 ];
 

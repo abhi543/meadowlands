@@ -355,3 +355,63 @@ export function playTillSoilSound(): void {
   osc2.stop(now + 0.18);
 }
 
+/**
+ * 🌊 2-second water surge/wash sound effect for Hydraulic Flood-Wash
+ */
+export function playFloodWashSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+
+  // 1. Hydraulic valve release rush (white noise-like burst via detuned oscillators)
+  [220, 310, 440, 580].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = i % 2 === 0 ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.4, now + 1.8);
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.linearRampToValueAtTime(0.12, now + 0.4);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.95);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 2.0);
+  });
+}
+
+/**
+ * ✨ Magical restorative chime for Universal Bio-Dressing application
+ */
+export function playBioDressingSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const notes = [440, 554.37, 659.25, 880]; // A major arpeggio
+
+  notes.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.setValueAtTime(0.15, now + idx * 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.5);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + idx * 0.08);
+    osc.stop(now + idx * 0.08 + 0.55);
+  });
+}
+
+

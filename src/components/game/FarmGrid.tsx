@@ -14,7 +14,13 @@ import {
   isSoilBatteryFull,
   type PlotSoilBattery,
 } from '@/game/soilEnergyEngine';
-import { playSoilEnergyChime, playTiredSoilAlert, playTillSoilSound } from '@/lib/soundEffects';
+import {
+  playSoilEnergyChime,
+  playTiredSoilAlert,
+  playTillSoilSound,
+  playFloodWashSound,
+  playBioDressingSound,
+} from '@/lib/soundEffects';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -33,6 +39,8 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     applyCompostToProps,
     applyCompostToAllPlots,
     tillUnderCrop,
+    flushPlotBed,
+    applyUniversalBioDressing,
     waterPlot,
     waterLevel,
     maxWaterLevel,
@@ -64,6 +72,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const [activeActionPlotId, setActiveActionPlotId] = useState<number | null>(null);
   const [tillingPlotId, setTillingPlotId] = useState<number | null>(null);
   const [clearedFloatingTextPlotId, setClearedFloatingTextPlotId] = useState<number | null>(null);
+  const [flushingPlotId, setFlushingPlotId] = useState<number | null>(null);
+  const [flushedFloatingTextPlotId, setFlushedFloatingTextPlotId] = useState<number | null>(null);
+  const [bioDressingPlotId, setBioDressingPlotId] = useState<number | null>(null);
+  const [bioDressingFloatingTextPlotId, setBioDressingFloatingTextPlotId] = useState<number | null>(null);
 
   const handleTillUnder = (plotId: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -80,7 +92,38 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     }, 1800);
   };
 
+  const handleFlushBed = (plotId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const success = flushPlotBed(plotId);
+    if (!success) return;
+    setFlushingPlotId(plotId);
+    setFlushedFloatingTextPlotId(plotId);
+    setActiveActionPlotId(null);
+    setTimeout(() => {
+      setFlushingPlotId(null);
+    }, 2000);
+    setTimeout(() => {
+      setFlushedFloatingTextPlotId(null);
+    }, 2600);
+  };
+
+  const handleApplyBioDressing = (plotId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const success = applyUniversalBioDressing(plotId);
+    if (!success) return;
+    setBioDressingPlotId(plotId);
+    setBioDressingFloatingTextPlotId(plotId);
+    setActiveActionPlotId(null);
+    setTimeout(() => {
+      setBioDressingPlotId(null);
+    }, 1200);
+    setTimeout(() => {
+      setBioDressingFloatingTextPlotId(null);
+    }, 2200);
+  };
+
   const visiblePlots = plots.slice(0, unlockedPlots);
+  const towerWater = hydrology?.towerLiters || 0;
 
   // Livestock summary stats
   const chickensCount = animals.filter(a => a.species === 'chicken').length;
@@ -558,7 +601,12 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             } else if (isReady) {
               harvestPlot(plot.id);
             } else if (isEmpty) {
-              plantCrop(plot.id, selectedCrop);
+              if (isDepleted) {
+                // Tapping an empty depleted plot toggles contextual actions: [ 🌊 Flush Bed ] / [ 🧪 Bio-Dressing ]
+                setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
+              } else {
+                plantCrop(plot.id, selectedCrop);
+              }
             } else if (isGrowing) {
               // Tapping growing crop toggles contextual action bubble: [ ❌ Uproot & Till Under ]
               setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
@@ -819,9 +867,38 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                           </div>
                           {/* Floating Quick Fix Hint Bubble directly on plot */}
                           <div
-                            className="mt-1 flex items-center gap-1 z-40"
+                            className="mt-1 flex flex-wrap items-center justify-center gap-1 z-40 max-w-[96%]"
                             onClick={(e) => e.stopPropagation()}
                           >
+                            <button
+                              type="button"
+                              disabled={towerWater < 200}
+                              onClick={(e) => handleFlushBed(plot.id, e)}
+                              className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight flex items-center gap-0.5 shadow-md border ${
+                                towerWater >= 200
+                                  ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 text-white border-blue-400 cursor-pointer'
+                                  : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
+                              }`}
+                              title={
+                                towerWater >= 200
+                                  ? 'Flush bed with 15L Tower Water to instantly restore all nutrients'
+                                  : `Tower Water below 200L (${Math.round(towerWater)}L) — Stage 1 Load-Shedding Active`
+                              }
+                            >
+                              <span>🌊</span>
+                              <span>Flush Bed</span>
+                            </button>
+                            {(barn?.universal_bio_dressing || 0) > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                                className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md border border-emerald-400"
+                                title="Apply Universal Bio-Dressing (Instant 100% Recharge)"
+                              >
+                                <span>🧪</span>
+                                <span>Bio-Dress ({barn.universal_bio_dressing})</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => applyCompostToProps(plot.id)}
@@ -829,9 +906,8 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                               title="Add compost/manure to instantly refill battery"
                             >
                               <span>💩</span>
-                              <span>Add Compost</span>
+                              <span>Compost</span>
                             </button>
-                            <span className="text-[8px] text-stone-300 font-bold">or</span>
                             <button
                               type="button"
                               onClick={() => {
@@ -842,11 +918,61 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                               title="Plant restorative Peas to recharge 🟢 Leaf/Stem fuel"
                             >
                               <span>🫛</span>
-                              <span>Plant Peas</span>
+                              <span>Peas</span>
                             </button>
                           </div>
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {/* Contextual Action Bubble for Empty Depleted Plot */}
+                  {isEmpty && isDepleted && (activeActionPlotId === plot.id || isHovered) && (
+                    <div
+                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-stone-950/95 border border-cyan-400/90 px-2 py-1 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        disabled={towerWater < 200}
+                        onClick={(e) => handleFlushBed(plot.id, e)}
+                        className={`px-2 py-0.5 rounded-lg text-white text-[9px] font-black tracking-tight flex items-center gap-1 shadow-md transition-all border ${
+                          towerWater >= 200
+                            ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 border-blue-400 cursor-pointer'
+                            : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
+                        }`}
+                        title={
+                          towerWater >= 200
+                            ? 'Instantly restore all depleted nutrient lights using 15L Gravity Tower water'
+                            : `Gravity Tower below 200L (${Math.round(towerWater)}L) — Hydraulic Load-Shedding Stage 1 Active`
+                        }
+                      >
+                        <span>🌊</span>
+                        <span>Flush Bed (-15L Tower Water)</span>
+                      </button>
+                      {(barn?.universal_bio_dressing || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                          className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
+                          title="Apply Universal Bio-Dressing from Favor Shop: 100% nutrient recharge & blight cleanse"
+                        >
+                          <span>🧪</span>
+                          <span>Bio-Dressing ({barn.universal_bio_dressing})</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          plantCrop(plot.id, selectedCrop);
+                          setActiveActionPlotId(null);
+                        }}
+                        className="px-1.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 active:scale-95 text-stone-300 text-[9px] font-bold border border-stone-600 cursor-pointer shadow-sm"
+                        title="Plant crop anyway (will suffer 1x harvest and slow growth)"
+                      >
+                        <span>🌱</span>
+                        <span>Plant {selectedCropDef.name}</span>
+                      </button>
                     </div>
                   )}
 
@@ -865,6 +991,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         <span>❌</span>
                         <span>Uproot & Till Under</span>
                       </button>
+                      {(barn?.universal_bio_dressing || 0) > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleApplyBioDressing(plot.id, e)}
+                          className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
+                          title="Apply Universal Bio-Dressing: restores 100% soil energy & clears negative modifiers"
+                        >
+                          <span>🧪</span>
+                          <span>Bio-Dressing ({barn.universal_bio_dressing})</span>
+                        </button>
+                      )}
                       {!isWatered && waterLevel > 0 && (
                         <button
                           type="button"
@@ -879,6 +1016,43 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                           <span>Water</span>
                         </button>
                       )}
+                    </div>
+                  )}
+
+                  {/* 2-second water pooling animation over the dirt */}
+                  {flushingPlotId === plot.id && (
+                    <div className="absolute inset-0 z-40 bg-blue-600/50 backdrop-blur-[1px] flex flex-col items-center justify-center animate-in fade-in duration-200 pointer-events-none overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-t from-blue-700/70 via-cyan-500/40 to-transparent animate-pulse" />
+                      <span className="text-3xl animate-bounce z-10">🌊</span>
+                      <div className="absolute w-16 h-16 rounded-full border-2 border-cyan-200/80 animate-ping" />
+                      <span className="text-[9px] font-black text-white mt-1 uppercase tracking-wider drop-shadow-md z-10">
+                        Flushing Bed...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Floating feedback text after flush */}
+                  {flushedFloatingTextPlotId === plot.id && (
+                    <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-50 px-2 py-0.5 rounded-full bg-blue-950/95 border border-cyan-400 text-cyan-200 text-[8px] sm:text-[9px] font-black shadow-2xl animate-bounce pointer-events-none whitespace-nowrap">
+                      Soil Flushed — Nutrients Restored!
+                    </div>
+                  )}
+
+                  {/* 1.2-second bio-dressing sparkle animation */}
+                  {bioDressingPlotId === plot.id && (
+                    <div className="absolute inset-0 z-40 bg-emerald-950/70 backdrop-blur-[1px] flex flex-col items-center justify-center animate-in fade-in duration-200 pointer-events-none">
+                      <span className="text-3xl animate-bounce z-10">🧪</span>
+                      <div className="absolute w-14 h-14 rounded-full border-2 border-emerald-300 animate-ping" />
+                      <span className="text-[9px] font-black text-emerald-200 mt-1 uppercase tracking-wider drop-shadow-md z-10">
+                        Enriching Loam...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Floating feedback text after bio-dressing */}
+                  {bioDressingFloatingTextPlotId === plot.id && (
+                    <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-50 px-2 py-0.5 rounded-full bg-emerald-950/95 border border-emerald-400 text-emerald-200 text-[8px] sm:text-[9px] font-black shadow-2xl animate-bounce pointer-events-none whitespace-nowrap">
+                      ✨ Bio-Dressing Applied — Nutrients 100%!
                     </div>
                   )}
 

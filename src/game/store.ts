@@ -190,6 +190,9 @@ import {
   playClockTickSound,
   playSirenSting,
   playCashRegisterSound,
+  playTillSoilSound,
+  playFloodWashSound,
+  playBioDressingSound,
 } from '@/lib/soundEffects';
 import {
   type OverclockTier,
@@ -855,6 +858,8 @@ export interface GameState {
   applyCompostToProps: (plotId: number) => boolean;
   applyCompostToAllPlots: () => void;
   tillUnderCrop: (plotId: number) => boolean;
+  flushPlotBed: (plotId: number) => boolean;
+  applyUniversalBioDressing: (plotId: number) => boolean;
   feedAnimal: (animalId: string) => void;
   collectProduct: (animalId: string) => void;
   feedAllAnimals: () => void;
@@ -2286,6 +2291,113 @@ export const useGameStore = create<GameState>()(
         });
 
         state.addNotification(`🌱 Plot #${plotId + 1}: Crop tilled under as green manure! Blight cleansed & bed prepped for restorative planting.`, '🚜', 'discovery');
+        return true;
+      },
+
+      flushPlotBed: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots || plot.crop !== null) return false;
+
+        const isDepleted = !plot.soilBattery?.green || !plot.soilBattery?.yellow || !plot.soilBattery?.red;
+        if (!isDepleted && !plot.plantedInDepletedSoil) {
+          state.addNotification(`Plot #${plotId + 1} already has 100% full nutrient reserves!`, 'ℹ️', 'info');
+          return false;
+        }
+
+        const currentTowerLiters = state.hydrology?.towerLiters || 0;
+        if (currentTowerLiters < 200) {
+          state.addNotification(`⚠️ Hydraulic Load-Shedding Active: Gravity Tower volume (${Math.round(currentTowerLiters)}L) is below the 200L safety threshold!`, '⚠️', 'event');
+          return false;
+        }
+
+        const newTowerLiters = Math.max(0, Math.round((currentTowerLiters - 15) * 10) / 10);
+
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          soilBattery: rechargeSoilBatteryFull(),
+          plantedInDepletedSoil: false,
+          moistureLevel: Math.max(80, plot.moistureLevel !== undefined ? plot.moistureLevel : 80),
+          isWatered: true,
+          desiccatedSeconds: 0,
+          isWithered: false,
+          hasRootRot: false,
+          isMonoculture: false,
+        };
+
+        playFloodWashSound();
+
+        set({
+          hydrology: {
+            ...state.hydrology,
+            towerLiters: newTowerLiters,
+          },
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(`🌊 Soil Flushed — Nutrients Restored! Deducted 15L from Elevated Gravity Tower (Tower remaining: ${newTowerLiters}L).`, '🌊', 'discovery');
+        return true;
+      },
+
+      applyUniversalBioDressing: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots) return false;
+
+        const doses = state.barn?.universal_bio_dressing || 0;
+        if (doses <= 0) {
+          state.addNotification('No Universal Bio-Dressing available! Purchase a pack from the Favor Shop.', 'ℹ️', 'info');
+          return false;
+        }
+
+        const newBarn = {
+          ...state.barn,
+          universal_bio_dressing: doses - 1,
+        };
+
+        let updatedActiveCrisis = state.activeCrisis;
+        if (state.activeCrisis?.type === 'crop_blight') {
+          const newTargetIds = state.activeCrisis.targetIds.filter(
+            id => id !== plotId && id !== String(plotId)
+          );
+          if (newTargetIds.length === 0) {
+            updatedActiveCrisis = null;
+          } else {
+            updatedActiveCrisis = {
+              ...state.activeCrisis,
+              targetIds: newTargetIds,
+            };
+          }
+        }
+
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          soilBattery: rechargeSoilBatteryFull(),
+          plantedInDepletedSoil: false,
+          isMonoculture: false,
+          isWithered: false,
+          hasRootRot: false,
+          isFrostbitten: false,
+          isHeatWilted: false,
+          desiccatedSeconds: 0,
+          waterloggedSeconds: 0,
+          moistureLevel: Math.max(85, plot.moistureLevel !== undefined ? plot.moistureLevel : 85),
+          isWatered: true,
+        };
+
+        playBioDressingSound();
+
+        set({
+          barn: newBarn,
+          plots: newPlots,
+          activeCrisis: updatedActiveCrisis,
+          isDirty: true,
+        });
+
+        state.addNotification(`✨ Universal Bio-Dressing applied to Plot #${plotId + 1}! All 3 nutrient lights recharged to 100% Solid Full & soil health cleansed. (${doses - 1} doses left)`, '🧪', 'discovery');
         return true;
       },
 
@@ -12232,6 +12344,19 @@ export const useGameStore = create<GameState>()(
           });
           playVictoryChime();
           state.addNotification(`🚰 Purchased Emergency Siphon Float Valve! Ready for installation in Gravity Tower / Sluice Gate console.`, '🚰', 'event');
+          return true;
+        }
+
+        if (item.type === 'universal_bio_dressing') {
+          const newBarn = { ...state.barn };
+          newBarn.universal_bio_dressing = (newBarn.universal_bio_dressing || 0) + 3;
+          set({
+            globalReputation: updatedGlobalRep,
+            barn: newBarn,
+            isDirty: true,
+          });
+          playVictoryChime();
+          state.addNotification(`🧪 Purchased Universal Bio-Dressing (Pack of 3)! Restores exhausted plots to 100% full nutrient capacity instantly. Doses available: ${newBarn.universal_bio_dressing}`, '🧪', 'event');
           return true;
         }
 

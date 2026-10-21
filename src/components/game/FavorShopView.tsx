@@ -47,7 +47,7 @@ export function FavorShopView() {
         </div>
 
         {/* Active Inventory / Benefits Active Strip */}
-        <div className="mt-3 pt-2.5 border-t border-amber-500/20 grid grid-cols-3 gap-2 text-center">
+        <div className="mt-3 pt-2.5 border-t border-amber-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
           <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
             <div className="text-[10px] text-stone-400">Active Shields</div>
             <div className="text-xs font-black text-sky-300 font-mono">🛡️ {crisisShields || 0} Ready</div>
@@ -59,6 +59,10 @@ export function FavorShopView() {
           <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
             <div className="text-[10px] text-stone-400">Granary Expansion</div>
             <div className="text-xs font-black text-emerald-300 font-mono">📜 +{bonusStorageCapacity || 0} Slots</div>
+          </div>
+          <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
+            <div className="text-[10px] text-stone-400">Bio-Dressing</div>
+            <div className="text-xs font-black text-teal-300 font-mono">🧪 {barn?.universal_bio_dressing || 0} Doses</div>
           </div>
         </div>
       </div>
@@ -107,6 +111,7 @@ export function FavorShopView() {
                   {item.type === 'order_reroll' && `Refreshes all 6 orders`}
                   {item.type === 'barn_permit' && `Permit Bonus: +${bonusStorageCapacity || 0}`}
                   {item.type === 'siphon_valve' && (isSiphonInstalled ? '✅ Installed in Tower' : siphonInBag > 0 ? `In Bag: ${siphonInBag}` : 'Not Installed')}
+                  {item.type === 'universal_bio_dressing' && `In Bag: ${barn?.universal_bio_dressing || 0} Doses (Pack of 3)`}
                 </span>
 
                 <button
