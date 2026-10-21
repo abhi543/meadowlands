@@ -55,8 +55,8 @@ export function WaterTab() {
   const [customShutoff, setCustomShutoff] = useState(hydrology?.autoShutoffMoisture ?? 75);
 
   const hydro = hydrology;
-  const canalTier = (hydro?.canalTier || 1) as CanalTier;
-  const tierConfig = CANAL_TIER_CONFIGS[canalTier];
+  const canalTier = (Math.min(4, Math.max(1, hydro?.canalTier || 1))) as CanalTier;
+  const tierConfig = CANAL_TIER_CONFIGS[canalTier] || CANAL_TIER_CONFIGS[1];
 
   const towerTier = hydro?.towerTier || 1;
   const towerTierConfig = TOWER_STORAGE_TIERS[towerTier] || TOWER_STORAGE_TIERS[1];
@@ -406,11 +406,11 @@ export function WaterTab() {
             <button
               type="button"
               onClick={upgradeCisternStorageTier}
-              disabled={cisternTier >= 5 || coins < (cisternTierConfig.costCoins || 0)}
-              className="py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500"
-              title={`Upgrade Cistern (🪙${(cisternTierConfig.costCoins || 0).toLocaleString()})`}
+              disabled={cisternTier >= 5 || coins < (CISTERN_STORAGE_TIERS[cisternTier + 1]?.costCoins || 999999)}
+              className="py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500 cursor-pointer disabled:cursor-not-allowed"
+              title={cisternTier >= 5 ? 'Max Tier Reached' : `Upgrade Cistern (🪙${(CISTERN_STORAGE_TIERS[cisternTier + 1]?.costCoins || 0).toLocaleString()})`}
             >
-              ⬆️ T{cisternTier + 1}
+              {cisternTier >= 5 ? 'MAX' : `⬆️ T${cisternTier + 1}`}
             </button>
           </div>
         </div>
@@ -451,10 +451,10 @@ export function WaterTab() {
             <button
               type="button"
               onClick={upgradeTowerStorageTier}
-              disabled={towerTier >= 5 || coins < (towerTierConfig.costCoins || 0)}
-              className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500 transition-all active:scale-95"
+              disabled={towerTier >= 5 || coins < (TOWER_STORAGE_TIERS[towerTier + 1]?.costCoins || 999999)}
+              className="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
             >
-              ⬆️ Upgrade Tower Capacity (🪙{(towerTierConfig.costCoins || 0).toLocaleString()})
+              {towerTier >= 5 ? 'Tower at Maximum Capacity (Tier 5)' : `⬆️ Upgrade Tower Capacity (🪙${(TOWER_STORAGE_TIERS[towerTier + 1]?.costCoins || 0).toLocaleString()})`}
             </button>
           </div>
         </div>
@@ -507,11 +507,11 @@ export function WaterTab() {
             <button
               type="button"
               onClick={upgradeAquiferStorageTier}
-              disabled={aquiferTier >= 5 || coins < (aquiferTierConfig.costCoins || 0)}
-              className="py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500"
-              title={`Upgrade Aquifer Depth (🪙${(aquiferTierConfig.costCoins || 0).toLocaleString()})`}
+              disabled={aquiferTier >= 5 || coins < (AQUIFER_STORAGE_TIERS[aquiferTier + 1]?.costCoins || 999999)}
+              className="py-1.5 px-2.5 rounded-xl text-[11px] font-bold bg-amber-600/30 hover:bg-amber-600/50 disabled:bg-stone-800/50 border border-amber-500/50 disabled:border-stone-700 text-amber-200 disabled:text-stone-500 cursor-pointer disabled:cursor-not-allowed"
+              title={aquiferTier >= 5 ? 'Max Tier Reached' : `Upgrade Aquifer Depth (🪙${(AQUIFER_STORAGE_TIERS[aquiferTier + 1]?.costCoins || 0).toLocaleString()})`}
             >
-              ⬆️ T{aquiferTier + 1}
+              {aquiferTier >= 5 ? 'MAX' : `⬆️ T${aquiferTier + 1}`}
             </button>
           </div>
         </div>
@@ -604,9 +604,10 @@ export function WaterTab() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-          {([1, 2, 3, 4, 5] as CanalTier[]).map((t) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+          {([1, 2, 3, 4] as CanalTier[]).map((t) => {
             const cfg = CANAL_TIER_CONFIGS[t];
+            if (!cfg) return null;
             const isCurrent = canalTier === t;
             const isNext = canalTier + 1 === t;
             return (
