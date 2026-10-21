@@ -114,3 +114,19 @@ Work Log:
 Stage Summary:
 - Events now occur purely as unpredictable random surprises matching natural farm progression, completely removing player-selected manual triggers from standard gameplay
 
+---
+Task ID: 7
+Agent: Main Agent
+Task: Unified Order Board with High-Stakes Deadlines, Hydrology Water Demands, Freshness Bonuses, and Item Help Guide
+
+Work Log:
+- Retired separate Faction Contract Deck toggle; restored classic Order Board as the primary, unified logistics hub across all tabs (All, Local, Freight, Noble, Timed & High-Stakes, Favor Shop, Reputation).
+- Integrated High-Stakes Bounties with massive 5.0x coin payout multipliers (+400% coin boost), bonus gems, +150% rep points, urgent ticking countdowns, and failure penalties (breach fee & client rep deduction upon expiry).
+- Added Hydrology Pressurized Water Demands: orders can request fresh pressurized water directly from farm reserves (Elevated Gravity Tower & Rain Cistern), validating stock and deducting water on single dispatch or bulk caravan haul.
+- Integrated Perishable Freshness Rating System into town deliveries: added +50% Pristine Quality payout bonuses when fulfilling contracts with fresh crops, bakery goods, seafood, and dairy.
+- Created `ItemSourceHelpModal.tsx` and interactive help buttons: added a dedicated "Where to Get Items" guide in the Order Board header, per-card "Where to Get" requisition breakdown buttons, and interactive guide links next to missing ingredients.
+- Verified TypeScript checks (`npx tsc --noEmit`) and Next.js Turbopack production build pass with 0 errors.
+
+Stage Summary:
+- Seamless single-hub order experience combining the classic client persona order board with high-stakes rewards, water logistics, perishable quality mechanics, and full item procurement assistance.
+

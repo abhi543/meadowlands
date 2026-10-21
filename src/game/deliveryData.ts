@@ -11,6 +11,7 @@ import {
   type ContractEconomicTier,
   type ContractSettlementBreakdown,
 } from './pricingEngine';
+import { isItemPerishable } from './freshnessEngine';
 
 export type OrderType = 'standard' | 'rush' | 'futures' | 'town_project';
 
@@ -52,15 +53,21 @@ export interface DeliveryOrder {
     name: string;
     quantity: number;
     icon: string;
+    isPerishable?: boolean;
+    minFreshness?: 'pristine' | 'standard';
   }[];
+  waterRequired?: number; // Hydrology demand in Liters
+  isHighStakes?: boolean; // High-Stakes flag
+  penaltyReputation?: number; // Client reputation loss if deadline missed
   rewards: {
     coins: number;
     xp: number;
     gems?: number;
     reputationPoints: number;
     specialItem?: string; // e.g., 'Expansion Deed', 'Nail', 'Plank'
+    pristineBonusCoins?: number; // Extra +50% coins if delivered with pristine goods
   };
-  durationRemaining?: number; // In seconds (for rush/futures)
+  durationRemaining?: number; // In seconds (for rush/futures/high-stakes)
   totalDuration?: number;
   penaltyCoins?: number;
   routeOptions?: {
@@ -463,11 +470,15 @@ export function generateDeliveryOrder(
       // Manufactured/artisan products (bread, cheese, pie, sweater, etc.)
       qty = type === 'town_project' ? 2 : 1;
     }
+    const perishable = isItemPerishable(id);
+    const minFresh: 'standard' | 'pristine' | undefined = perishable ? 'standard' : undefined;
     return {
       itemId: id,
       name: meta.name,
       quantity: qty,
       icon: meta.icon,
+      isPerishable: perishable,
+      minFreshness: minFresh,
     };
   });
 
@@ -484,21 +495,50 @@ export function generateDeliveryOrder(
   }
 
   const isRush = type === 'rush';
-  const settlement = calculateMasterSettlement(requiredItems, contractTier, 0, isRush);
+  // High-stakes bounty roll: Level 2+ contracts have ~30% chance to roll as High-Stakes
+  const isHighStakes = safeLevel >= 2 && (isRush || Math.random() < 0.30);
+
+  // Hydrology pressurized water demand roll: ~35% chance at Level 2+
+  let waterRequired: number | undefined;
+  if (safeLevel >= 2 && (isHighStakes || selectedClientId === 'mayor_barnaby' || Math.random() < 0.35)) {
+    // 20L to 60L pressurized water request
+    waterRequired = 20 + Math.floor(Math.random() * 5) * 10;
+  }
+
+  // Calculate master settlement with high-stakes 5.0x multiplier and water demand valuation
+  const settlement = calculateMasterSettlement(
+    requiredItems,
+    contractTier,
+    0,
+    isRush,
+    0,
+    waterRequired || 0,
+    isHighStakes
+  );
 
   const specialItemPool = ['Expansion Deed', 'Nail', 'Plank', 'Relic Fragment'];
-  const specialItem = (type === 'town_project' || (isRush && Math.random() < 0.5)) ? specialItemPool[Math.floor(Math.random() * specialItemPool.length)] : undefined;
-  const gems = isRush ? 2 : (type === 'town_project' ? 1 : undefined);
+  const specialItem = (type === 'town_project' || isHighStakes || (isRush && Math.random() < 0.5))
+    ? specialItemPool[Math.floor(Math.random() * specialItemPool.length)]
+    : undefined;
+  const gems = isHighStakes ? 3 : (isRush ? 2 : (type === 'town_project' ? 1 : undefined));
 
   const coins = settlement.finalCoinPayout;
   const xp = Math.max(15, Math.round(settlement.baseCommodityValue * 0.75));
   let reputationPoints = contractTier === 'tier3_noble' ? 50 : (contractTier === 'tier2_merchant' ? 25 : 15);
-  if (isRush) reputationPoints *= 2;
+  if (isHighStakes) reputationPoints = Math.round(reputationPoints * 2.5);
+  else if (isRush) reputationPoints *= 2;
 
-  // 10-minute countdown for Courier Rush bounties
-  const totalDuration = isRush ? 600 : (type === 'futures' ? 300 : undefined);
+  // Freshness Pristine Bonus (+50% coins if all perishables delivered pristine)
+  const hasPerishables = requiredItems.some(it => it.isPerishable);
+  const pristineBonusCoins = hasPerishables ? Math.round(coins * 0.50) : undefined;
+
+  // Countdown duration: High-stakes 8-min (480s) or 10-min rush (600s)
+  const totalDuration = isHighStakes ? 480 : (isRush ? 600 : (type === 'futures' ? 300 : undefined));
   const durationRemaining = totalDuration;
-  const penaltyCoins = isRush ? Math.max(25, Math.round(coins * 0.10)) : undefined;
+  const penaltyCoins = isHighStakes
+    ? Math.max(80, Math.round(coins * 0.20))
+    : (isRush ? Math.max(25, Math.round(coins * 0.10)) : undefined);
+  const penaltyReputation = isHighStakes ? 15 : undefined;
 
   const id = `deliv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const now = Date.now();
@@ -510,12 +550,16 @@ export function generateDeliveryOrder(
     contractTier,
     settlementBreakdown: settlement,
     requiredItems,
+    waterRequired,
+    isHighStakes,
+    penaltyReputation,
     rewards: {
       coins,
       xp,
       gems,
       reputationPoints,
       specialItem,
+      pristineBonusCoins,
     },
     durationRemaining,
     totalDuration,
@@ -536,9 +580,9 @@ export function generateDeliveryOrder(
     })),
     coinReward: coins,
     xpReward: xp,
-    isRushOrder: isRush,
-    rushExpiresAt: isRush ? now + 600000 : null,
-    rushDurationSec: isRush ? 600 : undefined,
+    isRushOrder: isRush || isHighStakes,
+    rushExpiresAt: durationRemaining ? now + durationRemaining * 1000 : null,
+    rushDurationSec: durationRemaining,
     breachFee: penaltyCoins,
     bonusGems: gems,
     relicFragmentReward: specialItem === 'Relic Fragment' ? 1 : 0,

@@ -51,6 +51,8 @@ import {
   evaluateCropPhenology,
   type CropPhenologyResult,
   createDefaultWeatherState,
+  getAvailableHydrologyWater,
+  deductHydrologyWater,
 } from '@/game/hydrologyEngine';
 import {
   simulateSiphonTick,
@@ -2756,6 +2758,20 @@ export const useGameStore = create<GameState>()(
         const order = state.orders.find(o => o.id === orderId);
         if (!order) return { success: false, message: 'Order not found' };
 
+        // Hydrology Pressurized Water Validation
+        const availableWater = getAvailableHydrologyWater(state.hydrology);
+        if (order.waterRequired && order.waterRequired > 0) {
+          if (availableWater < order.waterRequired) {
+            return {
+              success: false,
+              message: `Need ${order.waterRequired}L Pressurized Water (have ${availableWater}L in Hydrology storage)`,
+            };
+          }
+        }
+        const updatedHydrology = order.waterRequired && state.hydrology
+          ? deductHydrologyWater(state.hydrology, order.waterRequired)
+          : state.hydrology;
+
         const newSilo = { ...state.silo };
         const newBarn = { ...state.barn };
         const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty, name: r.name, icon: r.emoji })) || []);
@@ -2782,8 +2798,53 @@ export const useGameStore = create<GameState>()(
         const telemetry = calculateStaffUpkeep(state.unifiedWorkers, state.specialistWorkers, state.payrollVaultCoins, state.staffPantry);
         const dailyBurnRate = telemetry.baseDailyPayroll;
 
+        // Perishable Batches & Pristine Freshness Validation
+        let pristineBonusAwarded = 0;
+        const updatedBatches = { ...(state.perishableBatches || {}) };
+        let hasPerishables = false;
+        let allPristine = true;
+
+        for (const item of required) {
+          if (isItemPerishable(item.itemId)) {
+            hasPerishables = true;
+            const batches = updatedBatches[item.itemId] || [];
+            const def = PERISHABLE_DEFINITIONS[item.itemId];
+            const maxLife = def?.baseDecayDurationSec || 900;
+            const pristineCount = batches
+              .filter(b => calculateFreshnessPercent(b.harvestedAt, b.maxLifetimeSec || maxLife, now) >= 85)
+              .reduce((sum, b) => sum + b.quantity, 0);
+
+            if (pristineCount < item.quantity) {
+              allPristine = false;
+            }
+
+            // Deduct from perishable batches
+            let remainingNeeded = item.quantity;
+            const remainingBatches: PerishableBatch[] = [];
+            for (const b of batches) {
+              if (remainingNeeded <= 0) {
+                remainingBatches.push(b);
+              } else if (b.quantity <= remainingNeeded) {
+                remainingNeeded -= b.quantity;
+              } else {
+                remainingBatches.push({ ...b, quantity: b.quantity - remainingNeeded });
+                remainingNeeded = 0;
+              }
+            }
+            updatedBatches[item.itemId] = remainingBatches;
+          }
+        }
+
         const contractTier = order.contractTier || 'tier1_local';
-        const settlement = calculateMasterSettlement(required, contractTier, currentStreak, isRush, dailyBurnRate);
+        const settlement = calculateMasterSettlement(
+          required,
+          contractTier,
+          currentStreak,
+          isRush,
+          dailyBurnRate,
+          order.waterRequired || 0,
+          order.isHighStakes || false
+        );
 
         const baseCoins = settlement.finalCoinPayout;
         let baseGems = order.rewards?.gems || order.bonusGems || 0;
@@ -2803,6 +2864,11 @@ export const useGameStore = create<GameState>()(
 
         const crownBonus = (state.relics.royalCrownCrestUntil && state.relics.royalCrownCrestUntil > Date.now()) ? 1.15 : 1.0;
         let finalCoins = Math.round(baseCoins * crownBonus * mayorMult * chefMult * ladyMult);
+
+        if (hasPerishables && allPristine && order.rewards?.pristineBonusCoins) {
+          pristineBonusAwarded = order.rewards.pristineBonusCoins;
+          finalCoins += pristineBonusAwarded;
+        }
 
         // Route Logistics Check
         let hazardEncountered = false;
@@ -2829,6 +2895,16 @@ export const useGameStore = create<GameState>()(
             routeNotice = `🌲 Wild Shortcut Conquered! +${wildBounty} Hazard Bonus Coins secured!`;
             playGoldRushFanfare();
           }
+        }
+
+        if (order.isHighStakes) {
+          routeNotice += ' 👑 High-Stakes Bounty Secured!';
+        }
+        if (pristineBonusAwarded > 0) {
+          routeNotice += ` ✨ Pristine Freshness Bonus (+${pristineBonusAwarded}c)!`;
+        }
+        if (order.waterRequired) {
+          routeNotice += ` 💧 Hydrology Provision (+${order.waterRequired}L)!`;
         }
 
         // Reputation progression (Dual-Track Progression: Lifetime XP + Spendable Favor)
@@ -2896,6 +2972,8 @@ export const useGameStore = create<GameState>()(
         set({
           silo: newSilo,
           barn: newBarn,
+          hydrology: updatedHydrology,
+          perishableBatches: updatedBatches,
           coins: state.coins + finalCoins,
           gems: state.gems + baseGems,
           xp: newXp,
@@ -2923,13 +3001,18 @@ export const useGameStore = create<GameState>()(
           return { success: false, ordersCount: 0, netCoins: 0, message: 'Selected orders not found on order board', rareDropsWon: [] };
         }
 
-        // Aggregate Inventory Validation (Anti-cannibalization)
-        const cargoValidation = validateCaravanCargo(matchedOrders, state.silo, state.barn);
+        // Aggregate Inventory & Hydrology Validation (Anti-cannibalization)
+        const cargoValidation = validateCaravanCargo(
+          matchedOrders,
+          state.silo,
+          state.barn,
+          getAvailableHydrologyWater(state.hydrology)
+        );
         if (!cargoValidation.isValidCargo) {
           const firstDeficit = cargoValidation.conflictingItems[0];
           const errReason = firstDeficit
             ? `Insufficient stock for ${firstDeficit.name} (have ${firstDeficit.availableStock}, need ${firstDeficit.totalRequired})`
-            : 'Combined cargo exceeds available barn/silo stock';
+            : 'Combined cargo exceeds available barn/silo/water stock';
           return { success: false, ordersCount: 0, netCoins: 0, message: errReason, rareDropsWon: [] };
         }
 
@@ -3070,9 +3153,15 @@ export const useGameStore = create<GameState>()(
           'event'
         );
 
+        const totalWaterDemanded = matchedOrders.reduce((sum, o) => sum + (o.waterRequired || 0), 0);
+        const updatedHydrology = totalWaterDemanded > 0 && state.hydrology
+          ? deductHydrologyWater(state.hydrology, totalWaterDemanded)
+          : state.hydrology;
+
         set({
           silo: newSilo,
           barn: newBarn,
+          hydrology: updatedHydrology,
           coins: state.coins + finalCoins,
           gems: state.gems + settlement.totalGems,
           xp: newXp,
@@ -8967,8 +9056,11 @@ export const useGameStore = create<GameState>()(
         let currentCrisis: CrisisEvent | null = null;
         let newCrisisTime: number = state.nextCrisisTime || (now + 86400000);
 
-        // Check VIP rush & advance futures orders countdown and sanitize any overlevel orders
+        // Check VIP rush, high-stakes & advance futures orders countdown and sanitize any overlevel orders
         let ordersModified = false;
+        let clientRepModified = false;
+        const currentClientRep = { ...(state.clientReputation || DEFAULT_CLIENT_REPUTATION) };
+
         const updatedOrders = state.orders.map(order => {
           const reqItems = order.requiredItems || (order.requested?.map((r: any) => ({ itemId: r.itemId })) || []);
           const hasOverlevelItem = reqItems.some((it: any) => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) > state.level);
@@ -8976,16 +9068,33 @@ export const useGameStore = create<GameState>()(
             ordersModified = true;
             return generateDeliveryOrder(state.level, undefined, order.clientId);
           }
-          const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder;
+          const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder || order.isHighStakes;
           const expiryTime = order.expiresAt || order.rushExpiresAt;
           if (isTimed && expiryTime && now >= expiryTime) {
             ordersModified = true;
-            const breachPercent = state.isHardcoreMode ? 0.20 : 0.10;
-            const minFee = state.isHardcoreMode ? 25 : 15;
+            const isHighStakes = order.isHighStakes;
+            const breachPercent = isHighStakes ? 0.20 : (state.isHardcoreMode ? 0.20 : 0.10);
+            const minFee = isHighStakes ? 80 : (state.isHardcoreMode ? 25 : 15);
             const fee = order.penaltyCoins || order.breachFee || Math.max(minFee, Math.round((order.rewards?.coins || order.coinReward || 50) * breachPercent));
             newCoins = Math.max(0, newCoins - fee);
+
+            let repLostText = '';
+            if (isHighStakes && order.clientId && currentClientRep[order.clientId]) {
+              clientRepModified = true;
+              const repPenalty = order.penaltyReputation || 15;
+              currentClientRep[order.clientId] = {
+                ...currentClientRep[order.clientId],
+                xp: Math.max(0, (currentClientRep[order.clientId].xp || 0) - repPenalty),
+              };
+              repLostText = ` & -${repPenalty} ${CLIENT_DEFINITIONS[order.clientId]?.name || 'Client'} Rep`;
+            }
+
             playDefeatSound();
-            state.addNotification(`⚠️ ${order.type === 'futures' ? 'Advance Futures' : 'VIP Rush'} Contract expired! Paid breach fee of ${fee} coins.`, '📉', 'event');
+            state.addNotification(
+              `⚠️ ${isHighStakes ? '👑 High-Stakes Contract' : (order.type === 'futures' ? 'Advance Futures' : 'VIP Rush')} expired! Paid breach fee of ${fee} coins${repLostText}.`,
+              '📉',
+              'event'
+            );
             return generateDeliveryOrder(state.level, undefined, order.clientId);
           }
           return order;
@@ -9057,6 +9166,7 @@ export const useGameStore = create<GameState>()(
           waterLevel: newWaterLevel,
           lastWellAutoRefill: newLastWellAutoRefill,
           orders: ordersModified ? updatedOrders : state.orders,
+          clientReputation: clientRepModified ? currentClientRep : state.clientReputation,
           activeCrisis: currentCrisis,
           nextCrisisTime: newCrisisTime,
           wildExpedition: updatedExpedition,

@@ -380,6 +380,38 @@ export interface HydrologyState {
   totalPercolatedLiters: number;
 }
 
+/**
+ * Returns total available pressurized water stock in liters across Tower and Cistern reservoirs.
+ */
+export function getAvailableHydrologyWater(hydrology?: HydrologyState | null): number {
+  if (!hydrology) return 0;
+  return Math.floor((hydrology.towerLiters || 0) + (hydrology.cisternLiters || 0));
+}
+
+/**
+ * Deducts specified liters of water from the estate's reserves (prioritizing Tower, then Cistern).
+ */
+export function deductHydrologyWater(hydrology: HydrologyState, amountLiters: number): HydrologyState {
+  let remaining = amountLiters;
+  let newTower = hydrology.towerLiters || 0;
+  let newCistern = hydrology.cisternLiters || 0;
+
+  if (newTower >= remaining) {
+    newTower -= remaining;
+    remaining = 0;
+  } else {
+    remaining -= newTower;
+    newTower = 0;
+    newCistern = Math.max(0, newCistern - remaining);
+  }
+
+  return {
+    ...hydrology,
+    towerLiters: newTower,
+    cisternLiters: newCistern,
+  };
+}
+
 export function createDefaultHydrologyState(farmLevel: number = 1): HydrologyState {
   const cisternMax = getCisternCapacity(farmLevel);
   return {

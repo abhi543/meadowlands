@@ -34,6 +34,10 @@ export interface ContractSettlementBreakdown {
   streakBonusPercent: number; // e.g. 0, 25, 50
   isRush: boolean;
   rushMultiplier: number; // 3.0 or 1.0
+  isHighStakes?: boolean;
+  highStakesMultiplier?: number; // 5.0 or 1.0
+  waterValue?: number;
+  waterRequired?: number;
   finalCoinPayout: number;
   payrollDaysCovered?: number;
 }
@@ -474,11 +478,15 @@ export function calculateMasterSettlement(
   tier: ContractEconomicTier,
   streak = 0,
   isRush = false,
-  dailyPayrollRate = 0
+  dailyPayrollRate = 0,
+  waterRequired = 0,
+  isHighStakes = false
 ): ContractSettlementBreakdown {
   const tierConfig = CONTRACT_TIER_CONFIG[tier] || CONTRACT_TIER_CONFIG.tier1_local;
   const streakInfo = getTradeStreakMultiplier(streak);
   const rushMultiplier = isRush ? 3.0 : 1.0;
+  // High-stakes contracts command a premium 5.0x bounty multiplier delivering substantial payouts
+  const highStakesMultiplier = isHighStakes ? 5.0 : 1.0;
 
   let baseCommodityValue = 0;
   for (const it of items) {
@@ -486,7 +494,11 @@ export function calculateMasterSettlement(
     baseCommodityValue += profile.baseValue * it.quantity;
   }
 
-  const rawFinal = baseCommodityValue * tierConfig.multiplier * streakInfo.multiplier * rushMultiplier;
+  // Pressurized hydrology water demand value (6 coins per Liter base)
+  const waterValue = waterRequired > 0 ? Math.round(waterRequired * 6) : 0;
+  baseCommodityValue += waterValue;
+
+  const rawFinal = baseCommodityValue * tierConfig.multiplier * streakInfo.multiplier * rushMultiplier * highStakesMultiplier;
   const finalCoinPayout = Math.max(15, Math.round(rawFinal));
 
   let payrollDaysCovered: number | undefined;
@@ -505,6 +517,10 @@ export function calculateMasterSettlement(
     streakBonusPercent: streakInfo.bonusPercent,
     isRush,
     rushMultiplier,
+    isHighStakes,
+    highStakesMultiplier,
+    waterValue,
+    waterRequired,
     finalCoinPayout,
     payrollDaysCovered,
   };

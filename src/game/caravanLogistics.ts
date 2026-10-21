@@ -140,7 +140,8 @@ export interface CaravanManifestValidation {
 export function validateCaravanCargo(
   orders: DeliveryOrder[],
   silo: Record<string, number>,
-  barn: Record<string, number>
+  barn: Record<string, number>,
+  currentWater: number = Infinity
 ): CaravanManifestValidation {
   const demandMap: Record<string, RequisitionItemDemand> = {};
 
@@ -174,6 +175,25 @@ export function validateCaravanCargo(
 
       demandMap[item.itemId].totalRequired += item.quantity;
       demandMap[item.itemId].contributingOrderIds.push(order.id);
+    }
+
+    // Hydrology pressurized water demand
+    if (order.waterRequired && order.waterRequired > 0) {
+      if (!demandMap['water']) {
+        demandMap['water'] = {
+          itemId: 'water',
+          name: 'Pressurized Water',
+          icon: '💧',
+          storageType: 'silo',
+          totalRequired: 0,
+          availableStock: Math.floor(currentWater),
+          isSatisfied: true,
+          deficit: 0,
+          contributingOrderIds: [],
+        };
+      }
+      demandMap['water'].totalRequired += order.waterRequired;
+      demandMap['water'].contributingOrderIds.push(order.id);
     }
   }
 
@@ -213,11 +233,12 @@ export function canAddOrderToCaravan(
   candidateOrder: DeliveryOrder,
   currentlySelectedOrders: DeliveryOrder[],
   silo: Record<string, number>,
-  barn: Record<string, number>
+  barn: Record<string, number>,
+  currentWater: number = Infinity
 ): { canAdd: boolean; conflictReason?: string; shortItemName?: string; shortAvailable?: number; shortRequired?: number } {
   // Combine currently selected plus candidate
   const combined = [...currentlySelectedOrders, candidateOrder];
-  const validation = validateCaravanCargo(combined, silo, barn);
+  const validation = validateCaravanCargo(combined, silo, barn, currentWater);
 
   if (validation.isValidCargo) {
     return { canAdd: true };
@@ -234,7 +255,7 @@ export function canAddOrderToCaravan(
     };
   }
 
-  return { canAdd: false, conflictReason: 'Insufficient Home Barn Inventory' };
+  return { canAdd: false, conflictReason: 'Insufficient Home Barn/Hydrology Inventory' };
 }
 
 export interface CaravanSettlementBreakdown {
@@ -325,12 +346,16 @@ export function calculateCaravanSettlement(args: {
       const profile = getItemEconomicProfile(it.itemId);
       orderRawBase += profile.baseValue * it.quantity;
     }
+    if (order.waterRequired) {
+      orderRawBase += Math.round(order.waterRequired * 6);
+    }
     baseCommodityTotal += orderRawBase;
 
-    // Apply contract tier multiplier
+    // Apply contract tier multiplier & high-stakes bounty multiplier (5.0x)
     const contractTier: ContractEconomicTier = order.contractTier || 'tier1_local';
     const tierConfig = CONTRACT_TIER_CONFIG[contractTier] || CONTRACT_TIER_CONFIG.tier1_local;
-    const tierBase = Math.round(orderRawBase * tierConfig.multiplier);
+    const highStakesMult = order.isHighStakes ? 5.0 : 1.0;
+    const tierBase = Math.round(orderRawBase * tierConfig.multiplier * highStakesMult);
 
     // Rush multiplier (3.0x applied to that specific order's base portion)
     const isRush = Boolean(
