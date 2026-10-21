@@ -311,3 +311,47 @@ export function playTiredSoilAlert(): void {
   osc.stop(now + 0.18);
 }
 
+/**
+ * 🚜 Crisp soil-digging sound effect for tilling under crops
+ */
+export function playTillSoilSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+
+  // 1. Low frequency earth thump
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(160, now);
+  osc.frequency.exponentialRampToValueAtTime(50, now + 0.18);
+
+  gain.gain.setValueAtTime(0.18, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.22);
+
+  // 2. Crisp rustle of soil turning
+  const osc2 = ctx.createOscillator();
+  const gain2 = ctx.createGain();
+
+  osc2.type = 'triangle';
+  osc2.frequency.setValueAtTime(420, now + 0.02);
+  osc2.frequency.exponentialRampToValueAtTime(180, now + 0.16);
+
+  gain2.gain.setValueAtTime(0.10, now + 0.02);
+  gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+  osc2.connect(gain2);
+  gain2.connect(ctx.destination);
+
+  osc2.start(now + 0.02);
+  osc2.stop(now + 0.18);
+}
+

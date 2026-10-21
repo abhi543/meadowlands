@@ -14,7 +14,7 @@ import {
   isSoilBatteryFull,
   type PlotSoilBattery,
 } from '@/game/soilEnergyEngine';
-import { playSoilEnergyChime, playTiredSoilAlert } from '@/lib/soundEffects';
+import { playSoilEnergyChime, playTiredSoilAlert, playTillSoilSound } from '@/lib/soundEffects';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -32,6 +32,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     harvestAllPlots,
     applyCompostToProps,
     applyCompostToAllPlots,
+    tillUnderCrop,
     waterPlot,
     waterLevel,
     maxWaterLevel,
@@ -60,6 +61,24 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
   const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
+  const [activeActionPlotId, setActiveActionPlotId] = useState<number | null>(null);
+  const [tillingPlotId, setTillingPlotId] = useState<number | null>(null);
+  const [clearedFloatingTextPlotId, setClearedFloatingTextPlotId] = useState<number | null>(null);
+
+  const handleTillUnder = (plotId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    playTillSoilSound();
+    setTillingPlotId(plotId);
+    setClearedFloatingTextPlotId(plotId);
+    setActiveActionPlotId(null);
+    tillUnderCrop(plotId);
+    setTimeout(() => {
+      setTillingPlotId(null);
+    }, 550);
+    setTimeout(() => {
+      setClearedFloatingTextPlotId(null);
+    }, 1800);
+  };
 
   const visiblePlots = plots.slice(0, unlockedPlots);
 
@@ -540,11 +559,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               harvestPlot(plot.id);
             } else if (isEmpty) {
               plantCrop(plot.id, selectedCrop);
-            } else if (isGrowing && !isWatered) {
-              // Tapping unwatered growing crop waters it to double speed!
-              if (waterLevel > 0) {
-                waterPlot(plot.id);
-              }
+            } else if (isGrowing) {
+              // Tapping growing crop toggles contextual action bubble: [ ❌ Uproot & Till Under ]
+              setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
             }
           };
 
@@ -778,10 +795,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         <>
                           <div className="px-2 py-1 rounded-lg bg-teal-950/95 border-2 border-teal-400 text-teal-200 text-[9px] sm:text-[10px] font-black shadow-xl flex items-center gap-1 animate-pulse">
                             <span>🫛</span>
-                            <span>Recharges 🟢 Energy</span>
+                            <span>Restorative Crop</span>
                           </div>
-                          <span className="text-[8px] font-bold text-teal-300/90 mt-0.5">
-                            Restorative Legume
+                          <span className="text-[8px] font-bold text-teal-300/95 mt-0.5 text-center leading-tight">
+                            Fully recharges 🟢 Green Energy on harvest
                           </span>
                         </>
                       ) : isChargedForSelected ? (
@@ -833,6 +850,60 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
+                  {/* Contextual Action Bubble for Growing Crop */}
+                  {isGrowing && (activeActionPlotId === plot.id || isHovered) && (
+                    <div
+                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-stone-950/95 border border-amber-400/90 px-2 py-1 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => handleTillUnder(plot.id, e)}
+                        className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-rose-400"
+                        title="Uproot and till under this growing crop to clear bed immediately"
+                      >
+                        <span>❌</span>
+                        <span>Uproot & Till Under</span>
+                      </button>
+                      {!isWatered && waterLevel > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            waterPlot(plot.id);
+                          }}
+                          className="px-1.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md transition-all border border-blue-400"
+                          title="Water plot (+100% growth speed)"
+                        >
+                          <span>💧</span>
+                          <span>Water</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 0.5-second tilling dust puff & scythe sweep animation */}
+                  {tillingPlotId === plot.id && (
+                    <div className="absolute inset-0 z-40 bg-amber-900/60 backdrop-blur-[1px] flex flex-col items-center justify-center animate-in fade-in duration-100 pointer-events-none">
+                      <span className="text-3xl animate-spin transition-transform duration-500">
+                        🧹
+                      </span>
+                      <span className="absolute text-2xl animate-ping opacity-90">
+                        💨
+                      </span>
+                      <span className="text-[9px] font-black text-amber-200 mt-1 uppercase tracking-wider animate-pulse">
+                        Tilling Soil...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Brief floating notification rising from the dirt */}
+                  {clearedFloatingTextPlotId === plot.id && (
+                    <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-50 px-2 py-0.5 rounded-full bg-emerald-950/95 border border-emerald-400 text-emerald-200 text-[8px] sm:text-[9px] font-black shadow-2xl animate-bounce pointer-events-none whitespace-nowrap">
+                      🌱 Crop Cleared — Soil Prepped
+                    </div>
+                  )}
+
                   {isGrowing && plot.crop && (
                     <div className="flex flex-col items-center">
                       <span className="text-xl">{CROPS[plot.crop].emoji}</span>
@@ -845,6 +916,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                       }`}>
                         {plot.isFrostbitten ? '🧊 Frostbitten' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
                       </span>
+
+                      {/* Quick Till Under Button for active growing plot */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleTillUnder(plot.id, e)}
+                        className="mt-1 px-1.5 py-0.5 rounded text-[8px] font-black bg-rose-950/90 hover:bg-rose-800 text-rose-200 border border-rose-500/70 shadow-xs active:scale-95 cursor-pointer transition-all flex items-center gap-0.5 z-20"
+                        title="Uproot & Till Under (Clear Bed)"
+                      >
+                        <span>❌</span>
+                        <span>Till Under</span>
+                      </button>
                     </div>
                   )}
 

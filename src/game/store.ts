@@ -854,6 +854,7 @@ export interface GameState {
   harvestAllPlots: () => void;
   applyCompostToProps: (plotId: number) => boolean;
   applyCompostToAllPlots: () => void;
+  tillUnderCrop: (plotId: number) => boolean;
   feedAnimal: (animalId: string) => void;
   collectProduct: (animalId: string) => void;
   feedAllAnimals: () => void;
@@ -2227,6 +2228,65 @@ export const useGameStore = create<GameState>()(
           coins: state.coins - coinsSpent,
         });
         state.addNotification(`✨ Soil Restored: Recharged ${rechargedCount} plots to 100% battery!`, '🌱', 'discovery');
+      },
+
+      tillUnderCrop: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots || !plot.crop) return false;
+
+        const pLevel = plot.level || 1;
+        const soilTier = getSoilTier(pLevel);
+
+        // Blight Cleansing (Green Manure Effect):
+        // If plot has active crop blight, cleanse the infection completely
+        let updatedActiveCrisis = state.activeCrisis;
+        if (state.activeCrisis?.type === 'crop_blight') {
+          const newTargetIds = state.activeCrisis.targetIds.filter(
+            id => id !== plotId && id !== String(plotId)
+          );
+          if (newTargetIds.length === 0) {
+            updatedActiveCrisis = null;
+          } else {
+            updatedActiveCrisis = {
+              ...state.activeCrisis,
+              targetIds: newTargetIds,
+            };
+          }
+        }
+
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          crop: null,
+          plantedAt: null,
+          ready: false,
+          isWatered: soilTier.autoHydrate ? true : (plot.moistureLevel ? plot.moistureLevel >= 40 : false),
+          wateredUntil: null,
+          level: pLevel,
+          moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
+          desiccatedSeconds: 0,
+          waterloggedSeconds: 0,
+          isWithered: false,
+          hasRootRot: false,
+          isMonoculture: false,
+          plantedInDepletedSoil: false,
+          phenologyBadgeEmoji: undefined,
+          phenologyBadgeText: undefined,
+          isFrostbitten: false,
+          isHeatWilted: false,
+          isDormant: false,
+          soilBattery: plot.soilBattery || { green: true, yellow: true, red: true },
+        };
+
+        set({
+          plots: newPlots,
+          activeCrisis: updatedActiveCrisis,
+          isDirty: true,
+        });
+
+        state.addNotification(`🌱 Plot #${plotId + 1}: Crop tilled under as green manure! Blight cleansed & bed prepped for restorative planting.`, '🚜', 'discovery');
+        return true;
       },
 
       feedAnimal: (animalId) => {
