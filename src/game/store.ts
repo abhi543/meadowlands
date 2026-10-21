@@ -387,6 +387,8 @@ export interface PlotState {
   // Climate-Driven Crop Phenology & Thermal Taxonomy
   phenologyBadgeEmoji?: string;
   phenologyBadgeText?: string;
+  weatherModifierText?: string;
+  isTimerFrozen?: boolean;
   isFrostbitten?: boolean;
   isHeatWilted?: boolean;
   isDormant?: boolean;
@@ -1793,11 +1795,17 @@ export const useGameStore = create<GameState>()(
 
         // Climate-Driven Crop Phenology & Weather Hazard modifiers
         const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(state.hydrology?.weatherCondition);
+        const hasWindbreak = Boolean(
+          pLevel >= 4 ||
+          state.workshopLoadout?.equippedTool === 'hardened_chitin_trowel' ||
+          (state.workshopLoadout?.sluiceGateSealsInstalled || 0) >= 2
+        );
         const pheno = evaluateCropPhenology({
           cropId: plot.crop,
           weather: activeWeatherId,
           moistureLevel: plot.moistureLevel ?? 60.0,
           isProtectedByGreenhouse: false,
+          isWindbreakProtected: hasWindbreak,
         });
 
         const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0) - (plot.isMonoculture ? 0.25 : 0);
@@ -2030,11 +2038,17 @@ export const useGameStore = create<GameState>()(
 
             // Climate-Driven Crop Phenology & Weather Hazard modifiers
             const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(state.hydrology?.weatherCondition);
+            const hasWindbreak = Boolean(
+              pLevel >= 4 ||
+              state.workshopLoadout?.equippedTool === 'hardened_chitin_trowel' ||
+              (state.workshopLoadout?.sluiceGateSealsInstalled || 0) >= 2
+            );
             const pheno = evaluateCropPhenology({
               cropId: plot.crop,
               weather: activeWeatherId,
               moistureLevel: plot.moistureLevel ?? 60.0,
               isProtectedByGreenhouse: false,
+              isWindbreakProtected: hasWindbreak,
             });
 
             const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0);
@@ -7920,10 +7934,65 @@ export const useGameStore = create<GameState>()(
         const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydroSimResult.updatedHydrology.weatherCondition);
 
         const newPlots = hydroSimResult.updatedPlots.map((p: any) => {
+          const pLevel = p.level || 1;
+          const hasThermalCore = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
+          const hasHeatSource = Boolean(hasDimetrodon || hasThermalCore || pLevel >= 5);
+          const hasWindbreak = Boolean(
+            pLevel >= 4 ||
+            workshopLoadout.equippedTool === 'hardened_chitin_trowel' ||
+            (workshopLoadout.sluiceGateSealsInstalled || 0) >= 2
+          );
+
+          // Soil Battery dynamic checks for all plots:
+          // Rule 2: Heatwave Battery Burnout
+          // Evaporation rate triples: Plot water requirement jumps from 1x to 3x per cycle.
+          // If water is not supplied via the Gravity Tower, plot batteries burn out twice as fast and turn into depleted ⚪ hollow rings.
+          let currentBattery = p.soilBattery || { green: true, yellow: true, red: true };
+          const isHeatHazard = activeWeatherId === 'heatwave' || activeWeatherId === 'drought' || activeWeatherId === 'plasma_firestorm';
+          const isTowerSupplying = Boolean(hydroSimResult.updatedHydrology.sluiceGatesOpen && hydroSimResult.updatedHydrology.towerLiters > 200);
+
+          if (isHeatHazard && !isTowerSupplying && !p.isWatered && (p.moistureLevel ?? 0) <= 25) {
+            // Twice as fast burnout during dry unsupplied heatwaves (~1.2% per second per unwatered plot)
+            if (Math.random() < 0.012 * deltaSeconds) {
+              if (currentBattery.red) {
+                currentBattery = { ...currentBattery, red: false };
+                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} fruit/flower battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
+              } else if (currentBattery.yellow) {
+                currentBattery = { ...currentBattery, yellow: false };
+                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} root battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
+              } else if (currentBattery.green) {
+                currentBattery = { ...currentBattery, green: false };
+                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} leaf battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
+              }
+            }
+          }
+
+          // Rule 3: Torrential Downpour Nutrient Leaching
+          // Open furrow plots (level <= 2, canalTier 1, no casing) suffer nutrient leaching
+          // (solid nutrient lights risk reverting to depleted ⚪ gray lights unless shielded or trenched)
+          const isDownpour = activeWeatherId === 'rain' || activeWeatherId === 'monsoon' || activeWeatherId === 'supercell_deluge' || activeWeatherId === 'thunderstorm';
+          const isOpenFurrow = pLevel <= 2 && hydroSimResult.updatedHydrology.canalTier === 1 && !workshopLoadout.aquiferCasingsInstalled && (workshopLoadout.sluiceGateSealsInstalled || 0) < 2;
+
+          if (isDownpour && isOpenFurrow) {
+            // Downpour leaching roll (~0.6% per second per open furrow plot)
+            if (Math.random() < 0.006 * deltaSeconds) {
+              if (currentBattery.green) {
+                currentBattery = { ...currentBattery, green: false };
+                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached leaf nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
+              } else if (currentBattery.yellow) {
+                currentBattery = { ...currentBattery, yellow: false };
+                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached root nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
+              } else if (currentBattery.red) {
+                currentBattery = { ...currentBattery, red: false };
+                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached fruit nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
+              }
+            }
+          }
+
           if (p.crop && p.plantedAt && !p.ready) {
             // Under barn_fire, unwatered/burning plots are frozen
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
-              return p;
+              return { ...p, soilBattery: currentBattery };
             }
             // Fail-Safe Stage 1+ Crop Conservation Mode (Tower <= 200L)
             // Canal gates are auto-closed to protect remaining tower reserve.
@@ -7937,15 +8006,18 @@ export const useGameStore = create<GameState>()(
                 isWithered: false,
                 phenologyBadgeEmoji: '🛡️💧',
                 phenologyBadgeText: 'Crop Conservation (Tower ≤ 200L)',
+                weatherModifierText: '🛡️ Crop Conservation: Dry Plot Frozen (Tower ≤ 200L)',
+                isTimerFrozen: true,
+                soilBattery: currentBattery,
               };
             }
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
             if (isPlotExhausted) {
-              return p; // Growth halted during soil exhaustion
+              return { ...p, soilBattery: currentBattery }; // Growth halted during soil exhaustion
             }
             if (p.isWithered) {
-              return p; // Growth halted if crop withered from prolonged desiccation
+              return { ...p, soilBattery: currentBattery }; // Growth halted if crop withered from prolonged desiccation
             }
 
             // Direct Atmospheric Crop Phenology evaluation
@@ -7954,33 +8026,55 @@ export const useGameStore = create<GameState>()(
               weather: activeWeatherId,
               moistureLevel: p.moistureLevel !== undefined ? p.moistureLevel : 60.0,
               isProtectedByGreenhouse: false,
+              hasHeatSource,
+              isWindbreakProtected: hasWindbreak,
             });
 
             // Dimetrodon Geothermal Radiance or Thermal Retaining Core: Frost Immunity!
-            const hasThermalCore = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
-            if ((hasDimetrodon || hasThermalCore) && pheno.isFrostbitten) {
+            if (hasHeatSource && pheno.isFrostbitten) {
               pheno = {
                 ...pheno,
                 isFrostbitten: false,
+                isTimerFrozen: false,
                 badgeEmoji: hasThermalCore ? '🔥💎' : '🔥🛡️',
                 badgeText: hasThermalCore ? 'Thermal Retaining Core (Frost Immunity)' : 'Geothermal Radiance (Frost Immunity)',
+                weatherModifierText: hasThermalCore ? '🔥 Thermal Core: Protected from Frost' : '🔥 Geothermal Radiance: Protected from Frost',
                 growthSpeedMultiplier: Math.max(1.0, pheno.growthSpeedMultiplier),
               };
             }
 
-            // Growth halted if crop is thermal-wilted, frostbitten, or in winter dormancy
-            if (pheno.isWilted || pheno.isFrostbitten || pheno.isDormant) {
+            // Rule 1: Frost / Cold Snap: Plots without a nearby heat source have their crop timers frozen.
+            // Crop hover stamp displays: ❄️ Frozen: Requires heat source to continue growth
+            if (pheno.isTimerFrozen || (pheno.isFrostbitten && !hasHeatSource)) {
+              return {
+                ...p,
+                plantedAt: p.plantedAt + (deltaSeconds * 1000), // cleanly freeze crop timer in place!
+                phenologyBadgeEmoji: '❄️',
+                phenologyBadgeText: '❄️ Frozen: Requires heat source to continue growth',
+                weatherModifierText: '❄️ Frozen: Requires heat source to continue growth',
+                isTimerFrozen: true,
+                isFrostbitten: true,
+                isHeatWilted: false,
+                isDormant: false,
+                soilBattery: currentBattery,
+              };
+            }
+
+            // Growth halted if crop is thermal-wilted or in winter dormancy
+            if (pheno.isWilted || pheno.isDormant) {
               return {
                 ...p,
                 phenologyBadgeEmoji: pheno.badgeEmoji,
                 phenologyBadgeText: pheno.badgeText,
+                weatherModifierText: pheno.weatherModifierText,
                 isFrostbitten: pheno.isFrostbitten,
                 isHeatWilted: pheno.isWilted,
                 isDormant: pheno.isDormant,
+                isTimerFrozen: false,
+                soilBattery: currentBattery,
               };
             }
 
-            const pLevel = p.level || 1;
             const soilTier = getSoilTier(pLevel);
             const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
             const plotMultiplier = (plotOverclock?.isOverclocked && !p.ready) ? plotOverclock.speedMultiplier : 1.0;
@@ -8021,9 +8115,12 @@ export const useGameStore = create<GameState>()(
                 ready: true,
                 phenologyBadgeEmoji: badgeEmoji,
                 phenologyBadgeText: badgeText,
+                weatherModifierText: pheno.weatherModifierText,
+                isTimerFrozen: false,
                 isFrostbitten: false,
                 isHeatWilted: false,
                 isDormant: false,
+                soilBattery: currentBattery,
               };
             }
 
@@ -8031,12 +8128,18 @@ export const useGameStore = create<GameState>()(
               ...p,
               phenologyBadgeEmoji: badgeEmoji,
               phenologyBadgeText: badgeText,
+              weatherModifierText: pheno.weatherModifierText,
+              isTimerFrozen: false,
               isFrostbitten: false,
               isHeatWilted: false,
               isDormant: false,
+              soilBattery: currentBattery,
             };
           }
-          return p;
+          return {
+            ...p,
+            soilBattery: currentBattery,
+          };
         });
 
         // Update animal production and domestic troughs

@@ -988,7 +988,10 @@ export function stepHydrologySimulation(params: {
     cycleElapsedSeconds,
     canalTier: effectiveTier,
   });
-  const evapRatePctPerSec = thermoEvap.evapRatePctPerMin / 60;
+  // Heatwave / Drought: Evaporation rate triples: Plot water requirement jumps from 1x to 3x per cycle
+  const isHeatwaveOrDrought = activeProfileId === 'heatwave' || activeProfileId === 'drought' || activeProfileId === 'plasma_firestorm';
+  const weatherEvapMult = isHeatwaveOrDrought ? 3.0 : 1.0;
+  const evapRatePctPerSec = (thermoEvap.evapRatePctPerMin * weatherEvapMult) / 60;
   const evapDeltaPct = evapRatePctPerSec * dt;
 
   // Direct soil wetting from rain / condensation

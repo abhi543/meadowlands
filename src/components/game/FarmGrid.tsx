@@ -7,7 +7,12 @@ import { OverclockActionMenu } from './OverclockActionMenu';
 import { PlotUpgradeModal } from './PlotUpgradeModal';
 import { getSoilTier, getPlotUnlockCost } from '@/game/plotUpgrades';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
-import { getMoistureZone } from '@/game/hydrologyEngine';
+import { getMoistureZone, resolveWeatherProfileId } from '@/game/hydrologyEngine';
+import {
+  WEATHER_PROFILES,
+  getEstateWeatherModifier,
+  type WeatherProfileId,
+} from '@/game/weatherEngine';
 import {
   CROP_NUTRIENT_PROFILES,
   isBatteryChargedForCrop,
@@ -174,8 +179,77 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const totalPlantCost = emptyCount * selectedCropDef.seedCost;
   const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
 
+  // Atmospheric Weather & Estate Modifier State
+  const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydrology?.weatherCondition);
+  const activeProfile = WEATHER_PROFILES[activeWeatherId] || WEATHER_PROFILES.sunny;
+  const estateModifier = getEstateWeatherModifier(activeWeatherId);
+  const weatherState = hydrology?.weatherState;
+  const tempC = weatherState?.temperatureC ?? activeProfile.defaultTempC;
+  const humidityPct = weatherState?.relativeHumidityPct ?? activeProfile.defaultHumidityPct;
+
   return (
     <div className="space-y-3.5">
+      {/* Environmental Weather & Estate Modifier Banner */}
+      <div
+        className={`rounded-2xl p-3 sm:p-3.5 border transition-all duration-300 shadow-lg flex flex-wrap items-center justify-between gap-3 ${
+          estateModifier.severity === 'danger'
+            ? 'bg-gradient-to-r from-rose-950/95 via-red-950/90 to-amber-950/95 border-rose-500/80 text-rose-100 shadow-rose-950/50'
+            : estateModifier.severity === 'warning'
+            ? 'bg-gradient-to-r from-amber-950/95 via-orange-950/90 to-stone-900/95 border-amber-500/80 text-amber-100 shadow-amber-950/50'
+            : estateModifier.severity === 'benefit'
+            ? 'bg-gradient-to-r from-emerald-950/95 via-teal-950/90 to-cyan-950/95 border-emerald-400/80 text-emerald-100 shadow-emerald-950/50'
+            : 'bg-gradient-to-r from-stone-900/95 via-stone-850 to-stone-900/95 border-stone-700/80 text-stone-200 shadow-md'
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-black/30 border border-white/20 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+            {estateModifier.icon || activeProfile.emoji}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-xs sm:text-sm tracking-wide uppercase text-white flex items-center gap-1.5">
+                <span>{activeProfile.emoji}</span>
+                <span>{activeProfile.name}</span>
+              </span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold border ${
+                estateModifier.severity === 'danger'
+                  ? 'bg-rose-900/80 border-rose-400 text-rose-200 animate-pulse'
+                  : estateModifier.severity === 'warning'
+                  ? 'bg-amber-900/80 border-amber-400 text-amber-200'
+                  : estateModifier.severity === 'benefit'
+                  ? 'bg-emerald-900/80 border-emerald-400 text-emerald-200 animate-pulse'
+                  : 'bg-stone-800 border-stone-600 text-stone-300'
+              }`}>
+                {estateModifier.categoryLabel}
+              </span>
+              <span className="text-[11px] font-mono opacity-80">
+                🌡️ {tempC}°C · 💧 {humidityPct}% RH
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-extrabold mt-0.5 text-white/95 tracking-tight flex items-center gap-1.5">
+              <span>{estateModifier.bannerText}</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
+          <button
+            type="button"
+            onClick={() => {
+              if (onSelectTab) onSelectTab('water');
+              else setSluiceModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-black/40 hover:bg-black/60 border border-white/20 text-xs font-bold text-white transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm"
+            title="Open Estate Hydrology & Sluice Console"
+          >
+            <span>🌊 Sluice:</span>
+            <span className={hydrology?.sluiceGatesOpen ? 'text-emerald-300 font-black' : 'text-stone-400'}>
+              {hydrology?.sluiceGatesOpen ? 'OPEN' : 'CLOSED'}
+            </span>
+            <span className="text-[10px] opacity-75">({Math.round(hydrology?.towerLiters || 0)}L Tower)</span>
+          </button>
+        </div>
+      </div>
       {/* Flash Flood Crisis Warning Banner */}
       {hydrology?.isFlashFloodActive && (
         <div className="bg-gradient-to-r from-rose-950/95 via-red-950/90 to-amber-950/95 border-2 border-rose-500 rounded-2xl p-3 sm:p-4 text-white shadow-xl shadow-rose-950/80 animate-pulse flex flex-wrap items-center justify-between gap-3">
@@ -1228,17 +1302,38 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
+                  {/* Crop Hover Inspection Stamp during Severe Weather / Growing */}
+                  {isGrowing && isHovered && (
+                    <div className="absolute inset-0 z-35 bg-stone-950/92 backdrop-blur-[2px] flex flex-col items-center justify-center p-1 text-center animate-in fade-in duration-150 select-none pointer-events-none">
+                      <span className="text-xl sm:text-2xl animate-pulse">
+                        {plot.isTimerFrozen || plot.isFrostbitten ? '❄️' : (plot.isHeatWilted ? '🥀' : (plot.phenologyBadgeEmoji || '🌱'))}
+                      </span>
+                      <div className={`mt-0.5 px-1.5 py-0.5 rounded-lg border text-[8px] sm:text-[9px] font-black leading-tight shadow-lg max-w-[95%] ${
+                        plot.isTimerFrozen || plot.isFrostbitten
+                          ? 'bg-sky-950 text-sky-200 border-sky-400 animate-pulse'
+                          : plot.isHeatWilted
+                          ? 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse'
+                          : 'bg-stone-900 text-amber-200 border-amber-500/70'
+                      }`}>
+                        {plot.weatherModifierText || (plot.isTimerFrozen ? '❄️ Frozen: Requires heat source to continue growth' : plot.phenologyBadgeText || 'Standard Growth')}
+                      </div>
+                      <span className="text-[8px] font-bold text-stone-300 mt-0.5">
+                        {plot.isTimerFrozen ? '❄️ Timer Frozen' : `Progress: ${Math.round(progress * 100)}%`}
+                      </span>
+                    </div>
+                  )}
+
                   {isGrowing && plot.crop && (
                     <div className="flex flex-col items-center">
                       <span className="text-xl">{CROPS[plot.crop].emoji}</span>
                       <span className={`text-[10px] font-semibold mt-0.5 ${
-                        plot.isFrostbitten
-                          ? 'text-sky-300 font-bold'
+                        plot.isTimerFrozen || plot.isFrostbitten
+                          ? 'text-sky-300 font-black animate-pulse'
                           : plot.isHeatWilted
                           ? 'text-orange-400 font-bold'
                           : isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
                       }`}>
-                        {plot.isFrostbitten ? '🧊 Frostbitten' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
+                        {plot.isTimerFrozen || plot.isFrostbitten ? '❄️ Frozen' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
                       </span>
                       {plot.crop === 'peas' && (
                         <span className="text-[8px] font-black text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded-full border border-emerald-400/80 animate-pulse mt-0.5">
@@ -1268,14 +1363,22 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
-                  {/* Climate-Driven Phenology Badge */}
-                  {plot.crop && plot.phenologyBadgeEmoji && (
+                  {/* Climate-Driven Phenology & Weather Modifier Badge */}
+                  {plot.crop && (plot.weatherModifierText || plot.phenologyBadgeEmoji) && (
                     <span
-                      className="absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold bg-stone-900/90 border border-stone-700/80 text-amber-200 z-10 backdrop-blur-xs shadow-xs"
-                      title={plot.phenologyBadgeText || ''}
+                      className={`absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold border z-10 backdrop-blur-xs shadow-xs ${
+                        plot.isTimerFrozen || plot.isFrostbitten
+                          ? 'bg-sky-950/95 border-sky-400 text-sky-200 animate-pulse'
+                          : 'bg-stone-900/90 border-stone-700/80 text-amber-200'
+                      }`}
+                      title={plot.weatherModifierText || plot.phenologyBadgeText || ''}
                     >
-                      <span>{plot.phenologyBadgeEmoji}</span>
-                      <span className="truncate max-w-[60px] hidden xs:inline">{plot.phenologyBadgeText?.split('(')[0]?.trim()}</span>
+                      <span>{plot.isTimerFrozen || plot.isFrostbitten ? '❄️' : (plot.phenologyBadgeEmoji || '🌦️')}</span>
+                      <span className="truncate max-w-[65px] hidden xs:inline">
+                        {plot.isTimerFrozen || plot.isFrostbitten
+                          ? 'Frozen'
+                          : (plot.weatherModifierText?.split(':')[0]?.trim() || plot.phenologyBadgeText?.split('(')[0]?.trim())}
+                      </span>
                     </span>
                   )}
 

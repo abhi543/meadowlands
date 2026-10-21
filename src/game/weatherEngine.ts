@@ -671,6 +671,9 @@ export interface CropPhenologyResult {
   badgeEmoji: string;
   badgeText: string;
   description: string;
+  isTimerFrozen?: boolean;
+  weatherModifierText?: string;
+  freezeReason?: string;
 }
 
 /**
@@ -683,6 +686,8 @@ export function evaluateCropPhenology(params: {
   moistureLevel: number;
   isProtectedByGreenhouse?: boolean;
   hasAlchemicalAsh?: boolean;
+  hasHeatSource?: boolean;
+  isWindbreakProtected?: boolean;
 }): CropPhenologyResult {
   const {
     cropId,
@@ -691,6 +696,8 @@ export function evaluateCropPhenology(params: {
     moistureLevel,
     isProtectedByGreenhouse = false,
     hasAlchemicalAsh = false,
+    hasHeatSource = false,
+    isWindbreakProtected = false,
   } = params;
 
   const pheno = CROP_PHENOLOGY_REGISTRY[cropId] || CROP_PHENOLOGY_REGISTRY.wheat;
@@ -706,6 +713,9 @@ export function evaluateCropPhenology(params: {
   let isWilted = false;
   let isFrostbitten = false;
   let isDormant = false;
+  let isTimerFrozen = false;
+  let freezeReason: string | undefined = undefined;
+  let weatherModifierText = '';
   let badgeEmoji = pheno.familyIcon;
   let badgeText = 'Normal';
   let description = 'Standard ambient growth.';
@@ -715,63 +725,107 @@ export function evaluateCropPhenology(params: {
     bonusPrismatic += 0.10; // +10% Prismatic / Mythic quality roll chance
     badgeEmoji = '🌈';
     badgeText = 'Sunshower Blessed (+10% Prismatic)';
+    weatherModifierText = '🌈 Sunshower: +10% Mythic / Prismatic Quality Roll';
     description = 'Golden sunshower blessing unlocks +10% mythic quality roll chance!';
   }
 
   // 2. Severe Convective & Mechanical Hazards
   if (weather === 'hailstorm') {
     if (!isProtectedByGreenhouse) {
-      yieldMult *= 0.70; // -30% harvest quantity reduction
-      badgeEmoji = '🌨️';
-      badgeText = 'Hail Damaged (-30% Yield)';
-      description = 'Blunt hail lodging damaged plant stems! Yield cut by 30%.';
+      if ((cropId === 'wheat' || cropId === 'corn') && !isWindbreakProtected) {
+        // Unprotected tall crops suffer physical stalk damage, reducing final yield by 50%
+        yieldMult = 0.50;
+        badgeEmoji = '🌨️⚠️';
+        badgeText = '🌨️ Stalk Damaged (-50% Yield)';
+        weatherModifierText = '🌨️ Stalk Damage: -50% Yield (Unprotected)';
+        description = 'Severe hail lodging crushed unprotected tall stalks! Final yield cut by 50%.';
+      } else {
+        yieldMult *= 0.70; // -30% harvest quantity reduction
+        badgeEmoji = '🌨️';
+        badgeText = 'Hail Damaged (-30% Yield)';
+        weatherModifierText = '🌨️ Hailstorm: -30% Harvest Quantity Loss';
+        description = 'Blunt hail lodging damaged plant stems! Yield cut by 30%.';
+      }
+    } else {
+      weatherModifierText = '🛡️ Greenhouse Sheltered: Hail Damage Prevented';
     }
   } else if (weather === 'gale') {
     if (cropId === 'wheat' || cropId === 'corn') {
-      yieldMult *= 0.90; // 10% seed-scatter loss
-      badgeEmoji = '💨';
-      badgeText = 'Wind Scattered (-10%)';
-      description = 'Howling gales scattered stalks, losing 10% seeds.';
+      if (!isWindbreakProtected && !isProtectedByGreenhouse) {
+        // Unprotected tall crops suffer physical stalk damage, reducing final yield by 50%
+        yieldMult = 0.50;
+        badgeEmoji = '💨⚠️';
+        badgeText = '🌨️ Stalk Damaged (-50% Yield)';
+        weatherModifierText = '💨 Stalk Damage: -50% Yield (Unprotected High Gale)';
+        description = 'Howling gales snapped unprotected tall stalks! Final yield cut by 50%.';
+      } else {
+        yieldMult *= 0.90; // 10% seed-scatter loss with windbreaks
+        badgeEmoji = '💨🛡️';
+        badgeText = 'Windbreak Shielded (-10%)';
+        weatherModifierText = '💨 Windbreak Shielded: Stalk Damage Prevented';
+        description = 'Windbreaks shielded tall stalks from catastrophic lodging damage.';
+      }
+    } else {
+      weatherModifierText = '💨 High Gale: Strong Winds';
     }
   } else if (weather === 'cyclone') {
     speedMult = 0.0;
+    if ((cropId === 'wheat' || cropId === 'corn') && !isWindbreakProtected && !isProtectedByGreenhouse) {
+      yieldMult = 0.50;
+      weatherModifierText = '🌀 Cyclone: 0x Growth & -50% Yield (Unprotected Stalks)';
+    } else {
+      weatherModifierText = '🌀 Cyclone: 0x Growth (Metabolic Arrest)';
+    }
     badgeEmoji = '🌀';
     badgeText = 'Tempest Halted (0x)';
     description = 'Catastrophic cyclonic gale halts all crop metabolic processes.';
   } else if (weather === 'supercell_deluge') {
-    speedMult *= 0.5;
+    // Torrential rain boosts growth +25% across all outdoor plots automatically (free irrigation)
+    speedMult = 1.25;
     badgeEmoji = '🌊⛈️';
-    badgeText = 'Deluge Inundation';
+    badgeText = 'Deluge Growth (+25%)';
+    weatherModifierText = '🌧️ Supercell Deluge: +25% Growth Acceleration (Free Irrigation)';
     description = 'Supercell rain (+450 L/min) saturates beds to maximum; excess runoff requires immediate drainage.';
   } else if (weather === 'plasma_firestorm') {
     if (moistureLevel >= 70.0) {
       speedMult *= 1.30;
       badgeEmoji = '☄️🔥';
       badgeText = 'Solar Plasma Surge (+30%)';
+      weatherModifierText = '☄️ Plasma Surge: +30% Speed (Irrigated Loam)';
       description = 'Extreme solar radiation accelerated by heavy irrigation produces explosive growth!';
     } else {
       isWilted = true;
       speedMult = 0.0;
       badgeEmoji = '🥀';
       badgeText = 'Thermal Scorched (0x)';
+      weatherModifierText = '☀️ PLASMA FIRESTORM: Evaporation 3x (Thermal Scorch 0x)';
       description = '52°C Plasma firestorm scorched soil! Irrigate immediately to prevent crop death.';
     }
   } else if (weather === 'polar_vortex') {
-    if (!isProtectedByGreenhouse && !hasAlchemicalAsh) {
+    if (!isProtectedByGreenhouse && !hasAlchemicalAsh && !hasHeatSource) {
       isFrostbitten = true;
+      isTimerFrozen = true;
+      freezeReason = 'Requires heat source to continue growth';
       speedMult = 0.0;
       yieldMult *= 0.40; // -60% yield penalty
       badgeEmoji = '🧊🥶';
-      badgeText = 'Cryo-Glaciation (-60%)';
-      description = '-18°C Polar vortex froze plant cellular walls! Requires Geothermal heat or Greenhouse.';
+      badgeText = '❄️ Frozen: Requires heat source to continue growth';
+      weatherModifierText = '❄️ Frozen: Requires heat source to continue growth';
+      description = '-18°C Polar vortex froze plant cellular walls! Requires Geothermal heat, Furrow Heater, or Greenhouse.';
+    } else if (hasHeatSource) {
+      speedMult = Math.max(1.0, speedMult);
+      badgeEmoji = '🔥🛡️';
+      badgeText = '🔥 Thermal Protected';
+      weatherModifierText = '🔥 Heat Source Active: Protected from Cryo Freeze';
     }
   } else if (weather === 'hyper_cyclone') {
     speedMult = 0.0;
     if (!isProtectedByGreenhouse) {
-      yieldMult *= 0.70;
+      yieldMult *= 0.50;
     }
     badgeEmoji = '🌪️⚡';
     badgeText = 'Hyper-Cyclone Halted (0x)';
+    weatherModifierText = '🌪️ Hyper-Cyclone: 0x Growth & Severe Hazard';
     description = 'Cataclysmic 165 km/h hurricane winds force complete suspension of growth and labor.';
   } else if (weather === 'alchemical_monsoon') {
     speedMult *= 1.50; // +50% acceleration!
@@ -779,87 +833,119 @@ export function evaluateCropPhenology(params: {
     extraQty += 1;
     badgeEmoji = '🧪✨';
     badgeText = 'Alchemical Infusion (+50% Speed)';
+    weatherModifierText = '🧪 Alchemical Monsoon: +50% Speed & Double Yield';
     description = 'Mana-infused precipitation supercharges crop biology and doubles harvest yields!';
   } else if (weather === 'haboob_sandstorm') {
     speedMult *= 0.75; // -25% dust penalty
     badgeEmoji = '🏜️🌪️';
     badgeText = 'Dust Choked (-25%)';
+    weatherModifierText = '🏜️ Haboob: -25% Growth Speed (Dust Choked)';
     description = 'Red dust wall obscures sunlight and silts up furrow water beds.';
   }
 
-  // 3. Category & Thermal Adaptations
+  // Torrential Downpour (Heavy Rain): Free Irrigation +25% Speed Acceleration
+  if (weather === 'rain' || weather === 'monsoon' || weather === 'thunderstorm') {
+    speedMult *= 1.25;
+    if (!weatherModifierText) {
+      weatherModifierText = '🌧️ Heavy Rain: +25% Growth Acceleration (Free Irrigation)';
+    }
+  }
+
+  // 3. Frost / Cold Snap: Plots without a nearby heat source have timers frozen
+  if (weather === 'frost' || weather === 'snow') {
+    if (!hasHeatSource && !isProtectedByGreenhouse && !hasAlchemicalAsh) {
+      isFrostbitten = true;
+      isTimerFrozen = true;
+      freezeReason = 'Requires heat source to continue growth';
+      speedMult = 0.0;
+      badgeEmoji = '❄️';
+      badgeText = '❄️ Frozen: Requires heat source to continue growth';
+      weatherModifierText = '❄️ Frozen: Requires heat source to continue growth';
+      description = 'Freezing cold has frozen crop timers. Requires a heat source (Dimetrodon aura or Furrow Heater) to continue growth.';
+    } else if (hasHeatSource) {
+      speedMult = Math.max(1.0, speedMult);
+      badgeEmoji = '🔥🛡️';
+      badgeText = '🔥 Thermal Protected';
+      weatherModifierText = '🔥 Heat Source Active: Normal growth maintained';
+    }
+  }
+
+  // 4. Heatwave / Drought: Evaporation 3x
+  if (weather === 'heatwave' || weather === 'drought') {
+    if (moistureLevel < 50.0) {
+      if (!weatherModifierText) {
+        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Water Deficit Risk)';
+      }
+    } else {
+      if (!weatherModifierText) {
+        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Canal Cooled)';
+      }
+    }
+  }
+
+  // 5. Category & Thermal Adaptations
   if (pheno.family === 'sun_loving_warm') {
     if (weather === 'sunny') {
       speedMult *= 1.10;
       badgeEmoji = '☀️';
       badgeText = 'Sun-Loving (+10% Speed)';
+      if (!weatherModifierText) weatherModifierText = '☀️ Clear Irradiance: +10% Photosynthetic Speed';
       description = 'Vibrant solar irradiance accelerates photosynthesis!';
     } else if (weather === 'heatwave') {
       if (moistureLevel >= 50.0) {
         speedMult *= 1.20;
         badgeEmoji = '🔥';
         badgeText = 'Heat Surge (+20% Speed)';
+        weatherModifierText = '🔥 Heat Surge: +20% Speed (Irrigated Loam)';
         description = 'Abundant irrigation coupled with intense heat sparks growth surge!';
       } else {
         isWilted = true;
         speedMult = 0.0;
         badgeEmoji = '🥀';
         badgeText = 'Thermal Wilted (0x)';
+        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Thermal Wilted 0x)';
         description = 'Blistering heatwave scorched dry soil! Growth halted until watered.';
       }
     } else if (weather === 'humid' && cropId === 'pumpkin') {
       extraQty += 1;
       badgeEmoji = '🎃';
       badgeText = 'Vine Swelled (+1 Harvest)';
+      weatherModifierText = '🌫️ Humid Tropical Air: +1 Harvest on Pumpkin Vines';
       description = 'Moist tropical humidity causes pumpkin vines to swell +1 extra fruit!';
-    } else if (weather === 'frost') {
-      if (!isProtectedByGreenhouse && !hasAlchemicalAsh) {
-        isFrostbitten = true;
-        speedMult = 0.0;
-        yieldMult *= 0.60; // -40% yield
-        badgeEmoji = '🧊';
-        badgeText = 'Frostbitten (-40% Yield)';
-        description = 'Sub-zero frost crystallised warm tissue! Growth halted and yield penalized.';
-      }
-    } else if (weather === 'snow') {
-      if (!isProtectedByGreenhouse && !hasAlchemicalAsh) {
-        isDormant = true;
-        speedMult = 0.0;
-        yieldMult *= 0.50;
-        badgeEmoji = '❄️';
-        badgeText = 'Winter Dormancy (0x)';
-        description = 'Deep snow buried warm crop into dormancy.';
-      }
     }
   } else if (pheno.family === 'cool_season_root') {
-    if (weather === 'frost') {
+    if (weather === 'frost' && hasHeatSource) {
       priceMult *= 1.25; // +25% cold-sweetened value
-      badgeEmoji = '❄️';
+      badgeEmoji = '❄️✨';
       badgeText = 'Cold-Sweetened (+25% Price)';
+      weatherModifierText = '❄️ Cold-Sweetened: +25% Crop Value (Heat Protected)';
       description = 'Freezing temperatures convert root starches into pure natural sugars!';
     } else if (weather === 'heatwave') {
       if (moistureLevel >= 70.0) {
-        // High soil moisture & canal hydration provides evaporative cooling
         speedMult *= 0.85;
         badgeEmoji = '💧';
         badgeText = 'Canal Cooled (0.85x)';
+        weatherModifierText = '💧 Canal Cooled: 0.85x Speed (Shielded from Wilt)';
         description = 'Abundant canal moisture (≥70%) evaporatively cools root beds, shielding greens from heat collapse!';
       } else {
         isWilted = true;
         speedMult = 0.0;
         badgeEmoji = '🥀';
         badgeText = 'Heat Wilted (0x)';
+        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Heat Wilted 0x)';
         description = 'Cool-season greens scorched by heatwave! Irrigate to ≥70% moisture or switch weather.';
       }
     } else if (weather === 'foggy') {
       speedMult *= 1.25;
       badgeEmoji = '🌁';
       badgeText = 'Fog Dew (+25% Speed)';
+      weatherModifierText = '🌁 Ground Fog: +25% Root Growth Speed';
       description = 'Cool dense condensation accelerates root development.';
-    } else if (weather === 'drizzle' || weather === 'rain') {
+    } else if (weather === 'drizzle') {
       speedMult *= 1.10;
       badgeEmoji = '💧';
-      badgeText = 'Lush Rain (+10% Speed)';
+      badgeText = 'Lush Mist (+10% Speed)';
+      weatherModifierText = '🌦️ Drizzle: Gentle Inflow (+10% Speed)';
       description = 'Gentle precipitation creates ideal temperate growing conditions.';
     }
   } else if (pheno.family === 'temperate_berry') {
@@ -867,19 +953,39 @@ export function evaluateCropPhenology(params: {
       speedMult *= 1.15;
       badgeEmoji = '🌈';
       badgeText = 'Sunshower Burst (+15%)';
+      weatherModifierText = '🌈 Sunshower: +15% Berry Speed & Prismatic Chance';
       description = 'Perfect balance of moisture and sunlight stimulates berry ripening!';
     } else if (weather === 'heatwave') {
       if (moistureLevel >= 65.0) {
         speedMult *= 1.0;
         badgeEmoji = '🫐';
         badgeText = 'Hydrated Berry (1.0x)';
+        weatherModifierText = '🫐 Hydrated Berry: Normal Speed (Evaporatively Cooled)';
         description = 'Plentiful soil moisture shields berry foliage from solar scorching.';
       } else {
         speedMult *= 0.50;
         badgeEmoji = '☀️';
         badgeText = 'Heat Stressed (-50%)';
+        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (-50% Heat Stress)';
         description = 'Berry bushes suffer leaf scorch during intense heatwaves. Irrigate to relieve stress.';
       }
+    }
+  }
+
+  // Fallback default weather modifier text if none assigned
+  if (!weatherModifierText) {
+    if (weather === 'sunny') {
+      weatherModifierText = '☀️ Clear Skies: Normal Ambient Growth';
+    } else if (weather === 'cloudy') {
+      weatherModifierText = '⛅ Cloudy: Evaporative Loss Halved (Steady Growth)';
+    } else if (weather === 'humid') {
+      weatherModifierText = '🌫️ Humid: Reduced Evaporation';
+    } else if (weather === 'foggy') {
+      weatherModifierText = '🌁 Ground Fog: +0.3% Soil Moisture/min';
+    } else if (weather === 'drizzle') {
+      weatherModifierText = '🌦️ Drizzle: Gentle Rain Inflow';
+    } else {
+      weatherModifierText = `${def.emoji} ${def.name}: Active Estate Environment`;
     }
   }
 
@@ -893,6 +999,9 @@ export function evaluateCropPhenology(params: {
     isFrostbitten,
     isDormant,
     isSheltered: isProtectedByGreenhouse,
+    isTimerFrozen,
+    freezeReason,
+    weatherModifierText,
     badgeEmoji,
     badgeText,
     description,
@@ -1086,3 +1195,174 @@ export function rollNextNaturalWeather(current: WeatherProfileId): WeatherProfil
       return 'sunny';
   }
 }
+
+export interface EstateWeatherModifierInfo {
+  bannerText: string;
+  categoryLabel: string;
+  severity: 'danger' | 'warning' | 'benefit' | 'info';
+  icon: string;
+}
+
+/**
+ * Returns formatted estate-wide banner description and active mechanical impact.
+ */
+export function getEstateWeatherModifier(weather: WeatherProfileId): EstateWeatherModifierInfo {
+  switch (weather) {
+    case 'heatwave':
+      return {
+        bannerText: '☀️ HEATWAVE: Plot Water Evaporation 3x · Supply Gravity Tower Water',
+        categoryLabel: 'Clear & Thermal Hazard',
+        severity: 'danger',
+        icon: '🔥',
+      };
+    case 'drought':
+      return {
+        bannerText: '🏜️ DROUGHT: Plot Water Evaporation 3x · Canal Inflow Suspended',
+        categoryLabel: 'Clear & Thermal Hazard',
+        severity: 'danger',
+        icon: '🏜️',
+      };
+    case 'plasma_firestorm':
+      return {
+        bannerText: '☄️ PLASMA FIRESTORM: 52°C Thermal Scorch · Evaporation 3x · Sluice Open Required',
+        categoryLabel: 'Cataclysmic Hazard',
+        severity: 'danger',
+        icon: '☄️',
+      };
+    case 'frost':
+      return {
+        bannerText: '❄️ FROST / COLD SNAP: Crop Timers Frozen Without Heat Source (Dimetrodon / Furrow Heater)',
+        categoryLabel: 'Freezing Hazard',
+        severity: 'warning',
+        icon: '❄️',
+      };
+    case 'snow':
+      return {
+        bannerText: '❄️ WINTER SNOWFALL: Crop Timers Frozen Without Geothermal Heat Source',
+        categoryLabel: 'Freezing Hazard',
+        severity: 'warning',
+        icon: '❄️',
+      };
+    case 'polar_vortex':
+      return {
+        bannerText: '🧊 POLAR VORTEX: Deep -18°C Cryo Freeze · Crop Timers Frozen · Heat Source Required',
+        categoryLabel: 'Cataclysmic Hazard',
+        severity: 'danger',
+        icon: '🧊',
+      };
+    case 'rain':
+      return {
+        bannerText: '🌧️ TORRENTIAL RAIN: +25% Crop Growth Acceleration · Open Furrow Nutrient Leaching Risk',
+        categoryLabel: 'Active Precipitation',
+        severity: 'benefit',
+        icon: '🌧️',
+      };
+    case 'monsoon':
+      return {
+        bannerText: '⛈️ HEAVY MONSOON: +25% Crop Growth Acceleration · Open Furrow Nutrient Leaching Risk',
+        categoryLabel: 'Active Precipitation',
+        severity: 'warning',
+        icon: '⛈️',
+      };
+    case 'supercell_deluge':
+      return {
+        bannerText: '🌊 SUPERCELL DELUGE: +25% Growth Acceleration · Inundation & Soil Leaching Risk',
+        categoryLabel: 'Cataclysmic Hazard',
+        severity: 'danger',
+        icon: '🌊',
+      };
+    case 'thunderstorm':
+      return {
+        bannerText: '⛈️ THUNDERSTORM: +25% Crop Growth Acceleration · Rapid Inflow & Leaching Hazard',
+        categoryLabel: 'Severe Convective',
+        severity: 'warning',
+        icon: '⛈️',
+      };
+    case 'hailstorm':
+      return {
+        bannerText: '🌨️ HAILSTORM: -50% Yield on Unprotected Tall Crops (Wheat/Corn) · Stalk Damage Risk',
+        categoryLabel: 'Mechanical Hazard',
+        severity: 'danger',
+        icon: '🌨️',
+      };
+    case 'gale':
+      return {
+        bannerText: '💨 HIGH GALE: -50% Yield on Unprotected Tall Crops (Wheat/Corn) Without Windbreaks',
+        categoryLabel: 'Mechanical Hazard',
+        severity: 'warning',
+        icon: '💨',
+      };
+    case 'cyclone':
+      return {
+        bannerText: '🌀 CYCLONE: Gale Hazard (-50% Tall Crop Yield) · Growth Processes Suspended',
+        categoryLabel: 'Severe Convective',
+        severity: 'danger',
+        icon: '🌀',
+      };
+    case 'hyper_cyclone':
+      return {
+        bannerText: '🌪️ HYPER-CYCLONE: 165 km/h Gales · -50% Tall Crop Yield · Metabolic Arrest',
+        categoryLabel: 'Cataclysmic Hazard',
+        severity: 'danger',
+        icon: '🌪️',
+      };
+    case 'sunshower':
+      return {
+        bannerText: '🌈 SUNSHOWER: +10% Prismatic / Mythic Crop Quality Chance',
+        categoryLabel: 'Meteorologic Blessing',
+        severity: 'benefit',
+        icon: '🌈',
+      };
+    case 'alchemical_monsoon':
+      return {
+        bannerText: '🧪 ALCHEMICAL MONSOON: +50% Crop Speed & Double Harvest Yield',
+        categoryLabel: 'Alchemical Blessing',
+        severity: 'benefit',
+        icon: '🧪',
+      };
+    case 'haboob_sandstorm':
+      return {
+        bannerText: '🏜️ HABOOB DUST STORM: -25% Crop Growth Speed · Silt Infiltration',
+        categoryLabel: 'Atmospheric Hazard',
+        severity: 'warning',
+        icon: '🏜️',
+      };
+    case 'foggy':
+      return {
+        bannerText: '🌁 GROUND FOG: +0.3% Soil Moisture/min · +25% Delicate Root Speed',
+        categoryLabel: 'Overcast & Humidity',
+        severity: 'info',
+        icon: '🌁',
+      };
+    case 'humid':
+      return {
+        bannerText: '🌫️ HUMID & MUGGY: Soil Evaporation Suppressed · +1 Harvest on Pumpkin Vines',
+        categoryLabel: 'Overcast & Humidity',
+        severity: 'info',
+        icon: '🌫️',
+      };
+    case 'drizzle':
+      return {
+        bannerText: '🌦️ DRIZZLE: Gentle Mist Irrigation · Reduced Evaporation',
+        categoryLabel: 'Active Precipitation',
+        severity: 'info',
+        icon: '🌦️',
+      };
+    case 'cloudy':
+      return {
+        bannerText: '⛅ CLOUDY: Evaporative Loss Halved · Stable Unhurried Growth',
+        categoryLabel: 'Overcast & Humidity',
+        severity: 'info',
+        icon: '⛅',
+      };
+    case 'sunny':
+    default:
+      return {
+        bannerText: '☀️ CLEAR SKIES: Normal Ambient Evaporation · +10% Photosynthetic Speed on Sun Crops',
+        categoryLabel: 'Clear & Thermal',
+        severity: 'info',
+        icon: '☀️',
+      };
+  }
+}
+
