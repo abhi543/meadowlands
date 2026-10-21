@@ -571,7 +571,7 @@ export function createDefaultWeatherState(initialWeather: WeatherProfileId = 'su
 }
 
 // --- Crop Agronomic Families & Phenology Taxonomy ---
-export type CropAgronomicFamily = 'sun_loving_warm' | 'cool_season_root' | 'temperate_berry';
+export type CropAgronomicFamily = 'sun_loving_warm' | 'cool_season_root' | 'temperate_berry' | 'cool_season_hardy' | 'restorative_legume';
 
 export interface CropPhenologyMeta {
   cropId: CropId;
@@ -646,6 +646,15 @@ export const CROP_PHENOLOGY_REGISTRY: Record<CropId, CropPhenologyMeta> = {
     optimalWeather: ['sunny', 'heatwave', 'humid'],
     coldToleranceMinC: 14,
     heatToleranceMaxC: 50,
+  },
+  peas: {
+    cropId: 'peas',
+    family: 'cool_season_hardy',
+    familyLabel: 'Restorative Legume',
+    familyIcon: '🫛',
+    optimalWeather: ['sunny', 'cloudy', 'humid', 'drizzle'],
+    coldToleranceMinC: 2,
+    heatToleranceMaxC: 38,
   },
 };
 

@@ -258,3 +258,56 @@ export function playCashRegisterSound(): void {
   });
 }
 
+/**
+ * 🌾 Gentle confirmation chime for full soil energy hover stamp
+ */
+export function playSoilEnergyChime(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const frequencies = [880, 1318.5]; // A5, E6
+  frequencies.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + i * 0.04);
+
+    gain.gain.setValueAtTime(0, now + i * 0.04);
+    gain.gain.linearRampToValueAtTime(0.08 / (i + 1), now + i * 0.04 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.3);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + i * 0.04);
+    osc.stop(now + i * 0.04 + 0.3);
+  });
+}
+
+/**
+ * 🥀 Subtle alert chime for depleted soil hover warning
+ */
+export function playTiredSoilAlert(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(320, now);
+  osc.frequency.exponentialRampToValueAtTime(220, now + 0.15);
+
+  gain.gain.setValueAtTime(0.08, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.18);
+}
+

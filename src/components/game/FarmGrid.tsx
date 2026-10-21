@@ -8,6 +8,13 @@ import { PlotUpgradeModal } from './PlotUpgradeModal';
 import { getSoilTier, getPlotUnlockCost } from '@/game/plotUpgrades';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 import { getMoistureZone } from '@/game/hydrologyEngine';
+import {
+  CROP_NUTRIENT_PROFILES,
+  isBatteryChargedForCrop,
+  isSoilBatteryFull,
+  type PlotSoilBattery,
+} from '@/game/soilEnergyEngine';
+import { playSoilEnergyChime, playTiredSoilAlert } from '@/lib/soundEffects';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -23,12 +30,15 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     harvestPlot,
     plantAllCrops,
     harvestAllPlots,
+    applyCompostToProps,
+    applyCompostToAllPlots,
     waterPlot,
     waterLevel,
     maxWaterLevel,
     pumpWell,
     waterAllPlots,
     silo,
+    barn = {},
     coins,
     systemicEvent,
     extinguishBrushfire,
@@ -49,6 +59,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
+  const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
 
   const visiblePlots = plots.slice(0, unlockedPlots);
 
@@ -65,6 +76,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const readyCount = visiblePlots.filter(p => p.crop && p.ready).length;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
   const unwateredCount = visiblePlots.filter(p => !p.isWatered).length;
+  const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
   const effectiveMaxWater = maxWaterLevel || 10;
   const isWellFull = waterLevel >= effectiveMaxWater;
   const canWaterAll = waterLevel > 0 && unwateredCount > 0;
@@ -178,26 +190,71 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         </div>
       </div>
 
-      {/* Crop Selector Toolbar */}
-      <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2 border border-amber-200 dark:border-amber-800">
-        <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1.5 flex items-center gap-1">
-          {'🌱'} Select Crop & Tap Plot to Plant
+      {/* Crop Selector Toolbar & Soil Battery Agronomy Legend */}
+      <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2.5 border border-amber-200 dark:border-amber-800 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <span>🌱</span>
+            <span>Select Crop & Tap Plot to Plant</span>
+          </div>
+
+          {/* Intuitive 3-Color Agronomy Soil Battery Legend (Zero academic jargon) */}
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-bold flex-wrap">
+            <span className="text-stone-700 dark:text-stone-300">⚡ Soil Fuel:</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-400 text-emerald-800 dark:text-emerald-300 flex items-center gap-1">
+              <span>🟢</span>
+              <span>Leaf/Stem</span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/70 border border-amber-400 text-amber-800 dark:text-amber-300 flex items-center gap-1">
+              <span>🟡</span>
+              <span>Root</span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 border border-rose-400 text-rose-800 dark:text-rose-300 flex items-center gap-1">
+              <span>🔴</span>
+              <span>Fruit/Flower</span>
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950/70 border border-teal-400 text-teal-800 dark:text-teal-300 flex items-center gap-1">
+              <span>🫛</span>
+              <span>Restorative (Refills 🟢)</span>
+            </span>
+          </div>
         </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {CROP_LIST.map(crop => (
-            <button
-              key={crop.id}
-              onClick={() => setSelectedCrop(crop.id)}
-              className={`px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all border ${
-                selectedCrop === crop.id
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
-              }`}
-            >
-              {crop.emoji} {crop.name}
-              {crop.seedCost > 0 && <span className="text-xs opacity-70 ml-1">{'💰'}{crop.seedCost}</span>}
-            </button>
-          ))}
+
+        {/* Seed Packets with Upper-Corner Colored Nutrient Fuel Dots */}
+        <div className="flex gap-2 flex-wrap">
+          {CROP_LIST.map(crop => {
+            const profile = CROP_NUTRIENT_PROFILES[crop.id];
+            const isSelected = selectedCrop === crop.id;
+            return (
+              <button
+                key={crop.id}
+                type="button"
+                onClick={() => setSelectedCrop(crop.id)}
+                className={`relative px-3 py-2 rounded-xl text-sm font-bold transition-all border cursor-pointer select-none ${
+                  isSelected
+                    ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105 ring-2 ring-amber-400/50'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
+                }`}
+                title={`${crop.name} — Requires ${profile?.fuelLabel || 'Soil Energy'}`}
+              >
+                {/* Seed Menu Upper-Corner Nutrient Color Dot */}
+                {profile && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 text-xs bg-stone-900/90 rounded-full w-4 h-4 flex items-center justify-center border border-white/40 shadow-sm"
+                    title={profile.fuelLabel}
+                  >
+                    {profile.badgeDot}
+                  </span>
+                )}
+                <span>{crop.emoji}</span> {crop.name}
+                {crop.seedCost > 0 && (
+                  <span className="text-[11px] opacity-75 ml-1.5 font-mono">
+                    💰{crop.seedCost}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -220,7 +277,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       )}
 
       {/* Batch Action Buttons */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {/* Harvest All */}
         <button
           onClick={() => harvestAllPlots()}
@@ -236,6 +293,26 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           {readyCount > 0 && (
             <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
               {readyCount}
+            </span>
+          )}
+        </button>
+
+        {/* Restore Soil (Compost Bailout) */}
+        <button
+          onClick={() => applyCompostToAllPlots()}
+          disabled={tiredPlotsCount === 0}
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 ${
+            tiredPlotsCount > 0
+              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border-emerald-400 shadow-md shadow-emerald-500/20 active:scale-95 animate-pulse cursor-pointer'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+          }`}
+          title={tiredPlotsCount > 0 ? `Apply organic compost to all ${tiredPlotsCount} tired plots to refill battery to 100% full` : 'All plot batteries are at 100% energy!'}
+        >
+          <span className="text-base sm:text-lg">{'💩'}</span>
+          <span>Restore Soil</span>
+          {tiredPlotsCount > 0 && (
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
+              {tiredPlotsCount} Tired
             </span>
           )}
         </button>
@@ -390,11 +467,19 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const moistureSpeedMult = isWithered ? 0 : moistureZone.growthSpeedMultiplier;
           const siltSpeedMult = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
+          // Soil Battery Energy State
+          const battery: PlotSoilBattery = plot.soilBattery || { green: true, yellow: true, red: true };
+          const isBatteryFull = isSoilBatteryFull(battery);
+          const isDepleted = !isBatteryFull;
+          const isHovered = hoveredPlotId === plot.id;
+          const selectedProfile = CROP_NUTRIENT_PROFILES[selectedCrop];
+          const isChargedForSelected = isBatteryChargedForCrop(battery, selectedCrop);
+
           const progress = plot.crop && plot.plantedAt && !plot.ready
             ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult * siltSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000))
             : 0;
 
-          // Soil styling classes with hydrological dynamics
+          // Soil styling classes with hydrological dynamics & soil battery energy
           let soilClasses = '';
           if (hasBlight) {
             soilClasses = 'bg-purple-950/70 border-purple-500 animate-pulse ring-2 ring-purple-400 shadow-lg shadow-purple-500/40 cursor-pointer text-white';
@@ -417,7 +502,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               : 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 hover:scale-105 shadow-green-200/50 shadow-lg cursor-pointer';
           } else if (moistureZone.id === 'optimal') {
             // Optimal capillary loam: Rich dark chocolate soil with emerald/cyan aeration ring
-            soilClasses = 'bg-[#3b2716] dark:bg-[#2c1d10] border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-md shadow-emerald-950/40 text-stone-100 cursor-pointer';
+            soilClasses = isDepleted
+              ? 'bg-gradient-to-br from-[#736d65] to-[#59554f] border-amber-500/70 ring-1 ring-amber-500/40 text-stone-200 cursor-pointer'
+              : 'bg-[#3b2716] dark:bg-[#2c1d10] border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-md shadow-emerald-950/40 text-stone-100 cursor-pointer';
           } else if (moistureZone.id === 'waterlogged' || moistureZone.id === 'saturated') {
             // Saturated soil
             soilClasses = 'bg-[#2b2724] dark:bg-[#1e1c1b] border-cyan-400/70 ring-1 ring-cyan-400/40 text-cyan-200 cursor-pointer';
@@ -425,11 +512,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             // Desiccated earth: dusty cracked pale soil
             soilClasses = 'bg-[#e8d5be] dark:bg-stone-900/80 border-rose-500/60 ring-1 ring-rose-400/40 text-rose-300 cursor-pointer';
           } else if (isGrowing) {
-            // Parched growing soil: Standard light-tan soil texture
-            soilClasses = 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
+            // Growing soil (highlight tired soil with amber outline if planted depleted)
+            soilClasses = plot.plantedInDepletedSoil
+              ? 'bg-gradient-to-br from-[#7a756e] to-[#635f58] border-amber-500/70 ring-1 ring-amber-500/40 text-amber-200 cursor-pointer'
+              : 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
           } else {
-            // Dry empty plot: Standard light-tan soil texture
-            soilClasses = 'bg-[#f4e8d8]/80 dark:bg-stone-900/40 border-stone-300 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-600 hover:bg-amber-100/40 cursor-pointer';
+            // Empty plot dirt appearance:
+            // Full Energy: Plot surface renders as rich, dark, damp brown soil.
+            // Depleted Energy: Plot surface visibly changes to pale, dry, cracked gray dirt with subtle withered patches.
+            soilClasses = isBatteryFull
+              ? 'bg-gradient-to-br from-[#2f1b0c] via-[#3d2410] to-[#201206] border-[#663b1a] text-amber-100 shadow-md hover:border-amber-400 cursor-pointer'
+              : 'bg-gradient-to-br from-[#96918a] via-[#827d76] to-[#69645e] border-stone-400 text-stone-200 shadow-inner hover:border-amber-300 cursor-pointer';
           }
 
           const handlePlotClick = () => {
@@ -460,6 +553,21 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               key={plot.id}
               role="button"
               tabIndex={0}
+              onMouseEnter={() => {
+                setHoveredPlotId(plot.id);
+                if (!plot.crop) {
+                  if (selectedProfile?.isRestorative || isChargedForSelected) {
+                    playSoilEnergyChime();
+                  } else {
+                    playTiredSoilAlert();
+                  }
+                }
+              }}
+              onMouseLeave={() => {
+                if (hoveredPlotId === plot.id) {
+                  setHoveredPlotId(null);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
@@ -548,6 +656,63 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     )}
                   </div>
 
+                  {/* 3-Color Soil Battery Persistent Mini-Bar (Floating Plot Meter) */}
+                  <div
+                    className="absolute top-1 left-1/2 -translate-x-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-stone-950/85 backdrop-blur-xs border border-stone-700/80 shadow-md z-20 pointer-events-none select-none"
+                    title={`Soil Battery: 🟢Leaf ${battery.green ? 'Full' : 'Depleted'} · 🟡Root ${battery.yellow ? 'Full' : 'Depleted'} · 🔴Fruit ${battery.red ? 'Full' : 'Depleted'}`}
+                  >
+                    {/* 🟢 Green Light (Leaf / Stem fuel) */}
+                    <span
+                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
+                        battery.green
+                          ? `bg-emerald-400 shadow-[0_0_6px_#34d399] ${
+                              isHovered && selectedProfile?.fuelType === 'green'
+                                ? 'ring-2 ring-white scale-125 animate-pulse'
+                                : ''
+                            }`
+                          : `border-2 border-stone-500 bg-stone-900 ${
+                              isHovered && selectedProfile?.fuelType === 'green'
+                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
+                                : ''
+                            }`
+                      }`}
+                    />
+
+                    {/* 🟡 Yellow Light (Root fuel) */}
+                    <span
+                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
+                        battery.yellow
+                          ? `bg-amber-400 shadow-[0_0_6px_#fbbf24] ${
+                              isHovered && selectedProfile?.fuelType === 'yellow'
+                                ? 'ring-2 ring-white scale-125 animate-pulse'
+                                : ''
+                            }`
+                          : `border-2 border-stone-500 bg-stone-900 ${
+                              isHovered && selectedProfile?.fuelType === 'yellow'
+                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
+                              : ''
+                            }`
+                      }`}
+                    />
+
+                    {/* 🔴 Red Light (Fruit / Flower fuel) */}
+                    <span
+                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
+                        battery.red
+                          ? `bg-rose-500 shadow-[0_0_6px_#f43f5e] ${
+                              isHovered && selectedProfile?.fuelType === 'red'
+                                ? 'ring-2 ring-white scale-125 animate-pulse'
+                                : ''
+                            }`
+                          : `border-2 border-stone-500 bg-stone-900 ${
+                              isHovered && selectedProfile?.fuelType === 'red'
+                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
+                                : ''
+                            }`
+                      }`}
+                    />
+                  </div>
+
                   {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
                   {isWatered && (
                     <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-cyan-600/90 text-white text-[8px] sm:text-[9px] font-black border border-cyan-300 shadow-sm animate-pulse z-10">
@@ -594,13 +759,77 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   )}
 
                   {isEmpty && (
-                    <div className="flex flex-col items-center">
-                      <span className="text-2xl opacity-40">
-                        {isWatered ? '💧' : '🟫'}
+                    <div className="flex flex-col items-center select-none">
+                      <span className="text-2xl filter drop-shadow">
+                        {isDepleted ? '🪨' : (isWatered ? '💧' : '🌱')}
                       </span>
-                      <span className="text-[9px] text-stone-500 dark:text-stone-400 mt-0.5">
-                        {isWatered ? 'Moist Soil' : 'Dry Soil'}
+                      <span className={`text-[9px] font-bold mt-0.5 ${
+                        isDepleted ? 'text-stone-300' : 'text-amber-200/90'
+                      }`}>
+                        {isDepleted ? 'Tired Soil' : (isWatered ? 'Moist Soil' : 'Full Energy')}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Drag & Hover Visual Stamp / Pre-Plant Previews */}
+                  {isEmpty && isHovered && (
+                    <div className="absolute inset-0 z-30 bg-black/70 backdrop-blur-[1px] flex flex-col items-center justify-center p-1 animate-in fade-in duration-150">
+                      {selectedProfile?.isRestorative ? (
+                        <>
+                          <div className="px-2 py-1 rounded-lg bg-teal-950/95 border-2 border-teal-400 text-teal-200 text-[9px] sm:text-[10px] font-black shadow-xl flex items-center gap-1 animate-pulse">
+                            <span>🫛</span>
+                            <span>Recharges 🟢 Energy</span>
+                          </div>
+                          <span className="text-[8px] font-bold text-teal-300/90 mt-0.5">
+                            Restorative Legume
+                          </span>
+                        </>
+                      ) : isChargedForSelected ? (
+                        <>
+                          <div className="px-2 py-1 rounded-lg bg-emerald-950/95 border-2 border-emerald-400 text-emerald-300 text-[10px] sm:text-xs font-black shadow-xl flex items-center gap-1 animate-pulse">
+                            <span>✨</span>
+                            <span>+3 Harvest (Fast)</span>
+                          </div>
+                          <span className="text-[8px] font-bold text-emerald-300/90 mt-0.5">
+                            Full Energy Match
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="px-1.5 py-0.5 rounded-lg bg-amber-950/95 border-2 border-amber-500 text-amber-300 text-[9px] sm:text-[10px] font-black shadow-xl flex items-center gap-1 animate-pulse">
+                            <span>⚠️</span>
+                            <span>Only 1x Harvest (Slow)</span>
+                          </div>
+                          {/* Floating Quick Fix Hint Bubble directly on plot */}
+                          <div
+                            className="mt-1 flex items-center gap-1 z-40"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => applyCompostToProps(plot.id)}
+                              className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
+                              title="Add compost/manure to instantly refill battery"
+                            >
+                              <span>💩</span>
+                              <span>Add Compost</span>
+                            </button>
+                            <span className="text-[8px] text-stone-300 font-bold">or</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCrop('peas');
+                                plantCrop(plot.id, 'peas');
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
+                              title="Plant restorative Peas to recharge 🟢 Leaf/Stem fuel"
+                            >
+                              <span>🫛</span>
+                              <span>Plant Peas</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
