@@ -161,6 +161,17 @@ export function WaterTab() {
               {aquiferDepthPct}%
             </span>
           </div>
+          <a
+            href="/Meadowlands_Water_System_Complete_Manual.pdf"
+            download="Meadowlands_Water_System_Complete_Manual.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-white/25 hover:bg-white/35 dark:bg-cyan-900/60 dark:hover:bg-cyan-800/80 backdrop-blur-md border border-white/40 dark:border-cyan-400/50 flex items-center gap-1.5 font-bold text-white shadow-sm transition-all active:scale-95 cursor-pointer text-xs"
+            title="Download the Complete Hydrology & Water Engineering PDF Manual"
+          >
+            <span>📄</span>
+            <span>PDF Guide</span>
+          </a>
         </div>
       </div>
 
