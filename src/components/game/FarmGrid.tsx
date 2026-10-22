@@ -131,7 +131,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
   // Count ready, empty, and crop-bearing plots for batch actions
   const readyOrWitheredCount = visiblePlots.filter(p => p.crop && (p.ready || p.isWithered)).length;
+  const alreadyWitheredCount = visiblePlots.filter(p => p.crop && p.isWithered).length;
   const cropsToWitherCount = visiblePlots.filter(p => p.crop && !p.isWithered).length;
+  const anyCropsOnFarm = visiblePlots.some(p => p.crop); // growing OR withered
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
   const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
   const selectedCropDef = CROPS[selectedCrop];
@@ -623,22 +625,30 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           )}
         </button>
 
-        {/* Wither All Plants */}
+        {/* Wither All Plants / Clear Withered */}
         <button
           onClick={() => witherAllPlants()}
-          disabled={cropsToWitherCount === 0}
+          disabled={!anyCropsOnFarm}
           className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
-            cropsToWitherCount > 0
-              ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-md shadow-rose-200/50 cursor-pointer'
+            anyCropsOnFarm
+              ? alreadyWitheredCount > 0 && cropsToWitherCount === 0
+                ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-700 shadow-md shadow-amber-200/50 cursor-pointer'
+                : 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-md shadow-rose-200/50 cursor-pointer'
               : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
-          title="Instantly wither all growing/ready crops across all plots"
+          title={alreadyWitheredCount > 0 && cropsToWitherCount === 0
+            ? 'Clear all withered crop debris from beds'
+            : 'Instantly wither all growing/ready crops across all plots'}
         >
           <span className="text-base sm:text-lg">{'🥀'}</span>
-          <span>Wither All</span>
-          {cropsToWitherCount > 0 && (
+          <span>
+            {alreadyWitheredCount > 0 && cropsToWitherCount === 0
+              ? 'Clear Withered'
+              : 'Wither All'}
+          </span>
+          {anyCropsOnFarm && (
             <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
-              {cropsToWitherCount}
+              {alreadyWitheredCount > 0 && cropsToWitherCount === 0 ? alreadyWitheredCount : cropsToWitherCount || alreadyWitheredCount}
             </span>
           )}
         </button>

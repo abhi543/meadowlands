@@ -2886,9 +2886,31 @@ export const useGameStore = create<GameState>()(
 
       witherAllPlants: () => {
         const state = get();
-        let witheredCount = 0;
+        let witheredCount = 0;   // crops newly withered
+        let clearedCount = 0;    // already-withered crops now cleared
         const newPlots = state.plots.map((plot, idx) => {
-          if (idx < state.unlockedPlots && plot.crop) {
+          if (idx >= state.unlockedPlots || !plot.crop) return plot;
+
+          if (plot.isWithered) {
+            // Already withered — clear the dead crop debris
+            clearedCount++;
+            const pLevel = plot.level || 1;
+            const soilTier = getSoilTier(pLevel);
+            return {
+              ...plot,
+              crop: null,
+              plantedAt: null,
+              ready: false,
+              isWithered: false,
+              hasRootRot: false,
+              disease: null,
+              isWatered: soilTier.autoHydrate ? true : false,
+              wateredUntil: null,
+              desiccatedSeconds: 0,
+              waterloggedSeconds: 0,
+            };
+          } else {
+            // Growing/ready crop — wither it
             witheredCount++;
             return {
               ...plot,
@@ -2897,16 +2919,23 @@ export const useGameStore = create<GameState>()(
               disease: null,
             };
           }
-          return plot;
         });
 
-        if (witheredCount === 0) {
-          state.addNotification('No crops currently growing to wither!', 'ℹ️', 'info');
+        const totalAffected = witheredCount + clearedCount;
+        if (totalAffected === 0) {
+          state.addNotification('No crops on the farm to act on!', 'ℹ️', 'info');
           return;
         }
 
         set({ plots: newPlots, isDirty: true });
-        state.addNotification(`🥀 Wither All Plants: Withered ${witheredCount} crop(s) across your farmland! Clear them with Hoe or Harvest All.`, '🥀', 'danger');
+
+        if (clearedCount > 0 && witheredCount > 0) {
+          state.addNotification(`🥀 Farm Reset: Cleared ${clearedCount} withered crop(s) and withered ${witheredCount} growing crop(s).`, '🥀', 'danger');
+        } else if (clearedCount > 0) {
+          state.addNotification(`🧹 Cleared ${clearedCount} withered crop(s) from your farmland. Beds ready for replanting!`, '🥀', 'info');
+        } else {
+          state.addNotification(`🥀 Wither All Plants: Withered ${witheredCount} crop(s) across your farmland! Use Harvest All to clear them.`, '🥀', 'danger');
+        }
       },
 
       feedAnimal: (animalId) => {
