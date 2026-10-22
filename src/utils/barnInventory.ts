@@ -52,8 +52,12 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   cotton_gold: { id: 'cotton_gold', name: 'Golden Cotton', icon: '🌿⭐', category: 'crop', baseValue: 28, isEdibleFeed: true },
   cotton_prismatic: { id: 'cotton_prismatic', name: 'Prismatic Cotton', icon: '🌿🌈', category: 'crop', baseValue: 60, isEdibleFeed: true },
 
+  wild_berries: { id: 'wild_berries', name: 'Wild Berries', icon: '🍇', category: 'crop', baseValue: 8, isEdibleFeed: true },
+  wild_berries_silver: { id: 'wild_berries_silver', name: 'Silver Wild Berries', icon: '🍇✨', category: 'crop', baseValue: 16, isEdibleFeed: true },
+  wild_berries_gold: { id: 'wild_berries_gold', name: 'Golden Wild Berries', icon: '🍇⭐', category: 'crop', baseValue: 32, isEdibleFeed: true },
+  wild_berries_prismatic: { id: 'wild_berries_prismatic', name: 'Prismatic Wild Berries', icon: '🍇🌈', category: 'crop', baseValue: 70, isEdibleFeed: true },
+
   // Forage & Raw Extras
-  wild_berries: { id: 'wild_berries', name: 'Wild Berries', icon: '🍇', category: 'forage', baseValue: 8, isEdibleFeed: true },
   honey_comb: { id: 'honey_comb', name: 'Honey Comb', icon: '🍯', category: 'forage', baseValue: 12, isEdibleFeed: false },
   gold_nugget: { id: 'gold_nugget', name: 'Gold Nugget', icon: '⭐', category: 'forage', baseValue: 50, isEdibleFeed: false },
 

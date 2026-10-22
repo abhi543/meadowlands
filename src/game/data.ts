@@ -216,7 +216,7 @@ export const BREED_DISCOVERY_HINTS: Record<string, string> = {
 };
 
 // --- Crops ---
-export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton' | 'peas';
+export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton' | 'peas' | 'wild_berries';
 
 export interface CropDef {
   id: CropId;
@@ -236,6 +236,7 @@ export const CROPS: Record<CropId, CropDef> = {
   pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 1200, yieldCount: 10, seedCost: 25 },
   cotton:      { id: 'cotton',      name: 'Cotton',      emoji: '\u{1F33F}', growTimeSec: 300, yieldCount: 16, seedCost: 12 },
   peas:        { id: 'peas',        name: 'Peas (Restorative)', emoji: '\u{1FADB}', growTimeSec: 30,  yieldCount: 4,  seedCost: 2 },
+  wild_berries:{ id: 'wild_berries',name: 'Wild Berry',  emoji: '\u{1F347}', growTimeSec: 150, yieldCount: 5,  seedCost: 6 },
 };
 
 // --- Animals ---
@@ -305,6 +306,7 @@ export type ProductId =
   | 'soybean_silver' | 'soybean_gold' | 'soybean_prismatic'
   | 'pumpkin_silver' | 'pumpkin_gold' | 'pumpkin_prismatic'
   | 'cotton_silver' | 'cotton_gold' | 'cotton_prismatic'
+  | 'wild_berries_silver' | 'wild_berries_gold' | 'wild_berries_prismatic'
   // Gourmet Culinary & Premium Artisan Products
   | 'golden_cornbread' | 'prismatic_berry_tart' | 'glazed_silver_carrots'
   | 'royal_pumpkin_pottage' | 'grand_prismatic_jam' | 'prismatic_silk_tapestry' | 'silver_woven_quilt'
@@ -436,6 +438,10 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   cotton_silver:        { id: 'cotton_silver',        name: 'Silver Cotton',         emoji: '🌿✨', category: 'raw',          sellPrice: 15 },
   cotton_gold:          { id: 'cotton_gold',          name: 'Golden Cotton',         emoji: '🌿⭐', category: 'raw',          sellPrice: 28 },
   cotton_prismatic:     { id: 'cotton_prismatic',     name: 'Prismatic Cotton',      emoji: '🌿🌈', category: 'raw',          sellPrice: 60 },
+
+  wild_berries_silver:    { id: 'wild_berries_silver',    name: 'Silver Wild Berries',    emoji: '🍇✨', category: 'raw',          sellPrice: 16 },
+  wild_berries_gold:      { id: 'wild_berries_gold',      name: 'Golden Wild Berries',    emoji: '🍇⭐', category: 'raw',          sellPrice: 32 },
+  wild_berries_prismatic: { id: 'wild_berries_prismatic', name: 'Prismatic Wild Berries', emoji: '🍇🌈', category: 'raw',          sellPrice: 70 },
 
   // --- Gourmet Culinary & Premium Artisan Products ---
   golden_cornbread:        { id: 'golden_cornbread',        name: 'Golden Cornbread',        emoji: '🍞⭐', category: 'manufactured', sellPrice: 95 },
@@ -2016,7 +2022,7 @@ export const MARKET_COMMODITIES: string[] = [
   'wheat', 'corn', 'carrot', 'strawberry', 'cotton',
   'egg', 'milk', 'wool', 'truffle',
   'bread', 'cheese', 'pie', 'sweater', 'truffle_oil',
-  'fish', 'honey_comb', 'gold_nugget',
+  'fish', 'honey_comb', 'gold_nugget', 'wild_berries',
 ];
 
 export interface MarketNewsTemplate {
@@ -2039,4 +2045,5 @@ export const MARKET_NEWS_TEMPLATES: MarketNewsTemplate[] = [
   { itemId: 'truffle', headline: 'Gourmet Culinary Tour: Rare Truffles commanding top dollar!', minMult: 1.8, maxMult: 2.2 },
   { itemId: 'strawberry', headline: 'Sweet Strawberry Craze: Confectioners bidding up berry prices!', minMult: 1.6, maxMult: 2.0 },
   { itemId: 'cotton', headline: 'Weaving Guild Bulk Contract: Raw Cotton in high demand!', minMult: 1.5, maxMult: 1.9 },
+  { itemId: 'wild_berries', headline: 'Forest Berry Forage Shortage: Wild Berries commanding high prices!', minMult: 1.6, maxMult: 2.1 },
 ];

@@ -211,8 +211,8 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     previewCropRoleLabel = '🌾 Heavy Feeder (-35% N on harvest)';
   } else if (previewCropId === 'carrot') {
     previewCropRoleLabel = '🥕 Root Aerator (+20% O₂ on harvest)';
-  } else if (previewCropId === 'strawberry' || previewCropId === 'pumpkin') {
-    previewCropRoleLabel = '🍓 Fruit & Flower Feeder';
+  } else if (previewCropId === 'strawberry' || previewCropId === 'pumpkin' || previewCropId === 'wild_berries') {
+    previewCropRoleLabel = '🍓 Fruit & Berry Feeder';
   }
 
   const prePlantAlerts: { type: 'danger' | 'warning'; text: string }[] = [];

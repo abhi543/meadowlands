@@ -54,6 +54,8 @@ export const STAGE_0_RAW_CROPS: Record<string, { seedCost: number; growTimeSec: 
   cotton:      { seedCost: 12, growTimeSec: 300, name: 'Cotton',      icon: '🌿' },
   soybean:     { seedCost: 15, growTimeSec: 360, name: 'Soybean',     icon: '🫛' },
   pumpkin:     { seedCost: 25, growTimeSec: 1200, name: 'Pumpkin',     icon: '🎃' },
+  peas:        { seedCost: 2,  growTimeSec: 30,  name: 'Peas',        icon: '🫛' },
+  wild_berries:{ seedCost: 6,  growTimeSec: 150, name: 'Wild Berries', icon: '🍇' },
 };
 
 export function calculateRawCropValue(seedCost: number, growTimeSec: number): number {

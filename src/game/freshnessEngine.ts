@@ -31,6 +31,9 @@ export const PERISHABLE_DEFINITIONS: Record<string, PerishableItemDef> = {
   soybean: { itemId: 'soybean', name: 'Soybean', category: 'raw_crop', baseDecayDurationSec: 1080 },
   pumpkin: { itemId: 'pumpkin', name: 'Pumpkin', category: 'raw_crop', baseDecayDurationSec: 1200 },
   wild_berries: { itemId: 'wild_berries', name: 'Wild Berries', category: 'raw_crop', baseDecayDurationSec: 540 },
+  wild_berries_silver: { itemId: 'wild_berries_silver', name: 'Silver Wild Berries', category: 'raw_crop', baseDecayDurationSec: 720 },
+  wild_berries_gold: { itemId: 'wild_berries_gold', name: 'Golden Wild Berries', category: 'raw_crop', baseDecayDurationSec: 900 },
+  wild_berries_prismatic: { itemId: 'wild_berries_prismatic', name: 'Prismatic Wild Berries', category: 'raw_crop', baseDecayDurationSec: 1500 },
 
   // Dairy & Animal Goods (8 to 15 minutes)
   milk: { itemId: 'milk', name: 'Fresh Milk', category: 'dairy', baseDecayDurationSec: 600 },

@@ -736,6 +736,8 @@ function getCropUsage(cropId: string): string {
     case 'soybean': return 'Tofu & Soy Press processing, specialized contracts.';
     case 'pumpkin': return 'Holiday VIP Orders, seasonal recipes.';
     case 'cotton': return 'Tailor Shop, Fine Fabric, Quilted Blankets, Yarn.';
+    case 'peas': return 'Restorative Green Manure, recharges Leaf soil energy, Feed.';
+    case 'wild_berries': return 'Primeval Diets, Citrus Herb Tea, Algae Paste, Livestock Feed, Orders.';
     default: return 'Orders & Direct selling.';
   }
 }

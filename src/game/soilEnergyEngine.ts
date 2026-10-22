@@ -95,6 +95,13 @@ export const CROP_NUTRIENT_PROFILES: Record<CropId, CropNutrientProfile> = {
     isRestorative: true,
     restoresColor: 'green',
   },
+  wild_berries: {
+    fuelType: 'red',
+    badgeColor: 'text-purple-500 bg-purple-100 dark:bg-purple-950/80 border-purple-400',
+    badgeDot: '🔴',
+    fuelLabel: 'Fruit & Berry Energy',
+    isRestorative: false,
+  },
 };
 
 /**

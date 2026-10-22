@@ -660,6 +660,15 @@ export const CROP_PHENOLOGY_REGISTRY: Record<CropId, CropPhenologyMeta> = {
     coldToleranceMinC: 2,
     heatToleranceMaxC: 38,
   },
+  wild_berries: {
+    cropId: 'wild_berries',
+    family: 'temperate_berry',
+    familyLabel: 'Temperate Berry',
+    familyIcon: '🍇',
+    optimalWeather: ['cloudy', 'sunshower', 'drizzle'],
+    coldToleranceMinC: 3,
+    heatToleranceMaxC: 36,
+  },
 };
 
 export interface CropPhenologyResult {
