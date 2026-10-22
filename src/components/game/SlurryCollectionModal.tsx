@@ -599,6 +599,20 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                   {gasLab.distillationSpeedMultiplier > 1.0 ? 'Active (+50% Speed)' : 'Standard (1.0x)'}
                 </div>
               </div>
+
+              {/* Agronomic Ecosystem Callout: Oxygen Gas (O2) */}
+              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-cyan-300">
+                  <span className="text-base">🫧</span>
+                  <span>Ecosystem Agronomy Note: Oxygen Gas (O₂) &amp; Anaerobic Digestion</span>
+                </div>
+                <p className="text-[11px] text-stone-300 leading-relaxed">
+                  The Gas Chamber operates in a strictly <strong>anaerobic (zero-oxygen) environment</strong> — methanogenic microbes ferment slurry and chaff biomass into clean Methane (CH₄), CO₂, and Nitrogen without oxygen. 
+                </p>
+                <p className="text-[11px] text-stone-400 leading-relaxed">
+                  <strong>Oxygen Gas (O₂)</strong> is an aerobic soil metric maintained across your <strong>Farm Plots</strong>. Optimal soil O₂ is <strong>45%–75%</strong>; values below 20% freeze crop growth from root suffocation. You can restore plot O₂ by tilling with a hoe (instant 60%), harvesting root crops like Carrots (+20%), or clearing waterlogged soil.
+                </p>
+              </div>
             </div>
           )}
         </div>

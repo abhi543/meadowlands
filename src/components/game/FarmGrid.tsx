@@ -783,6 +783,16 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 <span className="text-stone-500 font-mono text-[9px]">Target: &gt;60%</span>
               </div>
             </div>
+
+            {/* Description & Action Guidance */}
+            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
+              <p>
+                <strong className="text-amber-400">Photosynthetic Speed Engine:</strong> Governs vegetative crop growth speed. Baseline is 25%. Values &gt;60% accelerate growth up to +40% speed boost.
+              </p>
+              <div className="text-[9px] text-amber-300/90 font-mono bg-stone-900/60 p-1 rounded border border-amber-500/20">
+                <span>💡 Boost:</span> Livestock pens (&le;3 tiles: +40%) • Compost (+25%) • Gas Lab canopy line
+              </div>
+            </div>
           </div>
 
           {/* Oxygen (O2) */}
@@ -854,6 +864,16 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 <span className="text-stone-500 font-mono text-[9px]">Target: 45%–75%</span>
               </div>
             </div>
+
+            {/* Description & Action Guidance */}
+            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
+              <p>
+                <strong className="text-cyan-400">Soil Aeration &amp; Breath:</strong> Governs root-zone respiration &amp; drainage. Flooded soil (&ge;80% moisture) drains O₂ (-10%/10s). Below 20% causes <span className="text-rose-400 font-bold">Root Suffocation</span> (growth paused). Above 85% causes <span className="text-amber-400 font-bold">Parched Ground</span> (2x water drain).
+              </p>
+              <div className="text-[9px] text-cyan-300/90 font-mono bg-stone-900/60 p-1 rounded border border-cyan-500/20">
+                <span>💡 Fix/Get O₂:</span> Till bed (instant 60%) • Pull Carrots (+20%) • Drain flooding
+              </div>
+            </div>
           </div>
 
           {/* Nitrogen (N) */}
@@ -919,6 +939,16 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     : '🔴 Exhausted Deficit (<35%)'}
                 </span>
                 <span className="text-stone-500 font-mono text-[9px]">Target: 70%–100%</span>
+              </div>
+            </div>
+
+            {/* Description & Action Guidance */}
+            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
+              <p>
+                <strong className="text-teal-400">Soil Fertility Battery:</strong> Governs final harvest yield multiplier. High fertility (70%–100%) guarantees full 3x yields. Deficit (&lt;35%) drops harvest to 1x.
+              </p>
+              <div className="text-[9px] text-teal-300/90 font-mono bg-stone-900/60 p-1 rounded border border-teal-500/20">
+                <span>💡 Refill N:</span> Harvest Peas/Soybeans (+50%) • Compost/Manure/Chaff Mulch (100%) • Gas Lab digestate
               </div>
             </div>
           </div>
