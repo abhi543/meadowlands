@@ -66,6 +66,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     hydrology,
     toggleEmergencySpillway,
     clearWitheredCrop,
+    curePlotDisease,
+    washHandTools,
+    solarizePlotBed,
+    clearDiseasedCrop,
+    isToolContaminated,
     animals = [],
     livestockReserve = [],
     farmEpochStart,
@@ -334,6 +339,35 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         </div>
       )}
 
+      {/* Tool Sanitation Warning Banner */}
+      {isToolContaminated && (
+        <div className="bg-gradient-to-r from-red-950/95 via-rose-950/90 to-amber-950/95 border-2 border-rose-500 rounded-2xl p-3 sm:p-4 text-white shadow-xl shadow-rose-950/80 animate-pulse flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-3xl animate-bounce">🧼</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-black text-xs sm:text-sm tracking-wide uppercase text-rose-200">
+                  ⚠️ Hand Tools Contaminated with Crop Pathogens!
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-mono font-bold bg-rose-950 border border-rose-400 text-rose-300">
+                  50% Infection Risk on Replanting
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-rose-200/80 mt-0.5 leading-snug">
+                Harvesting blighted crops infected your hand scythe. Wash tools in clean trough water to restore sanitation.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => washHandTools()}
+            className="px-4 py-2 rounded-xl font-black text-xs sm:text-sm tracking-wide bg-blue-600 hover:bg-blue-500 text-white border-2 border-blue-300 cursor-pointer active:scale-95 transition-all shadow-md flex items-center gap-1.5"
+          >
+            <span>🧼</span>
+            <span>Wash Hand Tools (-2L Water)</span>
+          </button>
+        </div>
+      )}
 
       {/* Farm Livestock & Animals Overview Widget */}
       <div className="bg-gradient-to-r from-amber-50/90 via-stone-50 to-orange-50/80 dark:from-stone-900/90 dark:via-stone-850 dark:to-stone-900/90 rounded-2xl p-3 border border-amber-200/90 dark:border-amber-900/50 shadow-xs flex flex-wrap items-center justify-between gap-3">
@@ -1038,6 +1072,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const isWithered = Boolean(plot.isWithered);
           const hasRootRot = Boolean(plot.hasRootRot);
 
+          // Dynamic Crop Disease & Soil Contamination Status
+          const isDiseaseActive = Boolean(plot.disease && plot.disease.stage === 'active');
+          const isDiseaseWarning = Boolean(plot.disease && plot.disease.stage === 'warning');
+          const isContaminatedDirt = Boolean(plot.isContaminatedDirt);
+
           const moisturePct = plot.moistureLevel !== undefined ? plot.moistureLevel : (isWatered ? 70 : 35);
           const moistureZone = getMoistureZone(moisturePct);
 
@@ -1082,6 +1121,18 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           let soilClasses = '';
           if (hasBlight) {
             soilClasses = 'bg-purple-950/70 border-purple-500 animate-pulse ring-2 ring-purple-400 shadow-lg shadow-purple-500/40 cursor-pointer text-white';
+          } else if (isDiseaseActive) {
+            if (plot.disease?.type === 'root_rot') {
+              soilClasses = 'bg-gradient-to-br from-[#121f28] to-[#0a1217] border-amber-500 ring-2 ring-amber-400/80 shadow-lg shadow-amber-950/70 cursor-pointer text-amber-200 animate-pulse';
+            } else if (plot.disease?.type === 'foliar_mildew') {
+              soilClasses = 'bg-gradient-to-br from-[#2a2d2f] to-[#1e2022] border-stone-300 ring-2 ring-stone-200/80 shadow-lg shadow-stone-900/60 cursor-pointer text-stone-100';
+            } else {
+              soilClasses = 'bg-gradient-to-br from-[#2b1f14] to-[#1c1209] border-rose-600 ring-2 ring-rose-500/80 shadow-lg shadow-rose-950/70 cursor-pointer text-rose-200 animate-pulse';
+            }
+          } else if (isDiseaseWarning) {
+            soilClasses = 'bg-stone-900 border-amber-400 ring-2 ring-amber-400/90 shadow-lg shadow-amber-500/40 cursor-pointer text-amber-200 animate-pulse';
+          } else if (isEmpty && isContaminatedDirt) {
+            soilClasses = 'bg-gradient-to-br from-[#2c1d1d] via-[#241515] to-[#180c0c] border-rose-500 ring-2 ring-rose-500/70 shadow-inner cursor-pointer text-rose-300';
           } else if (isOnFire) {
             soilClasses = 'bg-rose-100 dark:bg-rose-950/60 border-rose-500 animate-pulse ring-2 ring-rose-400 shadow-lg shadow-rose-500/30 cursor-pointer';
           } else if (hasLocust) {
@@ -1135,6 +1186,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               captureLocust(plot.id);
             } else if (isPlotExhausted) {
               cureEntityExhaustion(`plot_${plot.id}`, 'plot');
+            } else if (isDiseaseActive || isDiseaseWarning) {
+              setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
+            } else if (isEmpty && isContaminatedDirt) {
+              setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
             } else if (isReady) {
               harvestPlot(plot.id);
             } else if (isEmpty) {
@@ -1368,16 +1423,43 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   )}
 
                   {isEmpty && (
-                    <div className="flex flex-col items-center select-none">
-                      <span className="text-2xl filter drop-shadow">
-                        {isDepleted ? '🪨' : (isWatered ? '💧' : '🌱')}
-                      </span>
-                      <span className={`text-[9px] font-bold mt-0.5 ${
-                        isDepleted ? 'text-stone-300' : 'text-amber-200/90'
-                      }`}>
-                        {isDepleted ? 'Tired Soil' : (isWatered ? 'Moist Soil' : 'Full Energy')}
-                      </span>
-                    </div>
+                    isContaminatedDirt ? (
+                      <div className="flex flex-col items-center select-none text-center p-1">
+                        <span className="text-2xl animate-pulse">☣️</span>
+                        <span className="text-[8px] font-black uppercase text-rose-300 bg-rose-950/90 px-1 py-0.5 rounded border border-rose-500/60 mt-0.5">
+                          Contaminated Dirt
+                        </span>
+                        <div className="mt-1 flex flex-wrap gap-1 justify-center z-40" onClick={e => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => solarizePlotBed(plot.id)}
+                            className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 text-stone-950 text-[8px] font-black cursor-pointer shadow-md"
+                            title="Solarize soil with clear tarp to eradicate lingering pathogens"
+                          >
+                            ☀️ Solarize
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => curePlotDisease(plot.id, 'apply_lime')}
+                            className="px-1.5 py-0.5 rounded bg-rose-600 hover:bg-rose-500 text-white text-[8px] font-black cursor-pointer shadow-md border border-rose-400"
+                            title="Apply Slaked Lime to neutralize soil bed"
+                          >
+                            ☣️ Lime
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center select-none">
+                        <span className="text-2xl filter drop-shadow">
+                          {isDepleted ? '🪨' : (isWatered ? '💧' : '🌱')}
+                        </span>
+                        <span className={`text-[9px] font-bold mt-0.5 ${
+                          isDepleted ? 'text-stone-300' : 'text-amber-200/90'
+                        }`}>
+                          {isDepleted ? 'Tired Soil' : (isWatered ? 'Moist Soil' : 'Full Energy')}
+                        </span>
+                      </div>
+                    )
                   )}
 
                   {/* Drag & Hover Visual Stamp / Pre-Plant Previews */}
@@ -1653,25 +1735,116 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
+                  {/* Early Disease Risk Amber Alert Badge */}
+                  {isDiseaseWarning && plot.disease && (
+                    <div className="absolute top-1 left-1 flex items-center gap-1 z-30 pointer-events-none">
+                      <span className="px-1.5 py-0.5 rounded-full text-[8px] font-black bg-amber-500 text-stone-950 border border-amber-200 shadow-md animate-bounce flex items-center gap-0.5">
+                        <span>⚠️</span>
+                        <span>Risk ({Math.round(plot.disease.warningTimerSec)}s)</span>
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Active Inspection Card (Hover or Click) */}
+                  {(isDiseaseActive || isDiseaseWarning) && plot.disease && (activeActionPlotId === plot.id || isHovered) && (
+                    <div
+                      className="absolute -top-14 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center bg-stone-950/98 border-2 border-amber-400 p-2 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap min-w-[210px]"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between w-full gap-2 border-b border-stone-700/80 pb-1 mb-1">
+                        <span className="text-[10px] font-black text-amber-300 flex items-center gap-1">
+                          <span>{plot.disease.emoji}</span>
+                          <span>{plot.disease.name}</span>
+                        </span>
+                        <span className="text-[9px] font-mono font-bold text-rose-400">
+                          ⏱️ {Math.round(plot.disease.timeRemainingSec || plot.disease.warningTimerSec)}s
+                        </span>
+                      </div>
+
+                      <div className="text-[8px] text-stone-300 leading-tight mb-1 text-center w-full">
+                        <span className="text-stone-400">Cause:</span> <span className="font-semibold text-amber-200">{plot.disease.causeDescription}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1 w-full justify-center mt-0.5">
+                        {plot.disease.type === 'root_rot' && (
+                          <button
+                            type="button"
+                            onClick={() => curePlotDisease(plot.id, 'dig_drain')}
+                            className="px-2 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[9px] font-black cursor-pointer shadow-md border border-teal-300 flex items-center gap-1 active:scale-95"
+                            title="Slice an emergency drainage ditch or till bed with Hand Hoe (Boosts O2 > 50%)"
+                          >
+                            <span>🪱</span>
+                            <span>[ Dig Drain ]</span>
+                          </button>
+                        )}
+
+                        {plot.disease.type === 'foliar_mildew' && (
+                          <button
+                            type="button"
+                            onClick={() => curePlotDisease(plot.id, 'prune_mildew')}
+                            className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[9px] font-black cursor-pointer shadow-md border border-emerald-300 flex items-center gap-1 active:scale-95"
+                            title="Prune diseased leaves with Shears & apply milk wash"
+                          >
+                            <span>✂️</span>
+                            <span>[ Prune Foliage ]</span>
+                          </button>
+                        )}
+
+                        {plot.disease.type === 'bacterial_soft_rot' && (
+                          <button
+                            type="button"
+                            onClick={() => curePlotDisease(plot.id, 'apply_lime')}
+                            className="px-2 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[9px] font-black cursor-pointer shadow-md border border-rose-300 flex items-center gap-1 active:scale-95"
+                            title="Dress dirt with Slaked Lime / Bio-Char to neutralize pathogens"
+                          >
+                            <span>☣️</span>
+                            <span>[ Apply Lime ]</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => clearDiseasedCrop(plot.id)}
+                          className="px-1.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-rose-300 text-[8px] font-bold border border-stone-600 cursor-pointer shadow-sm active:scale-95"
+                          title="Remove ruined plant with Hand Hoe"
+                        >
+                          <span>🧹 Clear</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {isGrowing && plot.crop && (
                     <div className="flex flex-col items-center">
-                      <span className="text-xl">{CROPS[plot.crop].emoji}</span>
-                      <span className={`text-[10px] font-semibold mt-0.5 ${
-                        plot.isTimerFrozen || plot.isFrostbitten
-                          ? 'text-sky-300 font-black animate-pulse'
-                          : plot.isHeatWilted
-                          ? 'text-orange-400 font-bold'
-                          : isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
-                      }`}>
-                        {plot.isTimerFrozen || plot.isFrostbitten ? '❄️ Frozen' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
-                      </span>
-                      {plot.crop === 'peas' && (
+                      {isDiseaseActive && plot.disease ? (
+                        <>
+                          <div className="relative">
+                            <span className="text-xl opacity-60 grayscale filter">{CROPS[plot.crop].emoji}</span>
+                            <span className="absolute -top-1 -right-2 text-base animate-bounce">{plot.disease.emoji}</span>
+                          </div>
+                          <span className="text-[9px] font-black text-rose-300 bg-rose-950/90 px-1 py-0.2 rounded border border-rose-500/60 mt-0.5 animate-pulse">
+                            {plot.disease.type === 'root_rot' ? 'Root Rot' : plot.disease.type === 'foliar_mildew' ? 'Mildew Spores' : 'Soft Rot'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-xl">{CROPS[plot.crop].emoji}</span>
+                          <span className={`text-[10px] font-semibold mt-0.5 ${
+                            plot.isTimerFrozen || plot.isFrostbitten
+                              ? 'text-sky-300 font-black animate-pulse'
+                              : plot.isHeatWilted
+                              ? 'text-orange-400 font-bold'
+                              : isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
+                          }`}>
+                            {plot.isTimerFrozen || plot.isFrostbitten ? '❄️ Frozen' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
+                          </span>
+                        </>
+                      )}
+                      {plot.crop === 'peas' && !isDiseaseActive && (
                         <span className="text-[8px] font-black text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded-full border border-emerald-400/80 animate-pulse mt-0.5">
                           ⚡ Recharging 🟢 Leaf
                         </span>
                       )}
-
-
                     </div>
                   )}
 

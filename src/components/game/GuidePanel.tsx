@@ -508,6 +508,119 @@ function FarmGuide() {
         </div>
       </div>
 
+      {/* 2.5 Dynamic Crop Disease & Blight Ecosystem */}
+      <div className="bg-gradient-to-r from-red-950/30 via-rose-950/20 to-amber-950/30 border border-rose-500/50 rounded-xl p-3.5 text-xs space-y-3 shadow-sm">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl animate-bounce">🪱</span>
+            <div>
+              <h5 className="font-black text-sm text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                <span>Dynamic Crop Disease &amp; Blight Ecosystem</span>
+                <span className="text-[10px] bg-rose-500/20 text-rose-700 dark:text-rose-300 font-mono px-2 py-0.5 rounded-full border border-rose-400/40">
+                  Real-Time Pathology &amp; Agronomy
+                </span>
+              </h5>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                Environmental stressors, standing water anoxia, crowded CO₂ canopies, and slurry scorching trigger biological pathogens.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Pathogens */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          {/* Anaerobic Root Rot */}
+          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-amber-400/50 shadow-xs flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-extrabold text-amber-700 dark:text-amber-400 flex items-center gap-1 text-xs">
+                  <span>🪱</span> Anaerobic Root Rot
+                </span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
+                  Anoxic Fungal
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
+                <strong>Trigger:</strong> Soil O₂ remains below 20% for &gt;45s due to standing flood water, poor drainage, or open sluice gates.
+              </p>
+              <p className="text-[10.5px] text-stone-500 dark:text-stone-400 mt-1">
+                <strong>Symptoms &amp; Impact:</strong> Drooping yellow foliage; growth timer freezes; crop yield drops by 50% every 30s until collapse.
+              </p>
+              <div className="mt-2 p-1.5 rounded bg-teal-950/40 border border-teal-500/40 text-[10.5px] text-teal-300">
+                <strong>Remedy:</strong> Click <code>[ Dig Drain ]</code> with Hand Hoe to boost O₂ &gt;50%, or dress bed with calcified wood ash.
+              </div>
+            </div>
+          </div>
+
+          {/* Foliar Mildew & Rust */}
+          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-stone-400/50 shadow-xs flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-extrabold text-stone-700 dark:text-stone-300 flex items-center gap-1 text-xs">
+                  <span>🍄</span> Foliar Mildew &amp; Rust
+                </span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-stone-500/20 text-stone-700 dark:text-stone-300 font-bold">
+                  Canopy Stagnation
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
+                <strong>Trigger:</strong> Dense animal CO₂ zones (&gt;80% CO₂) during warm, humid, cloudy weather with low wind ventilation.
+              </p>
+              <p className="text-[10.5px] text-stone-500 dark:text-stone-400 mt-1">
+                <strong>Symptoms &amp; Impact:</strong> Grayish-white spore coating; growth speed cut by 50%; generates airborne spore radius spreading to orthogonal neighbors every 60s.
+              </p>
+              <div className="mt-2 p-1.5 rounded bg-emerald-950/40 border border-emerald-500/40 text-[10.5px] text-emerald-300">
+                <strong>Remedy:</strong> Click <code>[ Prune Foliage ]</code> with Shears &amp; spray diluted milk wash, or restore windbreaks.
+              </div>
+            </div>
+          </div>
+
+          {/* Slurry Scorch & Bacterial Soft Rot */}
+          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-rose-400/50 shadow-xs flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-extrabold text-rose-700 dark:text-rose-400 flex items-center gap-1 text-xs">
+                  <span>☣️</span> Slurry Scorch &amp; Soft Rot
+                </span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold">
+                  Excess N &amp; Raw Slurry
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
+                <strong>Trigger:</strong> Applying unpasteurized raw slurry or leaving soil Nitrogen pegged at 100% in humid/heat spells.
+              </p>
+              <p className="text-[10.5px] text-stone-500 dark:text-stone-400 mt-1">
+                <strong>Symptoms &amp; Impact:</strong> Brown slimy lesions, foul odor vapor; full crop liquidation within 90s; leaves soil bed <strong>Contaminated Dirt</strong> for 1 subsequent cycle.
+              </p>
+              <div className="mt-2 p-1.5 rounded bg-rose-950/40 border border-rose-500/40 text-[10.5px] text-rose-300">
+                <strong>Remedy:</strong> Remove plant; click <code>[ Apply Lime ]</code> or Bio-Char to neutralize. Solarize empty bed with clear tarp.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Vectors & Prevention */}
+        <div className="bg-stone-100 dark:bg-stone-900/60 rounded-xl p-2.5 border border-stone-300 dark:border-stone-700/80 text-[11px] space-y-1.5">
+          <div className="font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
+            <span>🛡️</span> Contagion, Quarantine &amp; Tool Sanitation Rules:
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-stone-600 dark:text-stone-300">
+            <div>
+              <strong>🌐 Spatial Contagion:</strong>
+              <p className="mt-0.5">Diseases spread airborne to orthogonal neighbors (left, right, up, down) every 45–60 seconds unless cured.</p>
+            </div>
+            <div>
+              <strong>🧼 Tool Sanitation:</strong>
+              <p className="mt-0.5">Harvesting blighted crops contaminates hand scythes. Contaminated tools have a 50% infection risk upon replanting. Clean with <code>[ Wash Hand Tools ]</code> (-2L water).</p>
+            </div>
+            <div>
+              <strong>☀️ Soil Solarization:</strong>
+              <p className="mt-0.5">Blighted beds retain a <code>Contaminated Dirt</code> tag. Replanting without clear tarp solarization or lime guarantees immediate pathogen reinfection!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 2. Crop Harvest Byproduct: Chaff & Husks System */}
       <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-3.5 text-xs text-amber-200 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">

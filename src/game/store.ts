@@ -78,6 +78,14 @@ import {
   applyHarvestGasModifiers,
 } from '@/game/gasTickEngine';
 import {
+  type CropDiseaseType,
+  type PlotDiseaseState,
+  stepPlotDiseaseTick,
+  createPlotInfection,
+  getOrthogonalNeighborPlotIds,
+  CROP_DISEASE_DEFINITIONS,
+} from '@/game/cropDiseaseEngine';
+import {
   type PastureWelfareState,
   type FaunaWeatherEvaluation,
   createDefaultPastureWelfare,
@@ -440,6 +448,13 @@ export interface PlotState {
   plantedInDepletedSoil?: boolean;
   // Dynamic Soil Atmospheric Gas System (CO2, O2, Nitrogen)
   gases?: PlotGasState;
+  // Dynamic Crop Disease & Blight Ecosystem
+  disease?: PlotDiseaseState | null;
+  lowO2DurationSec?: number;
+  highCo2DurationSec?: number;
+  highNitrogenDurationSec?: number;
+  isContaminatedDirt?: boolean;
+  contaminatedCyclesRemaining?: number;
 }
 
 export interface AnimalInstance {
@@ -922,6 +937,13 @@ export interface GameState {
   feedChaffToDigester: (chaffCount?: number) => boolean;
   injectBioOxygenToPlots: () => number;
   aerateFisheryZoneWithOxygen: () => boolean;
+
+  // Dynamic Crop Disease & Blight Ecosystem
+  isToolContaminated?: boolean;
+  curePlotDisease: (plotId: number, remedy: 'dig_drain' | 'prune_mildew' | 'apply_lime') => boolean;
+  washHandTools: () => boolean;
+  solarizePlotBed: (plotId: number) => boolean;
+  clearDiseasedCrop: (plotId: number) => void;
 
   // Time
   lastTick: number;
@@ -1423,6 +1445,12 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
   soilBattery: { green: true, yellow: true, red: true },
   plantedInDepletedSoil: false,
   gases: createDefaultPlotGases(),
+  disease: null,
+  lowO2DurationSec: 0,
+  highCo2DurationSec: 0,
+  highNitrogenDurationSec: 0,
+  isContaminatedDirt: false,
+  contaminatedCyclesRemaining: 0,
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -1731,6 +1759,7 @@ export const useGameStore = create<GameState>()(
       slurryPits: createDefaultSlurryPits(),
       gasProductionLab: createDefaultGasProductionLab(),
       activeSumpModalPitId: null,
+      isToolContaminated: false,
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -1850,6 +1879,16 @@ export const useGameStore = create<GameState>()(
           state.addNotification(`⚠️ Tired Soil: Planted ${cropDef.name} without matching energy! Growth duration is doubled and harvest capped at 1x.`, '🥀', 'info');
         }
 
+        // Dynamic Crop Disease & Soil Contamination Check
+        let initialDisease: PlotDiseaseState | null = null;
+        if (plot.isContaminatedDirt) {
+          initialDisease = createPlotInfection('bacterial_soft_rot', 'Contaminated Dirt from prior blighted crop');
+          state.addNotification(`☣️ Soil Contamination: Replanted without solarizing or applying lime! Bacterial Soft Rot immediately struck new ${cropDef.name} sprout!`, '☣️', 'danger');
+        } else if (state.isToolContaminated && Math.random() < 0.50) {
+          initialDisease = createPlotInfection('root_rot', 'Contaminated Tool (Dirty Harvesting Scythe)');
+          state.addNotification(`⚠️ Tool Contamination: Pathogens transferred from dirty hand tools to Plot #${plotId + 1}! Wash tools in water trough.`, '🧼', 'danger');
+        }
+
         const pLevel = plot.level || 1;
         const soilTier = getSoilTier(pLevel);
         const newPlots = [...state.plots];
@@ -1867,6 +1906,12 @@ export const useGameStore = create<GameState>()(
           isMonoculture,
           soilBattery: plot.soilBattery || { green: true, yellow: true, red: true },
           plantedInDepletedSoil,
+          disease: initialDisease,
+          lowO2DurationSec: 0,
+          highCo2DurationSec: 0,
+          highNitrogenDurationSec: 0,
+          isContaminatedDirt: false,
+          contaminatedCyclesRemaining: 0,
         };
         set({ plots: newPlots });
       },
@@ -1918,14 +1963,31 @@ export const useGameStore = create<GameState>()(
           ? 1
           : Math.max(1, Math.round(baseTotalYield * (nitrogenTierMultiplier / 3)));
 
+        // Crop Disease Yield Penalty & Vector Contamination
+        const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
+          ? Math.max(0.1, 1 - (plot.disease.yieldReductionPct / 100))
+          : 1.0;
+
         const qualityAdjusted = isDepletedPenalty
           ? 1
-          : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
+          : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
         const totalYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
 
         // Soil Battery Energy Update (Consumption or Restorative Legume Recharge)
         const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
         const newBattery = batteryRes.newBattery;
+
+        // Tool Sanitation & Soil Contamination Vector Tracking
+        const wasDiseased = Boolean(plot.disease && plot.disease.stage === 'active');
+        let newToolContaminated = Boolean(state.isToolContaminated);
+        let isSoilContaminated = Boolean(plot.isContaminatedDirt);
+        if (wasDiseased) {
+          newToolContaminated = true;
+          if (plot.disease?.type === 'bacterial_soft_rot') {
+            isSoilContaminated = true;
+          }
+          state.addNotification(`⚠️ Tool Contamination: Harvesting diseased ${cropDef.name} contaminated hand tools! Wash tools at water trough before replanting.`, '🧼', 'danger');
+        }
 
         // Dynamic Gas System: Post-Harvest Gas Modifiers (Heavy Feeder -35% N, Legume +50% N, Root +20% O2)
         const gasMods = applyHarvestGasModifiers(plot.crop, plot.gases);
@@ -1966,6 +2028,12 @@ export const useGameStore = create<GameState>()(
           waterloggedSeconds: 0,
           isWithered: false,
           hasRootRot: false,
+          disease: null,
+          lowO2DurationSec: 0,
+          highCo2DurationSec: 0,
+          highNitrogenDurationSec: 0,
+          isContaminatedDirt: isSoilContaminated,
+          contaminatedCyclesRemaining: isSoilContaminated ? 1 : 0,
           alluvialSiltCyclesRemaining: nextSiltCycles,
           phenologyBadgeEmoji: undefined,
           phenologyBadgeText: undefined,
@@ -2057,6 +2125,7 @@ export const useGameStore = create<GameState>()(
           level: newLevel,
           systemicEvent: newSystemicEvent,
           relics: newRelics,
+          isToolContaminated: newToolContaminated,
         });
       },
 
@@ -2081,6 +2150,8 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         let monocultureCount = 0;
         let depletedPlantedCount = 0;
+        let contaminatedCount = 0;
+        let toolInfectionCount = 0;
         for (const pid of emptyPlotIds) {
           const currentPlot = state.plots[pid];
           const pLevel = currentPlot?.level || 1;
@@ -2091,6 +2162,15 @@ export const useGameStore = create<GameState>()(
           const isCharged = isBatteryChargedForCrop(currentPlot?.soilBattery, cropId);
           const plantedInDepletedSoil = !isCharged;
           if (plantedInDepletedSoil) depletedPlantedCount++;
+
+          let initialDisease: PlotDiseaseState | null = null;
+          if (currentPlot?.isContaminatedDirt) {
+            initialDisease = createPlotInfection('bacterial_soft_rot', 'Contaminated Dirt from prior blighted crop');
+            contaminatedCount++;
+          } else if (state.isToolContaminated && Math.random() < 0.50) {
+            initialDisease = createPlotInfection('root_rot', 'Contaminated Tool (Dirty Harvesting Scythe)');
+            toolInfectionCount++;
+          }
 
           newPlots[pid] = {
             ...currentPlot,
@@ -2106,6 +2186,12 @@ export const useGameStore = create<GameState>()(
             isMonoculture,
             soilBattery: currentPlot?.soilBattery || { green: true, yellow: true, red: true },
             plantedInDepletedSoil,
+            disease: initialDisease,
+            lowO2DurationSec: 0,
+            highCo2DurationSec: 0,
+            highNitrogenDurationSec: 0,
+            isContaminatedDirt: false,
+            contaminatedCyclesRemaining: 0,
           };
         }
         if (monocultureCount > 0) {
@@ -2113,6 +2199,12 @@ export const useGameStore = create<GameState>()(
         }
         if (depletedPlantedCount > 0) {
           state.addNotification(`⚠️ Tired Soil: Planted ${depletedPlantedCount} plot(s) without matching fuel! Slowed growth & 1x harvest.`, '🥀', 'info');
+        }
+        if (contaminatedCount > 0) {
+          state.addNotification(`☣️ Soil Contamination: Replanted ${contaminatedCount} plot(s) on un-solarized dirty soil! Bacterial Soft Rot immediately struck.`, '☣️', 'danger');
+        }
+        if (toolInfectionCount > 0) {
+          state.addNotification(`⚠️ Tool Contamination: Dirty harvesting scythe transferred pathogens to ${toolInfectionCount} new sprout(s)! Wash tools in water trough.`, '🧼', 'danger');
         }
         set({
           coins: state.coins - totalCost,
@@ -2133,6 +2225,8 @@ export const useGameStore = create<GameState>()(
         let qualityCropsCount = 0;
         let totalChaffRecovered = 0;
 
+        let anyToolContaminated = false;
+
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
           if (plot && plot.crop && plot.ready) {
@@ -2150,6 +2244,12 @@ export const useGameStore = create<GameState>()(
                 waterloggedSeconds: 0,
                 isWithered: false,
                 hasRootRot: false,
+                disease: null,
+                lowO2DurationSec: 0,
+                highCo2DurationSec: 0,
+                highNitrogenDurationSec: 0,
+                isContaminatedDirt: Boolean(plot.isContaminatedDirt),
+                contaminatedCyclesRemaining: plot.contaminatedCyclesRemaining || 0,
               };
               continue;
             }
@@ -2193,15 +2293,30 @@ export const useGameStore = create<GameState>()(
               ? 1
               : Math.max(1, Math.round(singleYield * (nitrogenTierMultiplier / 3)));
 
+            // Crop Disease Yield Penalty & Vector Contamination
+            const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
+              ? Math.max(0.1, 1 - (plot.disease.yieldReductionPct / 100))
+              : 1.0;
+
             const qualityAdjusted = isDepletedPenalty
               ? 1
-              : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier));
+              : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
             const plotYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (!isDepletedPenalty ? (bonus + soilTier.bonusYield) : 0);
 
             // Soil battery energy update
             const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
             const newBattery = batteryRes.newBattery;
+
+            // Tool Sanitation & Soil Contamination Vector Tracking
+            const wasDiseased = Boolean(plot.disease && plot.disease.stage === 'active');
+            let isSoilContaminated = Boolean(plot.isContaminatedDirt);
+            if (wasDiseased) {
+              anyToolContaminated = true;
+              if (plot.disease?.type === 'bacterial_soft_rot') {
+                isSoilContaminated = true;
+              }
+            }
 
             // Dynamic Gas System: Post-Harvest Gas Modifiers
             const gasMods = applyHarvestGasModifiers(plot.crop, plot.gases);
@@ -2233,6 +2348,12 @@ export const useGameStore = create<GameState>()(
               waterloggedSeconds: 0,
               isWithered: false,
               hasRootRot: false,
+              disease: null,
+              lowO2DurationSec: 0,
+              highCo2DurationSec: 0,
+              highNitrogenDurationSec: 0,
+              isContaminatedDirt: isSoilContaminated,
+              contaminatedCyclesRemaining: isSoilContaminated ? 1 : 0,
               alluvialSiltCyclesRemaining: nextSiltCycles,
               phenologyBadgeEmoji: undefined,
               phenologyBadgeText: undefined,
@@ -2300,6 +2421,10 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        if (anyToolContaminated) {
+          state.addNotification('⚠️ Tool Contamination: Harvesting blighted crops infected hand tools! Wash tools in water trough before replanting.', '🧼', 'danger');
+        }
+
         const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * harvestedCount * xpMultiplier), state.level);
         set({
@@ -2309,6 +2434,7 @@ export const useGameStore = create<GameState>()(
           level: newLevel,
           systemicEvent: newSystemicEvent,
           relics: newRelics,
+          isToolContaminated: anyToolContaminated || Boolean(state.isToolContaminated),
         });
       },
 
@@ -2605,6 +2731,9 @@ export const useGameStore = create<GameState>()(
             nitrogen: 100,
             o2: 60,
           },
+          disease: null,
+          isContaminatedDirt: false,
+          contaminatedCyclesRemaining: 0,
         };
 
         playBioDressingSound();
@@ -2618,6 +2747,140 @@ export const useGameStore = create<GameState>()(
 
         state.addNotification(`✨ Universal Bio-Dressing applied to Plot #${plotId + 1}! All 3 nutrient lights recharged to 100% Solid Full & soil health cleansed.${purchaseMethod} (${newBarn.universal_bio_dressing} doses left)`, '🧪', 'discovery');
         return true;
+      },
+
+      curePlotDisease: (plotId: number, remedy: 'dig_drain' | 'prune_mildew' | 'apply_lime') => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots) return false;
+
+        const newPlots = [...state.plots];
+        const currentGases = plot.gases || createDefaultPlotGases();
+
+        if (remedy === 'dig_drain') {
+          // Emergency drainage ditch / Hand hoe tilling
+          newPlots[plotId] = {
+            ...plot,
+            disease: null,
+            lowO2DurationSec: 0,
+            hasRootRot: false,
+            gases: {
+              ...currentGases,
+              o2: Math.max(65, currentGases.o2 + 35),
+              co2: Math.max(15, currentGases.co2 - 20),
+            },
+          };
+          set({ plots: newPlots });
+          state.addNotification(`🪱 Emergency Drainage Ditch Dug! Plot #${plotId + 1} aerated with Hand Hoe (O₂ raised to ${newPlots[plotId].gases?.o2}%); Root Rot eradicated!`, '🪱', 'discovery');
+          return true;
+        }
+
+        if (remedy === 'prune_mildew') {
+          // Prune foliage with Shears & apply milk wash
+          newPlots[plotId] = {
+            ...plot,
+            disease: null,
+            highCo2DurationSec: 0,
+            gases: {
+              ...currentGases,
+              co2: Math.min(30, currentGases.co2 - 35),
+              o2: Math.max(50, currentGases.o2 + 10),
+            },
+          };
+          set({ plots: newPlots });
+          state.addNotification(`🍄 Diseased Foliage Pruned with Shears! Canopy thinned & milk wash applied to Plot #${plotId + 1}; Mildew spores eradicated.`, '🍄', 'discovery');
+          return true;
+        }
+
+        if (remedy === 'apply_lime') {
+          // Dress bed with Slaked Lime / Bio-Char
+          newPlots[plotId] = {
+            ...plot,
+            disease: null,
+            highNitrogenDurationSec: 0,
+            isContaminatedDirt: false,
+            contaminatedCyclesRemaining: 0,
+            gases: {
+              ...currentGases,
+              nitrogen: 75,
+              o2: Math.max(50, currentGases.o2),
+            },
+          };
+          set({ plots: newPlots });
+          state.addNotification(`☣️ Slaked Lime & Bio-Char Dressed! Pathogens neutralized on Plot #${plotId + 1}; soil sterilized & safe for crops.`, '☣️', 'discovery');
+          return true;
+        }
+
+        return false;
+      },
+
+      washHandTools: () => {
+        const state = get();
+        if (!state.isToolContaminated) {
+          state.addNotification('Hand tools are already sterile and clean!', '🧼', 'info');
+          return false;
+        }
+        const currentHydrology = state.hydrology || createDefaultHydrologyState(state.level);
+        const newTowerLiters = Math.max(0, (currentHydrology.towerLiters || 0) - 2);
+        set({
+          isToolContaminated: false,
+          hydrology: {
+            ...currentHydrology,
+            towerLiters: newTowerLiters,
+          },
+        });
+        state.addNotification('🧼 Hand Tools Sanitized! Scythe washed in clean trough water; 50% pathogen transfer hazard eliminated.', '🧼', 'discovery');
+        return true;
+      },
+
+      solarizePlotBed: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots) return false;
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          isContaminatedDirt: false,
+          contaminatedCyclesRemaining: 0,
+        };
+        set({ plots: newPlots });
+        state.addNotification(`☀️ Clear Tarp Solarization Complete on Plot #${plotId + 1}! Intense UV sterilization eradicated lingering soil pathogens.`, '☀️', 'discovery');
+        return true;
+      },
+
+      clearDiseasedCrop: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots) return;
+
+        const hadBacterialRot = plot.disease?.type === 'bacterial_soft_rot';
+        const pLevel = plot.level || 1;
+        const soilTier = getSoilTier(pLevel);
+        const newPlots = [...state.plots];
+        newPlots[plotId] = {
+          ...plot,
+          crop: null,
+          plantedAt: null,
+          ready: false,
+          isWatered: soilTier.autoHydrate ? true : (plot.moistureLevel ? plot.moistureLevel >= 40 : false),
+          wateredUntil: null,
+          desiccatedSeconds: 0,
+          waterloggedSeconds: 0,
+          isWithered: false,
+          hasRootRot: false,
+          disease: null,
+          isContaminatedDirt: hadBacterialRot || Boolean(plot.isContaminatedDirt),
+          contaminatedCyclesRemaining: hadBacterialRot ? 1 : 0,
+        };
+        set({
+          plots: newPlots,
+          isToolContaminated: true, // Clearing diseased crop contaminates tool!
+        });
+        if (hadBacterialRot) {
+          state.addNotification(`☣️ Blighted crop removed from Plot #${plotId + 1}. Bed retains 'Contaminated Dirt' tag! Apply Slaked Lime or Solarize before replanting.`, '☣️', 'danger');
+        } else {
+          state.addNotification(`🧹 Diseased crop cleared from Plot #${plotId + 1}. Tool contaminated—wash at water trough!`, '🧹', 'info');
+        }
       },
 
       feedAnimal: (animalId) => {
@@ -9013,6 +9276,8 @@ export const useGameStore = create<GameState>()(
           isHardcoreMode: Boolean(state.isHardcoreMode),
         });
 
+        const pendingDiseaseOutbreaks: Array<{ fromPlotId: number; diseaseType: CropDiseaseType }> = [];
+
         const newPlots = hydroSimResult.updatedPlots.map((p: any) => {
           const pLevel = p.level || 1;
           const hasThermalCore = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
@@ -9051,6 +9316,63 @@ export const useGameStore = create<GameState>()(
           }
 
           let currentBattery = p.soilBattery || { green: true, yellow: true, red: true };
+
+          // Step Dynamic Crop Disease & Blight Simulation
+          const diseaseRes = stepPlotDiseaseTick(
+            {
+              id: p.id,
+              crop: p.crop,
+              ready: p.ready,
+              moistureLevel: currentMoisture,
+              gases: currentGases,
+              disease: p.disease,
+              lowO2DurationSec: p.lowO2DurationSec,
+              highCo2DurationSec: p.highCo2DurationSec,
+              highNitrogenDurationSec: p.highNitrogenDurationSec,
+              isContaminatedDirt: p.isContaminatedDirt,
+            },
+            {
+              activeWeatherId,
+              deltaSeconds,
+              isRainstormActive: state.activeEvent?.type === 'rainstorm',
+              unlockedPlots: state.unlockedPlots,
+            }
+          );
+
+          if (diseaseRes.notification) {
+            state.addNotification(diseaseRes.notification.text, diseaseRes.notification.icon, diseaseRes.notification.type);
+          }
+
+          if (diseaseRes.spreadOutbreakType) {
+            pendingDiseaseOutbreaks.push({ fromPlotId: p.id, diseaseType: diseaseRes.spreadOutbreakType });
+          }
+
+          let currentDisease = diseaseRes.updatedDisease;
+          let currentLowO2Sec = diseaseRes.newLowO2Seconds;
+          let currentHighCo2Sec = diseaseRes.newHighCo2Seconds;
+          let currentHighNSec = diseaseRes.newHighNSeconds;
+          let currentContaminatedDirt = Boolean(p.isContaminatedDirt || diseaseRes.shouldContaminateDirt);
+          let currentContaminatedCycles = diseaseRes.shouldContaminateDirt ? 1 : (p.contaminatedCyclesRemaining || 0);
+
+          if (diseaseRes.isCropDead) {
+            return {
+              ...p,
+              crop: null,
+              plantedAt: null,
+              ready: false,
+              isWithered: true,
+              hasRootRot: false,
+              disease: null,
+              lowO2DurationSec: 0,
+              highCo2DurationSec: 0,
+              highNitrogenDurationSec: 0,
+              isContaminatedDirt: currentContaminatedDirt,
+              contaminatedCyclesRemaining: currentContaminatedCycles,
+              soilBattery: currentBattery,
+              gases: currentGases,
+              moistureLevel: currentMoisture,
+            };
+          }
           const isHeatHazard = activeWeatherId === 'heatwave' || activeWeatherId === 'drought' || activeWeatherId === 'plasma_firestorm';
           const isTowerSupplying = Boolean(hydroSimResult.updatedHydrology.sluiceGatesOpen && hydroSimResult.updatedHydrology.towerLiters > 200);
 
@@ -9092,7 +9414,29 @@ export const useGameStore = create<GameState>()(
           if (p.crop && p.plantedAt && !p.ready) {
             // Under barn_fire, unwatered/burning plots are frozen
             if (isBarnFireActive && firePlotIds.includes(p.id)) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
+            }
+
+            // Disease Rule: Anaerobic Root Rot — growth timer completely freezes
+            if (currentDisease?.stage === 'active' && currentDisease.type === 'root_rot') {
+              return {
+                ...p,
+                plantedAt: p.plantedAt + (deltaSeconds * 1000), // cleanly freeze crop timer!
+                isTimerFrozen: true,
+                hasRootRot: true,
+                phenologyBadgeEmoji: '🪱⚠️',
+                phenologyBadgeText: `Root Rot: Growth Paused (-${currentDisease.yieldReductionPct}% Yield)`,
+                weatherModifierText: '🪱 Root Rot: Soil Anoxia (Timer Paused)',
+                soilBattery: currentBattery,
+                gases: currentGases,
+                moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
+              };
             }
 
             // Gas Rule: Root Anoxia / Suffocation (O2 < 20%) — Crop timer completely pauses.
@@ -9107,6 +9451,12 @@ export const useGameStore = create<GameState>()(
                 soilBattery: currentBattery,
                 gases: currentGases,
                 moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
               };
             }
 
@@ -9124,15 +9474,21 @@ export const useGameStore = create<GameState>()(
                 soilBattery: currentBattery,
                 gases: currentGases,
                 moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
               };
             }
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
             if (isPlotExhausted) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
             if (p.isWithered) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture };
+              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
 
             // Direct Atmospheric Crop Phenology evaluation
@@ -9172,6 +9528,12 @@ export const useGameStore = create<GameState>()(
                 soilBattery: currentBattery,
                 gases: currentGases,
                 moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
               };
             }
 
@@ -9188,6 +9550,12 @@ export const useGameStore = create<GameState>()(
                 soilBattery: currentBattery,
                 gases: currentGases,
                 moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
               };
             }
 
@@ -9216,11 +9584,26 @@ export const useGameStore = create<GameState>()(
             // Gas Dynamic Output: CO2 Boosted Velocity (Above 60%: +1% crop growth speed per 2% above 60%)
             const gasSpeedMultiplier = currentGases.growthSpeedMultiplier;
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * gasSpeedMultiplier;
+            // Active Disease Growth Penalty: Mildew -50%, Soft Rot -80%
+            const diseaseSpeedMultiplier = currentDisease?.stage === 'active'
+              ? (currentDisease.type === 'foliar_mildew' ? 0.50 : (currentDisease.type === 'bacterial_soft_rot' ? 0.20 : 1.0))
+              : 1.0;
+
+            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * gasSpeedMultiplier * diseaseSpeedMultiplier;
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
-            const badgeEmoji = p.plantedInDepletedSoil ? '🥀⚡' : (p.isMonoculture ? '🥀⚠️' : (currentGases.co2 > 60 ? '⚡🌱' : pheno.badgeEmoji));
-            const badgeText = p.plantedInDepletedSoil ? 'Tired Soil (-50% Speed & 1x Harvest)' : (p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : (currentGases.co2 > 60 ? `Boosted Velocity (+${((currentGases.co2 - 60)/2).toFixed(0)}% Spd)` : pheno.badgeText));
+
+            let badgeEmoji = p.plantedInDepletedSoil ? '🥀⚡' : (p.isMonoculture ? '🥀⚠️' : (currentGases.co2 > 60 ? '⚡🌱' : pheno.badgeEmoji));
+            let badgeText = p.plantedInDepletedSoil ? 'Tired Soil (-50% Speed & 1x Harvest)' : (p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : (currentGases.co2 > 60 ? `Boosted Velocity (+${((currentGases.co2 - 60)/2).toFixed(0)}% Spd)` : pheno.badgeText));
+
+            if (currentDisease?.stage === 'warning') {
+              badgeEmoji = '⚠️';
+              badgeText = `⚠️ High Disease Risk: ${currentDisease.name} (${Math.round(currentDisease.warningTimerSec)}s to infection)`;
+            } else if (currentDisease?.stage === 'active') {
+              badgeEmoji = currentDisease.emoji;
+              badgeText = `${currentDisease.emoji} ${currentDisease.name} (-${currentDisease.yieldReductionPct}% Yield, ${Math.round(currentDisease.timeRemainingSec)}s to collapse)`;
+            }
+
             if (effectiveElapsed >= growTime) {
               return {
                 ...p,
@@ -9235,6 +9618,12 @@ export const useGameStore = create<GameState>()(
                 soilBattery: currentBattery,
                 gases: currentGases,
                 moistureLevel: currentMoisture,
+                disease: currentDisease,
+                lowO2DurationSec: currentLowO2Sec,
+                highCo2DurationSec: currentHighCo2Sec,
+                highNitrogenDurationSec: currentHighNSec,
+                isContaminatedDirt: currentContaminatedDirt,
+                contaminatedCyclesRemaining: currentContaminatedCycles,
               };
             }
 
@@ -9250,6 +9639,12 @@ export const useGameStore = create<GameState>()(
               soilBattery: currentBattery,
               gases: currentGases,
               moistureLevel: currentMoisture,
+              disease: currentDisease,
+              lowO2DurationSec: currentLowO2Sec,
+              highCo2DurationSec: currentHighCo2Sec,
+              highNitrogenDurationSec: currentHighNSec,
+              isContaminatedDirt: currentContaminatedDirt,
+              contaminatedCyclesRemaining: currentContaminatedCycles,
             };
           }
           return {
@@ -9257,8 +9652,28 @@ export const useGameStore = create<GameState>()(
             soilBattery: currentBattery,
             gases: currentGases,
             moistureLevel: currentMoisture,
+            disease: currentDisease,
+            lowO2DurationSec: currentLowO2Sec,
+            highCo2DurationSec: currentHighCo2Sec,
+            highNitrogenDurationSec: currentHighNSec,
+            isContaminatedDirt: currentContaminatedDirt,
+            contaminatedCyclesRemaining: currentContaminatedCycles,
           };
         });
+
+        // Spatial Contagion Propagation across Orthogonal Neighbors
+        if (pendingDiseaseOutbreaks.length > 0) {
+          for (const outbreak of pendingDiseaseOutbreaks) {
+            const neighbors = getOrthogonalNeighborPlotIds(outbreak.fromPlotId, state.unlockedPlots);
+            for (const nId of neighbors) {
+              const targetPlot = newPlots[nId];
+              if (targetPlot && targetPlot.crop && !targetPlot.ready && !targetPlot.disease) {
+                targetPlot.disease = createPlotInfection(outbreak.diseaseType, `Airborne Contagion Spread from Plot #${outbreak.fromPlotId + 1}`);
+                state.addNotification(`⚠️ Spatial Contagion! ${targetPlot.disease.emoji} ${targetPlot.disease.name} spread from Plot #${outbreak.fromPlotId + 1} to orthogonal Plot #${nId + 1}!`, '⚠️', 'danger');
+              }
+            }
+          }
+        }
 
         // Update animal production and domestic troughs
         const currentDomesticTroughs = state.domesticTroughs || {
