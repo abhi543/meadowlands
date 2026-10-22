@@ -944,6 +944,7 @@ export interface GameState {
   washHandTools: () => boolean;
   solarizePlotBed: (plotId: number) => boolean;
   clearDiseasedCrop: (plotId: number) => void;
+  witherAllPlants: () => void;
 
   // Time
   lastTick: number;
@@ -2229,7 +2230,7 @@ export const useGameStore = create<GameState>()(
 
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
-          if (plot && plot.crop && plot.ready) {
+          if (plot && plot.crop && (plot.ready || plot.isWithered)) {
             if (plot.isWithered) {
               newPlots[i] = {
                 id: i,
@@ -2881,6 +2882,31 @@ export const useGameStore = create<GameState>()(
         } else {
           state.addNotification(`🧹 Diseased crop cleared from Plot #${plotId + 1}. Tool contaminated—wash at water trough!`, '🧹', 'info');
         }
+      },
+
+      witherAllPlants: () => {
+        const state = get();
+        let witheredCount = 0;
+        const newPlots = state.plots.map((plot, idx) => {
+          if (idx < state.unlockedPlots && plot.crop) {
+            witheredCount++;
+            return {
+              ...plot,
+              ready: false,
+              isWithered: true,
+              disease: null,
+            };
+          }
+          return plot;
+        });
+
+        if (witheredCount === 0) {
+          state.addNotification('No crops currently growing to wither!', 'ℹ️', 'info');
+          return;
+        }
+
+        set({ plots: newPlots, isDirty: true });
+        state.addNotification(`🥀 Wither All Plants: Withered ${witheredCount} crop(s) across your farmland! Clear them with Hoe or Harvest All.`, '🥀', 'danger');
       },
 
       feedAnimal: (animalId) => {

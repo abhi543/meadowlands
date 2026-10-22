@@ -45,11 +45,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     applyCompostToProps,
     flushPlotBed,
     applyUniversalBioDressing,
-    waterPlot,
-    waterLevel,
-    maxWaterLevel,
-    pumpWell,
-    waterAllPlots,
+    witherAllPlants,
     silo,
     barn = {},
     coins,
@@ -133,15 +129,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const hungryCount = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder').length;
   const totalFarmAnimals = animals.length + livestockReserve.length;
 
-  // Count ready, empty, and unwatered plots for batch actions
-  const readyCount = visiblePlots.filter(p => p.crop && p.ready).length;
+  // Count ready, empty, and crop-bearing plots for batch actions
+  const readyOrWitheredCount = visiblePlots.filter(p => p.crop && (p.ready || p.isWithered)).length;
+  const cropsToWitherCount = visiblePlots.filter(p => p.crop && !p.isWithered).length;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
-  const unwateredCount = visiblePlots.filter(p => !p.isWatered).length;
   const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
-  const effectiveMaxWater = maxWaterLevel || 10;
-  const isWellFull = waterLevel >= effectiveMaxWater;
-  const canWaterAll = waterLevel > 0 && unwateredCount > 0;
-  const waterableCount = Math.min(waterLevel, unwateredCount);
   const selectedCropDef = CROPS[selectedCrop];
   const totalPlantCost = emptyCount * selectedCropDef.seedCost;
   const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
@@ -589,22 +581,22 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       )}
 
       {/* Batch Action Buttons */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {/* Harvest All */}
         <button
           onClick={() => harvestAllPlots()}
-          disabled={readyCount === 0}
+          disabled={readyOrWitheredCount === 0}
           className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 ${
-            readyCount > 0
+            readyOrWitheredCount > 0
               ? 'bg-green-500 hover:bg-green-600 text-white border-green-600 shadow-md shadow-green-200/50 active:scale-95'
               : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
         >
           <span className="text-base sm:text-lg">{'🌾'}</span>
           Harvest All
-          {readyCount > 0 && (
+          {readyOrWitheredCount > 0 && (
             <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
-              {readyCount}
+              {readyOrWitheredCount}
             </span>
           )}
         </button>
@@ -631,58 +623,24 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           )}
         </button>
 
-        {/* Water All */}
+        {/* Wither All Plants */}
         <button
-          onClick={() => {
-            if (waterLevel <= 0) {
-              useGameStore.getState().addNotification('Well is dry (0 💧)! Tap Pump Well to draw water.', '💧', 'info');
-              return;
-            }
-            if (unwateredCount === 0) {
-              useGameStore.getState().addNotification('All plots are already hydrated! 💧', '💧', 'info');
-              return;
-            }
-            waterAllPlots();
-          }}
+          onClick={() => witherAllPlants()}
+          disabled={cropsToWitherCount === 0}
           className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
-            canWaterAll
-              ? 'bg-cyan-500 hover:bg-cyan-600 text-white border-cyan-600 shadow-md shadow-cyan-200/50'
-              : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900/40'
+            cropsToWitherCount > 0
+              ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-md shadow-rose-200/50 cursor-pointer'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
+          title="Instantly wither all growing/ready crops across all plots"
         >
-          <span className="text-base sm:text-lg">{'💧'}</span>
-          Water All
-          {canWaterAll ? (
+          <span className="text-base sm:text-lg">{'🥀'}</span>
+          <span>Wither All</span>
+          {cropsToWitherCount > 0 && (
             <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
-              {waterableCount}
-            </span>
-          ) : (
-            <span className="text-[10px] sm:text-xs opacity-80">
-              ({unwateredCount === 0 ? 'Full' : '0💧'})
+              {cropsToWitherCount}
             </span>
           )}
-        </button>
-
-        {/* Pump Well */}
-        <button
-          onClick={() => {
-            if (isWellFull) {
-              useGameStore.getState().addNotification(`Well is already full (${waterLevel}/${effectiveMaxWater} 💧)! Water crops to use water.`, '⛲', 'info');
-              return;
-            }
-            pumpWell();
-          }}
-          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
-            !isWellFull
-              ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-700 shadow-md shadow-blue-200/50'
-              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40'
-          }`}
-        >
-          <span className="text-base sm:text-lg">{'⛲'}</span>
-          Pump Well
-          <span className="bg-black/15 dark:bg-white/20 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
-            {waterLevel}/{effectiveMaxWater}💧
-          </span>
         </button>
 
         {/* Upgrade Plots with Coins */}
@@ -691,7 +649,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             setSelectedPlotForUpgrade(null);
             setIsUpgradeModalOpen(true);
           }}
-          className="col-span-2 sm:col-span-1 px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-500 hover:to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/20 cursor-pointer"
+          className="px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-500 hover:to-amber-600 text-white border-amber-500 shadow-md shadow-amber-500/20 cursor-pointer"
         >
           <span className="text-base sm:text-lg">{'🌱'}</span>
           <span>Upgrade Soil</span>
@@ -1385,13 +1343,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
-                  {/* Water Prompt Indicator for unwatered growing crops */}
-                  {isGrowing && !isWatered && waterLevel > 0 && (
-                    <div className="absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded-md bg-blue-600/90 hover:bg-blue-500 text-white text-[8px] sm:text-[9px] font-bold border border-blue-300 shadow-sm animate-bounce z-10">
-                      <span>💧</span>
-                      <span>Water</span>
-                    </div>
-                  )}
 
                   {/* Overclock Action Menu for Growing Plots */}
                   {isGrowing && (
@@ -1658,20 +1609,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                             : 'Bio-Dress (Shop)'}
                         </span>
                       </button>
-                      {!isWatered && waterLevel > 0 && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            waterPlot(plot.id);
-                          }}
-                          className="px-1.5 py-0.5 rounded-lg bg-blue-600 hover:bg-blue-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md transition-all border border-blue-400"
-                          title="Water plot (+100% growth speed)"
-                        >
-                          <span>💧</span>
-                          <span>Water</span>
-                        </button>
-                      )}
+
                     </div>
                   )}
 
