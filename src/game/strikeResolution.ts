@@ -4,6 +4,7 @@ import {
   type FoodCategory,
   type WorkerUpkeepConfig,
 } from '@/data/workerUpkeep';
+import { calculateWorkerDailyWage } from '@/game/data';
 import { LIVESTOCK_WORKER_ROSTER } from '@/data/workerCatalog';
 
 export const DESERTION_DURATION_SEC = 7200; // 2 Real-World Hours (120 in-game hours / 4 day cycles)
@@ -90,7 +91,7 @@ export function calculateGrievanceDossier(params: {
   const isSabbatical = moraleTier === 'sabbatical';
   const isStriking = moraleTier === 'striking' || Boolean(workerObj?.isStriking);
 
-  const baseDailyWage = config.baseDailyWage;
+  const baseDailyWage = calculateWorkerDailyWage(config.baseDailyWage, workerObj?.level || 1);
   const missedCycles = Math.max(1, workerObj?.missedCycles || 2);
 
   // Financial Debt Calculations

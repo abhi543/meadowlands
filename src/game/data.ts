@@ -1413,9 +1413,66 @@ export function workerGemProcUnlocked(level: number): boolean {
   return level >= 60;
 }
 
-/** Auto-sell bonus: +10% at level 20+ (Apprentice rank) */
+/**
+ * Calculates the daily wage of a worker scaled by their level.
+ * Level 1: 1.0x base wage.
+ * Scales up by +4% per level (e.g., Lv 10: 1.36x, Lv 25: 1.96x, Lv 50: 2.96x, Lv 100: 4.96x, Lv 120: 5.76x).
+ */
+export function calculateWorkerDailyWage(baseWage: number, level: number = 1): number {
+  const safeLevel = Math.max(1, level);
+  const scale = 1 + (safeLevel - 1) * 0.04;
+  return Math.max(1, Math.round(baseWage * scale));
+}
+
+/**
+ * Auto-sell payout bonus multiplier based on worker level:
+ * - Level 1: 1.0x
+ * - Scales continuously with level (+3.5% per level) plus milestone rank bonuses:
+ *   - Lv 20 (Apprentice): ~1.72x
+ *   - Lv 40 (Journeyman): ~2.47x
+ *   - Lv 60 (Craftsman): ~3.22x
+ *   - Lv 80 (Expert): ~4.02x
+ *   - Lv 100 (Grandmaster): ~4.82x
+ *   - Lv 120 (Mythic): ~5.67x
+ */
 export function workerAutoSellBonus(level: number): number {
-  return level >= 20 ? 1.10 : 1.0;
+  const safeLevel = Math.max(1, level);
+  const baseGrowth = 1 + (safeLevel - 1) * 0.035;
+  const milestoneBonus =
+    safeLevel >= 120 ? 0.50 :
+    safeLevel >= 100 ? 0.35 :
+    safeLevel >= 80 ? 0.25 :
+    safeLevel >= 60 ? 0.15 :
+    safeLevel >= 40 ? 0.10 :
+    safeLevel >= 20 ? 0.05 : 0;
+  return Number((baseGrowth + milestoneBonus).toFixed(2));
+}
+
+/**
+ * Item output quantity scaling per cycle in Hoard Mode based on worker level:
+ * - Lv 1–14: 1 item base
+ * - Lv 15–29: 2 items base
+ * - Lv 30–44: 3 items base
+ * - Lv 45–59: 4 items base
+ * - Lv 60–74: 5 items base
+ * - Lv 75–89: 6 items base
+ * - Lv 90–104: 7 items base
+ * - Lv 105–119: 8 items base
+ * - Lv 120 (Mythic Master): 10 items base!
+ */
+export function workerOutputBatchSize(level: number): number {
+  const safeLevel = Math.max(1, level);
+  if (safeLevel >= 120) return 10;
+  return 1 + Math.floor((safeLevel - 1) / 15);
+}
+
+/**
+ * Chance to proc the worker's rare secondary item per cycle (0% below Lv 10, up to 35% at Lv 120).
+ */
+export function workerRareItemProcChance(level: number): number {
+  const safeLevel = Math.max(1, level);
+  if (safeLevel < 10) return 0;
+  return Math.min(0.35, (safeLevel - 10) / 250);
 }
 
 /** Hopper buffer capacity: 0 below level 40, up to 5 at level 59+ */

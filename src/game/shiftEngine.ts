@@ -4,6 +4,7 @@ import {
   getGuildTaxRate,
   type MoraleTier,
 } from '@/data/workerUpkeep';
+import { calculateWorkerDailyWage } from '@/game/data';
 import { type WorkerHydrationState } from './hydrationEngine';
 
 /**
@@ -574,6 +575,7 @@ export function processSingleWorkerClockOut(params: {
   activeWorkersCount: number;
   wageMultiplier?: number;
   isHardcoreMode?: boolean;
+  workerLevel?: number;
 }): ClockOutSettlementResult {
   const {
     workerName,
@@ -585,6 +587,7 @@ export function processSingleWorkerClockOut(params: {
     activeWorkersCount,
     wageMultiplier = 1.0,
     isHardcoreMode = false,
+    workerLevel = 1,
   } = params;
 
   // Sabbatical workers do not burn wages or pantry rations
@@ -606,7 +609,8 @@ export function processSingleWorkerClockOut(params: {
   }
 
   const config = WORKER_UPKEEP_ROSTER[roleOrId];
-  const baseWage = config?.baseDailyWage || 15;
+  const rawBaseWage = config?.baseDailyWage || 15;
+  const baseWage = calculateWorkerDailyWage(rawBaseWage, workerLevel);
   const taxRate = getGuildTaxRate(activeWorkersCount);
   const wageCost = Math.round(baseWage * (1 + taxRate) * wageMultiplier);
 
@@ -743,6 +747,7 @@ export function processOfflineShiftCycles(params: {
         payrollVaultCoins: currentVaultCoins,
         staffPantry: currentPantry,
         activeWorkersCount: 1,
+        workerLevel: worker.level || 1,
       });
 
       currentVaultCoins = res.newPayrollCoins;

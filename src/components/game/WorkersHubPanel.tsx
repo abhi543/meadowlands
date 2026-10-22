@@ -8,6 +8,7 @@ import {
   workerTripleProcUnlocked, workerGemProcUnlocked, workerAutoSellPayout,
   workerSpeedMultiplier, workerHopperBuffer, workerAutoSellBonus,
   calculateBulkUpgrade, getMilestoneRank, MILESTONE_RANKS,
+  calculateWorkerDailyWage, workerOutputBatchSize,
   type WorkerRole, type WorkerDivision, type BulkMode,
 } from '@/game/data';
 import { OverclockActionMenu } from './OverclockActionMenu';
@@ -298,6 +299,8 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const payout = workerAutoSellPayout(role, worker.level);
           const hopper = workerHopperBuffer(worker.level);
           const autoSellBonusPct = workerAutoSellBonus(worker.level) > 1 ? Math.round((workerAutoSellBonus(worker.level) - 1) * 100) : 0;
+          const outputBatch = workerOutputBatchSize(worker.level);
+          const currentDailyWage = calculateWorkerDailyWage(upkeep?.baseDailyWage || 15, worker.level);
 
           // Block hint
           const blockHint = getBlockHint({
@@ -326,7 +329,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const schedule = getWorkerScheduleTelemetry({
             worker,
             roleOrId: role,
-            baseDailyWage: upkeep?.baseDailyWage || 15,
+            baseDailyWage: currentDailyWage,
             timestamp: now,
             epochStart: farmEpochStart,
             bunkhouseLevel: bunkhouse?.level || 1,
@@ -537,9 +540,12 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                   {upkeep && (
                     <div className="mt-2 p-2 rounded-lg bg-stone-100 dark:bg-stone-950/70 border border-stone-200 dark:border-stone-800 text-[10px] space-y-1">
                       <div className="flex items-center justify-between text-stone-600 dark:text-stone-300 font-semibold flex-wrap gap-1">
-                        <span className="flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400">
+                        <span className="flex items-center gap-1 font-bold text-amber-600 dark:text-amber-400" title={`Base wage: ${upkeep.baseDailyWage}c. Senior wage scales +4%/Lv.`}>
                           <span>💰</span>
-                          <span>{upkeep.baseDailyWage} Coins</span>
+                          <span>{worker.isHired ? currentDailyWage : upkeep.baseDailyWage} Coins/day</span>
+                          {worker.isHired && worker.level > 1 && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono font-bold">Lv.{worker.level}</span>
+                          )}
                         </span>
                         <span className="flex items-center gap-1">
                           <span>{FOOD_CATEGORY_INFO[upkeep.dietaryCategory].icon}</span>
@@ -692,11 +698,12 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                   {/* Stats Row */}
                   {worker.isHired && (
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-stone-500 dark:text-gray-400">
+                      <span className="font-bold text-sky-600 dark:text-sky-400">Yield: x{outputBatch} base</span>
                       <span>2x Drop: {Math.round(doubleChance * 100)}%</span>
                       {workerTripleProcUnlocked(worker.level) && <span className="text-rose-500">3x: 15%</span>}
                       {workerGemProcUnlocked(worker.level) && <span className="text-blue-500">{'\u{1F48E}'} 5%</span>}
                       {hopper > 0 && <span>Buffer: {hopper}</span>}
-                      {autoSellBonusPct > 0 && <span className="text-emerald-500">Sell +{autoSellBonusPct}%</span>}
+                      {autoSellBonusPct > 0 && <span className="text-emerald-500">Sell +{autoSellBonusPct}% coins</span>}
                     </div>
                   )}
 
@@ -803,7 +810,8 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                         <button
                           onClick={() => bulkUpgradeUnifiedWorker(role, bulkMode)}
                           disabled={!canAfford}
-                          className="px-3 py-1 text-xs font-medium rounded-lg bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors"
+                          className="px-3 py-1 text-xs font-medium rounded-lg bg-violet-600 hover:bg-violet-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white transition-colors cursor-pointer"
+                          title={`Upgrade ${cfg.name} to Level ${worker.level + upgradeResult.levelsToBuy}. Boosts output batch yield & auto-sell coin multiplier (+4% daily wage cost).`}
                         >
                           {bulkMode === 'x1' ? `+1 Lv` : bulkMode === 'x10' ? `+${upgradeResult.levelsToBuy} Lv` : `MAX +${upgradeResult.levelsToBuy}`}
                           {' '}({'\u{1F4B0}'}{upgradeResult.totalCost.toLocaleString()})

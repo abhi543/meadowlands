@@ -13,6 +13,7 @@ import {
   workerUpgradeCost, workerEffectiveInterval, workerDoubleProcChance,
   workerTripleProcUnlocked, workerGemProcUnlocked, workerAutoSellBonus,
   workerHopperBuffer, workerAutoSellPayout, calculateBulkUpgrade,
+  calculateWorkerDailyWage, workerOutputBatchSize, workerRareItemProcChance,
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
   type WorkerType, type HourlyEventType,
@@ -5247,7 +5248,7 @@ export const useGameStore = create<GameState>()(
         const now = Date.now();
         const clock = getCircadianClock(now, state.farmEpochStart);
         const config = WORKER_UPKEEP_ROSTER[roleOrId];
-        const baseWage = config?.baseDailyWage || 15;
+        const rawBaseWage = config?.baseDailyWage || 15;
         const workerName = config?.name || roleOrId;
 
         // Check if unified worker
@@ -5268,6 +5269,9 @@ export const useGameStore = create<GameState>()(
         if (workerObj.overtimeUntil && now < workerObj.overtimeUntil) {
           return { success: false, message: `${workerName} is already working an emergency overtime shift!` };
         }
+
+        const workerLevel = ('level' in workerObj) ? (workerObj.level || 1) : 1;
+        const baseWage = calculateWorkerDailyWage(rawBaseWage, workerLevel);
 
         // Overtime wage: 1.5x hourly equivalent for 4 hours = 0.75 * baseDailyWage
         const activeCount = Object.values(state.unifiedWorkers || {}).filter(w => w.isHired).length +
@@ -9936,10 +9940,11 @@ export const useGameStore = create<GameState>()(
             const moraleMultiplier = getMoraleSpeedMultiplier(morale);
 
             const cfg = WORKER_REGISTRY[role];
+            const workerDailyWage = calculateWorkerDailyWage(WORKER_UPKEEP_ROSTER[role]?.baseDailyWage || 15, worker.level);
             const schedule = getWorkerScheduleTelemetry({
               worker,
               roleOrId: role,
-              baseDailyWage: WORKER_UPKEEP_ROSTER[role]?.baseDailyWage || 15,
+              baseDailyWage: workerDailyWage,
               timestamp: now,
               epochStart: state.farmEpochStart || now,
               bunkhouseLevel: state.bunkhouse?.level || 1,
@@ -9966,6 +9971,7 @@ export const useGameStore = create<GameState>()(
                 activeWorkersCount: Object.values(updatedUnifiedWorkers).filter(w => w.isHired).length,
                 wageMultiplier: (state.isHardcoreMode && isExtremeWeather) ? 2.0 : 1.0,
                 isHardcoreMode: Boolean(state.isHardcoreMode),
+                workerLevel: worker.level,
               });
               newPayrollVaultCoins = clockOutRes.newPayrollCoins;
               newStaffPantry = clockOutRes.newStaffPantry;
@@ -10095,7 +10101,8 @@ export const useGameStore = create<GameState>()(
                     const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
                     const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
                     const prodKey = breedDef ? breedDef.primaryProductKey : speciesDef.product;
-                    const baseAmt = (breedDef ? breedDef.baseYieldAmount : speciesDef.productYield) + bonusYield;
+                    const herderLevelBonus = Math.floor((worker.level - 1) / 20);
+                    const baseAmt = (breedDef ? breedDef.baseYieldAmount : speciesDef.productYield) + bonusYield + herderLevelBonus;
                     const totalYield = baseAmt * multiplier;
 
                     if (worker.autoSell) {
@@ -10185,8 +10192,9 @@ export const useGameStore = create<GameState>()(
                       newSilo.feed = feedAvail;
                     }
                   } else if (cfg.hoardItem) {
-                    // Deposit hoard item to barn or silo
-                    let qty = multiplier;
+                    // Deposit hoard item to barn or silo with level-scaled base batch size
+                    const baseBatch = workerOutputBatchSize(worker.level);
+                    let qty = baseBatch * multiplier;
 
                     // Specialized bonus for feed millers when raw crops are available
                     const barnLocks = state.barnItemLocks || {};
@@ -10197,16 +10205,16 @@ export const useGameStore = create<GameState>()(
 
                     if (role === 'feed_miller_wheat' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
                       newSilo.wheat -= 1;
-                      qty += multiplier * 2;
+                      qty += multiplier * (2 * baseBatch);
                     } else if (role === 'feed_miller_corn' && !isCornLocked && (newSilo.corn || 0) > 2) {
                       newSilo.corn -= 1;
-                      qty += multiplier * 3;
+                      qty += multiplier * (3 * baseBatch);
                     } else if (role === 'feed_miller_carrot' && !isCarrotLocked && (newSilo.carrot || 0) > 2) {
                       newSilo.carrot -= 1;
-                      qty += multiplier * 3;
+                      qty += multiplier * (3 * baseBatch);
                     } else if (role === 'feed_miller_soy' && !isSoyLocked && (newSilo.soybean || 0) > 2) {
                       newSilo.soybean -= 1;
-                      qty += multiplier * 4;
+                      qty += multiplier * (4 * baseBatch);
                     }
 
                     if (cfg.hoardIsSilo) {
@@ -10215,6 +10223,23 @@ export const useGameStore = create<GameState>()(
                       newBarn[cfg.hoardItem] = (newBarn[cfg.hoardItem] || 0) + qty;
                     }
                     worker.stats.totalItemsProduced += qty;
+
+                    // Secondary rare item drop chance scaling with level
+                    if (cfg.rareItem && Math.random() < workerRareItemProcChance(worker.level)) {
+                      if (worker.autoSell && cfg.rareItemSellPrice) {
+                        const rareEarned = cfg.rareItemSellPrice * multiplier;
+                        newCoins += rareEarned;
+                        worker.stats.totalCoinsEarned += rareEarned;
+                      } else {
+                        const rareQty = multiplier;
+                        if (cfg.hoardIsSilo) {
+                          newSilo[cfg.rareItem] = (newSilo[cfg.rareItem] || 0) + rareQty;
+                        } else {
+                          newBarn[cfg.rareItem] = (newBarn[cfg.rareItem] || 0) + rareQty;
+                        }
+                        worker.stats.totalItemsProduced += rareQty;
+                      }
+                    }
                   }
                 }
               }

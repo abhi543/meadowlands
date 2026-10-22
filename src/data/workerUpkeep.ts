@@ -1,4 +1,4 @@
-import { WorkerRole } from '@/game/data';
+import { WorkerRole, calculateWorkerDailyWage } from '@/game/data';
 import { SpecialistWorkerId } from '@/data/workerCatalog';
 
 export type FoodCategory = 'crop' | 'dairy' | 'protein' | 'meal';
@@ -438,6 +438,8 @@ export interface StaffUpkeepTelemetry {
     isFavoriteInPantry: boolean;
     morale: MoraleTier;
     missedCycles: number;
+    effectiveDailyWage?: number;
+    workerLevel?: number;
   }>;
 }
 
@@ -482,6 +484,7 @@ export function calculateStaffUpkeep(
     let isPaused = false;
     let morale: MoraleTier = 'content';
     let missedCycles = 0;
+    let workerLevel = 1;
 
     if (config.isSpecialist) {
       const sp = specialistWorkers[id];
@@ -500,12 +503,15 @@ export function calculateStaffUpkeep(
         isPaused = Boolean(uw.isPaused);
         morale = uw.moraleTier || 'content';
         missedCycles = uw.missedCycles || 0;
+        workerLevel = uw.level || 1;
       }
     }
 
+    const effectiveWage = calculateWorkerDailyWage(config.baseDailyWage, workerLevel);
+
     if (isHired && isActive) {
       activeStaffCount += 1;
-      baseDailyPayroll += config.baseDailyWage;
+      baseDailyPayroll += effectiveWage;
       dailyFoodDemands[config.dietaryCategory] += config.dietaryUnits;
     }
 
@@ -523,6 +529,8 @@ export function calculateStaffUpkeep(
       isFavoriteInPantry: hasFav,
       morale,
       missedCycles,
+      effectiveDailyWage: effectiveWage,
+      workerLevel,
     };
   }
 
@@ -536,7 +544,8 @@ export function calculateStaffUpkeep(
   for (const id of Object.keys(workerUpkeeps)) {
     const w = workerUpkeeps[id];
     if (w.isHired && w.isActive) {
-      const workerWageCost = Math.round(w.config.baseDailyWage * (1 + guildTaxRate));
+      const wageToCharge = w.effectiveDailyWage || w.config.baseDailyWage;
+      const workerWageCost = Math.round(wageToCharge * (1 + guildTaxRate));
       if (remainingSimulatedCoins >= workerWageCost) {
         w.isWageSecured = true;
         remainingSimulatedCoins -= workerWageCost;
@@ -659,7 +668,10 @@ export function processUpkeepSettlement(params: {
 
   for (const entry of activeEntries) {
     const { id, config, isSpecialist } = entry;
-    const workerWageCost = Math.round(config.baseDailyWage * (1 + taxRate));
+    const currentWorker = isSpecialist ? updatedSpecialistWorkers[id] : updatedUnifiedWorkers[id];
+    const workerLevel = (currentWorker && 'level' in currentWorker) ? ((currentWorker as any).level || 1) : 1;
+    const effectiveWage = calculateWorkerDailyWage(config.baseDailyWage, workerLevel);
+    const workerWageCost = Math.round(effectiveWage * (1 + taxRate));
 
     const canAffordWage = payrollVaultCoins >= workerWageCost;
 
@@ -693,7 +705,6 @@ export function processUpkeepSettlement(params: {
       }
     }
 
-    const currentWorker = isSpecialist ? updatedSpecialistWorkers[id] : updatedUnifiedWorkers[id];
     let missed = currentWorker?.missedCycles || 0;
     let morale: MoraleTier = currentWorker?.moraleTier || 'content';
     let isStriking = false;
