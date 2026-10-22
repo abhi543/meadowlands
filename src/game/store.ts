@@ -83,6 +83,25 @@ import {
   evaluateFaunaWeather,
 } from '@/game/faunaWeatherEngine';
 import {
+  type SlurryViscosity,
+  type SlurryQualityGrade,
+  type SlurryPitId,
+  type SlurryPitState,
+  type GasProductionLabState,
+  createDefaultSlurryPits,
+  createDefaultGasProductionLab,
+  evaluateAnimalSlurry,
+  stepSlurrySimulation,
+  estimateGasLabOutputs,
+  SPECIES_SLURRY_REGISTRY,
+} from '@/game/slurryEngine';
+import {
+  playWashdownHoseSound,
+  playSlurryScoopSound,
+  playSumpValveSound,
+  playDigesterDistillSound,
+} from '@/lib/soundEffects';
+import {
   type ZoneEcosystemData,
   createDefaultZoneEcosystem,
   isZoneFishingPaused,
@@ -451,6 +470,14 @@ export interface AnimalInstance {
   weatherStressLabel?: string;
   weatherMitigated?: boolean;
   hasFootRot?: boolean;
+  // Species-Specific Slurry & Hydration Metrics
+  hydrationLevel?: number; // 0 to 100%
+  hasGreenDiet?: boolean;
+  slurryDailyRate?: number;
+  slurryQualityLabel?: string;
+  slurryViscosity?: SlurryViscosity;
+  slurryQualityGrade?: SlurryQualityGrade;
+  isBeddingDryCaked?: boolean;
 }
 
 export interface ProductionSlot {
@@ -875,6 +902,22 @@ export interface GameState {
 
   // Pasture Weather & Fauna Welfare System
   pastureWelfare: PastureWelfareState;
+
+  // Species-Specific Slurry Pits & Gas Production Lab
+  slurryPits: Record<SlurryPitId, SlurryPitState>;
+  gasProductionLab: GasProductionLabState;
+  activeSumpModalPitId: SlurryPitId | null;
+  setActiveSumpModalPitId: (pitId: SlurryPitId | null) => void;
+  sprayAndWashdownStalls: (pitId?: SlurryPitId) => boolean;
+  fillSlurryDrum: (pitId: SlurryPitId) => boolean;
+  hitchSlurryTanker: (pitId: SlurryPitId) => boolean;
+  toggleSumpCover: (pitId: SlurryPitId) => void;
+  installPitAgitator: (pitId: SlurryPitId) => boolean;
+  togglePitAutomationPipe: (pitId: SlurryPitId) => void;
+  feedSlurryToDigester: (source: 'inventory_bucket' | 'inventory_drum' | 'tanker' | 'pit', pitIdOrKey?: SlurryPitId | string) => boolean;
+  applyLiquidNitrogenDigestate: (plotId: number) => boolean;
+  applyLiquidNitrogenToAllPlots: () => number;
+  pipeBiogasCo2ToCanopy: () => boolean;
 
   // Time
   lastTick: number;
@@ -1679,6 +1722,11 @@ export const useGameStore = create<GameState>()(
 
       // Pasture Weather & Fauna Welfare System
       pastureWelfare: createDefaultPastureWelfare(),
+
+      // Species-Specific Slurry Pits & Gas Production Lab
+      slurryPits: createDefaultSlurryPits(),
+      gasProductionLab: createDefaultGasProductionLab(),
+      activeSumpModalPitId: null,
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -5829,6 +5877,416 @@ export const useGameStore = create<GameState>()(
         return true;
       },
 
+      // --- Species-Specific Slurry Yield & Collection Mechanics ---
+      setActiveSumpModalPitId: (pitId) => {
+        set({ activeSumpModalPitId: pitId });
+      },
+
+      sprayAndWashdownStalls: (pitId = 'pit_swine') => {
+        const state = get();
+        playWashdownHoseSound();
+        playSlurryScoopSound();
+
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId] || currentPits.pit_swine;
+
+        // Adds 25L of wet fluid slurry directly to the pit
+        pit.currentLiters = Math.min(pit.maxCapacityLiters, pit.currentLiters + 25);
+        pit.viscosityRating = 'fluid';
+
+        // Scoop raw slurry bucket into barn
+        const newBarn = { ...(state.barn || {}) };
+        let bucketKey = 'bucket_slurry_swine';
+        let bucketLabel = 'Bucket of Raw Swine Slurry';
+
+        if (pitId === 'pit_coop') {
+          bucketKey = 'bucket_slurry_chicken';
+          bucketLabel = 'Bucket of Raw Poultry Slurry (Uric Acid Rich)';
+        } else if (pitId === 'pit_cattle') {
+          bucketKey = 'bucket_slurry_cattle';
+          bucketLabel = 'Bucket of Raw Cattle Slurry (High Buffering)';
+        } else if (pitId === 'pit_sanctuary') {
+          bucketKey = 'bucket_slurry_primeval';
+          bucketLabel = 'Bucket of Primeval Slurry (Ancient Microbial Flora)';
+        }
+
+        newBarn[bucketKey] = (newBarn[bucketKey] || 0) + 1;
+
+        // Sanitize bedding and cure dry caking across animals
+        const newAnimals = (state.animals || []).map(a => ({
+          ...a,
+          isBeddingDryCaked: false,
+          hasFootRot: false,
+        }));
+
+        set({
+          slurryPits: currentPits,
+          barn: newBarn,
+          animals: newAnimals,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🚿 High-Pressure Washdown Complete! Bedding cleaned, +25L added to ${pit.name}, and 1x [${bucketLabel}] scooped into barn!`,
+          '🪣',
+          'discovery'
+        );
+        return true;
+      },
+
+      fillSlurryDrum: (pitId) => {
+        const state = get();
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId];
+        if (!pit || pit.currentLiters < 50) {
+          state.addNotification('Not enough slurry in sump pit to fill a 50L drum! Need at least 50L.', '⚠️', 'info');
+          return false;
+        }
+
+        playSumpValveSound();
+        playSlurryScoopSound();
+
+        pit.currentLiters = Number((pit.currentLiters - 50).toFixed(2));
+        const newBarn = { ...(state.barn || {}) };
+        newBarn.drum_slurry = (newBarn.drum_slurry || 0) + 1;
+
+        set({
+          slurryPits: currentPits,
+          barn: newBarn,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🛢️ Filled 50L Drum of Slurry from ${pit.name}! Added to barn storage for Gas Lab digester feeding.`,
+          '🛢️',
+          'discovery'
+        );
+        return true;
+      },
+
+      hitchSlurryTanker: (pitId) => {
+        const state = get();
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId];
+        if (!pit || pit.currentLiters < 50) {
+          state.addNotification('Need at least 50L in sump pit to hitch mobile slurry tanker!', '⚠️', 'info');
+          return false;
+        }
+
+        playSumpValveSound();
+
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        const transferVolume = Math.min(pit.currentLiters, 500);
+        const availableSpace = currentGasLab.digesterMaxCapacityLiters - currentGasLab.digesterCurrentLiters;
+        const volumeToTransfer = Math.min(transferVolume, availableSpace);
+
+        if (volumeToTransfer <= 0) {
+          state.addNotification('Gas Lab Anaerobic Digester tank is completely full (3,000L capacity)!', '⚠️', 'info');
+          return false;
+        }
+
+        pit.currentLiters = Number((pit.currentLiters - volumeToTransfer).toFixed(2));
+        currentGasLab.digesterCurrentLiters = Number((currentGasLab.digesterCurrentLiters + volumeToTransfer).toFixed(2));
+        if (pit.viscosityRating === 'primeval_heavy' || pitId === 'pit_sanctuary') {
+          currentGasLab.primevalSlurryRatio = 0.5;
+          currentGasLab.distillationSpeedMultiplier = 1.5;
+        }
+
+        set({
+          slurryPits: currentPits,
+          gasProductionLab: currentGasLab,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🚜 Mobile Slurry Tanker Hitched! Transported ${Math.round(volumeToTransfer)}L slurry directly into the Anaerobic Digester.`,
+          '🚜',
+          'discovery'
+        );
+        return true;
+      },
+
+      toggleSumpCover: (pitId) => {
+        const state = get();
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId];
+        if (!pit) return;
+
+        playSumpValveSound();
+        pit.isCovered = !pit.isCovered;
+        if (pit.isCovered) pit.isDilutedByRain = false;
+
+        set({
+          slurryPits: currentPits,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          pit.isCovered
+            ? `☂️ Weather Canopy Mounted over ${pit.name}! Pit protected from rainstorm dilution & nitrogen leaching.`
+            : `Weather cover removed from ${pit.name}.`,
+          pit.isCovered ? '☂️' : 'ℹ️',
+          'info'
+        );
+      },
+
+      installPitAgitator: (pitId) => {
+        const state = get();
+        if (state.coins < 150) {
+          state.addNotification('Need 150 coins to install a Mechanical Agitator / Macerator!', '⚠️', 'info');
+          return false;
+        }
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId];
+        if (!pit) return false;
+
+        playSumpValveSound();
+        pit.hasAgitatorMacerator = true;
+
+        set({
+          coins: state.coins - 150,
+          slurryPits: currentPits,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `⚙️ Mechanical Agitator / Macerator Installed on ${pit.name}! Fibrous ruminant pellets ground up; pipe clogs prevented.`,
+          '⚙️',
+          'discovery'
+        );
+        return true;
+      },
+
+      togglePitAutomationPipe: (pitId) => {
+        const state = get();
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+        const pit = currentPits[pitId];
+        if (!pit) return;
+
+        playSumpValveSound();
+        pit.automatedIntakePipe = !pit.automatedIntakePipe;
+
+        set({
+          slurryPits: currentPits,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          pit.automatedIntakePipe
+            ? `🔗 Heavy-Bore PVC/Bronze Pipe Connected! ${pit.name} now automatically feeds slurry straight into Gas Lab.`
+            : `Automation pipe disconnected on ${pit.name}.`,
+          pit.automatedIntakePipe ? '🔗' : 'ℹ️',
+          'info'
+        );
+      },
+
+      feedSlurryToDigester: (source, pitIdOrKey = 'pit_swine') => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        const availableSpace = currentGasLab.digesterMaxCapacityLiters - currentGasLab.digesterCurrentLiters;
+
+        if (availableSpace <= 0) {
+          state.addNotification('Anaerobic Digester is at max capacity (3,000L)!', '⚠️', 'info');
+          return false;
+        }
+
+        playDigesterDistillSound();
+
+        let addedLiters = 0;
+        let isPrimeval = false;
+        const currentBarn = { ...(state.barn || {}) };
+        const currentPits = { ...(state.slurryPits || createDefaultSlurryPits()) };
+
+        if (source === 'pit') {
+          const pitId = pitIdOrKey as SlurryPitId;
+          const pit = currentPits[pitId] || currentPits.pit_swine;
+          addedLiters = Math.min(pit.currentLiters, 50, availableSpace);
+          if (addedLiters <= 0) {
+            state.addNotification('Not enough slurry in the selected pit!', '⚠️', 'info');
+            return false;
+          }
+          pit.currentLiters = Number((pit.currentLiters - addedLiters).toFixed(2));
+          if (pit.viscosityRating === 'primeval_heavy' || pitId === 'pit_sanctuary') isPrimeval = true;
+        } else if (source === 'inventory_bucket') {
+          const key = (pitIdOrKey as string) || 'bucket_slurry_swine';
+          if ((currentBarn[key] || 0) <= 0) {
+            state.addNotification('No slurry buckets in barn storage!', '⚠️', 'info');
+            return false;
+          }
+          currentBarn[key] -= 1;
+          addedLiters = Math.min(20, availableSpace);
+          if (key === 'bucket_slurry_primeval') isPrimeval = true;
+        } else if (source === 'inventory_drum') {
+          if ((currentBarn.drum_slurry || 0) <= 0) {
+            state.addNotification('No 50L slurry drums in barn storage!', '⚠️', 'info');
+            return false;
+          }
+          currentBarn.drum_slurry -= 1;
+          addedLiters = Math.min(50, availableSpace);
+        }
+
+        currentGasLab.digesterCurrentLiters = Number((currentGasLab.digesterCurrentLiters + addedLiters).toFixed(2));
+        if (isPrimeval) {
+          currentGasLab.primevalSlurryRatio = 0.5;
+          currentGasLab.distillationSpeedMultiplier = 1.5;
+        }
+
+        set({
+          slurryPits: currentPits,
+          gasProductionLab: currentGasLab,
+          barn: currentBarn,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `⚗️ Fed ${Math.round(addedLiters)}L Slurry into Anaerobic Digester! ${isPrimeval ? '🧬 Primeval Flora Active: +50% Distillation Speed!' : 'Microbial fermentation ongoing.'}`,
+          '⚗️',
+          'discovery'
+        );
+        return true;
+      },
+
+      applyLiquidNitrogenDigestate: (plotId) => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        if (currentGasLab.storedLiquidNitrogen < 10) {
+          state.addNotification('Need at least 10L Liquid Nitrogen Digestate in Gas Lab! Process more slurry first.', '⚠️', 'info');
+          return false;
+        }
+
+        playWashdownHoseSound();
+        currentGasLab.storedLiquidNitrogen -= 10;
+
+        const newPlots = state.plots.map(p => {
+          if (p.id !== plotId) return p;
+          const prevGases = p.gases || createDefaultPlotGases();
+          return {
+            ...p,
+            gases: {
+              ...prevGases,
+              nitrogen: 100,
+              nitrogenYieldMultiplier: 3 as const,
+              nitrogenBreakdownText: 'Full 3x Liquid N Bio-Liquor',
+              nitrogenArrow: '▲▲',
+              isPenaltyNitrogen: false,
+              hasAnyPenalty: prevGases.isPenaltyCo2 || prevGases.isPenaltyO2,
+            },
+          };
+        });
+
+        set({
+          gasProductionLab: currentGasLab,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🧪 Applied Concentrated Liquid Nitrogen Bio-Liquor to Plot #${plotId + 1}! Nitrogen supercharged to 100% (3x harvest yield)!`,
+          '🧪',
+          'discovery'
+        );
+        return true;
+      },
+
+      applyLiquidNitrogenToAllPlots: () => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        const eligiblePlots = state.plots.filter(p => p.id < state.unlockedPlots && (p.gases?.nitrogen ?? 85) < 90);
+
+        if (eligiblePlots.length === 0) {
+          state.addNotification('All unlocked farm plots already have optimal Nitrogen (>90%)!', '✨', 'info');
+          return 0;
+        }
+
+        const costPerPlot = 10;
+        const totalNeeded = eligiblePlots.length * costPerPlot;
+        const availableLiters = currentGasLab.storedLiquidNitrogen;
+
+        if (availableLiters < costPerPlot) {
+          state.addNotification('Not enough Liquid Nitrogen Digestate stored in Gas Lab! Need at least 10L.', '⚠️', 'info');
+          return 0;
+        }
+
+        const plotsToTreatCount = Math.min(eligiblePlots.length, Math.floor(availableLiters / costPerPlot));
+        const treatedIds = new Set(eligiblePlots.slice(0, plotsToTreatCount).map(p => p.id));
+
+        playWashdownHoseSound();
+        currentGasLab.storedLiquidNitrogen -= plotsToTreatCount * costPerPlot;
+
+        const newPlots = state.plots.map(p => {
+          if (!treatedIds.has(p.id)) return p;
+          const prevGases = p.gases || createDefaultPlotGases();
+          return {
+            ...p,
+            gases: {
+              ...prevGases,
+              nitrogen: 100,
+              nitrogenYieldMultiplier: 3 as const,
+              nitrogenBreakdownText: 'Full 3x Liquid N Bio-Liquor',
+              nitrogenArrow: '▲▲',
+              isPenaltyNitrogen: false,
+              hasAnyPenalty: prevGases.isPenaltyCo2 || prevGases.isPenaltyO2,
+            },
+          };
+        });
+
+        set({
+          gasProductionLab: currentGasLab,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🧪 Supercharged ${plotsToTreatCount} Farm Plots with Liquid Nitrogen Bio-Liquor! Soil fertility restored to 100% (3x yields).`,
+          '🧪',
+          'discovery'
+        );
+        return plotsToTreatCount;
+      },
+
+      pipeBiogasCo2ToCanopy: () => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        if (currentGasLab.storedBiogasCo2 < 50) {
+          state.addNotification('Need at least 50L Biogas CO₂ in Gas Lab to pipe into the field canopy!', '⚠️', 'info');
+          return false;
+        }
+
+        playDigesterDistillSound();
+        currentGasLab.storedBiogasCo2 -= 50;
+
+        // Injects CO2 into all plots to 85% (+15% photosynthesis speed boost)
+        const newPlots = state.plots.map(p => {
+          if (p.id >= state.unlockedPlots) return p;
+          const prevGases = p.gases || createDefaultPlotGases();
+          return {
+            ...p,
+            gases: {
+              ...prevGases,
+              co2: 85,
+              growthSpeedMultiplier: 1.125, // +12.5% speed
+              co2BreakdownText: '+15% Biogas Injection',
+              co2Arrow: '▲▲',
+              isPenaltyCo2: false,
+              hasAnyPenalty: prevGases.isPenaltyO2 || prevGases.isPenaltyNitrogen,
+            },
+          };
+        });
+
+        set({
+          gasProductionLab: currentGasLab,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          '💨 Biogas CO₂ Piped to Farm Canopy! All active crop plots boosted to 85% CO₂ for accelerated growth velocity.',
+          '💨',
+          'discovery'
+        );
+        return true;
+      },
+
       // Breeding
       breedAnimals: (parent1Id, parent2Id) => {
         const state = get();
@@ -8784,6 +9242,58 @@ export const useGameStore = create<GameState>()(
           };
         });
 
+        // Step Slurry Simulation & Gas Lab Anaerobic Digester
+        const prehistoricList = Object.values(state.prehistoricSanctuary?.enclosures || {}).map(enc => ({
+          speciesId: enc.speciesId,
+          specimenCount: enc.specimenCount || 0,
+        }));
+
+        const slurrySimResult = stepSlurrySimulation({
+          deltaSeconds,
+          pits: state.slurryPits || createDefaultSlurryPits(),
+          animals: state.animals.map(a => ({
+            species: a.species,
+            hydrationLevel: a.hydrationLevel ?? 90,
+            hasGreenDiet: a.hasGreenDiet ?? true,
+          })),
+          prehistoricCreatures: prehistoricList,
+          gasLab: state.gasProductionLab || createDefaultGasProductionLab(),
+          activeWeatherId,
+          temperatureC: hydroSimResult.updatedHydrology.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: updatedPastureWelfare,
+          hasDimetrodon,
+        });
+
+        // Stamp live slurry metrics onto animal instances
+        newAnimals = newAnimals.map(a => {
+          const evalRes = evaluateAnimalSlurry({
+            species: a.species,
+            hydrationLevel: a.hydrationLevel ?? 90,
+            hasGreenDiet: a.hasGreenDiet ?? true,
+            hasAdequateWater: !faunaEval.isTroughFrozen,
+            activeWeatherId,
+            temperatureC: hydroSimResult.updatedHydrology.weatherState?.temperatureC ?? 20,
+            isRainstormActive: state.activeEvent?.type === 'rainstorm',
+            isPastureShaded: updatedPastureWelfare.hasShadedCanopy,
+          });
+
+          return {
+            ...a,
+            hydrationLevel: a.hydrationLevel ?? 90,
+            hasGreenDiet: a.hasGreenDiet ?? true,
+            slurryDailyRate: evalRes.dailyRateLiters,
+            slurryQualityLabel: evalRes.qualityLabel,
+            slurryViscosity: evalRes.viscosity,
+            slurryQualityGrade: evalRes.qualityGrade,
+            isBeddingDryCaked: evalRes.isDryCaked,
+          };
+        });
+
+        for (const notif of slurrySimResult.notifications) {
+          state.addNotification(notif, '🚰', 'info');
+        }
+
         // Update production queues (with Artisan Masterclass, Master Ledger, and Overclocking modifiers)
         const isArtisanMasterclass = state.systemicEvent?.id === 'artisan_masterclass' && state.systemicEvent.phase === 'active';
         const masterLedgerMultiplier = state.relics?.masterArtisanLedger ? 1.0526 : 1.0;
@@ -10219,6 +10729,8 @@ export const useGameStore = create<GameState>()(
           animals: newAnimals,
           domesticTroughs: updatedDomesticTroughs,
           pastureWelfare: updatedPastureWelfare,
+          slurryPits: slurrySimResult.updatedPits,
+          gasProductionLab: slurrySimResult.updatedGasLab,
           productionQueues: newQueues,
           barn: newBarn,
           silo: newSilo,
@@ -13819,6 +14331,14 @@ export const useGameStore = create<GameState>()(
         // Migration: Pasture Weather & Fauna Welfare System
         if (!merged.pastureWelfare) {
           merged.pastureWelfare = createDefaultPastureWelfare();
+        }
+
+        // Migration: Species-Specific Slurry Pits & Gas Production Lab
+        if (!merged.slurryPits) {
+          merged.slurryPits = createDefaultSlurryPits();
+        }
+        if (!merged.gasProductionLab) {
+          merged.gasProductionLab = createDefaultGasProductionLab();
         }
 
         return merged as GameState;

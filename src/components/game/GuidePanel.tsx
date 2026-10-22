@@ -752,6 +752,99 @@ function AnimalsGuide() {
         </div>
       </div>
 
+      {/* Species-Specific Slurry Yield & Gas Production Lab System */}
+      <div className="bg-emerald-950/20 border border-emerald-500/40 rounded-xl p-3.5 text-xs text-emerald-200 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">⚗️</span>
+            <div>
+              <h5 className="font-bold text-sm text-emerald-300">Species-Specific Slurry Yield &amp; Gas Production Lab</h5>
+              <p className="text-[11px] text-emerald-400/80">Every livestock and sanctuary animal produces biologically distinct slurry fueling the Anaerobic Digester.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+            Ecosystem Integration
+          </span>
+        </div>
+
+        {/* Matrix Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 space-y-1">
+            <div className="flex items-center justify-between font-bold text-emerald-300">
+              <span>🐔 Small Livestock (Poultry &amp; Rabbits)</span>
+              <span className="text-amber-400">0.5 – 1.0 L/day</span>
+            </div>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> High solid sludge rich in uric acid (accelerated Nitrogen spike). Requires 2:1 wash-down ratio.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Scraping coop droppings into buckets or Slat Pit grates yielding 1.5L wet slurry per 3 birds daily.</p>
+          </div>
+
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 space-y-1">
+            <div className="flex items-center justify-between font-bold text-emerald-300">
+              <span>🐖 Medium Livestock (Swine &amp; Ruminants)</span>
+              <span className="text-amber-400">Pigs: 8–12 L | Sheep: 3–5 L</span>
+            </div>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Swine slurry has the highest methane yield and rapid anaerobic digestion. Sheep/Goat pellets require macerator/agitator blades.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Slatted pen runoff drains directly into exterior masonry sump pits.</p>
+          </div>
+
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 space-y-1">
+            <div className="flex items-center justify-between font-bold text-emerald-300">
+              <span>🐄 Large Livestock (Bovine &amp; Equine)</span>
+              <span className="text-amber-400">25 – 40 L/day</span>
+            </div>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Heavy fibrous straw emulsion. High pH buffering capacity; produces balanced CO₂ and liquid Nitrogen digestate.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Barn gutter scrapers or automated wash-down flush valves push slurry into 1,000L holding tanks.</p>
+          </div>
+
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 space-y-1">
+            <div className="flex items-center justify-between font-bold text-emerald-300">
+              <span>🦕 Sanctuary Mega-Fauna (Prehistoric)</span>
+              <span className="text-amber-400">Dimetrodon: 15 L | Bronto: 150–250 L</span>
+            </div>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> &quot;Primeval Slurry&quot; with prehistoric microbial flora. Boosts anaerobic distillation velocity by +50% and supercharges soil nutrition.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Heavy-duty wash bays and reinforced high-bore concrete sluice channels feeding the bio-reactor.</p>
+          </div>
+        </div>
+
+        {/* Environmental & Dynamic Modifiers */}
+        <div className="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800 text-[11px] space-y-1.5">
+          <span className="font-bold text-amber-300 text-xs">🌿 Dynamic Modifiers on Slurry Yield:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-stone-300">
+            <div>
+              <strong className="text-emerald-400">Diet &amp; Hydration:</strong>
+              <p>Fresh green fodder: +25% volume &amp; fluidity. Dry grain/hay without water cakes bedding and halts drainage. Dehydration freezes production.</p>
+            </div>
+            <div>
+              <strong className="text-amber-400">Weather Extremes:</strong>
+              <p>Heatwave triggers 2.5x water intake (+30% volume, -20% gas potency). Deluges risk pit overflow leaching unless covered. Frost freezes unheated pipes.</p>
+            </div>
+            <div>
+              <strong className="text-sky-400">Collection &amp; Piping:</strong>
+              <p>Equip Washdown Hose to hose down bedding. Mid-game pen sump valves allow filling 50L drums or hitching tankers. Late-game PVC/Bronze pipes automate delivery.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Gas Lab Outputs */}
+        <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 text-[11px] space-y-1">
+          <span className="font-bold text-emerald-300 text-xs">⚗️ Anaerobic Digester &amp; Gas Lab Products:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-stone-300 pt-1">
+            <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
+              <strong className="text-amber-400">🔥 Biogas Methane (CH₄):</strong>
+              <p>Fermented from high-methane swine and bovine slurries, stored in pressurized tanks for energy monetization.</p>
+            </div>
+            <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
+              <strong className="text-cyan-400">💨 Biogas Carbon Dioxide (CO₂):</strong>
+              <p>Piped directly to the crop canopy, elevating atmospheric CO₂ to boost crop photosynthetic velocity.</p>
+            </div>
+            <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
+              <strong className="text-emerald-400">🌱 Liquid Nitrogen Digestate:</strong>
+              <p>Nutrient-dense liquid fertilizer. Instantly refills plot soil Nitrogen to 100% N, ensuring maximum 3x harvest yields.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
         {SPECIES_LIST.map(sp => {
           const def = ANIMALS[sp];

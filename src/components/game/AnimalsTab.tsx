@@ -16,6 +16,8 @@ import { AnimalProductsQuickReference } from './AnimalProductsQuickReference';
 import { resolveWeatherProfileId } from '@/game/hydrologyEngine';
 import { WEATHER_PROFILES } from '@/game/weatherEngine';
 import { evaluateFaunaWeather, type FaunaWeatherEvaluation } from '@/game/faunaWeatherEngine';
+import { SlurryCollectionModal } from './SlurryCollectionModal';
+import { type SlurryPitId } from '@/game/slurryEngine';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -72,6 +74,11 @@ export function AnimalsTab() {
     hydrology,
     prehistoricSanctuary,
     domesticTroughs,
+    slurryPits,
+    gasProductionLab,
+    activeSumpModalPitId,
+    setActiveSumpModalPitId,
+    sprayAndWashdownStalls,
   } = useGameStore();
 
   const isTessaActive = Boolean(
@@ -85,6 +92,8 @@ export function AnimalsTab() {
   const [showReserveModal, setShowReserveModal] = useState(false);
   const [showAnimalItemsModal, setShowAnimalItemsModal] = useState(false);
   const [showShelterControls, setShowShelterControls] = useState(false);
+  const [showSlurryModal, setShowSlurryModal] = useState(false);
+  const [selectedPitForModal, setSelectedPitForModal] = useState<SlurryPitId>('pit_swine');
   const [selectedAnimalForWelfare, setSelectedAnimalForWelfare] = useState<AnimalInstance | null>(null);
   const [, setTick] = useState(0);
 
@@ -471,6 +480,109 @@ export function AnimalsTab() {
         )}
       </div>
 
+      {/* SPECIES-SPECIFIC SLURRY YIELD & SUMP COLLECTION BAR */}
+      <div className="shrink-0 mb-2 p-2.5 rounded-2xl bg-stone-900/90 dark:bg-stone-950/90 border border-amber-500/30 shadow-md backdrop-blur-md flex flex-col gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="text-lg p-1 rounded-lg bg-amber-500/20 text-amber-300">🚰</span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black text-white font-serif tracking-wide">
+                  Estate Slurry Pits & Sump Runoff
+                </span>
+                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  Gas Lab Feedstock
+                </span>
+              </div>
+              <span className="text-[10px] text-stone-400">
+                Species-specific excretion rates, fluid viscosities & biochemical distillation profiles
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => sprayAndWashdownStalls()}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-blue-500 to-cyan-500 hover:brightness-110 text-white shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+              title="Equip Washdown Hose + Slurry Bucket: Wash stall bedding and scoop puddle into raw slurry bucket"
+            >
+              <span>🚿 Washdown Stalls</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setSelectedPitForModal('pit_swine');
+                setShowSlurryModal(true);
+              }}
+              className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 text-stone-950 shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
+              title="Open Gas Production Lab & Anaerobic Digester Console"
+            >
+              <span>⚗️ Gas Lab ({Math.round(gasProductionLab?.digesterCurrentLiters || 0)}L)</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Pen Sump Tiles */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {([
+            { id: 'pit_coop' as const, emoji: '🐔', label: 'Coop Slat Pit', sub: 'Poultry & Lagomorphs' },
+            { id: 'pit_swine' as const, emoji: '🐖', label: 'Swine Sump Pit', sub: 'Rooting Trufflers' },
+            { id: 'pit_cattle' as const, emoji: '🐄', label: 'Barn Holding Tank', sub: 'Bovine & Equine' },
+            { id: 'pit_sanctuary' as const, emoji: '🦖', label: 'Sanctuary Sluice Vat', sub: 'Primeval Mega-Fauna' },
+          ]).map(({ id, emoji, label }) => {
+            const p = slurryPits?.[id];
+            const current = Math.round(p?.currentLiters || 0);
+            const max = p?.maxCapacityLiters || 1000;
+            const pct = Math.min(100, Math.round((current / max) * 100));
+            const visc = p?.viscosityRating || 'fluid';
+
+            return (
+              <div
+                key={id}
+                onClick={() => {
+                  setSelectedPitForModal(id);
+                  setShowSlurryModal(true);
+                }}
+                className="p-2 rounded-xl bg-stone-900/90 border border-stone-800 hover:border-amber-500/50 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm"
+                title={`Click to open Sump Valve & Gas Lab profile for ${p?.name || label}`}
+              >
+                <div className="flex items-center justify-between text-[11px] font-bold">
+                  <span className="flex items-center gap-1 text-stone-200 group-hover:text-amber-300 transition-colors">
+                    <span>{emoji}</span>
+                    <span className="truncate">{label}</span>
+                  </span>
+                  <span className="text-[9px] font-mono text-stone-400">{pct}%</span>
+                </div>
+
+                <div className="my-1.5 flex items-baseline justify-between text-xs">
+                  <span className="font-mono font-black text-amber-300">{current}L</span>
+                  <span className="text-[10px] text-stone-500 font-mono">/ {max}L</span>
+                </div>
+
+                {/* Reservoir Bar */}
+                <div className="w-full h-1.5 bg-stone-950 rounded-full overflow-hidden border border-stone-800/80">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      pct >= 90 ? 'bg-rose-500' : pct >= 60 ? 'bg-amber-400' : 'bg-emerald-400'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+
+                <div className="mt-1.5 flex items-center justify-between text-[9px]">
+                  <span className="font-semibold text-stone-400 capitalize truncate">
+                    {visc.replace('_', ' ')}
+                  </span>
+                  <span className="text-amber-400/90 font-bold group-hover:translate-x-0.5 transition-transform">
+                    Valve 🚰
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* QUAD GRID CONTAINER (2x2 Equal Screen Real Estate, zero scroll) */}
       <div className="grid grid-cols-2 grid-rows-2 gap-2.5 flex-1 min-h-0">
         {SECTOR_ORDER.map(tier => {
@@ -578,7 +690,11 @@ export function AnimalsTab() {
                       }`}
                     >
                       {/* Top Row: Emoji + Breed Name + Cycles */}
-                      <div className="min-h-0 cursor-pointer" onClick={() => setSelectedAnimalForWelfare(animal)} title="Tap to inspect animal environmental welfare">
+                      <div
+                        className="min-h-0 cursor-pointer"
+                        onClick={() => setSelectedAnimalForWelfare(animal)}
+                        title={`Hydration: ${Math.round(animal.hydrationLevel ?? 90)}% | Slurry Generation: ${(animal.slurryDailyRate ?? 8.5).toFixed(1)}L/day (${animal.slurryQualityLabel || 'Swine Quality'})${animal.isBeddingDryCaked ? ' ⚠️ Caked Bedding: Washdown needed' : ''} • Tap to inspect welfare`}
+                      >
                         <div className="flex items-center justify-between gap-1">
                           <span
                             className={`text-base shrink-0 leading-none transition-transform ${
@@ -647,6 +763,18 @@ export function AnimalsTab() {
                           {animal.weatherMitigated && faunaEval.condition !== 'mild' && (
                             <span className="text-[8px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100/90 dark:bg-teal-950/80 px-1 py-0.2 rounded border border-teal-400/40" title="Sheltered from atmospheric weather stress">
                               🛡️ Sheltered
+                            </span>
+                          )}
+                          {/* Live Waste & Hydration Slurry Badge */}
+                          <span
+                            className="text-[8px] font-mono font-bold text-teal-800 dark:text-teal-200 bg-teal-100/90 dark:bg-teal-950/80 px-1 py-0.2 rounded border border-teal-300 dark:border-teal-700/60 truncate"
+                            title={`Hydration: ${Math.round(animal.hydrationLevel ?? 90)}% | Slurry: ${(animal.slurryDailyRate ?? 8.5).toFixed(1)}L/day (${animal.slurryQualityLabel || 'Swine Quality'})`}
+                          >
+                            💧 {Math.round(animal.hydrationLevel ?? 90)}% • 🚰 {(animal.slurryDailyRate ?? 8.5).toFixed(1)}L/d
+                          </span>
+                          {animal.isBeddingDryCaked && (
+                            <span className="text-[8px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-400/60" title="Bedding caked dry! Washdown needed to restore fluid runoff.">
+                              🪣 Caked
                             </span>
                           )}
                         </div>
@@ -1055,6 +1183,62 @@ export function AnimalsTab() {
                   {faunaEval.co2CanopyActive ? 'Active (+40% crop buffer)' : 'Offline (Retreated Indoors)'}
                 </span>
               </div>
+
+              {/* Slurry Yield & Fluid Viscosity Profile */}
+              {selectedAnimalForWelfare && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-amber-900 dark:text-amber-200 flex items-center gap-1.5 font-serif">
+                      <span>🚰</span>
+                      <span>Slurry Generation & Viscosity Profile</span>
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                      {selectedAnimalForWelfare.slurryQualityLabel || 'Swine Quality'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-800">
+                      <div className="text-[10px] text-stone-500 dark:text-stone-400 font-semibold">Live Hydration</div>
+                      <div className="font-mono font-black text-xs text-stone-800 dark:text-stone-100 mt-0.5">
+                        {Math.round(selectedAnimalForWelfare.hydrationLevel ?? 90)}%
+                      </div>
+                      <div className="text-[9px] text-stone-400">
+                        {faunaEval.waterConsumptionMultiplier > 1.5 ? 'Diluted in heatwave' : 'Optimal fluid level'}
+                      </div>
+                    </div>
+
+                    <div className="p-2 rounded-xl bg-white/80 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-800">
+                      <div className="text-[10px] text-stone-500 dark:text-stone-400 font-semibold">Daily Slurry Output</div>
+                      <div className="font-mono font-black text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                        {(selectedAnimalForWelfare.slurryDailyRate ?? 8.5).toFixed(1)} L / day
+                      </div>
+                      <div className="text-[9px] text-stone-400">Feeds Gas Lab digester</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className="text-[11px] text-stone-600 dark:text-stone-300">
+                      Fluid Viscosity Rating:
+                    </span>
+                    <span className="font-bold text-[11px] text-amber-600 dark:text-amber-300 capitalize">
+                      {(selectedAnimalForWelfare.slurryViscosity || 'fluid').replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {selectedAnimalForWelfare.isBeddingDryCaked && (
+                    <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/40 text-[11px] text-amber-800 dark:text-amber-200 flex items-center justify-between">
+                      <span>⚠️ Dry Hay Bedding Caked: Halting fluid runoff!</span>
+                      <button
+                        onClick={() => sprayAndWashdownStalls()}
+                        className="px-2 py-0.5 rounded-lg bg-blue-600 text-white font-bold text-[10px]"
+                      >
+                        Washdown Hose
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Active Player Mitigations */}
@@ -1110,6 +1294,16 @@ export function AnimalsTab() {
       <AnimalProductsQuickReference
         isOpen={showAnimalItemsModal}
         onClose={() => setShowAnimalItemsModal(false)}
+      />
+
+      {/* Slurry Hub & Gas Lab Anaerobic Digester Modal */}
+      <SlurryCollectionModal
+        isOpen={showSlurryModal || Boolean(activeSumpModalPitId)}
+        onClose={() => {
+          setShowSlurryModal(false);
+          setActiveSumpModalPitId(null);
+        }}
+        initialPitId={activeSumpModalPitId || selectedPitForModal}
       />
     </div>
   );

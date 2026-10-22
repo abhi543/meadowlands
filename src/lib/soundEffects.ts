@@ -544,5 +544,118 @@ export function playCalmingHerbsSound(): void {
   });
 }
 
+/**
+ * 🚿 High-pressure washdown hose spray whoosh sound
+ */
+export function playWashdownHoseSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
 
+  const now = ctx.currentTime;
+  const bufferSize = Math.floor(ctx.sampleRate * 0.4);
+  const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const output = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    output[i] = Math.random() * 2 - 1;
+  }
 
+  const whiteNoise = ctx.createBufferSource();
+  whiteNoise.buffer = noiseBuffer;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(800, now);
+  filter.frequency.exponentialRampToValueAtTime(1400, now + 0.35);
+  filter.Q.value = 2.0;
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.01, now);
+  gain.gain.linearRampToValueAtTime(0.18, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+
+  whiteNoise.connect(filter);
+  filter.connect(gain);
+  gain.connect(ctx.destination);
+
+  whiteNoise.start(now);
+  whiteNoise.stop(now + 0.4);
+}
+
+/**
+ * 🪣 Rich fluid slurry scoop & bucket slosh sound
+ */
+export function playSlurryScoopSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(180, now);
+  osc.frequency.exponentialRampToValueAtTime(80, now + 0.25);
+
+  gain.gain.setValueAtTime(0.2, now);
+  gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.3);
+}
+
+/**
+ * 🚰 Heavy industrial sump collection valve turn & fluid gush
+ */
+export function playSumpValveSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(220, now);
+  osc.frequency.exponentialRampToValueAtTime(110, now + 0.15);
+
+  gain.gain.setValueAtTime(0.15, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(now);
+  osc.stop(now + 0.2);
+
+  setTimeout(() => playWashdownHoseSound(), 80);
+}
+
+/**
+ * ⚗️ Anaerobic Digester bubbling fermentation & pressure hiss
+ */
+export function playDigesterDistillSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  [120, 160, 210, 280].forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+    osc.frequency.exponentialRampToValueAtTime(freq * 1.4, now + idx * 0.08 + 0.15);
+
+    gain.gain.setValueAtTime(0.12, now + idx * 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.2);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + idx * 0.08);
+    osc.stop(now + idx * 0.08 + 0.22);
+  });
+}

@@ -8,6 +8,7 @@ import {
   PrehistoricSpeciesId,
 } from '@/types/prehistoric';
 import { FrontierTrailModal } from './FrontierTrailModal';
+import { SlurryCollectionModal } from '../SlurryCollectionModal';
 
 export function PrehistoricSanctuaryPanel() {
   const {
@@ -21,6 +22,9 @@ export function PrehistoricSanctuaryPanel() {
     depositEnclosureFeed,
     collectEnclosureHarvest,
     setMenagerieModalOpen,
+    slurryPits,
+    activeSumpModalPitId,
+    setActiveSumpModalPitId,
   } = useGameStore();
 
   const [activeTab, setActiveTab] = useState<EnclosureTypeId | 'biolab'>('enclosure_silt_terrarium');
@@ -88,6 +92,15 @@ export function PrehistoricSanctuaryPanel() {
             >
               <span>🧭</span>
               <span>Launch Trail</span>
+            </button>
+
+            <button
+              onClick={() => setActiveSumpModalPitId('pit_sanctuary')}
+              className="py-3 px-4 rounded-xl bg-gradient-to-r from-rose-800 via-amber-800 to-rose-900 hover:brightness-110 text-white border border-rose-500/50 font-black text-xs tracking-wider uppercase shadow-lg active:scale-95 transition flex items-center space-x-2 cursor-pointer"
+              title="Inspect Industrial Sluice Vat & Primeval Slurry Output (+50% Distillation Speed)"
+            >
+              <span>🚰</span>
+              <span>Sluice Vat ({Math.round(slurryPits?.pit_sanctuary?.currentLiters || 0)}L)</span>
             </button>
           </div>
         </div>
@@ -547,6 +560,13 @@ export function PrehistoricSanctuaryPanel() {
       <FrontierTrailModal
         isOpen={isTrailModalOpen}
         onClose={() => setIsTrailModalOpen(false)}
+      />
+
+      {/* --- SLURRY SUMP & PRIMEVAL BIOREACTOR VAT MODAL --- */}
+      <SlurryCollectionModal
+        isOpen={Boolean(activeSumpModalPitId)}
+        onClose={() => setActiveSumpModalPitId(null)}
+        initialPitId={activeSumpModalPitId || 'pit_sanctuary'}
       />
     </div>
   );
