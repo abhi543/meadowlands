@@ -299,6 +299,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const payout = workerAutoSellPayout(role, worker.level);
           const hopper = workerHopperBuffer(worker.level);
           const autoSellBonusPct = workerAutoSellBonus(worker.level) > 1 ? Math.round((workerAutoSellBonus(worker.level) - 1) * 100) : 0;
+          const upkeep = WORKER_UPKEEP_ROSTER[role];
           const outputBatch = workerOutputBatchSize(worker.level);
           const currentDailyWage = calculateWorkerDailyWage(upkeep?.baseDailyWage || 15, worker.level);
 
@@ -319,7 +320,6 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           const nextMilestone = worker.isHired ? getNextMilestoneHint(worker.level) : null;
           const nextPerk = worker.isHired ? getNextPerkHint(worker.level) : null;
 
-          const upkeep = WORKER_UPKEEP_ROSTER[role];
           const upkeepStatus = telemetry.workerUpkeeps[role];
           const morale = worker.moraleTier || 'content';
           const isStriking = morale === 'striking';
