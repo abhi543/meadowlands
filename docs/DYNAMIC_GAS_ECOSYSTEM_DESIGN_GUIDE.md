@@ -94,3 +94,26 @@ This converts simple sowing into a multi-layered tactical optimization puzzle wh
    - Hovering seed packets in the crop selector displays a predictive forecast banner:
      - Example: `CO₂: 80% ▲ (+10% Speed) | O₂: 65% (Optimal) | N: 85% (3x Yield)`
      - Alert: `⚠️ WARNING: O₂ at 15% (Roots Choking) — Drain water or till before planting!`
+
+---
+
+## 4. Atmospheric Weather System & 1-Day Game Time (30 Minutes)
+
+### A. Calibrated 1-Day Circadian Cycle (30 Real Minutes)
+Meadowlands operates on an exact **30-minute real-world game day** (1,800 seconds):
+- **Morning Phase (10 Real Minutes · 0..600s / 06:00 – 14:00):**
+  - High solar irradiance and midday warmth (`+1.0°C` thermal boost).
+  - All field workers on active shift duty (irrigating, planting, harvesting, artisan processing).
+  - Baseline soil evaporation: `2.5%/min`.
+- **Night Phase (20 Real Minutes · 600..1800s / 14:00 – 06:00):**
+  - Atmospheric night cooling (`-3.0°C` ambient drop) and dew/condensation (`+6%` relative humidity increase).
+  - Workers rest and sleep in the Bunkhouse to regenerate stamina.
+  - Baseline soil evaporation dampened to `0.5%/min`.
+
+### B. 1-Day Weather Front Duration (30 Minutes)
+- **Previous System:** Natural weather cycled every 3 to 5 minutes (180s–300s).
+- **New Architecture:** Every atmospheric weather front is sustained for **1 full in-game day (30 real minutes = 1,800s)**.
+- **Day-Boundary Climate Progression:**
+  - When the in-game clock strikes 06:00 AM (or 1,800 seconds elapse), the estate rolls into a new natural weather pattern matching meteorological Markov neighbor transitions.
+  - Provides strategic stability for crop planning: players can select heat-tolerant or cool-season crops knowing the weather front will persist for the entire 30-minute day cycle.
+

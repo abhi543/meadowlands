@@ -278,29 +278,22 @@ export function getDiurnalEvaporationRatePctPerMin(
   cycleElapsedSeconds: number,
   canalTier: CanalTier
 ): { ratePctPerMin: number; phaseName: string; solarLabel: string } {
-  // 0..600s: Morning Shift (06:00 to 14:00)
-  // 600..1200s: Twilight Gap (14:00 to 22:00)
-  // 1200..1800s: Night Watch (22:00 to 06:00)
+  // 30m Game Day: 0..600s Morning Shift (10 min, 06:00 to 14:00)
+  // 600..1800s: Night Rest (20 min, 14:00 to 06:00)
   const tierDef = CANAL_TIER_CONFIGS[canalTier];
 
   if (cycleElapsedSeconds < 600) {
     const rate = tierDef.morningEvaporationRatePctPerMin;
     return {
       ratePctPerMin: rate,
-      phaseName: 'Morning Shift',
+      phaseName: 'Morning Shift (10m)',
       solarLabel: tierDef.tier >= 3 ? 'Midday Heat (Tile Dampened: -1.5%/min)' : 'High Sun (-3.0%/min)',
-    };
-  } else if (cycleElapsedSeconds < 1200) {
-    return {
-      ratePctPerMin: 2.0,
-      phaseName: 'Twilight Gap',
-      solarLabel: 'Afternoon Warmth (-2.0%/min)',
     };
   } else {
     return {
       ratePctPerMin: 0.5,
-      phaseName: 'Night Watch',
-      solarLabel: 'Cool Condensation (-0.5%/min)',
+      phaseName: 'Night Rest (20m)',
+      solarLabel: 'Night Cool Condensation (-0.5%/min)',
     };
   }
 }
@@ -596,14 +589,24 @@ export function stepHydrologySimulation(params: {
   }
 
   // Automatic Dynamic Weather Cycling:
-  // Weather shifts automatically across natural meteorological states every 180s - 300s (3 - 5 minutes).
+  // Weather shifts automatically once per 1-day game time (30 real minutes = 1,800s).
+  // Day cycle: 10 minutes morning (0..600s, 06:00 to 14:00), 20 minutes night (600..1800s, 14:00 to 06:00).
+  const WEATHER_1DAY_CYCLE_SEC = 1800; // 30 real minutes (1 full in-game day)
   let weatherStartedAt = hydrology.weatherState?.weatherStartedAt || Date.now();
-  let weatherDurationSec = hydrology.weatherState?.weatherDurationSec || 240; // ~4 minutes per weather pattern
+  let weatherDurationSec = hydrology.weatherState?.weatherDurationSec || WEATHER_1DAY_CYCLE_SEC;
+  // Upgrade old/legacy short weather durations (< 1800s) to 1800s (30 real minutes = 1 full day)
+  if (weatherDurationSec < WEATHER_1DAY_CYCLE_SEC) {
+    weatherDurationSec = WEATHER_1DAY_CYCLE_SEC;
+  }
+  let weatherDay = hydrology.weatherState?.weatherDay ?? currentDay;
   let ticksElapsed = (hydrology.weatherState?.ticksElapsed || 0) + 1;
   const elapsedWeatherSec = Math.max((Date.now() - weatherStartedAt) / 1000, ticksElapsed * dt);
 
-  // Auto-transition to next natural weather pattern when front duration expires
-  if (!isRainstormActive && elapsedWeatherSec >= weatherDurationSec) {
+  // Auto-transition to next natural weather pattern when 1-day duration expires (30 min) or when game day advances
+  const hasDayAdvanced = currentDay > weatherDay;
+  const hasDurationExpired = elapsedWeatherSec >= weatherDurationSec;
+
+  if (!isRainstormActive && (hasDayAdvanced || hasDurationExpired)) {
     let nextWeatherId = rollNextNaturalWeather(activeProfileId);
     // If Markov roll picked the same weather, cycle to another viable atmospheric neighbor
     if (nextWeatherId === activeProfileId) {
@@ -636,11 +639,12 @@ export function stepHydrologySimulation(params: {
 
     activeProfileId = nextWeatherId;
     weatherStartedAt = Date.now();
-    weatherDurationSec = 180 + Math.floor(Math.random() * 150); // 3 to 5.5 minutes
+    weatherDurationSec = WEATHER_1DAY_CYCLE_SEC; // Exactly 30 minutes (1 full in-game day)
+    weatherDay = currentDay;
     ticksElapsed = 0;
     const nextDef = WEATHER_PROFILES[nextWeatherId];
     notifications.push({
-      text: `🌤️ Dynamic Climate Shift: Atmospheric front transitioned into ${nextDef.emoji} ${nextDef.name}!`,
+      text: `🌤️ Day ${currentDay} Climate Front: Atmospheric front transitioned into ${nextDef.emoji} ${nextDef.name} (active for full 30-min day)!`,
       icon: nextDef.emoji,
       type: 'info',
     });
@@ -648,19 +652,27 @@ export function stepHydrologySimulation(params: {
 
   const weatherProfile = WEATHER_PROFILES[activeProfileId] || WEATHER_PROFILES.sunny;
 
+  // Diurnal temperature and humidity adjustment:
+  // Morning (10m, 0..600s): solar warming (+1°C)
+  // Night (20m, 600..1800s): night cooling (-3°C) and dew/condensation (+6% RH)
+  const isNightPhase = cycleElapsedSeconds >= 600;
+  const diurnalTempC = Math.round((weatherProfile.defaultTempC + (isNightPhase ? -3.0 : 1.0)) * 10) / 10;
+  const diurnalHumidityPct = Math.min(100, Math.max(10, Math.round(weatherProfile.defaultHumidityPct + (isNightPhase ? 6 : -2))));
+
   // Sync atmospheric weather state
   const currentAtmosphere: AtmosphericWeatherState = {
     ...(hydrology.weatherState || createDefaultWeatherState(activeProfileId)),
     currentWeather: activeProfileId,
     profileId: activeProfileId,
-    temperatureC: weatherProfile.defaultTempC,
-    relativeHumidityPct: weatherProfile.defaultHumidityPct,
+    temperatureC: diurnalTempC,
+    relativeHumidityPct: diurnalHumidityPct,
     precipitationInflowLPerMin: weatherProfile.precipitationInflowLPerMin,
     windSpeedKmH: weatherProfile.windSpeedKmH,
     cloudCoverPct: weatherProfile.cloudCoverPct,
     barometricPressureHPa: weatherProfile.barometricPressureHPa,
     weatherStartedAt,
     weatherDurationSec,
+    weatherDay,
     ticksElapsed,
   };
 

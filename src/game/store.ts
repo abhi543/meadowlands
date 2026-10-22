@@ -77,6 +77,12 @@ import {
   applyHarvestGasModifiers,
 } from '@/game/gasTickEngine';
 import {
+  type PastureWelfareState,
+  type FaunaWeatherEvaluation,
+  createDefaultPastureWelfare,
+  evaluateFaunaWeather,
+} from '@/game/faunaWeatherEngine';
+import {
   type ZoneEcosystemData,
   createDefaultZoneEcosystem,
   isZoneFishingPaused,
@@ -199,6 +205,11 @@ import {
   playTillSoilSound,
   playFloodWashSound,
   playBioDressingSound,
+  playAnimalDistressCall,
+  playAnimalContentedSound,
+  playMuckOutSound,
+  playLatchBarnDoorSound,
+  playCalmingHerbsSound,
 } from '@/lib/soundEffects';
 import {
   type OverclockTier,
@@ -435,6 +446,11 @@ export interface AnimalInstance {
   // Track B: Breeding Status (Decoupled & Independent)
   breedingCooldownExpiresAt?: number | null;
   breedingCooldownSec?: number;
+  // Environmental Weather & Welfare Status
+  weatherStress?: 'none' | 'heat_stressed' | 'freezing' | 'mud_soaked' | 'panicked';
+  weatherStressLabel?: string;
+  weatherMitigated?: boolean;
+  hasFootRot?: boolean;
 }
 
 export interface ProductionSlot {
@@ -852,10 +868,13 @@ export interface GameState {
   activeTrailRun: FrontierTrailRun | null;
 
   // Unified Estate Menagerie & Fauna Codex State
-  domesticTroughs: Record<AnimalSpecies, { foodUnits: number; maxUnits: number; isPaused?: boolean }>;
+  domesticTroughs: Record<AnimalSpecies, { foodUnits: number; maxUnits: number; isPaused?: boolean; isFrozen?: boolean }>;
   totalFaunaHarvests: number;
   faunaHarvestStats: Record<string, number>;
   isMenagerieModalOpen: boolean;
+
+  // Pasture Weather & Fauna Welfare System
+  pastureWelfare: PastureWelfareState;
 
   // Time
   lastTick: number;
@@ -960,6 +979,18 @@ export interface GameState {
   shooCrow: () => void;
   fulfillChefOrder: () => void;
   openSmugglerCrate: () => void;
+
+  // Pasture Climate & Fauna Welfare Actions
+  constructPastureShadeCanopy: () => boolean;
+  digMudWallowTrench: () => boolean;
+  digDrainageFurrows: () => boolean;
+  spreadDryStrawBedding: () => boolean;
+  buildElevatedPlatforms: () => boolean;
+  toggleBarnDoorsLatched: () => void;
+  muckOutPens: () => boolean;
+  feedCalmingHerbs: () => boolean;
+  thawFrozenTroughs: () => boolean;
+  repairBrokenFences: () => boolean;
 
   // Breeding
   breedAnimals: (parent1Id: string, parent2Id: string) => boolean;
@@ -1645,6 +1676,9 @@ export const useGameStore = create<GameState>()(
       totalFaunaHarvests: 0,
       faunaHarvestStats: {},
       isMenagerieModalOpen: false,
+
+      // Pasture Weather & Fauna Welfare System
+      pastureWelfare: createDefaultPastureWelfare(),
 
       habitatUpgradeSteps: { chicken: 0, cow: 0, sheep: 0, pig: 0 },
 
@@ -2512,6 +2546,26 @@ export const useGameStore = create<GameState>()(
         const animal = state.animals.find(a => a.id === animalId);
         if (!animal || animal.fed || animal.productReady) return;
 
+        const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: state.hydrology?.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: state.pastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: Boolean(state.barn?.thermal_retaining_core || (state.barn?.thermal_core || 0) > 0),
+          hasSiphonValve: Boolean(state.hydrology?.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0),
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
+        if (faunaEval.condition === 'storm' && !faunaEval.isMitigated) {
+          playAnimalDistressCall();
+          state.addNotification('⚡ Herd Panicked: Animals refuse to feed during unlatched severe storm! Latch barn doors or feed calming herbs.', '⚡⚠️', 'event');
+          return;
+        }
+
         const aOverclock = state.entityOverclocks?.[`animal_${animalId}`];
         const isExhausted = Boolean(
           (aOverclock?.isExhausted && aOverclock?.exhaustedUntil && Date.now() < aOverclock.exhaustedUntil) ||
@@ -2522,7 +2576,8 @@ export const useGameStore = create<GameState>()(
           return;
         }
 
-        const feedNeeded = ANIMALS[animal.species].feedPerCycle;
+        const baseFeedNeeded = ANIMALS[animal.species].feedPerCycle;
+        const feedNeeded = Math.max(1, Math.round(baseFeedNeeded * faunaEval.feedConsumptionMultiplier));
         if ((state.silo.feed || 0) < feedNeeded) return;
         const newSilo = { ...state.silo, feed: state.silo.feed - feedNeeded };
         const newAnimals = state.animals.map(a =>
@@ -2537,6 +2592,26 @@ export const useGameStore = create<GameState>()(
         if (!animal || !animal.productReady) return;
         if (animal.cyclesRemaining <= 0) return;
 
+        const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: state.hydrology?.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: state.pastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: Boolean(state.barn?.thermal_retaining_core || (state.barn?.thermal_core || 0) > 0),
+          hasSiphonValve: Boolean(state.hydrology?.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0),
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
+        if (faunaEval.isYieldFrozen) {
+          playAnimalDistressCall();
+          state.addNotification('❄️ Yield Frozen Solid: Sub-zero frost lockout! Animals need heating or thawed troughs to produce milk/eggs/wool.', '🥶', 'event');
+          return;
+        }
+
         // Use breed registry for breed-specific yields
         const breedDef = BREED_REGISTRY[animal.breedId];
         const speciesDef = ANIMALS[animal.species];
@@ -2546,17 +2621,25 @@ export const useGameStore = create<GameState>()(
         let additionalXp = 5;
         const newCodex = { ...state.codex };
 
-        // 1. Primary Product Yield + Overclock Bonus
+        // 1. Primary Product Yield + Overclock Bonus & Weather Modifier
         const aOverclock = state.entityOverclocks?.[`animal_${animalId}`];
         const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
+        const yieldMult = faunaEval.yieldMultiplier;
 
         if (breedDef) {
-          newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
-          state.registerHarvestFreshness(breedDef.primaryProductKey, breedDef.baseYieldAmount + bonusYield);
+          const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult)) + bonusYield;
+          newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + finalYield;
+          state.registerHarvestFreshness(breedDef.primaryProductKey, finalYield);
         } else {
           // Fallback to species default
-          newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
-          state.registerHarvestFreshness(speciesDef.product, speciesDef.productYield + bonusYield);
+          const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult)) + bonusYield;
+          newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + finalYield;
+          state.registerHarvestFreshness(speciesDef.product, finalYield);
+        }
+
+        // Animal Manure generation proc on harvest
+        if (faunaEval.manureRateMultiplier > 0 && Math.random() < (0.5 * faunaEval.manureRateMultiplier)) {
+          newBarn.manure = (newBarn.manure || 0) + 1;
         }
 
         // 2. Secondary Bonus Drop Procs
@@ -2614,6 +2697,7 @@ export const useGameStore = create<GameState>()(
         const newCyclesRemaining = animal.cyclesRemaining - 1;
         const isElder = newCyclesRemaining <= 0;
         const nowTime = Date.now();
+        playAnimalContentedSound();
         const newAnimals = state.animals.map(a =>
           a.id === animalId ? {
             ...a,
@@ -2646,6 +2730,27 @@ export const useGameStore = create<GameState>()(
         const state = get();
         let feedAvailable = state.silo.feed || 0;
         if (feedAvailable <= 0) return;
+
+        const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: state.hydrology?.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: state.pastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: Boolean(state.barn?.thermal_retaining_core || (state.barn?.thermal_core || 0) > 0),
+          hasSiphonValve: Boolean(state.hydrology?.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0),
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
+        if (faunaEval.condition === 'storm' && !faunaEval.isMitigated) {
+          playAnimalDistressCall();
+          state.addNotification('⚡ Herd Panicked: Animals refuse to feed during unlatched severe storm! Latch barn doors or feed calming herbs.', '⚡⚠️', 'event');
+          return;
+        }
+
         const now = Date.now();
         const newAnimals = state.animals.map(a => {
           // Skip if already fed, producing, elder, or exhausted
@@ -2655,7 +2760,8 @@ export const useGameStore = create<GameState>()(
             (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
           );
           if (a.fed || a.productReady || a.age === 'elder' || isExhausted) return a;
-          const feedNeeded = ANIMALS[a.species].feedPerCycle;
+          const baseFeedNeeded = ANIMALS[a.species].feedPerCycle;
+          const feedNeeded = Math.max(1, Math.round(baseFeedNeeded * faunaEval.feedConsumptionMultiplier));
           if (feedAvailable < feedNeeded) return a;
           feedAvailable -= feedNeeded;
           return { ...a, fed: true, fedAt: Date.now() };
@@ -2670,6 +2776,26 @@ export const useGameStore = create<GameState>()(
 
       collectAllProducts: () => {
         const state = get();
+        const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: state.hydrology?.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: state.pastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: Boolean(state.barn?.thermal_retaining_core || (state.barn?.thermal_core || 0) > 0),
+          hasSiphonValve: Boolean(state.hydrology?.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0),
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
+        if (faunaEval.isYieldFrozen) {
+          playAnimalDistressCall();
+          state.addNotification('❄️ Yield Frozen Solid: Sub-zero frost lockout! Animals need heating or thawed troughs to produce milk/eggs/wool.', '🥶', 'event');
+          return;
+        }
+
         const newBarn = { ...state.barn };
         let collectedCount = 0;
         let additionalCoins = 0;
@@ -2680,6 +2806,7 @@ export const useGameStore = create<GameState>()(
         let anyBurnout = false;
         let totalBonusYield = 0;
         const now = Date.now();
+        const yieldMult = faunaEval.yieldMultiplier;
 
         const newAnimals = state.animals.map(a => {
           if (!a.productReady || a.cyclesRemaining <= 0) return a;
@@ -2690,13 +2817,20 @@ export const useGameStore = create<GameState>()(
           const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
           totalBonusYield += bonusYield;
 
-          // 1. Primary Product Yield + Overclock Bonus
+          // 1. Primary Product Yield + Overclock Bonus & Weather Modifier
           if (breedDef) {
-            newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + breedDef.baseYieldAmount + bonusYield;
-            state.registerHarvestFreshness(breedDef.primaryProductKey, breedDef.baseYieldAmount + bonusYield);
+            const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult)) + bonusYield;
+            newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + finalYield;
+            state.registerHarvestFreshness(breedDef.primaryProductKey, finalYield);
           } else {
-            newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + speciesDef.productYield + bonusYield;
-            state.registerHarvestFreshness(speciesDef.product, speciesDef.productYield + bonusYield);
+            const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult)) + bonusYield;
+            newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + finalYield;
+            state.registerHarvestFreshness(speciesDef.product, finalYield);
+          }
+
+          // Manure generation on harvest
+          if (faunaEval.manureRateMultiplier > 0 && Math.random() < (0.5 * faunaEval.manureRateMultiplier)) {
+            newBarn.manure = (newBarn.manure || 0) + 1;
           }
 
           // 2. Secondary Bonus Drop Procs
@@ -2759,6 +2893,7 @@ export const useGameStore = create<GameState>()(
           };
         });
         if (collectedCount === 0) return;
+        playAnimalContentedSound();
         if (anyBurnout) {
           playDefeatSound();
           state.addNotification('⚠️ Animal Burnout: One or more animals exhausted from overdrive! Call Vet or rest.', '🛑', 'event');
@@ -5462,6 +5597,238 @@ export const useGameStore = create<GameState>()(
         });
       },
 
+      // Pasture Climate & Fauna Welfare Actions
+      constructPastureShadeCanopy: () => {
+        const state = get();
+        if (state.coins < 50) {
+          state.addNotification('Need 50 coins to construct pasture shade canopies!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playAnimalContentedSound();
+        set({
+          coins: state.coins - 50,
+          pastureWelfare: {
+            ...currentWelfare,
+            hasShadedCanopy: true,
+          },
+          isDirty: true,
+        });
+        state.addNotification('☀️ Pasture Shade Canopies Constructed! UV radiation deflected; herd cooled and yields protected.', '🛡️', 'discovery');
+        return true;
+      },
+
+      digMudWallowTrench: () => {
+        const state = get();
+        if (state.coins < 40) {
+          state.addNotification('Need 40 coins to dig mud wallow trench!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playTillSoilSound();
+        playAnimalContentedSound();
+        set({
+          coins: state.coins - 40,
+          pastureWelfare: {
+            ...currentWelfare,
+            hasMudWallow: true,
+          },
+          isDirty: true,
+        });
+        state.addNotification('💧 Mud Wallow Trench Excavated! Pigs and cattle enjoy evaporative cooling during heatwaves.', '🌊', 'discovery');
+        return true;
+      },
+
+      digDrainageFurrows: () => {
+        const state = get();
+        if (state.coins < 35) {
+          state.addNotification('Need 35 coins to dig perimeter drainage furrows!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playTillSoilSound();
+        set({
+          coins: state.coins - 35,
+          pastureWelfare: {
+            ...currentWelfare,
+            hasDrainageFurrows: true,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🌊 Perimeter Drainage Furrows Dug! Deluge rainwater diverted away from pens into lower cisterns.', '🛡️', 'discovery');
+        return true;
+      },
+
+      spreadDryStrawBedding: () => {
+        const state = get();
+        const hasFeed = (state.silo?.feed || 0) >= 5;
+        if (!hasFeed && state.coins < 25) {
+          state.addNotification('Need 5 Feed or 25 coins for dry straw bedding!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        const newAnimals = state.animals.map(a => ({ ...a, hasFootRot: false }));
+        playAnimalContentedSound();
+        set({
+          silo: hasFeed ? { ...state.silo, feed: state.silo.feed - 5 } : state.silo,
+          coins: hasFeed ? state.coins : state.coins - 25,
+          animals: newAnimals,
+          pastureWelfare: {
+            ...currentWelfare,
+            hasStrawBedding: true,
+            mudExposureSec: 0,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🌾 Dry Insulated Straw Bedding Spread! Thermal insulation restored and pasture sanitized.', '🌾', 'info');
+        return true;
+      },
+
+      buildElevatedPlatforms: () => {
+        const state = get();
+        if (state.coins < 60) {
+          state.addNotification('Need 60 coins to build elevated platforms!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playAnimalContentedSound();
+        set({
+          coins: state.coins - 60,
+          pastureWelfare: {
+            ...currentWelfare,
+            hasElevatedPlatforms: true,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🪵 Elevated Slatted Platforms Built! Livestock resting high and dry above mud slurry.', '🪵', 'discovery');
+        return true;
+      },
+
+      toggleBarnDoorsLatched: () => {
+        const state = get();
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        const willLatch = !currentWelfare.areBarnDoorsLatched;
+        playLatchBarnDoorSound();
+        set({
+          pastureWelfare: {
+            ...currentWelfare,
+            areBarnDoorsLatched: willLatch,
+          },
+          isDirty: true,
+        });
+        if (willLatch) {
+          state.addNotification('🚪 Barn Doors Latched & Secured! Herd sheltered indoors away from gale winds and lightning strikes.', '🔒', 'event');
+        } else {
+          state.addNotification('🚪 Barn Doors Unlatched! Free pasture grazing permitted.', '🔓', 'info');
+        }
+      },
+
+      muckOutPens: () => {
+        const state = get();
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playMuckOutSound();
+        const newBarn = { ...state.barn };
+        newBarn.organic_compost = (newBarn.organic_compost || 0) + 2;
+        newBarn.manure = (newBarn.manure || 0) + 1;
+        const newAnimals = state.animals.map(a => ({ ...a, hasFootRot: false }));
+        set({
+          barn: newBarn,
+          animals: newAnimals,
+          pastureWelfare: {
+            ...currentWelfare,
+            mudExposureSec: 0,
+            pensMuckedOutAt: Date.now(),
+          },
+          isDirty: true,
+        });
+        state.addNotification('🧹 Pens Mucked Out! Soiled slurry removed (+2 Compost, +1 Manure) and pens sanitized.', '✨', 'discovery');
+        return true;
+      },
+
+      feedCalmingHerbs: () => {
+        const state = get();
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        let doses = currentWelfare.calmingHerbsDoses || 0;
+        let costCoins = 0;
+        if (doses <= 0) {
+          if (state.coins < 20) {
+            state.addNotification('Need 20 coins to purchase Calming Herb bundle!', '⚠️', 'info');
+            return false;
+          }
+          costCoins = 20;
+          doses = 1;
+        }
+        playCalmingHerbsSound();
+        playAnimalContentedSound();
+        const newAnimals = state.animals.map(a => ({
+          ...a,
+          weatherStress: 'none' as const,
+          weatherStressLabel: 'Calmed by Herbal Mash',
+          weatherMitigated: true,
+        }));
+        set({
+          coins: state.coins - costCoins,
+          animals: newAnimals,
+          pastureWelfare: {
+            ...currentWelfare,
+            calmingHerbsDoses: Math.max(0, doses - 1),
+          },
+          isDirty: true,
+        });
+        state.addNotification('🌿 Calming Herbal Mash Administered! Chamomile & Lavender stabilize herd panic.', '🌿', 'info');
+        return true;
+      },
+
+      thawFrozenTroughs: () => {
+        const state = get();
+        if (state.coins < 15) {
+          state.addNotification('Need 15 coins to activate brazier/geothermal heaters!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        playAnimalContentedSound();
+        const updatedDomesticTroughs = { ...(state.domesticTroughs || {}) };
+        for (const sp of Object.keys(updatedDomesticTroughs) as AnimalSpecies[]) {
+          if (updatedDomesticTroughs[sp]) {
+            updatedDomesticTroughs[sp] = {
+              ...updatedDomesticTroughs[sp],
+              isFrozen: false,
+              isPaused: false,
+            };
+          }
+        }
+        set({
+          coins: state.coins - 15,
+          domesticTroughs: updatedDomesticTroughs,
+          pastureWelfare: {
+            ...currentWelfare,
+            troughThawedUntil: Date.now() + 600000, // 10 minutes thawed
+          },
+          isDirty: true,
+        });
+        state.addNotification('🔥 Geothermal / Brazier Heaters Activated! Water troughs thawed and flow restored for 10m.', '🔥', 'discovery');
+        return true;
+      },
+
+      repairBrokenFences: () => {
+        const state = get();
+        if (state.coins < 30) {
+          state.addNotification('Need 30 coins to repair broken pasture fence lines!', '⚠️', 'info');
+          return false;
+        }
+        const currentWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        set({
+          coins: state.coins - 30,
+          pastureWelfare: {
+            ...currentWelfare,
+            isFenceDamaged: false,
+          },
+          isDirty: true,
+        });
+        state.addNotification('🔨 Pasture Fence Reinforced! Perimeter integrity restored; escape risk eliminated.', '🛡️', 'info');
+        return true;
+      },
+
       // Breeding
       breedAnimals: (parent1Id, parent2Id) => {
         const state = get();
@@ -5470,6 +5837,26 @@ export const useGameStore = create<GameState>()(
         if (!parent1 || !parent2) return false;
         if (parent1.species !== parent2.species) return false;
         if (state.activeBreedings.length >= state.breedingSlots) return false;
+
+        const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
+        const sanctuaryBuffs = state.prehistoricSanctuary || createDefaultSanctuary();
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: state.hydrology?.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: state.pastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: Boolean(state.barn?.thermal_retaining_core || (state.barn?.thermal_core || 0) > 0),
+          hasSiphonValve: Boolean(state.hydrology?.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0),
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
+        if (faunaEval.isBreedingPaused) {
+          playAnimalDistressCall();
+          state.addNotification(`⚠️ Breeding Halted: Animal stress from ${faunaEval.conditionName} pauses reproductive cycles!`, '🛑', 'event');
+          return false;
+        }
 
         const now = Date.now();
         // Check breeding cooldown on parents
@@ -7996,6 +8383,21 @@ export const useGameStore = create<GameState>()(
         const rainBoost = state.activeEvent?.type === 'rainstorm' ? 0.5 : 0;
         const activeWeatherId: WeatherProfileId = resolveWeatherProfileId(hydroSimResult.updatedHydrology.weatherCondition);
 
+        const currentPastureWelfare = state.pastureWelfare || createDefaultPastureWelfare();
+        const hasThermalCoreMount = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
+        const hasSiphonValveMount = Boolean(effectiveHydrology.isSiphonActive || (state.barn?.aquifer_siphon_valve || 0) > 0);
+        const faunaEval = evaluateFaunaWeather({
+          activeWeatherId,
+          temperatureC: hydroSimResult.updatedHydrology.weatherState?.temperatureC ?? 20,
+          isRainstormActive: state.activeEvent?.type === 'rainstorm',
+          pastureWelfare: currentPastureWelfare,
+          sanctuary: sanctuaryBuffs,
+          hasThermalCore: hasThermalCoreMount,
+          hasSiphonValve: hasSiphonValveMount,
+          farmLevel: state.level,
+          isHardcoreMode: Boolean(state.isHardcoreMode),
+        });
+
         const newPlots = hydroSimResult.updatedPlots.map((p: any) => {
           const pLevel = p.level || 1;
           const hasThermalCore = Boolean(workshopLoadout.thermalCoreActive || (state.barn?.thermal_retaining_core || 0) > 0);
@@ -8022,7 +8424,7 @@ export const useGameStore = create<GameState>()(
             {
               activeWeatherId,
               isRainstormActive: state.activeEvent?.type === 'rainstorm',
-              hasAnimalsOrCompost: (state.animals && state.animals.length > 0) || ((state.barn?.organic_compost || 0) + (state.barn?.compost || 0) + (state.barn?.manure || 0)) > 0,
+              hasAnimalsOrCompost: Boolean((state.animals && state.animals.length > 0 && faunaEval.co2CanopyActive) || ((state.barn?.organic_compost || 0) + (state.barn?.compost || 0) + (state.barn?.manure || 0)) > 0),
               deltaSeconds,
             }
           );
@@ -8255,12 +8657,20 @@ export const useGameStore = create<GameState>()(
         const isExtremeWeather = activeWeatherId === 'supercell_deluge' || activeWeatherId === 'plasma_firestorm' || activeWeatherId === 'polar_vortex' || activeWeatherId === 'hyper_cyclone' || activeWeatherId === 'alchemical_monsoon' || activeWeatherId === 'haboob_sandstorm' || Boolean(hydroSimResult.updatedHydrology.isFlashFloodActive) || (state.isHardcoreMode && (activeWeatherId === 'heatwave' || activeWeatherId === 'monsoon' || activeWeatherId === 'cyclone' || activeWeatherId === 'drought'));
         for (const sp of dSpeciesList) {
           const activeProducers = state.animals.filter(a => a.species === sp && a.fed && !a.productReady).length;
-          if (activeProducers > 0) {
-            const tr = updatedDomesticTroughs[sp] || { foodUnits: 0, maxUnits: 100 };
-            const drain = (state.isHardcoreMode && isExtremeWeather ? 0.10 : state.isHardcoreMode ? 0.08 : 0.05) * activeProducers;
+          const tr = updatedDomesticTroughs[sp] || { foodUnits: 0, maxUnits: 100 };
+          if (faunaEval.isTroughFrozen) {
+            updatedDomesticTroughs[sp] = {
+              ...tr,
+              isFrozen: true,
+              isPaused: true,
+            };
+          } else {
+            const drainRate = (state.isHardcoreMode && isExtremeWeather ? 0.10 : state.isHardcoreMode ? 0.08 : 0.05) * faunaEval.waterConsumptionMultiplier;
+            const drain = activeProducers > 0 ? drainRate * activeProducers : (faunaEval.waterConsumptionMultiplier > 1.5 ? 0.02 * faunaEval.waterConsumptionMultiplier : 0);
             updatedDomesticTroughs[sp] = {
               ...tr,
               foodUnits: Math.max(0, tr.foodUnits - drain),
+              isFrozen: false,
               isPaused: tr.foodUnits <= 0,
             };
             if (state.isHardcoreMode && tr.foodUnits <= 0 && Math.random() < 0.02) {
@@ -8269,8 +8679,41 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Update animal production (with Overclocking, Mutation & Trough modifiers)
-        let newAnimals = state.animals.map(a => {
+        // Welfare Mud & Storm Fence tracking
+        let updatedMudSec = currentPastureWelfare.mudExposureSec || 0;
+        if (faunaEval.condition === 'rain' && !faunaEval.isMitigated) {
+          updatedMudSec += deltaSeconds;
+          if (updatedMudSec >= 60 && (currentPastureWelfare.mudExposureSec || 0) < 60) {
+            state.addNotification('🐾 Moisture Hazard: 60s in deep mud slurry! Livestock developing foot rot. Muck out pens or build elevated platforms!', '🐾⚠️', 'event');
+            playAnimalDistressCall();
+          }
+        } else if (faunaEval.condition !== 'rain') {
+          updatedMudSec = Math.max(0, updatedMudSec - deltaSeconds * 0.5);
+        }
+
+        let fenceBroken = Boolean(currentPastureWelfare.isFenceDamaged);
+        if (faunaEval.condition === 'storm' && !faunaEval.isMitigated && !fenceBroken) {
+          if (Math.random() < 0.005 * deltaSeconds) {
+            fenceBroken = true;
+            state.addNotification('⚡ Fence Line Fractured! Panicked livestock rammed wooden fence in gale! Repair immediately to prevent escape.', '🔨⚠️', 'event');
+            playAnimalDistressCall();
+          }
+        }
+
+        const updatedPastureWelfare: PastureWelfareState = {
+          ...currentPastureWelfare,
+          mudExposureSec: updatedMudSec,
+          isFenceDamaged: fenceBroken,
+        };
+
+        // Update animal production (with Overclocking, Mutation, Weather & Trough modifiers)
+        let newAnimals: AnimalInstance[] = state.animals.map((a): AnimalInstance => {
+          const stressState: AnimalInstance['weatherStress'] = faunaEval.behavioralState === 'panting' ? 'heat_stressed'
+            : faunaEval.behavioralState === 'shivering' ? 'freezing'
+            : faunaEval.behavioralState === 'mud_soaked' ? 'mud_soaked'
+            : faunaEval.behavioralState === 'panicked' ? 'panicked' : 'none';
+          const isFootRot = Boolean(a.hasFootRot || (faunaEval.condition === 'rain' && !faunaEval.isMitigated && updatedMudSec >= 60));
+
           if (a.fed && a.fedAt && !a.productReady) {
             const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
             const isAnimalExhausted = Boolean(
@@ -8278,13 +8721,19 @@ export const useGameStore = create<GameState>()(
               (a.isExhausted && a.exhaustedUntil && now < a.exhaustedUntil)
             );
             if (isAnimalExhausted) {
-              return a; // Production halted during exhaustion
+              return {
+                ...a,
+                weatherStress: stressState,
+                weatherStressLabel: faunaEval.statusBadge.text,
+                weatherMitigated: faunaEval.isMitigated,
+                hasFootRot: isFootRot,
+              };
             }
 
             // Trough Comfort Buff: full communal troughs grant +25% speed bonus!
-            // When trough is empty, animals still produce at normal speed (or -15% in hardcore mode)
+            // When trough is empty or frozen, animals lose comfort speed bonus
             const tr = updatedDomesticTroughs[a.species];
-            const hasTroughFood = tr && tr.foodUnits > 0;
+            const hasTroughFood = tr && tr.foodUnits > 0 && !tr.isFrozen;
             const troughSpeedMultiplier = hasTroughFood ? 1.25 : (state.isHardcoreMode ? 0.85 : 1.0);
 
             const isOverclocked = Boolean(
@@ -8294,9 +8743,14 @@ export const useGameStore = create<GameState>()(
             const overclockMultiplier = aOverclock?.isOverclocked ? aOverclock.speedMultiplier : (isOverclocked ? 3.0 : 1.0);
             const mutationMultiplier = a.isMutated ? (a.mutationBonus || 1.5) : 1.0;
 
+            // Environmental Weather Yield & Speed Halt:
+            // Frost Snap: 0% yield (freezes solid)
+            // Gale Storm panic: halts production entirely
+            const weatherYieldSpeed = (faunaEval.isYieldFrozen || (faunaEval.condition === 'storm' && !faunaEval.isMitigated)) ? 0.0 : 1.0;
+
             // Sanitize fedAt: if fedAt was previously pushed into the future by the bug, clamp it to now
             const safeFedAt = Math.min(a.fedAt, now);
-            const elapsed = ((now - safeFedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier * troughSpeedMultiplier;
+            const elapsed = ((now - safeFedAt) / 1000) * overclockMultiplier * mutationMultiplier * weatherMultiplier * troughSpeedMultiplier * weatherYieldSpeed;
 
             // Use breed-specific production time from BREED_REGISTRY if available
             const breedDef = BREED_REGISTRY[a.breedId];
@@ -8306,16 +8760,28 @@ export const useGameStore = create<GameState>()(
                 ...a,
                 productReady: true,
                 fedAt: safeFedAt,
+                weatherStress: stressState,
+                weatherStressLabel: faunaEval.statusBadge.text,
+                weatherMitigated: faunaEval.isMitigated,
+                hasFootRot: isFootRot,
               };
             }
-            if (safeFedAt !== a.fedAt) {
-              return {
-                ...a,
-                fedAt: safeFedAt,
-              };
-            }
+            return {
+              ...a,
+              fedAt: safeFedAt,
+              weatherStress: stressState,
+              weatherStressLabel: faunaEval.statusBadge.text,
+              weatherMitigated: faunaEval.isMitigated,
+              hasFootRot: isFootRot,
+            };
           }
-          return a;
+          return {
+            ...a,
+            weatherStress: stressState,
+            weatherStressLabel: faunaEval.statusBadge.text,
+            weatherMitigated: faunaEval.isMitigated,
+            hasFootRot: isFootRot,
+          };
         });
 
         // Update production queues (with Artisan Masterclass, Master Ledger, and Overclocking modifiers)
@@ -8365,6 +8831,17 @@ export const useGameStore = create<GameState>()(
             newSilo.honey_comb = (newSilo.honey_comb || 0) + stranded;
           }
           delete (newBarn as Record<string, number>).honey_comb;
+        }
+
+        // Periodic Manure Generation from comfortable herd
+        const lastManure = currentPastureWelfare.lastManureGenerationAt || 0;
+        if (now - lastManure >= 60000) {
+          updatedPastureWelfare.lastManureGenerationAt = now;
+          const healthyAnimals = state.animals.filter(a => !a.hasFootRot && a.weatherStress !== 'panicked' && a.weatherStress !== 'freezing').length;
+          if (healthyAnimals > 0 && faunaEval.manureRateMultiplier > 0) {
+            const manureGenerated = Math.max(1, Math.floor(healthyAnimals * 0.25 * faunaEval.manureRateMultiplier));
+            newBarn.manure = (newBarn.manure || 0) + manureGenerated;
+          }
         }
         let newGems = state.gems;
         let newCodex = { ...state.codex };
@@ -9741,6 +10218,7 @@ export const useGameStore = create<GameState>()(
           plots: newPlots,
           animals: newAnimals,
           domesticTroughs: updatedDomesticTroughs,
+          pastureWelfare: updatedPastureWelfare,
           productionQueues: newQueues,
           barn: newBarn,
           silo: newSilo,
@@ -11123,7 +11601,10 @@ export const useGameStore = create<GameState>()(
         const profileId = resolveWeatherProfileId(weather);
         const profileDef = WEATHER_PROFILES[profileId] || WEATHER_PROFILES.sunny;
         const currentHydro = state.hydrology || createDefaultHydrologyState(state.level);
+        const clock = getCircadianClock(Date.now(), state.farmEpochStart || Date.now());
         const newAtmosphere = createDefaultWeatherState(profileId);
+        newAtmosphere.weatherDay = clock.currentDay;
+        newAtmosphere.weatherDurationSec = 1800; // 30 minutes (1 full in-game day: 10m morning, 20m night)
         set({
           hydrology: {
             ...currentHydro,
@@ -11135,7 +11616,7 @@ export const useGameStore = create<GameState>()(
           },
           isDirty: true,
         });
-        state.addNotification(`Atmospheric Conditions Shifted: ${profileDef.emoji} ${profileDef.name} active.`, profileDef.emoji, 'info');
+        state.addNotification(`Atmospheric Conditions Shifted: ${profileDef.emoji} ${profileDef.name} active for Day ${clock.currentDay} (30m front).`, profileDef.emoji, 'info');
       },
 
       toggleEmergencySpillway: () => {
@@ -13326,6 +13807,18 @@ export const useGameStore = create<GameState>()(
             ...p,
             gases: p.gases || createDefaultPlotGases(),
           }));
+        }
+
+        // Migration: 1-Day Weather System (30 real minutes = 1,800s: 10m morning, 20m night)
+        if (merged.hydrology?.weatherState) {
+          if ((merged.hydrology.weatherState.weatherDurationSec || 0) < 1800) {
+            merged.hydrology.weatherState.weatherDurationSec = 1800;
+          }
+        }
+
+        // Migration: Pasture Weather & Fauna Welfare System
+        if (!merged.pastureWelfare) {
+          merged.pastureWelfare = createDefaultPastureWelfare();
         }
 
         return merged as GameState;

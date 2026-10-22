@@ -529,6 +529,8 @@ export const WEATHER_PROFILES: Record<WeatherProfileId, WeatherProfileDef> = {
 
 
 // --- Multi-Variable Atmospheric Weather State ---
+export const WEATHER_DAY_CYCLE_SEC = 1800; // 30 real minutes (1 full in-game day: 10m morning, 20m night)
+
 export interface AtmosphericWeatherState {
   currentWeather: WeatherProfileId;
   profileId?: WeatherProfileId;
@@ -540,6 +542,7 @@ export interface AtmosphericWeatherState {
   barometricPressureHPa: number;
   weatherStartedAt: number;
   weatherDurationSec: number;
+  weatherDay?: number; // In-game day that this weather front corresponds to
   isManualOverride: boolean;
   lightningStrikesCount: number;
   lastLightningFlash: number | null;
@@ -560,7 +563,8 @@ export function createDefaultWeatherState(initialWeather: WeatherProfileId = 'su
     cloudCoverPct: def.cloudCoverPct,
     barometricPressureHPa: def.barometricPressureHPa,
     weatherStartedAt: Date.now(),
-    weatherDurationSec: 600, // 10 minutes per natural weather phase
+    weatherDurationSec: WEATHER_DAY_CYCLE_SEC, // 30 minutes (1 full in-game day: 10m morning, 20m night)
+    weatherDay: 1,
     isManualOverride: false,
     lightningStrikesCount: 0,
     lastLightningFlash: null,
@@ -1029,15 +1033,12 @@ export function calculateThermodynamicEvaporationRatePctPerMin(params: {
 } {
   const { temperatureC, relativeHumidityPct, cycleElapsedSeconds, canalTier } = params;
 
-  // 1. Diurnal Baseline (cycle: 0..600s Morning, 600..1200s Twilight, 1200..1800s Night)
+  // 1. Diurnal Baseline (30m Game Day: 0..600s Morning [10m], 600..1800s Night [20m])
   let eBase = 2.5;
   let diurnalPhase = 'Morning Shift';
-  if (cycleElapsedSeconds >= 1200) {
-    eBase = 0.4;
-    diurnalPhase = 'Night Watch';
-  } else if (cycleElapsedSeconds >= 600) {
-    eBase = 1.5;
-    diurnalPhase = 'Twilight Gap';
+  if (cycleElapsedSeconds >= 600) {
+    eBase = 0.5;
+    diurnalPhase = 'Night Rest';
   }
 
   // 2. Thermal Scaling: (1 + (T - 20) / 25)

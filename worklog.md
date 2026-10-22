@@ -278,5 +278,102 @@ Work Log:
 Stage Summary:
 - Complete update of the Game Design Guide and in-game agronomy guide with dynamic three-gas balance ecosystem rules, clean color-coded percentage bars, and pre-plant stamp tactical feedback.
 
+---
+Task ID: 15
+Agent: Main Agent
+Task: 1-Day Weather Cycle Architecture (30 Real Minutes: 10m Morning & 20m Night)
+
+Work Log:
+- Updated `src/game/weatherEngine.ts`:
+  - Defined `WEATHER_DAY_CYCLE_SEC = 1800` (30 real minutes per 1-day cycle).
+  - Added `weatherDay?: number` tracking to `AtmosphericWeatherState`.
+  - Updated `createDefaultWeatherState` to initialize `weatherDurationSec: 1800` (30 minutes).
+  - Aligned `calculateThermodynamicEvaporationRatePctPerMin` diurnal baseline to the 30-minute day cycle: 10m Morning Shift (0..600s, `eBase = 2.5%`) and 20m Night Rest (600..1800s, `eBase = 0.5%`).
+- Updated `src/game/hydrologyEngine.ts`:
+  - Replaced 3 to 5.5 minute weather fronts with full 1-day game time (30 real minutes = 1,800s).
+  - Added auto-migration to upgrade any legacy short durations (< 1800s) to 1800s on the fly.
+  - Linked daily weather progression with circadian clock boundaries (`currentDay > weatherDay` or `elapsedWeatherSec >= 1800`).
+  - Added diurnal temperature and humidity adjustments: morning (0..600s) solar warming (+1.0°C) and nighttime (600..1800s) cooling (-3.0°C) with dew/condensation (+6% RH).
+  - Aligned `getDiurnalEvaporationRatePctPerMin` to the 10m Morning / 20m Night cycle.
+  - Updated notifications to announce day-long weather fronts: `🌤️ Day X Climate Front: Atmospheric front transitioned into [Weather] (active for full 30-min day)!`.
+- Updated `src/game/store.ts`:
+  - Updated `setHydrologyWeather` to assign `weatherDurationSec = 1800` and `weatherDay = clock.currentDay`.
+  - Added migration logic in store rehydration to normalize existing saves to 1,800s.
+- Updated `src/components/game/FarmGrid.tsx`:
+  - Connected `getCircadianClock` and `farmEpochStart` to the Environmental Weather banner.
+  - Added live Day telemetry badge (`📅 Day X Weather · ☀️ Morning (10m) / 🌙 Night (20m)`).
+  - Added dynamic real-time countdown badge (`⏳ MM:SS left in Day`) showing remaining time before the next daily climate front.
+- Updated documentation in `docs/DYNAMIC_GAS_ECOSYSTEM_DESIGN_GUIDE.md` and in-game agronomy guide (`src/components/game/GuidePanel.tsx`) detailing the 30-minute 1-day weather architecture.
+- Verified TypeScript type checking (`npx tsc --noEmit`) passes with 0 errors.
+- Verified Next.js Turbopack production build (`npm run build`) succeeds cleanly with 0 errors.
+
+Stage Summary:
+- Successfully migrated the weather system from temporary 3–5 minute intervals to lasting a full 1-day game time (30 real minutes, structured as 10m morning and 20m night) with live day-long countdown telemetry and diurnal thermodynamic calibration.
+
+---
+
+### Task 16: Connect Environmental Weather Engine to Livestock & Sanctuary Fauna
+
+Status: Completed
+Date: 2026-10-21
+
+Task Details:
+- Integrated global environmental weather states directly into the livestock and sanctuary creature simulation loop.
+- Dynamic Weather States & Animal Impact Rules:
+  - **Heatwave / Extreme Aridity**:
+    - Heavy panting, lethargy, refusal to graze open pastures.
+    - Water consumption increases to 2.5x standard baseline (troughs deplete rapidly).
+    - Feed consumption drops by 30%.
+    - Milk, egg, and wool yields decrease by 40%.
+    - Manure generation drops by 50% (severely choking the farm's Nitrogen compost supply).
+    - Mitigations: Shaded canopies, evaporative mud wallow trench, deep-aquifer siphon, Woolly Mammoth heat relief aura.
+  - **Frost Snap / Cold Front / Blizzard**:
+    - Shivering, herd huddling, refusal to move outdoors.
+    - Feed consumption increases by +40% (caloric burn spikes to maintain core body temp).
+    - Water troughs freeze solid (`isFrozen: true`), locking animals out of hydration.
+    - Milk, egg, and wool production freezes completely (0% yield, energy diverted to survival).
+    - Mitigations: Insulated dry straw bedding, Dimetrodon heat-sail radiator aura, thermal heat cores, brazier/geothermal thawed troughs.
+  - **Torrential Rain / Monsoon Downpour**:
+    - Seeking dry elevated ground, enclosure floors convert to deep mud slurry.
+    - Moisture hazard: >60 seconds of unmitigated mud exposure triggers foot rot (`hasFootRot`).
+    - Breeding timers, egg incubation, and fleece growth pause due to stress.
+    - Soiled bedding prevents manure collection until mucked out.
+    - Mitigations: Perimeter drainage furrows, elevated slatted platforms, mucking out pens (+2 Compost, +1 Manure, cures foot rot).
+  - **Gale-Force Winds / Severe Thunderstorms**:
+    - Herd panic, agitation, frantic pacing, bolt/stampede behaviors.
+    - Animals stop feeding and resting entirely during active storms.
+    - Panicked large creatures risk breaking wooden fence lines (`isFenceDamaged`).
+    - Animals retreat indoors, removing their passive +40% CO2 breathing canopy from outdoor crop borders.
+    - Reproductive and yield cycles halted.
+    - Mitigations: Cedar windbreak / stone boundary walls (Farm Level 4+), barn doors latched shut, calming herbal mash (Lavender/Chamomile).
+  - **Prehistoric Sanctuary Integration**:
+    - Dimetrodon: Geothermal Radiance Sail provides passive estate heating aura against frost snap/freezing.
+    - Woolly Mammoth: Glacial Paddock aura dampens extreme heatwave thermal penalties.
+- Implementation:
+  - Created `src/game/faunaWeatherEngine.ts` containing `evaluateFaunaWeather`, `createDefaultPastureWelfare`, and type definitions (`PastureWelfareState`, `FaunaWeatherEvaluation`, `FaunaClimateCondition`).
+  - Added Web Audio synthesizers in `src/lib/soundEffects.ts`: `playAnimalDistressCall()`, `playAnimalContentedSound()`, `playMuckOutSound()`, `playLatchBarnDoorSound()`, `playCalmingHerbsSound()`.
+  - Updated `src/game/store.ts`:
+    - Added welfare tracking to `AnimalInstance`: `weatherStress`, `weatherStressLabel`, `weatherMitigated`, `hasFootRot`.
+    - Added `pastureWelfare: PastureWelfareState` to `GameState` and rehydration migration.
+    - Implemented 10 welfare player actions: `constructPastureShadeCanopy`, `digMudWallowTrench`, `digDrainageFurrows`, `spreadDryStrawBedding`, `buildElevatedPlatforms`, `toggleBarnDoorsLatched`, `muckOutPens`, `feedCalmingHerbs`, `thawFrozenTroughs`, `repairBrokenFences`.
+    - Updated `feedAnimal`, `feedAllAnimals`, `collectProduct`, `collectAllProducts` with weather modifiers, storm panic feed halts, frost yield halts, and manure procs.
+    - Updated `tick()`:
+      - Linked `faunaEval` directly into plot gas simulation (`hasAnimalsOrCompost` toggles CO2 breathing canopy off when herds retreat indoors during storm panic).
+      - Applied weather water consumption multipliers to `domesticTroughs` (2.5x heatwave drain, frost freeze lockout).
+      - Tracked mud exposure seconds and foot rot risk.
+      - Tracked storm fence damage rolls.
+      - Periodic healthy herd manure generation directly into barn nitrogen supply.
+  - Updated `src/components/game/AnimalsTab.tsx`:
+    - Added **Pasture Climate & Shelter Controls Bar** with live weather status badge, mitigation indicators, fence damage warning, and interactive action buttons.
+    - Added expandable **Shelter Infrastructure Drawer** for permanent installations.
+    - Added visual animations (panting pulse, shivering wobble, panic bounce) and status badges to animal cards.
+    - Added **Animal Environmental Welfare Inspection Modal** displaying metabolic gauges, consumption shifts, yield impacts, and active mitigations.
+  - Updated `src/components/game/FarmGrid.tsx`:
+    - Integrated live fauna climate welfare status badge into the Farm Animals summary widget with 1-click navigation to pastures.
+- Validation:
+  - TypeScript compilation (`npx tsc --noEmit`) passes with 0 errors.
+  - Production build (`npm run build`) passes cleanly with 0 errors.
+
+
 
 

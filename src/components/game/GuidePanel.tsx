@@ -608,6 +608,45 @@ function FarmGuide() {
         </div>
       </div>
 
+      {/* 5. Atmospheric Weather System: 1-Day Regional Climate Fronts (30m Game Time) */}
+      <div className="bg-gradient-to-r from-sky-950/20 via-blue-950/20 to-indigo-950/20 border border-sky-400/40 rounded-xl p-3 text-xs space-y-2">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🌤️</span>
+            <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100">
+              Atmospheric Weather System: 1-Day Regional Climate Fronts (30m Game Time)
+            </h5>
+          </div>
+          <span className="text-[10px] bg-sky-950 text-sky-300 font-mono px-2 py-0.5 rounded-full border border-sky-500/40">
+            30-Min Weather Cadence
+          </span>
+        </div>
+        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+          Weather fronts now persist for an entire <strong>1-day game time = 30 real minutes</strong> (1,800 seconds). Each in-game day rolls a sustained regional climate pattern featuring natural diurnal day/night variations:
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+          <div className="p-2.5 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+              <span>☀️</span> Morning Phase (10 Real Minutes · 06:00 – 14:00):
+            </span>
+            <p className="mt-1 text-stone-600 dark:text-stone-300">
+              High midday sun with warmer temperatures (+1.0°C boost) and standard solar evaporation (2.5%/min). All field workers actively till, plant, water, and process goods.
+            </p>
+          </div>
+          <div className="p-2.5 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
+              <span>🌙</span> Night Phase (20 Real Minutes · 14:00 – 06:00):
+            </span>
+            <p className="mt-1 text-stone-600 dark:text-stone-300">
+              Atmospheric cooling (-3.0°C drop) with nighttime dew condensation (+6% RH) that slows soil evaporation to 0.5%/min while workers rest in the Bunkhouse.
+            </p>
+          </div>
+        </div>
+        <div className="text-[11px] text-sky-700 dark:text-sky-300 bg-sky-500/10 p-2 rounded-lg border border-sky-400/30">
+          💡 <strong>Crop Planning:</strong> Because the daily climate front is active for the full 30-minute day, you can reliably sow sun-loving crops during heatwaves or frost-hardy roots during cold fronts with total confidence!
+        </div>
+      </div>
+
       {/* Crop table */}
       <div>
         <h5 className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-gray-400 mb-1.5">

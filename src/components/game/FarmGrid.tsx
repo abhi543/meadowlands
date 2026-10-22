@@ -13,6 +13,8 @@ import {
   getEstateWeatherModifier,
   type WeatherProfileId,
 } from '@/game/weatherEngine';
+import { evaluateFaunaWeather } from '@/game/faunaWeatherEngine';
+import { getCircadianClock } from '@/game/shiftEngine';
 import {
   CROP_NUTRIENT_PROFILES,
   isBatteryChargedForCrop,
@@ -66,6 +68,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     clearWitheredCrop,
     animals = [],
     livestockReserve = [],
+    farmEpochStart,
+    level,
+    pastureWelfare,
+    prehistoricSanctuary,
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [hoveredCropId, setHoveredCropId] = useState<CropId | null>(null);
@@ -142,6 +148,24 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const weatherState = hydrology?.weatherState;
   const tempC = weatherState?.temperatureC ?? activeProfile.defaultTempC;
   const humidityPct = weatherState?.relativeHumidityPct ?? activeProfile.defaultHumidityPct;
+
+  const faunaEval = evaluateFaunaWeather({
+    activeWeatherId,
+    temperatureC: tempC,
+    isRainstormActive: false,
+    pastureWelfare,
+    sanctuary: prehistoricSanctuary,
+    hasThermalCore: false,
+    hasSiphonValve: Boolean(hydrology?.isSiphonActive),
+    farmLevel: level,
+  });
+
+  // 1-Day Weather Timing (30 real minutes per day: 10m morning, 20m night)
+  const clock = getCircadianClock(Date.now(), farmEpochStart || Date.now());
+  const dayRemainingSec = Math.max(0, 1800 - clock.cycleElapsedSeconds);
+  const dayRemainingMin = Math.floor(dayRemainingSec / 60);
+  const dayRemainingSecFormatted = `${dayRemainingMin}:${(dayRemainingSec % 60).toString().padStart(2, '0')}`;
+  const isMorningPhase = clock.activeShift === 'morning';
 
   // Estate-wide atmospheric gas metrics (Consolidated for all plots)
   const plotsWithGases = visiblePlots.filter(p => p.gases);
@@ -260,6 +284,22 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             </p>
           </div>
         </div>
+
+        {/* 1-Day Weather Front Telemetry Badge & Remaining Time */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-white flex items-center gap-1.5 shadow-inner">
+            <span>📅</span>
+            <span>Day {clock.currentDay} Weather</span>
+            <span className="opacity-50">•</span>
+            <span className={isMorningPhase ? 'text-amber-300' : 'text-indigo-300 font-semibold'}>
+              {isMorningPhase ? '☀️ Morning (10m)' : '🌙 Night (20m)'}
+            </span>
+          </span>
+          <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-amber-300 flex items-center gap-1 shadow-inner" title="Time remaining before next daily weather front transition">
+            <span>⏳</span>
+            <span>{dayRemainingSecFormatted} left</span>
+          </span>
+        </div>
       </div>
       {/* Flash Flood Crisis Warning Banner */}
       {hydrology?.isFlashFloodActive && (
@@ -342,6 +382,18 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 <span className="inline-flex items-center gap-1 font-semibold text-sky-600 dark:text-sky-400 bg-sky-100/80 dark:bg-sky-950/60 px-2 py-0.5 rounded border border-sky-300 dark:border-sky-800 text-[11px]">
                   🫗 {hungryCount} hungry
                 </span>
+              )}
+
+              {/* Fauna Environmental Climate Status Tag */}
+              {faunaEval && faunaEval.condition !== 'mild' && (
+                <button
+                  onClick={() => onSelectTab?.('animals')}
+                  className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded border text-[11px] shadow-2xs cursor-pointer hover:brightness-105 ${faunaEval.statusBadge.color}`}
+                  title={faunaEval.statusBadge.tooltip}
+                >
+                  <span>{faunaEval.statusBadge.emoji}</span>
+                  <span className="truncate max-w-[170px]">{faunaEval.statusBadge.text.split('|')[0].trim()}</span>
+                </button>
               )}
             </div>
           </div>
