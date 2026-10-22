@@ -919,6 +919,8 @@ export interface GameState {
   applyLiquidNitrogenToAllPlots: () => number;
   pipeBiogasCo2ToCanopy: () => boolean;
   feedChaffToDigester: (chaffCount?: number) => boolean;
+  injectBioOxygenToPlots: () => number;
+  aerateFisheryZoneWithOxygen: () => boolean;
 
   // Time
   lastTick: number;
@@ -6333,9 +6335,12 @@ export const useGameStore = create<GameState>()(
 
         playDigesterDistillSound();
         currentSilo.chaff -= chaffCount;
-        // 1 chaff = 3L organic carbonaceous biomass
+        // 1 chaff = 3L organic carbonaceous biomass + generates purified Bio-Oxygen (O2)
         const addedLiters = Math.min(chaffCount * 3.0, availableSpace);
         currentGasLab.digesterCurrentLiters = Number((currentGasLab.digesterCurrentLiters + addedLiters).toFixed(2));
+        currentGasLab.chaffBiomassSubstrateLiters = (currentGasLab.chaffBiomassSubstrateLiters || 0) + addedLiters;
+        const oxygenGenerated = Math.round(chaffCount * 6); // 10 chaff yields +60L Bio-Oxygen!
+        currentGasLab.storedOxygen = (currentGasLab.storedOxygen || 0) + oxygenGenerated;
 
         set({
           silo: currentSilo,
@@ -6344,8 +6349,92 @@ export const useGameStore = create<GameState>()(
         });
 
         state.addNotification(
-          `🌾 Fed ${chaffCount}x Crop Chaff into Anaerobic Digester! (+${Math.round(addedLiters)}L Organic Biomass Substrate)`,
-          '🌾',
+          `🌾 Mixed ${chaffCount}x Chaff with Slurry in Digester! Generated +${oxygenGenerated}L Bio-Oxygen (O₂) & added +${Math.round(addedLiters)}L Organic Substrate.`,
+          '🫧',
+          'discovery'
+        );
+        return true;
+      },
+
+      injectBioOxygenToPlots: () => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        if ((currentGasLab.storedOxygen || 0) < 30) {
+          state.addNotification('Need at least 30L Bio-Oxygen (O₂) in Gas Lab! Mix slurry with chaff in the digester first.', '⚠️', 'info');
+          return 0;
+        }
+
+        playWashdownHoseSound();
+        currentGasLab.storedOxygen -= 30;
+
+        let aeratedCount = 0;
+        const newPlots = state.plots.map(p => {
+          if (p.id >= state.unlockedPlots) return p;
+          const prevGases = p.gases || createDefaultPlotGases();
+          aeratedCount++;
+          return {
+            ...p,
+            isTimerFrozen: false,
+            phenologyBadgeEmoji: undefined,
+            phenologyBadgeText: undefined,
+            weatherModifierText: undefined,
+            gases: {
+              ...prevGases,
+              o2: 70, // Injects optimal 70% O2
+              isAnoxiaSuffocated: false,
+              isParchedDoubleDrain: false,
+              isPenaltyO2: false,
+              hasAnyPenalty: prevGases.isPenaltyCo2 || prevGases.isPenaltyNitrogen,
+              o2BreakdownText: '+25% Bio-Oxygen Flush',
+              o2Arrow: '▲▲',
+            },
+          };
+        });
+
+        set({
+          gasProductionLab: currentGasLab,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🫧 Injected 30L Bio-Oxygen (O₂) to ${aeratedCount} Farm Plots! Soil aerated to 70% O₂ (cleared root anoxia).`,
+          '🫧',
+          'discovery'
+        );
+        return aeratedCount;
+      },
+
+      aerateFisheryZoneWithOxygen: () => {
+        const state = get();
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        if ((currentGasLab.storedOxygen || 0) < 30) {
+          state.addNotification('Need at least 30L Bio-Oxygen (O₂) in Gas Lab! Mix slurry with chaff in the digester first.', '⚠️', 'info');
+          return false;
+        }
+
+        playWashdownHoseSound();
+        currentGasLab.storedOxygen -= 30;
+
+        const pondEco = state.aquaticEcosystem?.pond;
+        const newAquatic = state.aquaticEcosystem ? {
+          ...state.aquaticEcosystem,
+          pond: pondEco ? {
+            ...pondEco,
+            currentStock: Math.min(pondEco.maxStock, pondEco.currentStock + 6),
+            dissolvedOxygenRatio: 1.0,
+          } : undefined,
+        } : undefined;
+
+        set({
+          gasProductionLab: currentGasLab,
+          aquaticEcosystem: newAquatic as any,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          '⛲ Piped 30L Bio-Oxygen (O₂) into Farmstead Pond! Fish spawning grounds supercharged with dissolved oxygen (+6 fish recovery bonus).',
+          '🐟',
           'discovery'
         );
         return true;

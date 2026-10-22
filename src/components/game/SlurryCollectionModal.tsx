@@ -67,6 +67,8 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
     applyLiquidNitrogenToAllPlots,
     pipeBiogasCo2ToCanopy,
     feedChaffToDigester,
+    injectBioOxygenToPlots,
+    aerateFisheryZoneWithOxygen,
     sprayAndWashdownStalls,
     barn = {},
     silo = {},
@@ -128,6 +130,16 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
   const handlePipeCo2 = () => {
     playDigesterDistillSound();
     pipeBiogasCo2ToCanopy();
+  };
+
+  const handleInjectOxygenPlots = () => {
+    playWashdownHoseSound();
+    injectBioOxygenToPlots();
+  };
+
+  const handleAeratePond = () => {
+    playWashdownHoseSound();
+    aerateFisheryZoneWithOxygen();
   };
 
   return (
@@ -379,6 +391,15 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                           </span>
                         </div>
 
+                        <div className="flex items-center justify-between p-2 rounded-lg bg-sky-950/30 border border-sky-500/30">
+                          <span className="text-xs flex items-center gap-1.5 text-sky-200">
+                            <span>🫧</span> Bio-Oxygen (O₂):
+                          </span>
+                          <span className="font-mono font-bold text-sky-300">
+                            +{gasYield?.estimatedOxygenLiters || 0} L
+                          </span>
+                        </div>
+
                         {gasYield && gasYield.primevalDistillationBoostPercent > 0 && (
                           <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/40 text-[11px] text-rose-300 font-bold flex items-center gap-1.5">
                             <span>🧬</span> +{gasYield.primevalDistillationBoostPercent}% Primeval Distillation Speed!
@@ -463,19 +484,25 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">⚗️</span>
                       <h3 className="text-lg font-black text-white font-serif">
-                        Industrial Anaerobic Digester Tank
+                        Industrial Digester &amp; Gas Chamber
                       </h3>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
                         {gasLab.isDigesting ? 'Active Fermentation' : 'Idle / Standby'}
                       </span>
                     </div>
                     <p className="text-xs text-stone-400 mt-1">
-                      Converts animal slurry into clean Methane (CH₄), agricultural Biogas CO₂, and concentrated Liquid Nitrogen.
+                      Converts animal slurry and chaff biomass into clean Methane (CH₄), agricultural Biogas CO₂, Purified Bio-Oxygen (O₂), and Liquid Nitrogen.
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
                     <div className="text-right">
+                      <div className="text-[10px] uppercase font-bold text-stone-400">Chaff Substrate</div>
+                      <div className="text-lg font-mono font-black text-sky-300">
+                        {Math.round(gasLab.chaffBiomassSubstrateLiters || 0)}L
+                      </div>
+                    </div>
+                    <div className="text-right pl-2 border-l border-stone-800">
                       <div className="text-[10px] uppercase font-bold text-stone-400">Distillation Speed</div>
                       <div className="text-lg font-mono font-black text-amber-300">
                         {gasLab.distillationSpeedMultiplier.toFixed(1)}x
@@ -483,18 +510,18 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                     </div>
                     <button
                       onClick={handleFeedDigesterFromPit}
-                      className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition"
+                      className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition cursor-pointer"
                     >
                       + Feed 50L Slurry
                     </button>
                     <button
                       onClick={() => feedChaffToDigester(10)}
                       disabled={(silo?.chaff || 0) < 10}
-                      className="py-2.5 px-3.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 border border-amber-600/40 text-amber-300 font-bold text-xs uppercase tracking-wider shadow transition active:scale-95 flex items-center gap-1.5"
-                      title="Feed 10x Chaff & Husks into the Anaerobic Digester (+30L Carbonaceous Biomass Substrate)"
+                      className="py-2.5 px-3.5 rounded-xl bg-sky-950/70 hover:bg-sky-900/80 disabled:opacity-40 border border-sky-500/40 text-sky-200 font-bold text-xs uppercase tracking-wider shadow transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                      title="Feed 10x Chaff into the Digester (+30L Biomass Substrate & generates +60L Bio-Oxygen O2!)"
                     >
                       <span>🌾</span>
-                      <span>+ 10x Chaff ({silo?.chaff || 0})</span>
+                      <span>+ 10x Chaff ({silo?.chaff || 0}) 🫧</span>
                     </button>
                   </div>
                 </div>
@@ -514,14 +541,14 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                 </div>
               </div>
 
-              {/* 3 Gas Storage Tanks */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* 4 Gas Storage Tanks (Methane, CO2, Liquid N, Bio-Oxygen) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 {/* 1. Methane CH4 */}
                 <div className="p-4 rounded-2xl bg-stone-950/80 border border-amber-500/30 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between text-xs font-bold text-stone-400 uppercase">
-                      <span>⚡ Biogas Methane (CH₄)</span>
-                      <span>Tank #1</span>
+                      <span>⚡ Biogas Methane</span>
+                      <span className="text-amber-400 font-mono">Tank #1</span>
                     </div>
                     <div className="text-2xl font-black font-mono text-amber-400 my-2">
                       {gasLab.storedBiogasMethane} L
@@ -540,7 +567,7 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                   <div>
                     <div className="flex items-center justify-between text-xs font-bold text-stone-400 uppercase">
                       <span>💨 Biogas CO₂</span>
-                      <span>Canopy Line</span>
+                      <span className="text-teal-400 font-mono">Tank #2</span>
                     </div>
                     <div className="text-2xl font-black font-mono text-teal-400 my-2">
                       {gasLab.storedBiogasCo2} L
@@ -552,7 +579,7 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                   <button
                     onClick={handlePipeCo2}
                     disabled={gasLab.storedBiogasCo2 < 50}
-                    className="mt-3 py-1.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white font-bold text-xs transition"
+                    className="mt-3 py-1.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer"
                   >
                     Pipe CO₂ to Canopy (-50L)
                   </button>
@@ -563,7 +590,7 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                   <div>
                     <div className="flex items-center justify-between text-xs font-bold text-stone-400 uppercase">
                       <span>🧪 Liquid Nitrogen</span>
-                      <span>Bio-Liquor</span>
+                      <span className="text-cyan-400 font-mono">Tank #3</span>
                     </div>
                     <div className="text-2xl font-black font-mono text-cyan-400 my-2">
                       {gasLab.storedLiquidNitrogen} L
@@ -575,10 +602,44 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                   <button
                     onClick={handleApplyLiquidNAll}
                     disabled={gasLab.storedLiquidNitrogen < 20}
-                    className="mt-3 py-1.5 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold text-xs transition"
+                    className="mt-3 py-1.5 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer"
                   >
                     Apply Liquid N to Crops
                   </button>
+                </div>
+
+                {/* 4. Purified Bio-Oxygen (O2) */}
+                <div className="p-4 rounded-2xl bg-stone-950/80 border border-sky-500/40 flex flex-col justify-between shadow-lg">
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-bold text-stone-400 uppercase">
+                      <span>🫧 Bio-Oxygen (O₂)</span>
+                      <span className="text-sky-400 font-mono">Tank #4</span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-sky-400 my-2">
+                      {gasLab.storedOxygen || 0} L
+                    </div>
+                    <p className="text-[11px] text-stone-400">
+                      Aerobic bio-gas produced by mixing slurry with chaff. Injected to clear Root Anoxia or aerate fishery pond.
+                    </p>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    <button
+                      onClick={handleInjectOxygenPlots}
+                      disabled={(gasLab.storedOxygen || 0) < 30}
+                      className="w-full py-1.5 px-2 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer shadow-sm flex items-center justify-center gap-1"
+                      title="Flush all farm plots with 30L Bio-Oxygen to clear Root Anoxia and restore O2 to 70%"
+                    >
+                      <span>🫧</span> Aerate Plots (-30L)
+                    </button>
+                    <button
+                      onClick={handleAeratePond}
+                      disabled={(gasLab.storedOxygen || 0) < 30}
+                      className="w-full py-1.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-xs transition cursor-pointer shadow-sm flex items-center justify-center gap-1"
+                      title="Pipe 30L Bio-Oxygen into the farmstead pond for fish recovery (+6 stock bonus)"
+                    >
+                      <span>⛲</span> Aerate Pond (-30L)
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -601,16 +662,16 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
               </div>
 
               {/* Agronomic Ecosystem Callout: Oxygen Gas (O2) */}
-              <div className="p-3.5 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 text-xs space-y-1.5">
-                <div className="flex items-center gap-2 font-bold text-cyan-300">
+              <div className="p-3.5 rounded-2xl bg-sky-950/30 border border-sky-500/40 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-sky-300">
                   <span className="text-base">🫧</span>
-                  <span>Ecosystem Agronomy Note: Oxygen Gas (O₂) &amp; Anaerobic Digestion</span>
+                  <span>Ecosystem Mechanics: Bio-Oxygen (O₂) from Chaff &amp; Slurry Digestion</span>
                 </div>
                 <p className="text-[11px] text-stone-300 leading-relaxed">
-                  The Gas Chamber operates in a strictly <strong>anaerobic (zero-oxygen) environment</strong> — methanogenic microbes ferment slurry and chaff biomass into clean Methane (CH₄), CO₂, and Nitrogen without oxygen. 
+                  By mixing carbonaceous <strong>Chaff &amp; Husks (🌾)</strong> with nutrient-rich animal slurry in the digester, aerobic bio-scrubbing synthesizes <strong>Purified Bio-Oxygen (O₂)</strong> stored in <strong>Tank #4</strong> alongside Methane, CO₂, and Liquid Nitrogen.
                 </p>
                 <p className="text-[11px] text-stone-400 leading-relaxed">
-                  <strong>Oxygen Gas (O₂)</strong> is an aerobic soil metric maintained across your <strong>Farm Plots</strong>. Optimal soil O₂ is <strong>45%–75%</strong>; values below 20% freeze crop growth from root suffocation. You can restore plot O₂ by tilling with a hoe (instant 60%), harvesting root crops like Carrots (+20%), or clearing waterlogged soil.
+                  <strong>Plot &amp; Fishery Health:</strong> Use your stored Bio-Oxygen to instantly eliminate <em>Root Anoxia</em> across all cultivated plots (restoring soil O₂ to 70%), or pump it into your farmstead pond to supercharge dissolved oxygen and accelerate wild fish repopulation (+6 fish stock bonus).
                 </p>
               </div>
             </div>

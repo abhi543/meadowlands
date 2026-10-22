@@ -84,7 +84,9 @@ export interface GasProductionLabState {
   primevalSlurryRatio: number; // 0.0 to 1.0
   storedBiogasMethane: number; // Liters of CH4 clean energy
   storedBiogasCo2: number;     // Liters of Biogas CO2 for farm plots
+  storedOxygen: number;        // Liters of Purified Bio-Oxygen (O2) from slurry + chaff mix
   storedLiquidNitrogen: number;// Liters of Liquid Nitrogen Digestate / Bio-Fertilizer
+  chaffBiomassSubstrateLiters: number; // Active chaff biomass substrate inside chamber
   totalSlurryProcessedLiters: number;
   isAutomatedManifoldOpen: boolean;
 }
@@ -531,7 +533,9 @@ export function createDefaultGasProductionLab(): GasProductionLabState {
     primevalSlurryRatio: 0.25,
     storedBiogasMethane: 280, // 280 Liters CH4
     storedBiogasCo2: 240,     // 240 Liters CO2
+    storedOxygen: 160,        // 160 Liters Bio-Oxygen (O2)
     storedLiquidNitrogen: 180,// 180 Liters Liquid N
+    chaffBiomassSubstrateLiters: 100, // 100 Liters active chaff substrate
     totalSlurryProcessedLiters: 1250,
     isAutomatedManifoldOpen: true,
   };
@@ -842,12 +846,20 @@ export function stepSlurrySimulation(params: {
       const co2Produced = Math.round(batchSize * 0.75 * primevalMultiplier);
       const liquidNProduced = Math.round(batchSize * 0.80 * primevalMultiplier);
 
+      const hasChaff = (updatedGasLab.chaffBiomassSubstrateLiters || 0) > 0;
+      const oxygenProduced = Math.round(batchSize * (hasChaff ? 0.85 : 0.50) * primevalMultiplier);
+
       updatedGasLab.storedBiogasMethane += ch4Produced;
       updatedGasLab.storedBiogasCo2 += co2Produced;
+      updatedGasLab.storedOxygen = (updatedGasLab.storedOxygen || 0) + oxygenProduced;
       updatedGasLab.storedLiquidNitrogen += liquidNProduced;
 
+      if (hasChaff) {
+        updatedGasLab.chaffBiomassSubstrateLiters = Math.max(0, (updatedGasLab.chaffBiomassSubstrateLiters || 0) - (batchSize * 0.4));
+      }
+
       notifications.push(
-        `⚗️ Anaerobic Digestion Batch Ready! Produced +${ch4Produced}L Methane (CH₄), +${co2Produced}L Biogas CO₂, +${liquidNProduced}L Liquid Nitrogen Bio-Liquor.`
+        `⚗️ Digestion Batch Complete! Produced +${ch4Produced}L Methane (CH₄), +${co2Produced}L Biogas CO₂, +${oxygenProduced}L Bio-Oxygen (O₂), +${liquidNProduced}L Liquid Nitrogen.`
       );
     }
   } else {
@@ -875,6 +887,7 @@ export function estimateGasLabOutputs(
 ): {
   estimatedMethaneLiters: number;
   estimatedCo2Liters: number;
+  estimatedOxygenLiters: number;
   estimatedLiquidNitrogenLiters: number;
   primevalDistillationBoostPercent: number;
   summaryLabel: string;
@@ -905,6 +918,7 @@ export function estimateGasLabOutputs(
   ch4 *= potency;
   co2 *= potency;
   liquidN *= potency;
+  const o2 = Math.round(totalLiters * 0.75 * potency);
 
   const primevalRatio = primevalLiters / Math.max(1, totalLiters);
   const primevalBoost = primevalRatio > 0.2 ? 50 : Math.round(primevalRatio * 50);
@@ -912,8 +926,9 @@ export function estimateGasLabOutputs(
   return {
     estimatedMethaneLiters: Math.round(ch4),
     estimatedCo2Liters: Math.round(co2),
+    estimatedOxygenLiters: o2,
     estimatedLiquidNitrogenLiters: Math.round(liquidN),
     primevalDistillationBoostPercent: primevalBoost,
-    summaryLabel: `Est. Yield: ${Math.round(ch4)}L CH₄ | ${Math.round(co2)}L CO₂ | ${Math.round(liquidN)}L Liquid N`,
+    summaryLabel: `Est. Yield: ${Math.round(ch4)}L CH₄ | ${Math.round(co2)}L CO₂ | ${o2}L O₂ | ${Math.round(liquidN)}L Liquid N`,
   };
 }
