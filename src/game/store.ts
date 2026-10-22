@@ -941,6 +941,7 @@ export interface GameState {
   // Dynamic Crop Disease & Blight Ecosystem
   isToolContaminated?: boolean;
   curePlotDisease: (plotId: number, remedy: 'dig_drain' | 'prune_mildew' | 'apply_lime') => boolean;
+  cureAllDiseases: () => void;
   washHandTools: () => boolean;
   solarizePlotBed: (plotId: number) => boolean;
   clearDiseasedCrop: (plotId: number) => void;
@@ -2813,6 +2814,74 @@ export const useGameStore = create<GameState>()(
         }
 
         return false;
+      },
+
+      cureAllDiseases: () => {
+        const state = get();
+        const newPlots = [...state.plots];
+        let curedCount = 0;
+        const remedySummary: string[] = [];
+
+        for (let i = 0; i < state.unlockedPlots; i++) {
+          const plot = newPlots[i];
+          if (!plot?.disease) continue;
+
+          const currentGases = plot.gases || createDefaultPlotGases();
+          curedCount++;
+
+          if (plot.disease.type === 'root_rot') {
+            newPlots[i] = {
+              ...plot,
+              disease: null,
+              lowO2DurationSec: 0,
+              hasRootRot: false,
+              gases: {
+                ...currentGases,
+                o2: Math.max(65, currentGases.o2 + 35),
+                co2: Math.max(15, currentGases.co2 - 20),
+              },
+            };
+            if (!remedySummary.includes('🪱 Drained (Root Rot)')) remedySummary.push('🪱 Drained (Root Rot)');
+          } else if (plot.disease.type === 'foliar_mildew') {
+            newPlots[i] = {
+              ...plot,
+              disease: null,
+              highCo2DurationSec: 0,
+              gases: {
+                ...currentGases,
+                co2: Math.min(30, currentGases.co2 - 35),
+                o2: Math.max(50, currentGases.o2 + 10),
+              },
+            };
+            if (!remedySummary.includes('🍄 Pruned (Foliar Mildew)')) remedySummary.push('🍄 Pruned (Foliar Mildew)');
+          } else if (plot.disease.type === 'bacterial_soft_rot') {
+            newPlots[i] = {
+              ...plot,
+              disease: null,
+              highNitrogenDurationSec: 0,
+              isContaminatedDirt: false,
+              contaminatedCyclesRemaining: 0,
+              gases: {
+                ...currentGases,
+                nitrogen: 75,
+                o2: Math.max(50, currentGases.o2),
+              },
+            };
+            if (!remedySummary.includes('☣️ Limed (Soft Rot)')) remedySummary.push('☣️ Limed (Soft Rot)');
+          }
+        }
+
+        if (curedCount === 0) {
+          state.addNotification('No diseased crops found on the farm!', '✅', 'info');
+          return;
+        }
+
+        set({ plots: newPlots, isDirty: true });
+        state.addNotification(
+          `💊 Mass Cure Applied: ${curedCount} plot(s) treated — ${remedySummary.join(', ')}. Monitor gas levels to prevent reinfection!`,
+          '💊',
+          'discovery'
+        );
       },
 
       washHandTools: () => {

@@ -63,6 +63,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     toggleEmergencySpillway,
     clearWitheredCrop,
     curePlotDisease,
+    cureAllDiseases,
     washHandTools,
     solarizePlotBed,
     clearDiseasedCrop,
@@ -134,6 +135,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const alreadyWitheredCount = visiblePlots.filter(p => p.crop && p.isWithered).length;
   const cropsToWitherCount = visiblePlots.filter(p => p.crop && !p.isWithered).length;
   const anyCropsOnFarm = visiblePlots.some(p => p.crop); // growing OR withered
+  const diseasedPlotsCount = visiblePlots.filter(p => p.disease && (p.disease.stage === 'active' || p.disease.stage === 'warning')).length;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
   const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
   const selectedCropDef = CROPS[selectedCrop];
@@ -583,7 +585,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       )}
 
       {/* Batch Action Buttons */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {/* Harvest All */}
         <button
           onClick={() => harvestAllPlots()}
@@ -622,6 +624,26 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           )}
           {totalPlantCost > 0 && (
             <span className="text-[10px] sm:text-xs opacity-80">{'💰'}{totalPlantCost}</span>
+          )}
+        </button>
+
+        {/* Cure All Diseases */}
+        <button
+          onClick={() => cureAllDiseases()}
+          disabled={diseasedPlotsCount === 0}
+          className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
+            diseasedPlotsCount > 0
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-md shadow-emerald-300/40 cursor-pointer animate-pulse'
+              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+          }`}
+          title="Auto-apply the correct remedy to all diseased plots (Root Rot → Dig Drain, Mildew → Prune, Soft Rot → Apply Lime)"
+        >
+          <span className="text-base sm:text-lg">{'💊'}</span>
+          <span>Cure All</span>
+          {diseasedPlotsCount > 0 && (
+            <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
+              {diseasedPlotsCount}
+            </span>
           )}
         </button>
 
