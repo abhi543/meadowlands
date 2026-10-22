@@ -327,7 +327,25 @@ export type ProductId =
   | 'fired_hardwood' | 'tempered_glass' | 'copper_pipes' | 'geothermal_relics'
   // Workshop Tool, Hardware & Hydraulic Upgrades
   | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
-  | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve';
+  | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve'
+  // Agricultural Byproducts
+  | 'chaff';
+
+/**
+ * Calculates chaff byproduct from a crop harvest.
+ * - Cereals (Wheat, Corn): 1 chaff per 2 grain (50% yield)
+ * - Legumes & Fiber (Soybean, Cotton, Peas): 1 chaff per 3 crops (35% yield)
+ * - Vegetables & Fruits (Carrot, Strawberry, Pumpkin): 1 chaff per 4 crops (25% yield)
+ */
+export function calculateCropChaffYield(crop: CropId, totalYield: number): number {
+  if (crop === 'wheat' || crop === 'corn') {
+    return Math.max(1, Math.floor(totalYield * 0.5));
+  }
+  if (crop === 'soybean' || crop === 'cotton' || crop === 'peas') {
+    return Math.max(1, Math.floor(totalYield * 0.35));
+  }
+  return Math.max(1, Math.floor(totalYield * 0.25));
+}
 
 export interface ProductDef {
   id: ProductId;
@@ -338,6 +356,7 @@ export interface ProductDef {
 }
 
 export const PRODUCTS: Record<ProductId, ProductDef> = {
+  chaff:            { id: 'chaff',            name: 'Chaff & Husks',    emoji: '🌾',        category: 'raw',          sellPrice: 2 },
   feed:             { id: 'feed',             name: 'Animal Feed',      emoji: '\u{1FAD9}', category: 'raw',          sellPrice: 2 },
   egg:              { id: 'egg',              name: 'Egg',              emoji: '\u{1F95A}', category: 'animal',       sellPrice: 5 },
   egg_blue:         { id: 'egg_blue',         name: 'Blue Egg',         emoji: '\u{1F95A}', category: 'animal',       sellPrice: 8 },
@@ -511,6 +530,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
       { id: 'make_feed_corn', name: 'Corn Feed Blend', emoji: '🌽', inputs: [{ productId: 'corn', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
       { id: 'make_feed_carrot', name: 'Carrot Feed Blend', emoji: '🥕', inputs: [{ productId: 'carrot', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
       { id: 'make_feed_soybean', name: 'Protein Soy Chow', emoji: '🫘', inputs: [{ productId: 'soybean', qty: 2 }], output: { productId: 'feed', qty: 5 }, timeSec: 60 },
+      { id: 'make_feed_chaff', name: 'Chaff & Grain Mash', emoji: '🥣🌾', inputs: [{ productId: 'chaff', qty: 3 }, { productId: 'wheat', qty: 1 }], output: { productId: 'feed', qty: 4 }, timeSec: 45 },
     ],
   },
   feed_mill: {
@@ -518,6 +538,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
       { id: 'make_seed_blend', name: 'Wild Forage Seed Blend', emoji: '🌱', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'corn', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 100 },
+      { id: 'make_chaff_bedding', name: 'Compressed Chaff Bedding Bale', emoji: '📦🌾', inputs: [{ productId: 'chaff', qty: 4 }], output: { productId: 'mountain_hay_bales', qty: 1 }, timeSec: 45 },
       // Gourmet Animal Nutrition: High-yield feed conversion from premium harvest
       { id: 'make_gourmet_feed', name: 'Gourmet Cattle Ambrosia', emoji: '🥣⭐', inputs: [{ productId: 'soybean_gold', qty: 1 }, { productId: 'corn_silver', qty: 2 }], output: { productId: 'feed', qty: 15 }, timeSec: 60 },
       // Prehistoric Primeval Diets

@@ -13,7 +13,8 @@ export interface ItemCatalogMeta {
 }
 
 export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
-  // Crops
+  // Crops & Agricultural Byproducts
+  chaff: { id: 'chaff', name: 'Chaff & Husks', icon: '🌾', category: 'crop', baseValue: 2, isEdibleFeed: true },
   wheat: { id: 'wheat', name: 'Wheat', icon: '🌾', category: 'crop', baseValue: 1, isEdibleFeed: true },
   corn: { id: 'corn', name: 'Corn', icon: '🌽', category: 'crop', baseValue: 1, isEdibleFeed: true },
   carrot: { id: 'carrot', name: 'Carrot', icon: '🥕', category: 'crop', baseValue: 3, isEdibleFeed: true },

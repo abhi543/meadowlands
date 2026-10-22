@@ -66,8 +66,10 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
     feedSlurryToDigester,
     applyLiquidNitrogenToAllPlots,
     pipeBiogasCo2ToCanopy,
+    feedChaffToDigester,
     sprayAndWashdownStalls,
     barn = {},
+    silo = {},
     coins,
   } = useGameStore();
 
@@ -472,7 +474,7 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end">
                     <div className="text-right">
                       <div className="text-[10px] uppercase font-bold text-stone-400">Distillation Speed</div>
                       <div className="text-lg font-mono font-black text-amber-300">
@@ -481,9 +483,18 @@ export function SlurryCollectionModal({ isOpen, onClose, initialPitId = 'pit_swi
                     </div>
                     <button
                       onClick={handleFeedDigesterFromPit}
-                      className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition"
+                      className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:brightness-110 text-stone-950 font-black text-xs uppercase tracking-wider shadow-lg active:scale-95 transition"
                     >
                       + Feed 50L Slurry
+                    </button>
+                    <button
+                      onClick={() => feedChaffToDigester(10)}
+                      disabled={(silo?.chaff || 0) < 10}
+                      className="py-2.5 px-3.5 rounded-xl bg-stone-900 hover:bg-stone-800 disabled:opacity-40 border border-amber-600/40 text-amber-300 font-bold text-xs uppercase tracking-wider shadow transition active:scale-95 flex items-center gap-1.5"
+                      title="Feed 10x Chaff & Husks into the Anaerobic Digester (+30L Carbonaceous Biomass Substrate)"
+                    >
+                      <span>🌾</span>
+                      <span>+ 10x Chaff ({silo?.chaff || 0})</span>
                     </button>
                   </div>
                 </div>

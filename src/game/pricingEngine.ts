@@ -109,6 +109,7 @@ export const ANIMAL_COMMODITY_BASES: Record<string, { baseValue: number; name: s
   lanternfish:       { baseValue: 280, name: 'Lanternfish',       icon: '🐟' },
 
   // Raw Wild Forage & Byproducts
+  chaff:             { baseValue: 3,   name: 'Chaff & Husks',     icon: '🌾' },
   honey_comb:        { baseValue: 25,  name: 'Honey Comb',        icon: '🍯' },
   wild_berries:      { baseValue: 18,  name: 'Wild Berries',      icon: '🍇' },
   gold_nugget:       { baseValue: 120, name: 'Gold Nugget',       icon: '⭐' },

@@ -26,7 +26,7 @@ import {
   type CrisisType, type CrisisDef, CRISIS_DEFINITIONS,
   MUTATION_VARIANTS, type MutationVariantDef,
   MARKET_COMMODITIES, MARKET_NEWS_TEMPLATES, type MarketNewsTemplate,
-  TIER_LABELS,
+  TIER_LABELS, calculateCropChaffYield,
 } from './data';
 import {
   type HydrologyState,
@@ -918,6 +918,7 @@ export interface GameState {
   applyLiquidNitrogenDigestate: (plotId: number) => boolean;
   applyLiquidNitrogenToAllPlots: () => number;
   pipeBiogasCo2ToCanopy: () => boolean;
+  feedChaffToDigester: (chaffCount?: number) => boolean;
 
   // Time
   lastTick: number;
@@ -1301,7 +1302,7 @@ export interface OfflineActivitySummary {
 const GRID_SIZE = 12;
 
 export function isCropItem(itemId: string): boolean {
-  if (itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget') {
+  if (itemId in CROPS || itemId === 'feed' || itemId === 'cotton' || itemId === 'chaff' || itemId === 'honey_comb' || itemId === 'wild_berries' || itemId === 'gold_nugget') {
     return true;
   }
   if (itemId.endsWith('_silver') || itemId.endsWith('_gold') || itemId.endsWith('_prismatic')) {
@@ -1936,7 +1937,12 @@ export const useGameStore = create<GameState>()(
 
         // Deposit into dedicated quality-tier slot in Silo if silver/gold/prismatic
         const harvestItemKey = qualityRoll.quality !== 'standard' ? `${plot.crop}_${qualityRoll.quality}` : plot.crop;
-        const newSilo = { ...state.silo, [harvestItemKey]: (state.silo[harvestItemKey] || 0) + totalYield };
+        const chaffYield = calculateCropChaffYield(plot.crop, totalYield);
+        const newSilo = {
+          ...state.silo,
+          [harvestItemKey]: (state.silo[harvestItemKey] || 0) + totalYield,
+          chaff: (state.silo.chaff || 0) + chaffYield,
+        };
         state.registerHarvestFreshness(plot.crop, totalYield);
         if (harvestItemKey !== plot.crop) {
           state.registerHarvestFreshness(harvestItemKey, totalYield);
@@ -1985,6 +1991,10 @@ export const useGameStore = create<GameState>()(
           state.addNotification(`🎃 Vine Swell: Muggy air produced +${pheno.extraQuantity} extra fruit!`, '🎃', 'info');
         } else if (isDoubleProc) {
           state.addNotification(`🌋 Volcanic Double Yield proc! +${totalYield} ${cropDef.name}!`, '✨', 'info');
+        }
+
+        if (chaffYield > 0) {
+          state.addNotification(`🌾 Threshing: Recovered +${chaffYield}x Chaff & Husks byproduct from ${cropDef.name}!`, '🌾', 'discovery');
         }
 
         if (pheno.priceMultiplier > 1.0) {
@@ -2118,6 +2128,7 @@ export const useGameStore = create<GameState>()(
         let totalBonusYield = 0;
 
         let qualityCropsCount = 0;
+        let totalChaffRecovered = 0;
 
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
@@ -2203,6 +2214,8 @@ export const useGameStore = create<GameState>()(
             if (harvestItemKey !== plot.crop) {
               state.registerHarvestFreshness(harvestItemKey, plotYield);
             }
+            const chaffYield = calculateCropChaffYield(plot.crop, plotYield);
+            totalChaffRecovered += chaffYield;
             const nextSiltCycles = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? plot.alluvialSiltCyclesRemaining - 1 : undefined;
             newPlots[i] = {
               id: i,
@@ -2246,8 +2259,14 @@ export const useGameStore = create<GameState>()(
           }
         }
         if (harvestedCount === 0) return;
+        if (totalChaffRecovered > 0) {
+          newSilo.chaff = (newSilo.chaff || 0) + totalChaffRecovered;
+        }
         if (qualityCropsCount > 0) {
           state.addNotification(`✨ Harvested ${qualityCropsCount} premium quality crops (Silver/Gold/Prismatic) from optimal capillary soil!`, '🌈', 'event');
+        }
+        if (totalChaffRecovered > 0) {
+          state.addNotification(`🌾 Threshing & Husking: Gathered +${totalChaffRecovered}x Chaff & Husks byproduct into Silo!`, '🌾', 'discovery');
         }
         if (anyBurnout) {
           playDefeatSound();
@@ -2301,8 +2320,9 @@ export const useGameStore = create<GameState>()(
           return false;
         }
 
-        // Deduct compost or manure from barn if available; otherwise allow emergency coin bailout
+        // Deduct compost, manure, or chaff mulch if available; otherwise allow emergency coin bailout
         const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
         let costMethod = 'Free Recharge';
         if ((newBarn.organic_compost || 0) > 0) {
           newBarn.organic_compost -= 1;
@@ -2313,6 +2333,9 @@ export const useGameStore = create<GameState>()(
         } else if ((newBarn.manure || 0) > 0) {
           newBarn.manure -= 1;
           costMethod = '1x Manure';
+        } else if ((newSilo.chaff || 0) >= 2) {
+          newSilo.chaff -= 2;
+          costMethod = '2x Chaff Mulch 🌾';
         } else if (state.coins >= 5) {
           set({ coins: state.coins - 5 });
           costMethod = '🪙 5 Coins';
@@ -2331,6 +2354,7 @@ export const useGameStore = create<GameState>()(
 
         set({
           barn: newBarn,
+          silo: newSilo,
           plots: newPlots,
         });
 
@@ -2343,6 +2367,7 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         let rechargedCount = 0;
         const newBarn = { ...state.barn };
+        const newSilo = { ...state.silo };
         let coinsSpent = 0;
 
         for (let i = 0; i < state.unlockedPlots; i++) {
@@ -2356,6 +2381,8 @@ export const useGameStore = create<GameState>()(
               newBarn.compost -= 1;
             } else if ((newBarn.manure || 0) > 0) {
               newBarn.manure -= 1;
+            } else if ((newSilo.chaff || 0) >= 2) {
+              newSilo.chaff -= 2;
             } else if (state.coins - coinsSpent >= 5) {
               coinsSpent += 5;
             }
@@ -2380,6 +2407,7 @@ export const useGameStore = create<GameState>()(
         set({
           plots: newPlots,
           barn: newBarn,
+          silo: newSilo,
           coins: state.coins - coinsSpent,
         });
         state.addNotification(`✨ Soil Restored: Recharged ${rechargedCount} plots to 100% battery!`, '🌱', 'discovery');
@@ -6282,6 +6310,42 @@ export const useGameStore = create<GameState>()(
         state.addNotification(
           '💨 Biogas CO₂ Piped to Farm Canopy! All active crop plots boosted to 85% CO₂ for accelerated growth velocity.',
           '💨',
+          'discovery'
+        );
+        return true;
+      },
+
+      feedChaffToDigester: (chaffCount = 10) => {
+        const state = get();
+        const currentSilo = { ...state.silo };
+        const currentGasLab = { ...(state.gasProductionLab || createDefaultGasProductionLab()) };
+        const availableChaff = currentSilo.chaff || 0;
+        if (availableChaff < chaffCount) {
+          state.addNotification(`Need at least ${chaffCount}x Chaff in Silo! Harvest more grain crops to separate chaff byproduct.`, '⚠️', 'info');
+          return false;
+        }
+
+        const availableSpace = currentGasLab.digesterCapacityLiters - currentGasLab.digesterCurrentLiters;
+        if (availableSpace <= 0) {
+          state.addNotification('Anaerobic Digester tank is at max capacity (3,000L)!', '⚠️', 'info');
+          return false;
+        }
+
+        playDigesterDistillSound();
+        currentSilo.chaff -= chaffCount;
+        // 1 chaff = 3L organic carbonaceous biomass
+        const addedLiters = Math.min(chaffCount * 3.0, availableSpace);
+        currentGasLab.digesterCurrentLiters = Number((currentGasLab.digesterCurrentLiters + addedLiters).toFixed(2));
+
+        set({
+          silo: currentSilo,
+          gasProductionLab: currentGasLab,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🌾 Fed ${chaffCount}x Crop Chaff into Anaerobic Digester! (+${Math.round(addedLiters)}L Organic Biomass Substrate)`,
+          '🌾',
           'discovery'
         );
         return true;

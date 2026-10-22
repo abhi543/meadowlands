@@ -508,7 +508,56 @@ function FarmGuide() {
         </div>
       </div>
 
-      {/* 2. Soil Battery Agronomy System */}
+      {/* 2. Crop Harvest Byproduct: Chaff & Husks System */}
+      <div className="bg-amber-950/20 border border-amber-500/40 rounded-xl p-3.5 text-xs text-amber-200 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🌾</span>
+            <div>
+              <h5 className="font-bold text-sm text-amber-300">Crop Harvest Byproduct: Chaff &amp; Husks</h5>
+              <p className="text-[11px] text-amber-400/80">Every crop harvest automatically threshes and yields Chaff directly deposited into your Silo.</p>
+            </div>
+          </div>
+          <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded-full border border-amber-500/30">
+            Agricultural Byproduct
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+          <div className="bg-stone-900/80 p-2.5 rounded-lg border border-amber-500/30">
+            <div className="font-bold text-amber-300">🌾 Cereal Grains (50% Yield)</div>
+            <p className="text-stone-300 text-[10px] mt-0.5"><strong>Wheat &amp; Corn:</strong> 1 Chaff per 2 crops harvested. High dry-stalk and husk yield.</p>
+          </div>
+          <div className="bg-stone-900/80 p-2.5 rounded-lg border border-amber-500/30">
+            <div className="font-bold text-amber-300">🫛 Legumes &amp; Fiber (35% Yield)</div>
+            <p className="text-stone-300 text-[10px] mt-0.5"><strong>Soybeans, Cotton &amp; Peas:</strong> 1 Chaff per 3 crops harvested. Fibrous bolls, hulls &amp; dry pod fiber.</p>
+          </div>
+          <div className="bg-stone-900/80 p-2.5 rounded-lg border border-amber-500/30">
+            <div className="font-bold text-amber-300">🥕 Garden Produce (25% Yield)</div>
+            <p className="text-stone-300 text-[10px] mt-0.5"><strong>Carrots, Berries &amp; Pumpkins:</strong> 1 Chaff per 4 crops harvested. Dried greens, trimmings &amp; vine mulch.</p>
+          </div>
+        </div>
+
+        <div className="bg-stone-900/90 p-2.5 rounded-lg border border-stone-800 text-[11px] space-y-1.5">
+          <span className="font-bold text-amber-300 text-xs">🛠️ What Can You Do With Chaff?</span>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-stone-300">
+            <div>
+              <strong className="text-emerald-400">1. Animal Feed &amp; Bedding:</strong>
+              <p>Craft <em>Chaff &amp; Grain Mash</em> at the Animal Feed workshop or bundle <em>Compressed Bedding Bales</em> at the Feed Mill.</p>
+            </div>
+            <div>
+              <strong className="text-amber-400">2. Organic Soil Mulch:</strong>
+              <p>Apply 2x Chaff Mulch to empty/tired plots to restore battery energy and refill Nitrogen to 100% when organic compost is depleted.</p>
+            </div>
+            <div>
+              <strong className="text-cyan-400">3. Anaerobic Digester:</strong>
+              <p>Feed 10x Chaff directly into the Gas Production Lab (+30L Organic Biomass Substrate) to boost continuous Biogas Methane generation.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Soil Battery Agronomy System */}
       <div className="bg-gradient-to-r from-emerald-950/20 via-amber-950/20 to-rose-950/20 border border-emerald-500/40 rounded-xl p-3 text-xs space-y-2">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">

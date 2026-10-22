@@ -1427,7 +1427,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                               type="button"
                               onClick={() => applyCompostToProps(plot.id)}
                               className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                              title="Add compost/manure to instantly refill battery (5🪙 or free from barn)"
+                              title="Add compost/manure/chaff mulch to instantly refill battery (free from barn/silo or 5🪙)"
                             >
                               <span>💩</span>
                               <span>Compost</span>
@@ -1502,7 +1502,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                           applyCompostToProps(plot.id);
                         }}
                         className="px-1.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[9px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                        title="Add compost/manure to instantly refill battery (5🪙 or free from barn)"
+                        title="Add compost/manure/chaff mulch to instantly refill battery (free from barn/silo or 5🪙)"
                       >
                         <span>💩</span>
                         <span>Compost</span>
