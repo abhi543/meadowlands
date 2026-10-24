@@ -296,7 +296,7 @@ function FarmGuide() {
         <ul className="list-disc ml-4 space-y-1 text-stone-600 dark:text-stone-300">
           <li><strong>Plot Layout &amp; Expansion:</strong> You start with 12 tillable plots, expandable up to <strong>24 plots</strong> using coins. Click any locked plot to till additional land.</li>
           <li><strong>Planting Rules (No Water Needed to Plant):</strong> Planting seeds <em>never requires water</em>. You only need an empty plot and enough coins for the seed (Wheat &amp; Corn are 🪙0 free!).</li>
-          <li><strong>Batch Sowing &amp; Harvesting:</strong> Use <strong>Plant All</strong> to sow your selected seed across every empty plot with one click, and <strong>Harvest All</strong> to collect all mature crops simultaneously.</li>
+          <li><strong>Batch Sowing &amp; Harvesting:</strong> Use <strong>Plant All</strong> to sow your selected seed across every empty plot with one click, <strong>Harvest All</strong> to collect all mature crops simultaneously, and <strong>Cure All</strong> to mass-treat all infected crops for coins (calculated at <strong>2× Seed Planting Cost</strong> per plot, minimum 5 Coins; single-plot manual treatments remain free labor).</li>
           <li><strong>5 Soil Quality Tiers (🪙 Coins):</strong> Upgrade individual or batch plots through 5 persistent soil tiers (Basic &rarr; Enriched Loam &rarr; Fertilized Humus &rarr; Volcanic Bed &rarr; Celestial Soil) for up to <strong>+75% Speed, +3 Bonus Yields, 35% Double-Proc</strong>, and permanent self-watering at Celestial Tier!</li>
         </ul>
       </div>

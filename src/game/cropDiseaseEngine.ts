@@ -11,6 +11,19 @@
  */
 
 import { type WeatherProfileId } from '@/game/weatherEngine';
+import { type CropId, CROPS } from '@/game/data';
+
+export const CURE_BASE_MIN_COINS = 5;
+export const CURE_PLANT_COST_MULTIPLIER = 2;
+
+/**
+ * Calculates the coin cost for curing a single diseased plot.
+ * Rule: 2x seed planting cost, with a minimum floor of 5 coins (e.g. for free seeds like wheat/corn).
+ */
+export function calculatePlotCureCost(cropId?: CropId | null): number {
+  const seedCost = cropId && CROPS[cropId] ? CROPS[cropId].seedCost : 0;
+  return Math.max(CURE_BASE_MIN_COINS, Math.ceil(seedCost * CURE_PLANT_COST_MULTIPLIER));
+}
 
 export type CropDiseaseType = 'root_rot' | 'foliar_mildew' | 'bacterial_soft_rot';
 

@@ -21,6 +21,7 @@ import {
   isSoilBatteryFull,
   type PlotSoilBattery,
 } from '@/game/soilEnergyEngine';
+import { calculatePlotCureCost } from '@/game/cropDiseaseEngine';
 import {
   playSoilEnergyChime,
   playTiredSoilAlert,
@@ -135,7 +136,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const alreadyWitheredCount = visiblePlots.filter(p => p.crop && p.isWithered).length;
   const cropsToWitherCount = visiblePlots.filter(p => p.crop && !p.isWithered).length;
   const anyCropsOnFarm = visiblePlots.some(p => p.crop); // growing OR withered
-  const diseasedPlotsCount = visiblePlots.filter(p => p.disease && (p.disease.stage === 'active' || p.disease.stage === 'warning')).length;
+  const diseasedPlots = visiblePlots.filter(p => p.disease && (p.disease.stage === 'active' || p.disease.stage === 'warning'));
+  const diseasedPlotsCount = diseasedPlots.length;
+  const totalCureCost = diseasedPlots.reduce((sum, p) => sum + calculatePlotCureCost(p.crop), 0);
+  const canAffordCureAll = coins >= totalCureCost;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
   const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
   const selectedCropDef = CROPS[selectedCrop];
@@ -630,19 +634,30 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         {/* Cure All Diseases */}
         <button
           onClick={() => cureAllDiseases()}
-          disabled={diseasedPlotsCount === 0}
+          disabled={diseasedPlotsCount === 0 || !canAffordCureAll}
           className={`px-3 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all border-2 flex items-center justify-center gap-1.5 active:scale-95 ${
-            diseasedPlotsCount > 0
+            diseasedPlotsCount > 0 && canAffordCureAll
               ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-md shadow-emerald-300/40 cursor-pointer animate-pulse'
-              : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
+              : diseasedPlotsCount > 0 && !canAffordCureAll
+                ? 'bg-amber-900/60 text-amber-200 border-amber-600/70 cursor-not-allowed opacity-80'
+                : 'bg-stone-100 dark:bg-stone-800 text-stone-400 dark:text-stone-500 border-stone-200 dark:border-stone-700 cursor-not-allowed'
           }`}
-          title="Auto-apply the correct remedy to all diseased plots (Root Rot → Dig Drain, Mildew → Prune, Soft Rot → Apply Lime)"
+          title={
+            diseasedPlotsCount > 0
+              ? `Auto-cure all ${diseasedPlotsCount} diseased plots for ${totalCureCost} Coins (2x seed cost rule, min 5c per plot).${!canAffordCureAll ? ` (Need ${totalCureCost - coins} more Coins)` : ''}`
+              : 'Auto-apply the correct remedy to all diseased plots'
+          }
         >
           <span className="text-base sm:text-lg">{'💊'}</span>
           <span>Cure All</span>
           {diseasedPlotsCount > 0 && (
             <span className="bg-white/30 px-1.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold">
               {diseasedPlotsCount}
+            </span>
+          )}
+          {diseasedPlotsCount > 0 && (
+            <span className={`text-[10px] sm:text-xs font-mono font-bold ${!canAffordCureAll ? 'text-amber-300' : 'opacity-90'}`}>
+              {'💰'}{totalCureCost}
             </span>
           )}
         </button>

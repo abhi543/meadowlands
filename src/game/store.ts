@@ -84,6 +84,7 @@ import {
   createPlotInfection,
   getOrthogonalNeighborPlotIds,
   CROP_DISEASE_DEFINITIONS,
+  calculatePlotCureCost,
 } from '@/game/cropDiseaseEngine';
 import {
   type PastureWelfareState,
@@ -2953,14 +2954,37 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const newPlots = [...state.plots];
         let curedCount = 0;
+        let totalCost = 0;
         const remedySummary: string[] = [];
 
+        // 1. Calculate total cure cost and count diseased plots
+        for (let i = 0; i < state.unlockedPlots; i++) {
+          const plot = newPlots[i];
+          if (!plot?.disease) continue;
+          curedCount++;
+          totalCost += calculatePlotCureCost(plot.crop);
+        }
+
+        if (curedCount === 0) {
+          state.addNotification('No diseased crops found on the farm!', '✅', 'info');
+          return;
+        }
+
+        if (state.coins < totalCost) {
+          state.addNotification(
+            `❌ Insufficient Coins! Curing ${curedCount} infected crop(s) requires 💰${totalCost} Coins (You have 💰${state.coins}).`,
+            '💰',
+            'alert'
+          );
+          return;
+        }
+
+        // 2. Apply cures across all diseased plots
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = newPlots[i];
           if (!plot?.disease) continue;
 
           const currentGases = plot.gases || createDefaultPlotGases();
-          curedCount++;
 
           if (plot.disease.type === 'root_rot') {
             newPlots[i] = {
@@ -3004,14 +3028,14 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        if (curedCount === 0) {
-          state.addNotification('No diseased crops found on the farm!', '✅', 'info');
-          return;
-        }
-
-        set({ plots: newPlots, isDirty: true });
+        playCashRegisterSound();
+        set({
+          plots: newPlots,
+          coins: state.coins - totalCost,
+          isDirty: true,
+        });
         state.addNotification(
-          `💊 Mass Cure Applied: ${curedCount} plot(s) treated — ${remedySummary.join(', ')}. Monitor gas levels to prevent reinfection!`,
+          `💊 Mass Cure Applied: ${curedCount} plot(s) treated for 💰${totalCost} Coins (2x seed cost rule) — ${remedySummary.join(', ')}. Monitor gas levels to prevent reinfection!`,
           '💊',
           'discovery'
         );
