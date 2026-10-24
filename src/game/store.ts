@@ -455,6 +455,13 @@ export interface PlotState {
   highNitrogenDurationSec?: number;
   isContaminatedDirt?: boolean;
   contaminatedCyclesRemaining?: number;
+  // Progression with Drag (No-Freeze System)
+  growthProgress?: number; // 0.0 to 1.0
+  growthSpeedMultiplier?: number; // Clamped [0.40, 1.50]
+  stressAccumulator?: number; // Hidden Stress (0 to 100 points)
+  waterloggedStressTimerSec?: number; // 5s interval tracker (+5 pts)
+  lowNStressTimerSec?: number; // 5s interval tracker for N < 35% (+5 pts)
+  harvestGrade?: 'A' | 'B' | 'C'; // Dynamic Harvest Tier Outlook
 }
 
 export interface AnimalInstance {
@@ -1453,6 +1460,12 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
   highNitrogenDurationSec: 0,
   isContaminatedDirt: false,
   contaminatedCyclesRemaining: 0,
+  growthProgress: 0,
+  growthSpeedMultiplier: 1.0,
+  stressAccumulator: 0,
+  waterloggedStressTimerSec: 0,
+  lowNStressTimerSec: 0,
+  harvestGrade: 'A',
 }));
 
 const initialAnimals: AnimalInstance[] = [
@@ -1914,6 +1927,12 @@ export const useGameStore = create<GameState>()(
           highNitrogenDurationSec: 0,
           isContaminatedDirt: false,
           contaminatedCyclesRemaining: 0,
+          growthProgress: 0,
+          growthSpeedMultiplier: 1.0,
+          stressAccumulator: 0,
+          waterloggedStressTimerSec: 0,
+          lowNStressTimerSec: 0,
+          harvestGrade: 'A',
         };
         set({ plots: newPlots });
       },
@@ -1958,12 +1977,36 @@ export const useGameStore = create<GameState>()(
           ? 1 // Depleted soil penalty: drops to 1x harvest
           : (cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity);
 
-        // Dynamic Gas System: Nitrogen Yield Tier (70-100%: 3x, 35-69%: 2x, 0-34%: 1x)
-        const plotNitrogen = plot.gases?.nitrogen ?? 85;
-        const nitrogenTierMultiplier = plotNitrogen >= 70 ? 3 : (plotNitrogen >= 35 ? 2 : 1);
-        const nitrogenYield = isDepletedPenalty
+        // --- Progression with Drag: Dynamic Yield Tiering (Grades A, B, C) ---
+        // 0–20 Stress: Grade A (Pristine) -> 3x Items, 100% Value, +1 Seed Return.
+        // 21–60 Stress: Grade B (Standard) -> 2x Items, 60% Value.
+        // 61–100 Stress: Grade C (Stunted) -> 1x Item, 20% Value, No Seeds.
+        const stress = Math.min(100, Math.max(0, plot.stressAccumulator ?? 0));
+        let harvestGrade: 'A' | 'B' | 'C' = 'A';
+        let gradeItemMultiplier = 3;
+        let gradeValuePct = 1.0;
+        let givesSeedReturn = false;
+
+        if (stress <= 20) {
+          harvestGrade = 'A';
+          gradeItemMultiplier = 3;
+          gradeValuePct = 1.0;
+          givesSeedReturn = true;
+        } else if (stress <= 60) {
+          harvestGrade = 'B';
+          gradeItemMultiplier = 2;
+          gradeValuePct = 0.60;
+          givesSeedReturn = false;
+        } else {
+          harvestGrade = 'C';
+          gradeItemMultiplier = 1;
+          gradeValuePct = 0.20;
+          givesSeedReturn = false;
+        }
+
+        const gradeYield = isDepletedPenalty
           ? 1
-          : Math.max(1, Math.round(baseTotalYield * (nitrogenTierMultiplier / 3)));
+          : Math.max(1, Math.round(baseTotalYield * (gradeItemMultiplier / 3)));
 
         // Crop Disease Yield Penalty & Vector Contamination
         const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
@@ -1972,8 +2015,18 @@ export const useGameStore = create<GameState>()(
 
         const qualityAdjusted = isDepletedPenalty
           ? 1
-          : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
+          : Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
         const totalYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
+
+        // Dynamic Value & Seed Return calculation
+        const unitBasePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+        const earnedGradeCoins = Math.round(totalYield * unitBasePrice * gradeValuePct);
+        const seedCostRefund = givesSeedReturn ? Math.max(1, cropDef.seedCost) : 0;
+        const seedItemKey = `seed_${plot.crop}`;
+        const newBarn = {
+          ...state.barn,
+          ...(givesSeedReturn ? { [seedItemKey]: (state.barn[seedItemKey] || 0) + 1 } : {}),
+        };
 
         // Soil Battery Energy Update (Consumption or Restorative Legume Recharge)
         const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
@@ -2047,7 +2100,21 @@ export const useGameStore = create<GameState>()(
           soilBattery: newBattery,
           plantedInDepletedSoil: false,
           gases: postHarvestGases,
+          growthProgress: 0,
+          growthSpeedMultiplier: 1.0,
+          stressAccumulator: 0,
+          waterloggedStressTimerSec: 0,
+          lowNStressTimerSec: 0,
+          harvestGrade: 'A',
         };
+
+        if (harvestGrade === 'A') {
+          state.addNotification(`🌟 Grade A (Pristine) Harvest! +${totalYield} ${cropDef.name} (3x Items), 100% Value (+${earnedGradeCoins}🪙), and +1 Seed Return!`, '🌟', 'discovery');
+        } else if (harvestGrade === 'B') {
+          state.addNotification(`📦 Grade B (Standard) Harvest: +${totalYield} ${cropDef.name} (2x Items), 60% Value (+${earnedGradeCoins}🪙).`, '📦', 'info');
+        } else {
+          state.addNotification(`⚠️ Grade C (Stunted) Harvest: +${totalYield} ${cropDef.name} (1x Item), 20% Value (+${earnedGradeCoins}🪙, No Seeds).`, '⚠️', 'event');
+        }
 
         if (isDepletedPenalty) {
           state.addNotification(`⚠️ Tired Soil: Harvest reduced to only 1x crop (Slowed Growth) due to depleted soil battery! Add compost or plant restorative peas to recharge.`, '⚠️', 'info');
@@ -2121,6 +2188,8 @@ export const useGameStore = create<GameState>()(
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + earnedXp, state.level);
         set({
           silo: newSilo,
+          barn: newBarn,
+          coins: state.coins + earnedGradeCoins + seedCostRefund,
           plots: newPlots,
           entityOverclocks: updatedOverclocks,
           xp: newXp,
@@ -2194,6 +2263,12 @@ export const useGameStore = create<GameState>()(
             highNitrogenDurationSec: 0,
             isContaminatedDirt: false,
             contaminatedCyclesRemaining: 0,
+            growthProgress: 0,
+            growthSpeedMultiplier: 1.0,
+            stressAccumulator: 0,
+            waterloggedStressTimerSec: 0,
+            lowNStressTimerSec: 0,
+            harvestGrade: 'A',
           };
         }
         if (monocultureCount > 0) {
@@ -2226,6 +2301,12 @@ export const useGameStore = create<GameState>()(
 
         let qualityCropsCount = 0;
         let totalChaffRecovered = 0;
+        let totalGradeCoinsEarned = 0;
+        let totalSeedReturnCount = 0;
+        let gradeACount = 0;
+        let gradeBCount = 0;
+        let gradeCCount = 0;
+        const newBarn = { ...state.barn };
 
         let anyToolContaminated = false;
 
@@ -2252,6 +2333,12 @@ export const useGameStore = create<GameState>()(
                 highNitrogenDurationSec: 0,
                 isContaminatedDirt: Boolean(plot.isContaminatedDirt),
                 contaminatedCyclesRemaining: plot.contaminatedCyclesRemaining || 0,
+                growthProgress: 0,
+                growthSpeedMultiplier: 1.0,
+                stressAccumulator: 0,
+                waterloggedStressTimerSec: 0,
+                lowNStressTimerSec: 0,
+                harvestGrade: 'A',
               };
               continue;
             }
@@ -2288,12 +2375,36 @@ export const useGameStore = create<GameState>()(
               ? 1
               : (cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity);
 
-            // Dynamic Gas System: Nitrogen Yield Tier (70-100%: 3x, 35-69%: 2x, 0-34%: 1x)
-            const plotNitrogen = plot.gases?.nitrogen ?? 85;
-            const nitrogenTierMultiplier = plotNitrogen >= 70 ? 3 : (plotNitrogen >= 35 ? 2 : 1);
-            const nitrogenYield = isDepletedPenalty
+            // --- Progression with Drag: Dynamic Yield Tiering (Grades A, B, C) ---
+            const stress = Math.min(100, Math.max(0, plot.stressAccumulator ?? 0));
+            let harvestGrade: 'A' | 'B' | 'C' = 'A';
+            let gradeItemMultiplier = 3;
+            let gradeValuePct = 1.0;
+            let givesSeedReturn = false;
+
+            if (stress <= 20) {
+              harvestGrade = 'A';
+              gradeItemMultiplier = 3;
+              gradeValuePct = 1.0;
+              givesSeedReturn = true;
+              gradeACount++;
+            } else if (stress <= 60) {
+              harvestGrade = 'B';
+              gradeItemMultiplier = 2;
+              gradeValuePct = 0.60;
+              givesSeedReturn = false;
+              gradeBCount++;
+            } else {
+              harvestGrade = 'C';
+              gradeItemMultiplier = 1;
+              gradeValuePct = 0.20;
+              givesSeedReturn = false;
+              gradeCCount++;
+            }
+
+            const gradeYield = isDepletedPenalty
               ? 1
-              : Math.max(1, Math.round(singleYield * (nitrogenTierMultiplier / 3)));
+              : Math.max(1, Math.round(singleYield * (gradeItemMultiplier / 3)));
 
             // Crop Disease Yield Penalty & Vector Contamination
             const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
@@ -2302,9 +2413,20 @@ export const useGameStore = create<GameState>()(
 
             const qualityAdjusted = isDepletedPenalty
               ? 1
-              : Math.max(1, Math.round(nitrogenYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
+              : Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
             const plotYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
             totalBonusYield += (!isDepletedPenalty ? (bonus + soilTier.bonusYield) : 0);
+
+            // Dynamic Value & Seed Return calculation
+            const unitBasePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
+            const earnedGradeCoins = Math.round(plotYield * unitBasePrice * gradeValuePct);
+            const seedCostRefund = givesSeedReturn ? Math.max(1, cropDef.seedCost) : 0;
+            totalGradeCoinsEarned += earnedGradeCoins + seedCostRefund;
+            if (givesSeedReturn) {
+              totalSeedReturnCount++;
+              const seedItemKey = `seed_${plot.crop}`;
+              newBarn[seedItemKey] = (newBarn[seedItemKey] || 0) + 1;
+            }
 
             // Soil battery energy update
             const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
@@ -2367,6 +2489,12 @@ export const useGameStore = create<GameState>()(
               soilBattery: newBattery,
               plantedInDepletedSoil: false,
               gases: postHarvestGases,
+              growthProgress: 0,
+              growthSpeedMultiplier: 1.0,
+              stressAccumulator: 0,
+              waterloggedStressTimerSec: 0,
+              lowNStressTimerSec: 0,
+              harvestGrade: 'A',
             };
             if (plotOverclock?.isOverclocked) {
               const rollBurnout = Math.random() < plotOverclock.burnoutChance;
@@ -2387,6 +2515,9 @@ export const useGameStore = create<GameState>()(
         if (harvestedCount === 0) return;
         if (totalChaffRecovered > 0) {
           newSilo.chaff = (newSilo.chaff || 0) + totalChaffRecovered;
+        }
+        if (gradeACount > 0 || gradeBCount > 0 || gradeCCount > 0) {
+          state.addNotification(`🌾 Harvest All: ${gradeACount}x Grade A (+${totalSeedReturnCount} seeds), ${gradeBCount}x Grade B, ${gradeCCount}x Grade C! Earned +${totalGradeCoinsEarned}🪙!`, '🌾', 'discovery');
         }
         if (qualityCropsCount > 0) {
           state.addNotification(`✨ Harvested ${qualityCropsCount} premium quality crops (Silver/Gold/Prismatic) from optimal capillary soil!`, '🌈', 'event');
@@ -2431,6 +2562,8 @@ export const useGameStore = create<GameState>()(
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * harvestedCount * xpMultiplier), state.level);
         set({
           silo: newSilo,
+          barn: newBarn,
+          coins: state.coins + totalGradeCoinsEarned,
           plots: newPlots,
           xp: newXp,
           level: newLevel,
@@ -9536,76 +9669,6 @@ export const useGameStore = create<GameState>()(
           }
 
           if (p.crop && p.plantedAt && !p.ready) {
-            // Under barn_fire, unwatered/burning plots are frozen
-            if (isBarnFireActive && firePlotIds.includes(p.id)) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
-            }
-
-            // Disease Rule: Anaerobic Root Rot — growth timer completely freezes
-            if (currentDisease?.stage === 'active' && currentDisease.type === 'root_rot') {
-              return {
-                ...p,
-                plantedAt: p.plantedAt + (deltaSeconds * 1000), // cleanly freeze crop timer!
-                isTimerFrozen: true,
-                hasRootRot: true,
-                phenologyBadgeEmoji: '🪱⚠️',
-                phenologyBadgeText: `Root Rot: Growth Paused (-${currentDisease.yieldReductionPct}% Yield)`,
-                weatherModifierText: '🪱 Root Rot: Soil Anoxia (Timer Paused)',
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
-
-            // Gas Rule: Root Anoxia / Suffocation (O2 < 20%) — Crop timer completely pauses.
-            if (currentGases.isAnoxiaSuffocated) {
-              return {
-                ...p,
-                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze crop timer cleanly
-                isTimerFrozen: true,
-                phenologyBadgeEmoji: '🫧⚠️',
-                phenologyBadgeText: 'Root Anoxia (O₂ < 20%): Growth Paused',
-                weatherModifierText: '🫧 Root Anoxia: Depleted Soil Oxygen (Timer Paused)',
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
-
-            // Fail-Safe Stage 1+ Crop Conservation Mode (Tower <= 200L)
-            if (loadSheddingStage >= 1 && !p.isWatered && (p.moistureLevel ?? 0) <= 15) {
-              return {
-                ...p,
-                plantedAt: p.plantedAt + (deltaSeconds * 1000), // freeze dry plots cleanly without resetting
-                desiccatedSeconds: 0,
-                isWithered: false,
-                phenologyBadgeEmoji: '🛡️💧',
-                phenologyBadgeText: 'Crop Conservation (Tower ≤ 200L)',
-                weatherModifierText: '🛡️ Crop Conservation: Dry Plot Frozen (Tower ≤ 200L)',
-                isTimerFrozen: true,
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
             if (isPlotExhausted) {
@@ -9638,128 +9701,154 @@ export const useGameStore = create<GameState>()(
               };
             }
 
-            if (pheno.isTimerFrozen || (pheno.isFrostbitten && !hasHeatSource)) {
-              return {
-                ...p,
-                plantedAt: p.plantedAt + (deltaSeconds * 1000), // cleanly freeze crop timer in place!
-                phenologyBadgeEmoji: '❄️',
-                phenologyBadgeText: '❄️ Frozen: Requires heat source to continue growth',
-                weatherModifierText: '❄️ Frozen: Requires heat source to continue growth',
-                isTimerFrozen: true,
-                isFrostbitten: true,
-                isHeatWilted: false,
-                isDormant: false,
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
+            // --- Progression with Drag: Dynamic Speed Calculations ---
+            // 1. Base Growth Rate: 1.0 tick/sec
+            const baseGrowthRate = 1.0;
 
-            if (pheno.isWilted || pheno.isDormant) {
-              return {
-                ...p,
-                phenologyBadgeEmoji: pheno.badgeEmoji,
-                phenologyBadgeText: pheno.badgeText,
-                weatherModifierText: pheno.weatherModifierText,
-                isFrostbitten: pheno.isFrostbitten,
-                isHeatWilted: pheno.isWilted,
-                isDormant: pheno.isDormant,
-                isTimerFrozen: false,
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
+            // 2. Modifiers (Multiplicative):
+            // - CO2 Aura (Near Barn / Compost): +0.35x (1.35x multiplier)
+            const isCo2Aura = Boolean(
+              (state.animals && state.animals.length > 0 && faunaEval.co2CanopyActive) ||
+              ((state.barn?.organic_compost || 0) + (state.barn?.compost || 0) + (state.barn?.manure || 0)) > 0 ||
+              (currentGases.co2 > 60)
+            );
+            const co2Modifier = isCo2Aura ? 1.35 : 1.0;
 
+            // - Aerated Healthy Soil: +0.0x (1.0x multiplier)
+            const mZone = getMoistureZone(currentMoisture);
+            const isAeratedHealthy = (currentGases.o2 >= 40 && currentGases.o2 <= 85) && (currentMoisture > 15 && currentMoisture <= 80);
+            const aeratedModifier = isAeratedHealthy ? 1.0 : 1.0;
+
+            // - Waterlogged / Poor Drainage: -0.50x (0.50x multiplier)
+            const isWaterlogged = (currentMoisture >= 95.0) || (mZone.id === 'waterlogged');
+            const waterloggedModifier = isWaterlogged ? 0.50 : 1.0;
+
+            // - Active Foliar Mildew: -0.30x (0.70x multiplier)
+            const isMildewActive = Boolean(currentDisease?.stage === 'active' && currentDisease.type === 'foliar_mildew');
+            const mildewModifier = isMildewActive ? 0.70 : 1.0;
+
+            // Other disease drag (Root Rot or Soft Rot): -50% drag, NEVER 0.0x freeze
+            const isRootRotActive = Boolean(currentDisease?.stage === 'active' && currentDisease.type === 'root_rot');
+            const isSoftRotActive = Boolean(currentDisease?.stage === 'active' && currentDisease.type === 'bacterial_soft_rot');
+            const otherDiseaseModifier = isRootRotActive ? 0.50 : (isSoftRotActive ? 0.40 : 1.0);
+
+            // Soil tier, Overclock, Tools, Weather, etc.
             const soilTier = getSoilTier(pLevel);
             const soilSpeedMultiplier = 1 + (soilTier.speedBonusPct / 100);
             const plotMultiplier = (plotOverclock?.isOverclocked && !p.ready) ? plotOverclock.speedMultiplier : 1.0;
-            const elapsed = (now - p.plantedAt) / 1000;
-            const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
-
-            const mZone = getMoistureZone(currentMoisture);
-            const moistureSpeedMultiplier = mZone.growthSpeedMultiplier;
-            const phenoSpeedMultiplier = pheno.growthSpeedMultiplier;
+            const waterBoost = (p.isWatered || soilTier.autoHydrate) ? 1.25 : 1.0;
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
-
-            const hasLightLens = Boolean(workshopLoadout.prismaticLensMounted || (state.barn?.prismatic_light_lens || 0) > 0);
-            const isNight = currentClock.currentPeriod === 'night';
-            const nightFactor = isNight ? (hasLightLens ? 1.0 : 0.70) : 1.0;
-            const lightLensMultiplier = hasLightLens ? 1.25 : 1.0;
-
-            const hasChitinTrowel = Boolean(workshopLoadout.equippedTool === 'hardened_chitin_trowel' || (state.barn?.hardened_chitin_trowel || 0) > 0);
-            const trowelCropSpeedMultiplier = hasChitinTrowel ? 1.30 : 1.0;
-
+            const phenoSpeedMultiplier = pheno.growthSpeedMultiplier > 0 ? pheno.growthSpeedMultiplier : 0.70;
             const monocultureMultiplier = (state.isHardcoreMode && p.isMonoculture) ? 0.74 : 1.0;
-            const soilBatterySpeedMultiplier = p.plantedInDepletedSoil ? 0.50 : 1.0;
+            const soilBatterySpeedMultiplier = p.plantedInDepletedSoil ? 0.60 : 1.0;
+            const anoxiaModifier = currentGases.isAnoxiaSuffocated ? 0.60 : 1.0;
+            const frostModifier = (pheno.isFrostbitten && !hasHeatSource) ? 0.60 : 1.0;
 
-            // Gas Dynamic Output: CO2 Boosted Velocity (Above 60%: +1% crop growth speed per 2% above 60%)
-            const gasSpeedMultiplier = currentGases.growthSpeedMultiplier;
+            // Multiplicative speed calculation
+            const rawSpeed = baseGrowthRate * co2Modifier * aeratedModifier * waterloggedModifier * mildewModifier * otherDiseaseModifier * soilSpeedMultiplier * plotMultiplier * waterBoost * siltSpeedMultiplier * phenoSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * anoxiaModifier * frostModifier;
 
-            // Active Disease Growth Penalty: Mildew -50%, Soft Rot -80%
-            const diseaseSpeedMultiplier = currentDisease?.stage === 'active'
-              ? (currentDisease.type === 'foliar_mildew' ? 0.50 : (currentDisease.type === 'bacterial_soft_rot' ? 0.20 : 1.0))
-              : 1.0;
+            // Speed Clamp: Maximum 1.50x, Minimum 0.40x. Under NO circumstances does speed reach 0.0x!
+            const clampedSpeedMultiplier = Math.max(0.40, Math.min(1.50, rawSpeed));
 
-            const effectiveElapsed = (rainBoost > 0 ? elapsed * (1 + rainBoost) : elapsed) * ashMultiplier * waterBoost * weatherMultiplier * plotMultiplier * soilSpeedMultiplier * moistureSpeedMultiplier * phenoSpeedMultiplier * siltSpeedMultiplier * meganeuraSpeedMultiplier * trilobiteSpeedMultiplier * lightLensMultiplier * nightFactor * trowelCropSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * gasSpeedMultiplier * diseaseSpeedMultiplier;
+            // --- Dynamic Yield Tiering (Grades A, B, C) ---
+            // Hidden "Stress Accumulator" from 0 to 100 points:
+            // - Every 5 seconds spent Waterlogged adds +5 Stress points.
+            // - Every 5 seconds spent with N < 35% adds +5 Stress points.
+            let stress = Math.min(100, Math.max(0, p.stressAccumulator ?? 0));
+            let waterloggedTimer = p.waterloggedStressTimerSec ?? 0;
+            let lowNTimer = p.lowNStressTimerSec ?? 0;
+
+            if (isWaterlogged) {
+              waterloggedTimer += deltaSeconds;
+              while (waterloggedTimer >= 5) {
+                stress = Math.min(100, stress + 5);
+                waterloggedTimer -= 5;
+              }
+            } else {
+              waterloggedTimer = 0;
+            }
+
+            const isLowN = (currentGases?.nitrogen !== undefined && currentGases.nitrogen < 35);
+            if (isLowN) {
+              lowNTimer += deltaSeconds;
+              while (lowNTimer >= 5) {
+                stress = Math.min(100, stress + 5);
+                lowNTimer -= 5;
+              }
+            } else {
+              lowNTimer = 0;
+            }
+
+            let harvestGrade: 'A' | 'B' | 'C' = 'A';
+            if (stress <= 20) {
+              harvestGrade = 'A';
+            } else if (stress <= 60) {
+              harvestGrade = 'B';
+            } else {
+              harvestGrade = 'C';
+            }
+
+            // --- Growth Progress Advancement ---
             const cropBaseSec = CROPS[p.crop].growTimeSec;
             const growTime = isAlchemicalBloom ? Math.min(30, cropBaseSec) : cropBaseSec;
 
-            let badgeEmoji = p.plantedInDepletedSoil ? '🥀⚡' : (p.isMonoculture ? '🥀⚠️' : (currentGases.co2 > 60 ? '⚡🌱' : pheno.badgeEmoji));
-            let badgeText = p.plantedInDepletedSoil ? 'Tired Soil (-50% Speed & 1x Harvest)' : (p.isMonoculture ? 'Monoculture Exhaustion (-26% Speed)' : (currentGases.co2 > 60 ? `Boosted Velocity (+${((currentGases.co2 - 60)/2).toFixed(0)}% Spd)` : pheno.badgeText));
+            const prevProgress = p.growthProgress !== undefined
+              ? p.growthProgress
+              : Math.min(1.0, (now - p.plantedAt) / (growTime * 1000));
+
+            const progressDelta = (deltaSeconds * clampedSpeedMultiplier) / growTime;
+            const newProgress = Math.min(1.0, prevProgress + progressDelta);
+            const isReady = newProgress >= 1.0;
+            const newPlantedAt = Math.round(now - (newProgress * growTime * 1000));
+
+            let badgeEmoji = '🌱';
+            let badgeText = '';
 
             if (currentDisease?.stage === 'warning') {
               badgeEmoji = '⚠️';
               badgeText = `⚠️ High Disease Risk: ${currentDisease.name} (${Math.round(currentDisease.warningTimerSec)}s to infection)`;
             } else if (currentDisease?.stage === 'active') {
               badgeEmoji = currentDisease.emoji;
-              badgeText = `${currentDisease.emoji} ${currentDisease.name} (-${currentDisease.yieldReductionPct}% Yield, ${Math.round(currentDisease.timeRemainingSec)}s to collapse)`;
+              badgeText = `${currentDisease.emoji} ${currentDisease.name} (Drag ${clampedSpeedMultiplier.toFixed(2)}x, ${Math.round(currentDisease.timeRemainingSec)}s to collapse)`;
+            } else if (isWaterlogged) {
+              badgeEmoji = '🐌💧';
+              badgeText = `Sluggish: Soggy Soil (${clampedSpeedMultiplier.toFixed(2)}x Speed Drag)`;
+            } else if (clampedSpeedMultiplier < 0.65) {
+              badgeEmoji = '🐌';
+              badgeText = `Sluggish Drag (${clampedSpeedMultiplier.toFixed(2)}x)`;
+            } else if (clampedSpeedMultiplier >= 0.65 && clampedSpeedMultiplier < 1.0) {
+              badgeEmoji = '⚠️🌱';
+              badgeText = `Mild Delay (${clampedSpeedMultiplier.toFixed(2)}x)`;
+            } else if (clampedSpeedMultiplier >= 1.0 && isCo2Aura) {
+              badgeEmoji = '⚡🌱';
+              badgeText = `CO₂ Aura Boost (${clampedSpeedMultiplier.toFixed(2)}x)`;
+            } else {
+              badgeEmoji = pheno.badgeEmoji || '🌱';
+              badgeText = pheno.badgeText || `Speed ${clampedSpeedMultiplier.toFixed(2)}x`;
             }
 
-            if (effectiveElapsed >= growTime) {
-              return {
-                ...p,
-                ready: true,
-                phenologyBadgeEmoji: badgeEmoji,
-                phenologyBadgeText: badgeText,
-                weatherModifierText: pheno.weatherModifierText,
-                isTimerFrozen: false,
-                isFrostbitten: false,
-                isHeatWilted: false,
-                isDormant: false,
-                soilBattery: currentBattery,
-                gases: currentGases,
-                moistureLevel: currentMoisture,
-                disease: currentDisease,
-                lowO2DurationSec: currentLowO2Sec,
-                highCo2DurationSec: currentHighCo2Sec,
-                highNitrogenDurationSec: currentHighNSec,
-                isContaminatedDirt: currentContaminatedDirt,
-                contaminatedCyclesRemaining: currentContaminatedCycles,
-              };
-            }
+            const weatherModifier = isWaterlogged
+              ? `Sluggish: Soggy Soil (${clampedSpeedMultiplier.toFixed(2)}x)`
+              : (clampedSpeedMultiplier < 0.65 ? `Sluggish Drag (${clampedSpeedMultiplier.toFixed(2)}x)` : pheno.weatherModifierText);
 
             return {
               ...p,
+              plantedAt: newPlantedAt,
+              ready: isReady,
+              growthProgress: newProgress,
+              growthSpeedMultiplier: clampedSpeedMultiplier,
+              stressAccumulator: stress,
+              waterloggedStressTimerSec: waterloggedTimer,
+              lowNStressTimerSec: lowNTimer,
+              harvestGrade,
               phenologyBadgeEmoji: badgeEmoji,
               phenologyBadgeText: badgeText,
-              weatherModifierText: pheno.weatherModifierText,
+              weatherModifierText: weatherModifier,
               isTimerFrozen: false,
               isFrostbitten: false,
               isHeatWilted: false,
               isDormant: false,
+              hasRootRot: isRootRotActive,
               soilBattery: currentBattery,
               gases: currentGases,
               moistureLevel: currentMoisture,

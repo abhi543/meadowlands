@@ -40,7 +40,7 @@ export const CROP_DISEASE_DEFINITIONS: Record<CropDiseaseType, CropDiseaseDef> =
     remedyActionKey: 'dig_drain',
     timeToDeathSec: 120, // 2 minutes before plant collapses
     contagionIntervalSec: 60,
-    growthSpeedPenalty: 0, // completely freezes growth
+    growthSpeedPenalty: 0.5, // 0.5x speed drag (Progression with drag - no freeze)
   },
   foliar_mildew: {
     type: 'foliar_mildew',
@@ -53,7 +53,7 @@ export const CROP_DISEASE_DEFINITIONS: Record<CropDiseaseType, CropDiseaseDef> =
     remedyActionKey: 'prune_mildew',
     timeToDeathSec: 150, // 2.5 minutes before yield ruined
     contagionIntervalSec: 50,
-    growthSpeedPenalty: 0.5, // 50% growth speed cut
+    growthSpeedPenalty: 0.7, // -0.30x growth penalty (0.70x speed)
   },
   bacterial_soft_rot: {
     type: 'bacterial_soft_rot',
@@ -66,7 +66,7 @@ export const CROP_DISEASE_DEFINITIONS: Record<CropDiseaseType, CropDiseaseDef> =
     remedyActionKey: 'apply_lime',
     timeToDeathSec: 90, // fast 90s liquidation
     contagionIntervalSec: 45,
-    growthSpeedPenalty: 0.2, // severe 80% growth cut
+    growthSpeedPenalty: 0.4, // Locked minimum 0.40x floor drag
   },
 };
 

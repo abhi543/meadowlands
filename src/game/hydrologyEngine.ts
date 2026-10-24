@@ -212,9 +212,9 @@ export const MOISTURE_ZONES: Record<MoistureZoneId, MoistureZoneInfo> = {
     name: 'Desiccated Earth',
     minPct: 0.0,
     maxPct: 15.0,
-    growthSpeedMultiplier: 0.0, // 100% halted
+    growthSpeedMultiplier: 0.40, // Locked minimum speed floor (Progression with Drag)
     colorClass: 'text-rose-400 bg-rose-950/80 border-rose-500/60',
-    badgeText: '0x Halted',
+    badgeText: '0.4x Drag (Floor)',
     textureDescription: 'Pale, dusty tan with cracked polygon lines',
     qualityRollEligible: false,
   },
@@ -256,9 +256,9 @@ export const MOISTURE_ZONES: Record<MoistureZoneId, MoistureZoneInfo> = {
     name: 'Waterlogged / Flooded',
     minPct: 95.01,
     maxPct: 100.0,
-    growthSpeedMultiplier: 1.0,
+    growthSpeedMultiplier: 0.50, // -0.50x drag for waterlogged ground
     colorClass: 'text-blue-300 bg-blue-950/90 border-blue-400/80 animate-pulse',
-    badgeText: '⚠️ Root Rot Hazard',
+    badgeText: '⚠️ 0.5x Waterlogged Drag',
     textureDescription: 'Standing surface puddles with rising bubble reflections',
     qualityRollEligible: false,
   },

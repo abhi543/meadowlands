@@ -544,7 +544,7 @@ function FarmGuide() {
                 <strong>Trigger:</strong> Soil O₂ remains below 20% for &gt;45s due to standing flood water, poor drainage, or open sluice gates.
               </p>
               <p className="text-[10.5px] text-stone-500 dark:text-stone-400 mt-1">
-                <strong>Symptoms &amp; Impact:</strong> Drooping yellow foliage; growth timer freezes; crop yield drops by 50% every 30s until collapse.
+                <strong>Symptoms &amp; Impact:</strong> Drooping yellow foliage; growth velocity suffers sluggish drag (locked at 0.40x minimum floor); crop yield drops by 50% until collapse.
               </p>
               <div className="mt-2 p-1.5 rounded bg-teal-950/40 border border-teal-500/40 text-[10.5px] text-teal-300">
                 <strong>Remedy:</strong> Click <code>[ Dig Drain ]</code> with Hand Hoe to boost O₂ &gt;50%, or dress bed with calcified wood ash.

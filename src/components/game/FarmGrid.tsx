@@ -1104,8 +1104,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const isChargedForSelected = isBatteryChargedForCrop(battery, selectedCrop);
 
           const progress = plot.crop && plot.plantedAt && !plot.ready
-            ? Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult * siltSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000))
+            ? (plot.growthProgress !== undefined
+                ? plot.growthProgress
+                : Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult * siltSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000)))
             : 0;
+          const currentGrowthSpeed = plot.growthSpeedMultiplier ?? (moistureSpeedMult * soilSpeedMult * waterMult);
 
           // Soil styling classes with hydrological dynamics & soil battery energy
           let soilClasses = '';
@@ -1391,17 +1394,25 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     </div>
                   )}
 
-                  {/* Progress bar for growing crops */}
+                  {/* Progress bar for growing crops (Progression with Drag) */}
                   {isGrowing && plot.crop && (
-                    <div className={`absolute bottom-0 left-0 right-0 h-1.5 ${isWatered ? 'bg-cyan-950/60' : 'bg-amber-100 dark:bg-amber-900'}`}>
+                    <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-stone-900/80 border-t border-stone-800/60 overflow-visible z-20">
                       <div
-                        className={`h-full rounded-r transition-all ${
-                          isWatered
-                            ? 'bg-gradient-to-r from-cyan-400 to-blue-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]'
-                            : 'bg-amber-400 dark:bg-amber-500'
+                        className={`h-full rounded-r transition-all duration-300 ${
+                          currentGrowthSpeed >= 0.95
+                            ? 'bg-gradient-to-r from-emerald-500 to-green-400 shadow-[0_0_8px_rgba(34,197,94,0.7)]'
+                            : currentGrowthSpeed >= 0.65
+                            ? 'bg-gradient-to-r from-yellow-400 to-amber-400 bg-[linear-gradient(45deg,rgba(0,0,0,0.25)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.25)_50%,rgba(0,0,0,0.25)_75%,transparent_75%,transparent)] bg-[length:8px_8px] animate-pulse border-r border-yellow-300'
+                            : 'bg-gradient-to-r from-amber-600 to-amber-700 shadow-[0_0_8px_rgba(217,119,6,0.8)]'
                         }`}
-                        style={{ width: `${progress * 100}%` }}
+                        style={{ width: `${Math.max(3, progress * 100)}%` }}
+                        title={`Speed: ${currentGrowthSpeed.toFixed(2)}x (${currentGrowthSpeed < 0.65 ? 'Sluggish: Soggy Soil' : currentGrowthSpeed < 0.95 ? 'Mild Delay' : 'Optimal Speed'})`}
                       />
+                      {currentGrowthSpeed < 0.65 && (
+                        <span className="absolute -top-3.5 right-0.5 text-[10px] leading-none animate-bounce z-25 pointer-events-none" title="Sluggish: Soggy Soil (0.4x Speed Drag)">
+                          🐌
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -1686,23 +1697,59 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
                   {/* Crop Hover Inspection Stamp during Severe Weather / Growing */}
                   {isGrowing && isHovered && (
-                    <div className="absolute inset-0 z-35 bg-stone-950/92 backdrop-blur-[2px] flex flex-col items-center justify-center p-1 text-center animate-in fade-in duration-150 select-none pointer-events-none">
+                    <div className="absolute inset-0 z-35 bg-stone-950/94 backdrop-blur-[2px] flex flex-col items-center justify-center p-1 text-center animate-in fade-in duration-150 select-none pointer-events-none">
                       <span className="text-xl sm:text-2xl animate-pulse">
-                        {plot.isTimerFrozen || plot.isFrostbitten ? '❄️' : (plot.isHeatWilted ? '🥀' : (plot.phenologyBadgeEmoji || '🌱'))}
+                        {currentGrowthSpeed < 0.65 ? '🐌' : (plot.isHeatWilted ? '🥀' : (plot.phenologyBadgeEmoji || '🌱'))}
                       </span>
                       <div className={`mt-0.5 px-1.5 py-0.5 rounded-lg border text-[8px] sm:text-[9px] font-black leading-tight shadow-lg max-w-[95%] ${
-                        plot.isTimerFrozen || plot.isFrostbitten
-                          ? 'bg-sky-950 text-sky-200 border-sky-400 animate-pulse'
-                          : plot.isHeatWilted
-                          ? 'bg-rose-950 text-rose-200 border-rose-400 animate-pulse'
-                          : 'bg-stone-900 text-amber-200 border-amber-500/70'
+                        currentGrowthSpeed < 0.65
+                          ? 'bg-amber-950 text-amber-200 border-amber-400 animate-pulse'
+                          : currentGrowthSpeed < 0.95
+                          ? 'bg-yellow-950 text-yellow-200 border-yellow-400'
+                          : 'bg-emerald-950 text-emerald-200 border-emerald-400'
                       }`}>
-                        {plot.weatherModifierText || (plot.isTimerFrozen ? '❄️ Frozen: Requires heat source to continue growth' : plot.phenologyBadgeText || 'Standard Growth')}
+                        {plot.weatherModifierText || plot.phenologyBadgeText || `Growth Velocity: ${currentGrowthSpeed.toFixed(2)}x`}
+                      </div>
+                      {/* Expected Yield Outlook Inspection Badge */}
+                      <div className={`mt-1 px-1.5 py-0.5 rounded border text-[7.5px] sm:text-[8px] font-black leading-tight max-w-[95%] shadow-md ${
+                        plot.harvestGrade === 'B'
+                          ? 'bg-amber-950/90 border-amber-400 text-amber-200'
+                          : plot.harvestGrade === 'C'
+                          ? 'bg-rose-950/90 border-rose-500 text-rose-200'
+                          : 'bg-emerald-950/90 border-emerald-400 text-emerald-200'
+                      }`}>
+                        {plot.harvestGrade === 'B'
+                          ? 'Current Outlook: 📦 Grade B (Standard) — Aerate to save Grade A!'
+                          : plot.harvestGrade === 'C'
+                          ? 'Current Outlook: ⚠️ Grade C (Stunted) — Heavy Soil Stress!'
+                          : 'Current Outlook: 🌟 Grade A (Pristine) — 3x Items & Seed Return!'}
                       </div>
                       <span className="text-[8px] font-bold text-stone-300 mt-0.5">
-                        {plot.isTimerFrozen ? '❄️ Timer Frozen' : `Progress: ${Math.round(progress * 100)}%`}
+                        {`Progress: ${Math.round(progress * 100)}% (${currentGrowthSpeed.toFixed(2)}x spd)`}
                       </span>
                     </div>
+                  )}
+
+                  {/* Expected Yield Outlook Badge (Always visible on plot during growth) */}
+                  {isGrowing && (
+                    <span
+                      className={`absolute top-1 right-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-black z-20 border shadow-xs ${
+                        plot.harvestGrade === 'C'
+                          ? 'bg-rose-950/90 border-rose-500/80 text-rose-300'
+                          : plot.harvestGrade === 'B'
+                          ? 'bg-amber-950/90 border-amber-400/80 text-amber-300'
+                          : 'bg-emerald-950/90 border-emerald-400/80 text-emerald-300'
+                      }`}
+                      title={
+                        plot.harvestGrade === 'B'
+                          ? 'Current Outlook: 📦 Grade B (Standard) — Aerate to save Grade A!'
+                          : plot.harvestGrade === 'C'
+                          ? 'Current Outlook: ⚠️ Grade C (Stunted) — Heavy Stress'
+                          : 'Current Outlook: 🌟 Grade A (Pristine) — 3x Items & Seed Return'
+                      }
+                    >
+                      {plot.harvestGrade === 'B' ? '📦 Grade B' : plot.harvestGrade === 'C' ? '⚠️ Grade C' : '🌟 Grade A'}
+                    </span>
                   )}
 
                   {/* Early Disease Risk Amber Alert Badge */}
@@ -1800,13 +1847,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         <>
                           <span className="text-xl">{CROPS[plot.crop].emoji}</span>
                           <span className={`text-[10px] font-semibold mt-0.5 ${
-                            plot.isTimerFrozen || plot.isFrostbitten
-                              ? 'text-sky-300 font-black animate-pulse'
-                              : plot.isHeatWilted
-                              ? 'text-orange-400 font-bold'
-                              : isWatered ? 'text-cyan-300' : 'text-amber-700 dark:text-amber-400'
+                            currentGrowthSpeed < 0.65
+                              ? 'text-amber-400 font-bold'
+                              : currentGrowthSpeed < 0.95
+                              ? 'text-yellow-300 font-semibold'
+                              : isWatered ? 'text-cyan-300' : 'text-emerald-400 dark:text-emerald-300'
                           }`}>
-                            {plot.isTimerFrozen || plot.isFrostbitten ? '❄️ Frozen' : plot.isHeatWilted ? '🥀 Wilted' : `${Math.round(progress * 100)}%`}
+                            {currentGrowthSpeed < 0.65
+                              ? `🐌 ${Math.round(progress * 100)}%`
+                              : plot.isHeatWilted
+                              ? `🥀 ${Math.round(progress * 100)}%`
+                              : `${Math.round(progress * 100)}%`}
                           </span>
                         </>
                       )}
@@ -1831,17 +1882,15 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   {plot.crop && (plot.weatherModifierText || plot.phenologyBadgeEmoji) && (
                     <span
                       className={`absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold border z-10 backdrop-blur-xs shadow-xs ${
-                        plot.isTimerFrozen || plot.isFrostbitten
-                          ? 'bg-sky-950/95 border-sky-400 text-sky-200 animate-pulse'
+                        currentGrowthSpeed < 0.65
+                          ? 'bg-amber-950/95 border-amber-500/80 text-amber-200'
                           : 'bg-stone-900/90 border-stone-700/80 text-amber-200'
                       }`}
                       title={plot.weatherModifierText || plot.phenologyBadgeText || ''}
                     >
-                      <span>{plot.isTimerFrozen || plot.isFrostbitten ? '❄️' : (plot.phenologyBadgeEmoji || '🌦️')}</span>
+                      <span>{plot.phenologyBadgeEmoji || (currentGrowthSpeed < 0.65 ? '🐌' : '🌦️')}</span>
                       <span className="truncate max-w-[65px] hidden xs:inline">
-                        {plot.isTimerFrozen || plot.isFrostbitten
-                          ? 'Frozen'
-                          : (plot.weatherModifierText?.split(':')[0]?.trim() || plot.phenologyBadgeText?.split('(')[0]?.trim())}
+                        {plot.weatherModifierText?.split(':')[0]?.trim() || plot.phenologyBadgeText?.split('(')[0]?.trim() || 'Standard'}
                       </span>
                     </span>
                   )}
