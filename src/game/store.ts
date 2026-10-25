@@ -65,13 +65,6 @@ import {
   type TowerStorageTierConfig,
 } from '@/game/hydraulicFailSafeEngine';
 import {
-  type PlotSoilBattery,
-  DEFAULT_SOIL_BATTERY,
-  isBatteryChargedForCrop,
-  consumeOrRestoreSoilBattery,
-  rechargeSoilBatteryFull,
-} from '@/game/soilEnergyEngine';
-import {
   type PlotGasState,
   createDefaultPlotGases,
   stepPlotGasSimulation,
@@ -444,9 +437,6 @@ export interface PlotState {
   // Hardcore Crop Rotation & Soil Health
   lastHarvestedCrop?: CropId | null;
   isMonoculture?: boolean;
-  // Soil Battery Energy System (Module 1: Agronomy)
-  soilBattery?: PlotSoilBattery;
-  plantedInDepletedSoil?: boolean;
   // Dynamic Soil Atmospheric Gas System (CO2, O2, Nitrogen)
   gases?: PlotGasState;
   // Dynamic Crop Disease & Blight Ecosystem
@@ -712,7 +702,7 @@ export interface NotificationItem {
   message: string;
   emoji: string;
   createdAt: number;
-  type: 'xp' | 'coin' | 'gem' | 'discovery' | 'event' | 'info';
+  type: 'xp' | 'coin' | 'gem' | 'discovery' | 'event' | 'info' | 'danger' | 'alert';
   category?: NotificationCategory;
   priority?: NotificationPriority;
   shortcut?: NotificationActionShortcut;
@@ -1452,8 +1442,6 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
   waterloggedSeconds: 0,
   isWithered: false,
   hasRootRot: false,
-  soilBattery: { green: true, yellow: true, red: true },
-  plantedInDepletedSoil: false,
   gases: createDefaultPlotGases(),
   disease: null,
   lowO2DurationSec: 0,
@@ -1888,13 +1876,6 @@ export const useGameStore = create<GameState>()(
           state.addNotification(`⚠️ Monoculture Exhaustion: Planting ${cropDef.name} consecutively without crop rotation depleted soil micronutrients (+35% grow time)!`, '🥀', 'info');
         }
 
-        // Soil Battery Energy Check (Depleted Soil Penalty)
-        const isCharged = isBatteryChargedForCrop(plot.soilBattery, cropId);
-        const plantedInDepletedSoil = !isCharged;
-        if (plantedInDepletedSoil) {
-          state.addNotification(`⚠️ Tired Soil: Planted ${cropDef.name} without matching energy! Growth duration is doubled and harvest capped at 1x.`, '🥀', 'info');
-        }
-
         // Dynamic Crop Disease & Soil Contamination Check
         let initialDisease: PlotDiseaseState | null = null;
         if (plot.isContaminatedDirt) {
@@ -1920,8 +1901,6 @@ export const useGameStore = create<GameState>()(
           alluvialSiltCyclesRemaining: plot.alluvialSiltCyclesRemaining,
           moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
           isMonoculture,
-          soilBattery: plot.soilBattery || { green: true, yellow: true, red: true },
-          plantedInDepletedSoil,
           disease: initialDisease,
           lowO2DurationSec: 0,
           highCo2DurationSec: 0,
@@ -1973,10 +1952,7 @@ export const useGameStore = create<GameState>()(
         const bonusPrismatic = (pheno.bonusPrismaticChance || 0) + (state.hydrology?.isRainbowActive ? 0.10 : 0) - (plot.isMonoculture ? 0.25 : 0);
         const hasSiltFertilizer = Boolean(plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0);
         const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, Math.max(0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0)));
-        const isDepletedPenalty = Boolean(plot.plantedInDepletedSoil);
-        const baseTotalYield = isDepletedPenalty
-          ? 1 // Depleted soil penalty: drops to 1x harvest
-          : (cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity);
+        const baseTotalYield = cropDef.yieldCount + bonusYield + soilTier.bonusYield + pheno.extraQuantity;
 
         // --- Progression with Drag: Dynamic Yield Tiering (Grades A, B, C) ---
         // 0–20 Stress: Grade A (Pristine) -> 3x Items, 100% Value, +1 Seed Return.
@@ -2005,19 +1981,15 @@ export const useGameStore = create<GameState>()(
           givesSeedReturn = false;
         }
 
-        const gradeYield = isDepletedPenalty
-          ? 1
-          : Math.max(1, Math.round(baseTotalYield * (gradeItemMultiplier / 3)));
+        const gradeYield = Math.max(1, Math.round(baseTotalYield * (gradeItemMultiplier / 3)));
 
         // Crop Disease Yield Penalty & Vector Contamination
         const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
           ? Math.max(0.1, 1 - (plot.disease.yieldReductionPct / 100))
           : 1.0;
 
-        const qualityAdjusted = isDepletedPenalty
-          ? 1
-          : Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
-        const totalYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
+        const qualityAdjusted = Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
+        const totalYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
 
         // Dynamic Value & Seed Return calculation
         const unitBasePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
@@ -2028,10 +2000,6 @@ export const useGameStore = create<GameState>()(
           ...state.barn,
           ...(givesSeedReturn ? { [seedItemKey]: (state.barn[seedItemKey] || 0) + 1 } : {}),
         };
-
-        // Soil Battery Energy Update (Consumption or Restorative Legume Recharge)
-        const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
-        const newBattery = batteryRes.newBattery;
 
         // Tool Sanitation & Soil Contamination Vector Tracking
         const wasDiseased = Boolean(plot.disease && plot.disease.stage === 'active');
@@ -2098,8 +2066,6 @@ export const useGameStore = create<GameState>()(
           isDormant: false,
           lastHarvestedCrop: plot.crop,
           isMonoculture: false,
-          soilBattery: newBattery,
-          plantedInDepletedSoil: false,
           gases: postHarvestGases,
           growthProgress: 0,
           growthSpeedMultiplier: 1.0,
@@ -2117,11 +2083,7 @@ export const useGameStore = create<GameState>()(
           state.addNotification(`⚠️ Grade C (Stunted) Harvest: +${totalYield} ${cropDef.name} (1x Item), 20% Value (+${earnedGradeCoins}🪙, No Seeds).`, '⚠️', 'event');
         }
 
-        if (isDepletedPenalty) {
-          state.addNotification(`⚠️ Tired Soil: Harvest reduced to only 1x crop (Slowed Growth) due to depleted soil battery! Add compost or plant restorative peas to recharge.`, '⚠️', 'info');
-        } else if (batteryRes.action === 'restored') {
-          state.addNotification(`🫛 Restorative Legume Harvest! Recharged 🟢 Leaf & Stem Soil Energy to 100% full!`, '🌱', 'discovery');
-        } else if (qualityRoll.quality !== 'standard') {
+        if (qualityRoll.quality !== 'standard') {
           const qName = qualityRoll.quality.charAt(0).toUpperCase() + qualityRoll.quality.slice(1);
           state.addNotification(`${qualityRoll.badgeEmoji} ${qualityRoll.badgeText} Harvest! +${totalYield} ${qName} ${cropDef.name} deposited into Silo!`, qualityRoll.badgeEmoji, 'event');
         } else if (plot.hasRootRot) {
@@ -2221,7 +2183,6 @@ export const useGameStore = create<GameState>()(
         // Deduct cost and plant all
         const newPlots = [...state.plots];
         let monocultureCount = 0;
-        let depletedPlantedCount = 0;
         let contaminatedCount = 0;
         let toolInfectionCount = 0;
         for (const pid of emptyPlotIds) {
@@ -2230,10 +2191,6 @@ export const useGameStore = create<GameState>()(
           const soilTier = getSoilTier(pLevel);
           const isMonoculture = Boolean(state.isHardcoreMode && currentPlot?.lastHarvestedCrop && currentPlot?.lastHarvestedCrop === cropId);
           if (isMonoculture) monocultureCount++;
-
-          const isCharged = isBatteryChargedForCrop(currentPlot?.soilBattery, cropId);
-          const plantedInDepletedSoil = !isCharged;
-          if (plantedInDepletedSoil) depletedPlantedCount++;
 
           let initialDisease: PlotDiseaseState | null = null;
           if (currentPlot?.isContaminatedDirt) {
@@ -2256,8 +2213,6 @@ export const useGameStore = create<GameState>()(
             alluvialSiltCyclesRemaining: currentPlot?.alluvialSiltCyclesRemaining,
             moistureLevel: currentPlot?.moistureLevel !== undefined ? currentPlot?.moistureLevel : 60.0,
             isMonoculture,
-            soilBattery: currentPlot?.soilBattery || { green: true, yellow: true, red: true },
-            plantedInDepletedSoil,
             disease: initialDisease,
             lowO2DurationSec: 0,
             highCo2DurationSec: 0,
@@ -2274,9 +2229,6 @@ export const useGameStore = create<GameState>()(
         }
         if (monocultureCount > 0) {
           state.addNotification(`⚠️ Monoculture Exhaustion: ${monocultureCount} plot(s) planted with ${cropDef.name} consecutively (+35% grow time)!`, '🥀', 'info');
-        }
-        if (depletedPlantedCount > 0) {
-          state.addNotification(`⚠️ Tired Soil: Planted ${depletedPlantedCount} plot(s) without matching fuel! Slowed growth & 1x harvest.`, '🥀', 'info');
         }
         if (contaminatedCount > 0) {
           state.addNotification(`☣️ Soil Contamination: Replanted ${contaminatedCount} plot(s) on un-solarized dirty soil! Bacterial Soft Rot immediately struck.`, '☣️', 'danger');
@@ -2371,10 +2323,7 @@ export const useGameStore = create<GameState>()(
             const qualityRoll = rollCropQuality(Boolean(plot.hasRootRot), plot.moistureLevel ?? 60.0, bonusPrismatic + (hasSiltFertilizer ? 0.15 : 0));
             if (qualityRoll.quality !== 'standard') qualityCropsCount++;
 
-            const isDepletedPenalty = Boolean(plot.plantedInDepletedSoil);
-            const singleYield = isDepletedPenalty
-              ? 1
-              : (cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity);
+            const singleYield = cropDef.yieldCount + bonus + soilTier.bonusYield + pheno.extraQuantity;
 
             // --- Progression with Drag: Dynamic Yield Tiering (Grades A, B, C) ---
             const stress = Math.min(100, Math.max(0, plot.stressAccumulator ?? 0));
@@ -2403,20 +2352,16 @@ export const useGameStore = create<GameState>()(
               gradeCCount++;
             }
 
-            const gradeYield = isDepletedPenalty
-              ? 1
-              : Math.max(1, Math.round(singleYield * (gradeItemMultiplier / 3)));
+            const gradeYield = Math.max(1, Math.round(singleYield * (gradeItemMultiplier / 3)));
 
             // Crop Disease Yield Penalty & Vector Contamination
             const diseaseYieldMultiplier = (plot.disease && plot.disease.stage === 'active')
               ? Math.max(0.1, 1 - (plot.disease.yieldReductionPct / 100))
               : 1.0;
 
-            const qualityAdjusted = isDepletedPenalty
-              ? 1
-              : Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
-            const plotYield = (isDoubleProc && !isDepletedPenalty) ? qualityAdjusted * 2 : qualityAdjusted;
-            totalBonusYield += (!isDepletedPenalty ? (bonus + soilTier.bonusYield) : 0);
+            const qualityAdjusted = Math.max(1, Math.round(gradeYield * qualityRoll.yieldMultiplier * pheno.yieldMultiplier * diseaseYieldMultiplier));
+            const plotYield = isDoubleProc ? qualityAdjusted * 2 : qualityAdjusted;
+            totalBonusYield += bonus + soilTier.bonusYield;
 
             // Dynamic Value & Seed Return calculation
             const unitBasePrice = Math.max(1, Math.floor(cropDef.seedCost / 2) + 1);
@@ -2428,10 +2373,6 @@ export const useGameStore = create<GameState>()(
               const seedItemKey = `seed_${plot.crop}`;
               newBarn[seedItemKey] = (newBarn[seedItemKey] || 0) + 1;
             }
-
-            // Soil battery energy update
-            const batteryRes = consumeOrRestoreSoilBattery(plot.soilBattery, plot.crop);
-            const newBattery = batteryRes.newBattery;
 
             // Tool Sanitation & Soil Contamination Vector Tracking
             const wasDiseased = Boolean(plot.disease && plot.disease.stage === 'active');
@@ -2487,8 +2428,6 @@ export const useGameStore = create<GameState>()(
               isDormant: false,
               lastHarvestedCrop: plot.crop,
               isMonoculture: false,
-              soilBattery: newBattery,
-              plantedInDepletedSoil: false,
               gases: postHarvestGases,
               growthProgress: 0,
               growthSpeedMultiplier: 1.0,
@@ -2579,9 +2518,9 @@ export const useGameStore = create<GameState>()(
         const plot = state.plots[plotId];
         if (!plot || plotId >= state.unlockedPlots) return false;
 
-        const isFullyCharged = plot.soilBattery?.green && plot.soilBattery?.yellow && plot.soilBattery?.red;
-        if (isFullyCharged && !plot.plantedInDepletedSoil) {
-          state.addNotification(`Plot #${plotId + 1} soil energy is already at 100% full!`, 'ℹ️', 'info');
+        const isFullyEnriched = (plot.gases?.nitrogen ?? 78) >= 95;
+        if (isFullyEnriched) {
+          state.addNotification(`Plot #${plotId + 1} soil is already fully nutrient-enriched!`, 'ℹ️', 'info');
           return false;
         }
 
@@ -2609,8 +2548,6 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         newPlots[plotId] = {
           ...plot,
-          soilBattery: rechargeSoilBatteryFull(),
-          plantedInDepletedSoil: false, // Compost instantly revitalizes tired crops too!
           gases: {
             ...(plot.gases || createDefaultPlotGases()),
             nitrogen: 100, // Organic Manure / Compost Applied: Instantly sets to 100%
@@ -2623,7 +2560,7 @@ export const useGameStore = create<GameState>()(
           plots: newPlots,
         });
 
-        state.addNotification(`✨ Organic Compost Applied to Plot #${plotId + 1}! Battery refilled to 100% (${costMethod}).`, '🌱', 'discovery');
+        state.addNotification(`✨ Organic Compost Applied to Plot #${plotId + 1}! Soil nitrogen enriched to 100% (${costMethod}).`, '🌱', 'discovery');
         return true;
       },
 
@@ -2638,7 +2575,7 @@ export const useGameStore = create<GameState>()(
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
           if (!plot) continue;
-          const isFull = plot.soilBattery?.green && plot.soilBattery?.yellow && plot.soilBattery?.red && !plot.plantedInDepletedSoil;
+          const isFull = (plot.gases?.nitrogen ?? 78) >= 95;
           if (!isFull) {
             if ((newBarn.organic_compost || 0) > 0) {
               newBarn.organic_compost -= 1;
@@ -2653,8 +2590,6 @@ export const useGameStore = create<GameState>()(
             }
             newPlots[i] = {
               ...plot,
-              soilBattery: rechargeSoilBatteryFull(),
-              plantedInDepletedSoil: false,
               gases: {
                 ...(plot.gases || createDefaultPlotGases()),
                 nitrogen: 100,
@@ -2665,7 +2600,7 @@ export const useGameStore = create<GameState>()(
         }
 
         if (rechargedCount === 0) {
-          state.addNotification('All plots already have 100% full soil energy!', 'ℹ️', 'info');
+          state.addNotification('All plots already have optimal soil nitrogen!', 'ℹ️', 'info');
           return;
         }
 
@@ -2675,7 +2610,7 @@ export const useGameStore = create<GameState>()(
           silo: newSilo,
           coins: state.coins - coinsSpent,
         });
-        state.addNotification(`✨ Soil Restored: Recharged ${rechargedCount} plots to 100% battery!`, '🌱', 'discovery');
+        state.addNotification(`✨ Soil Restored: Enriched ${rechargedCount} plots with organic nitrogen!`, '🌱', 'discovery');
       },
 
       tillUnderCrop: (plotId: number) => {
@@ -2718,15 +2653,14 @@ export const useGameStore = create<GameState>()(
           isWithered: false,
           hasRootRot: false,
           isMonoculture: false,
-          plantedInDepletedSoil: false,
           phenologyBadgeEmoji: undefined,
           phenologyBadgeText: undefined,
           isFrostbitten: false,
           isHeatWilted: false,
           isDormant: false,
-          soilBattery: plot.crop === 'peas'
-            ? { ...(plot.soilBattery || { green: true, yellow: true, red: true }), green: true }
-            : (plot.soilBattery || { green: true, yellow: true, red: true }),
+          gases: plot.crop === 'peas'
+            ? { ...(plot.gases || createDefaultPlotGases()), nitrogen: 100 }
+            : (plot.gases || createDefaultPlotGases()),
         };
 
         set({
@@ -2736,7 +2670,7 @@ export const useGameStore = create<GameState>()(
         });
 
         if (plot.crop === 'peas') {
-          state.addNotification(`🌱 Plot #${plotId + 1}: Restorative Peas tilled under as green manure! Recharged 🟢 Leaf Fuel to 100% full!`, '🚜', 'discovery');
+          state.addNotification(`🌱 Plot #${plotId + 1}: Restorative Peas tilled under as green manure! Soil nitrogen boosted to 100%!`, '🚜', 'discovery');
         } else {
           state.addNotification(`🌱 Plot #${plotId + 1}: Crop tilled under as green manure! Blight cleansed & bed prepped for restorative planting.`, '🚜', 'discovery');
         }
@@ -2748,9 +2682,9 @@ export const useGameStore = create<GameState>()(
         const plot = state.plots[plotId];
         if (!plot || plotId >= state.unlockedPlots || plot.crop !== null) return false;
 
-        const isDepleted = !plot.soilBattery?.green || !plot.soilBattery?.yellow || !plot.soilBattery?.red;
-        if (!isDepleted && !plot.plantedInDepletedSoil) {
-          state.addNotification(`Plot #${plotId + 1} already has 100% full nutrient reserves!`, 'ℹ️', 'info');
+        const isFullyFlushed = (plot.moistureLevel ?? 60) >= 80 && (plot.gases?.o2 ?? 21) >= 60;
+        if (isFullyFlushed) {
+          state.addNotification(`Plot #${plotId + 1} already has optimal moisture and aeration!`, 'ℹ️', 'info');
           return false;
         }
 
@@ -2766,8 +2700,6 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         newPlots[plotId] = {
           ...plot,
-          soilBattery: rechargeSoilBatteryFull(),
-          plantedInDepletedSoil: false,
           moistureLevel: Math.max(80, plot.moistureLevel !== undefined ? plot.moistureLevel : 80),
           isWatered: true,
           desiccatedSeconds: 0,
@@ -2851,8 +2783,6 @@ export const useGameStore = create<GameState>()(
         const newPlots = [...state.plots];
         newPlots[plotId] = {
           ...plot,
-          soilBattery: rechargeSoilBatteryFull(),
-          plantedInDepletedSoil: false,
           isMonoculture: false,
           isWithered: false,
           hasRootRot: false,
@@ -6875,7 +6805,7 @@ export const useGameStore = create<GameState>()(
           return false;
         }
 
-        const availableSpace = currentGasLab.digesterCapacityLiters - currentGasLab.digesterCurrentLiters;
+        const availableSpace = currentGasLab.digesterMaxCapacityLiters - currentGasLab.digesterCurrentLiters;
         if (availableSpace <= 0) {
           state.addNotification('Anaerobic Digester tank is at max capacity (3,000L)!', '⚠️', 'info');
           return false;
@@ -6964,19 +6894,22 @@ export const useGameStore = create<GameState>()(
         playWashdownHoseSound();
         currentGasLab.storedOxygen -= 30;
 
-        const pondEco = state.aquaticEcosystem?.pond;
-        const newAquatic = state.aquaticEcosystem ? {
-          ...state.aquaticEcosystem,
-          pond: pondEco ? {
+        const currentEcosystem = { ...(state.fishery.zoneEcosystem || createDefaultZoneEcosystem()) };
+        const pondEco = currentEcosystem.zone_pond;
+        if (pondEco) {
+          currentEcosystem.zone_pond = {
             ...pondEco,
             currentStock: Math.min(pondEco.maxStock, pondEco.currentStock + 6),
-            dissolvedOxygenRatio: 1.0,
-          } : undefined,
-        } : undefined;
+            isDepleted: false,
+          };
+        }
 
         set({
           gasProductionLab: currentGasLab,
-          aquaticEcosystem: newAquatic as any,
+          fishery: {
+            ...state.fishery,
+            zoneEcosystem: currentEcosystem,
+          },
           isDirty: true,
         });
 
@@ -9596,8 +9529,6 @@ export const useGameStore = create<GameState>()(
             currentMoisture = Math.max(0, currentMoisture - (0.35 * deltaSeconds));
           }
 
-          let currentBattery = p.soilBattery || { green: true, yellow: true, red: true };
-
           // Step Dynamic Crop Disease & Blight Simulation
           const diseaseRes = stepPlotDiseaseTick(
             {
@@ -9649,57 +9580,19 @@ export const useGameStore = create<GameState>()(
               highNitrogenDurationSec: 0,
               isContaminatedDirt: currentContaminatedDirt,
               contaminatedCyclesRemaining: currentContaminatedCycles,
-              soilBattery: currentBattery,
               gases: currentGases,
               moistureLevel: currentMoisture,
             };
-          }
-          const isHeatHazard = activeWeatherId === 'heatwave' || activeWeatherId === 'drought' || activeWeatherId === 'plasma_firestorm';
-          const isTowerSupplying = Boolean(hydroSimResult.updatedHydrology.sluiceGatesOpen && hydroSimResult.updatedHydrology.towerLiters > 200);
-
-          if (isHeatHazard && !isTowerSupplying && !p.isWatered && (p.moistureLevel ?? 0) <= 25) {
-            // Twice as fast burnout during dry unsupplied heatwaves (~1.2% per second per unwatered plot)
-            if (Math.random() < 0.012 * deltaSeconds) {
-              if (currentBattery.red) {
-                currentBattery = { ...currentBattery, red: false };
-                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} fruit/flower battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
-              } else if (currentBattery.yellow) {
-                currentBattery = { ...currentBattery, yellow: false };
-                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} root battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
-              } else if (currentBattery.green) {
-                currentBattery = { ...currentBattery, green: false };
-                state.addNotification(`☀️ Heatwave Battery Burnout: Unirrigated Plot #${p.id + 1} leaf battery burned out! Supply water via Gravity Tower.`, '🔥', 'info');
-              }
-            }
-          }
-
-          // Rule 3: Torrential Downpour Nutrient Leaching
-          const isDownpour = activeWeatherId === 'rain' || activeWeatherId === 'monsoon' || activeWeatherId === 'supercell_deluge' || activeWeatherId === 'thunderstorm';
-          const isOpenFurrow = pLevel <= 2 && hydroSimResult.updatedHydrology.canalTier === 1 && !workshopLoadout.aquiferCasingsInstalled && (workshopLoadout.sluiceGateSealsInstalled || 0) < 2;
-
-          if (isDownpour && isOpenFurrow) {
-            if (Math.random() < 0.006 * deltaSeconds) {
-              if (currentBattery.green) {
-                currentBattery = { ...currentBattery, green: false };
-                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached leaf nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
-              } else if (currentBattery.yellow) {
-                currentBattery = { ...currentBattery, yellow: false };
-                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached root nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
-              } else if (currentBattery.red) {
-                currentBattery = { ...currentBattery, red: false };
-                state.addNotification(`🌧️ Downpour Nutrient Leaching: Rain leached fruit nutrients from open furrow Plot #${p.id + 1}! Trench canals or upgrade soil.`, '🌧️', 'info');
-              }
-            }
           }
 
           if (p.crop && p.plantedAt && !p.ready) {
             const plotOverclock = state.entityOverclocks?.[`plot_${p.id}`];
             const isPlotExhausted = Boolean(plotOverclock?.isExhausted && plotOverclock?.exhaustedUntil && now < plotOverclock.exhaustedUntil);
             if (isPlotExhausted) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
+              return { ...p, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
             if (p.isWithered) {
-              return { ...p, soilBattery: currentBattery, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
+              return { ...p, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
 
             // Direct Atmospheric Crop Phenology evaluation
@@ -9764,12 +9657,11 @@ export const useGameStore = create<GameState>()(
             const siltSpeedMultiplier = (p.alluvialSiltCyclesRemaining && p.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
             const phenoSpeedMultiplier = pheno.growthSpeedMultiplier > 0 ? pheno.growthSpeedMultiplier : 0.70;
             const monocultureMultiplier = (state.isHardcoreMode && p.isMonoculture) ? 0.74 : 1.0;
-            const soilBatterySpeedMultiplier = p.plantedInDepletedSoil ? 0.60 : 1.0;
             const anoxiaModifier = currentGases.isAnoxiaSuffocated ? 0.60 : 1.0;
             const frostModifier = (pheno.isFrostbitten && !hasHeatSource) ? 0.60 : 1.0;
 
             // Multiplicative speed calculation
-            const rawSpeed = baseGrowthRate * co2Modifier * aeratedModifier * waterloggedModifier * mildewModifier * otherDiseaseModifier * soilSpeedMultiplier * plotMultiplier * waterBoost * siltSpeedMultiplier * phenoSpeedMultiplier * monocultureMultiplier * soilBatterySpeedMultiplier * anoxiaModifier * frostModifier;
+            const rawSpeed = baseGrowthRate * co2Modifier * aeratedModifier * waterloggedModifier * mildewModifier * otherDiseaseModifier * soilSpeedMultiplier * plotMultiplier * waterBoost * siltSpeedMultiplier * phenoSpeedMultiplier * monocultureMultiplier * anoxiaModifier * frostModifier;
 
             // Speed Clamp: Maximum 1.50x, Minimum 0.40x. Under NO circumstances does speed reach 0.0x!
             const clampedSpeedMultiplier = Math.max(0.40, Math.min(1.50, rawSpeed));
@@ -9873,7 +9765,6 @@ export const useGameStore = create<GameState>()(
               isHeatWilted: false,
               isDormant: false,
               hasRootRot: isRootRotActive,
-              soilBattery: currentBattery,
               gases: currentGases,
               moistureLevel: currentMoisture,
               disease: currentDisease,
@@ -9886,7 +9777,6 @@ export const useGameStore = create<GameState>()(
           }
           return {
             ...p,
-            soilBattery: currentBattery,
             gases: currentGases,
             moistureLevel: currentMoisture,
             disease: currentDisease,

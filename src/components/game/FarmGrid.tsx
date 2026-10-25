@@ -15,16 +15,8 @@ import {
 } from '@/game/weatherEngine';
 import { evaluateFaunaWeather } from '@/game/faunaWeatherEngine';
 import { getCircadianClock } from '@/game/shiftEngine';
-import {
-  CROP_NUTRIENT_PROFILES,
-  isBatteryChargedForCrop,
-  isSoilBatteryFull,
-  type PlotSoilBattery,
-} from '@/game/soilEnergyEngine';
 import { calculatePlotCureCost } from '@/game/cropDiseaseEngine';
 import {
-  playSoilEnergyChime,
-  playTiredSoilAlert,
   playFloodWashSound,
   playBioDressingSound,
 } from '@/lib/soundEffects';
@@ -140,7 +132,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const totalCureCost = diseasedPlots.reduce((sum, p) => sum + calculatePlotCureCost(p.crop), 0);
   const canAffordCureAll = coins >= totalCureCost;
   const emptyCount = visiblePlots.filter(p => !p.crop).length;
-  const tiredPlotsCount = visiblePlots.filter(p => !isSoilBatteryFull(p.soilBattery)).length;
   const selectedCropDef = CROPS[selectedCrop];
   const totalPlantCost = emptyCount * selectedCropDef.seedCost;
   const canAffordPlantAll = selectedCropDef.seedCost === 0 || coins >= totalPlantCost;
@@ -399,10 +390,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </div>
         </div>
 
-        {/* Seed Packets with Upper-Corner Colored Nutrient Fuel Dots */}
+        {/* Seed Packets */}
         <div className="flex gap-2 flex-wrap">
           {CROP_LIST.map(crop => {
-            const profile = CROP_NUTRIENT_PROFILES[crop.id];
             const isSelected = selectedCrop === crop.id;
             return (
               <button
@@ -416,17 +406,8 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105 ring-2 ring-amber-400/50'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                 }`}
-                title={`${crop.name} — Requires ${profile?.fuelLabel || 'Soil Energy'}`}
+                title={crop.name}
               >
-                {/* Seed Menu Upper-Corner Nutrient Color Dot */}
-                {profile && (
-                  <span
-                    className="absolute -top-1.5 -right-1.5 text-xs bg-stone-900/90 rounded-full w-4 h-4 flex items-center justify-center border border-white/40 shadow-sm"
-                    title={profile.fuelLabel}
-                  >
-                    {profile.badgeDot}
-                  </span>
-                )}
                 <span>{crop.emoji}</span> {crop.name}
                 {crop.seedCost > 0 && (
                   <span className="text-[11px] opacity-75 ml-1.5 font-mono">
@@ -633,13 +614,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const moistureSpeedMult = isWithered ? 0 : moistureZone.growthSpeedMultiplier;
           const siltSpeedMult = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
-          // Soil Battery Energy State
-          const battery: PlotSoilBattery = plot.soilBattery || { green: true, yellow: true, red: true };
-          const isBatteryFull = isSoilBatteryFull(battery);
-          const isDepleted = !isBatteryFull;
           const isHovered = hoveredPlotId === plot.id;
-          const selectedProfile = CROP_NUTRIENT_PROFILES[selectedCrop];
-          const isChargedForSelected = isBatteryChargedForCrop(battery, selectedCrop);
 
           const progress = plot.crop && plot.plantedAt && !plot.ready
             ? (plot.growthProgress !== undefined
@@ -648,7 +623,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             : 0;
           const currentGrowthSpeed = plot.growthSpeedMultiplier ?? (moistureSpeedMult * soilSpeedMult * waterMult);
 
-          // Soil styling classes with hydrological dynamics & soil battery energy
+          // Soil styling classes with hydrological dynamics
           let soilClasses = '';
           if (hasBlight) {
             soilClasses = 'bg-purple-950/70 border-purple-500 animate-pulse ring-2 ring-purple-400 shadow-lg shadow-purple-500/40 cursor-pointer text-white';
@@ -683,9 +658,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               : 'bg-green-100 dark:bg-green-900/40 border-green-400 dark:border-green-600 hover:scale-105 shadow-green-200/50 shadow-lg cursor-pointer';
           } else if (moistureZone.id === 'optimal') {
             // Optimal capillary loam: Rich dark chocolate soil with emerald/cyan aeration ring
-            soilClasses = isDepleted
-              ? 'bg-gradient-to-br from-[#736d65] to-[#59554f] border-amber-500/70 ring-1 ring-amber-500/40 text-stone-200 cursor-pointer'
-              : 'bg-[#3b2716] dark:bg-[#2c1d10] border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-md shadow-emerald-950/40 text-stone-100 cursor-pointer';
+            soilClasses = 'bg-[#3b2716] dark:bg-[#2c1d10] border-emerald-400/80 ring-2 ring-emerald-400/40 shadow-md shadow-emerald-950/40 text-stone-100 cursor-pointer';
           } else if (moistureZone.id === 'waterlogged' || moistureZone.id === 'saturated') {
             // Saturated soil
             soilClasses = 'bg-[#2b2724] dark:bg-[#1e1c1b] border-cyan-400/70 ring-1 ring-cyan-400/40 text-cyan-200 cursor-pointer';
@@ -693,17 +666,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             // Desiccated earth: dusty cracked pale soil
             soilClasses = 'bg-[#e8d5be] dark:bg-stone-900/80 border-rose-500/60 ring-1 ring-rose-400/40 text-rose-300 cursor-pointer';
           } else if (isGrowing) {
-            // Growing soil (highlight tired soil with amber outline if planted depleted)
-            soilClasses = plot.plantedInDepletedSoil
-              ? 'bg-gradient-to-br from-[#7a756e] to-[#635f58] border-amber-500/70 ring-1 ring-amber-500/40 text-amber-200 cursor-pointer'
-              : 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
+            soilClasses = 'bg-[#eedbc5]/60 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 hover:border-cyan-400 cursor-pointer';
           } else {
-            // Empty plot dirt appearance:
-            // Full Energy: Plot surface renders as rich, dark, damp brown soil.
-            // Depleted Energy: Plot surface visibly changes to pale, dry, cracked gray dirt with subtle withered patches.
-            soilClasses = isBatteryFull
-              ? 'bg-gradient-to-br from-[#2f1b0c] via-[#3d2410] to-[#201206] border-[#663b1a] text-amber-100 shadow-md hover:border-amber-400 cursor-pointer'
-              : 'bg-gradient-to-br from-[#96918a] via-[#827d76] to-[#69645e] border-stone-400 text-stone-200 shadow-inner hover:border-amber-300 cursor-pointer';
+            // Empty plot dirt appearance: Rich dark damp brown soil
+            soilClasses = 'bg-gradient-to-br from-[#2f1b0c] via-[#3d2410] to-[#201206] border-[#663b1a] text-amber-100 shadow-md hover:border-amber-400 cursor-pointer';
           }
 
           const handlePlotClick = () => {
@@ -724,12 +690,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             } else if (isReady) {
               harvestPlot(plot.id);
             } else if (isEmpty) {
-              if (isDepleted) {
-                // Tapping an empty depleted plot toggles contextual actions: [ 🌊 Flush Bed ] / [ 🧪 Bio-Dressing ]
-                setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
-              } else {
-                plantCrop(plot.id, selectedCrop);
-              }
+              plantCrop(plot.id, selectedCrop);
             } else if (isGrowing) {
               // Tapping growing crop toggles contextual action bubble: [ ❌ Uproot & Till Under ]
               setActiveActionPlotId(prev => prev === plot.id ? null : plot.id);
@@ -743,13 +704,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
               tabIndex={0}
               onMouseEnter={() => {
                 setHoveredPlotId(plot.id);
-                if (!plot.crop) {
-                  if (selectedProfile?.isRestorative || isChargedForSelected) {
-                    playSoilEnergyChime();
-                  } else {
-                    playTiredSoilAlert();
-                  }
-                }
               }}
               onMouseLeave={() => {
                 if (hoveredPlotId === plot.id) {
@@ -826,7 +780,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 </div>
               ) : (
                 <>
-                  {/* Soil Moisture Zone Pill & Root Rot Indicator */}
+                  {/* Soil Moisture Zone Pill */}
                   <div className="absolute top-1 left-1 flex items-center gap-1 z-10 pointer-events-none">
                     <span className={`px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-mono font-black border backdrop-blur-md ${
                       moistureZone.id === 'optimal'
@@ -839,69 +793,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     }`} title={`${moistureZone.name}: ${Math.round(moisturePct)}% (${moistureZone.badgeText})`}>
                       💧{Math.round(moisturePct)}%
                     </span>
-                    {hasRootRot && (
-                      <span className="text-[9px] animate-pulse" title="Root Rot: Yield halved (-50%)!">🪱</span>
-                    )}
-                  </div>
-
-                  {/* 3-Color Soil Battery Persistent Mini-Bar (Floating Plot Meter) */}
-                  <div
-                    className="absolute top-1 left-1/2 -translate-x-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-stone-950/85 backdrop-blur-xs border border-stone-700/80 shadow-md z-20 pointer-events-none select-none"
-                    title={`Soil Battery: 🟢Leaf ${battery.green ? 'Full' : 'Depleted'} · 🟡Root ${battery.yellow ? 'Full' : 'Depleted'} · 🔴Fruit ${battery.red ? 'Full' : 'Depleted'}`}
-                  >
-                    {/* 🟢 Green Light (Leaf / Stem fuel) */}
-                    <span
-                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
-                        battery.green
-                          ? `bg-emerald-400 shadow-[0_0_6px_#34d399] ${
-                              isHovered && selectedProfile?.fuelType === 'green'
-                                ? 'ring-2 ring-white scale-125 animate-pulse'
-                                : ''
-                            }`
-                          : plot.crop === 'peas'
-                          ? 'bg-emerald-400 border border-white ring-2 ring-emerald-400 animate-pulse shadow-[0_0_8px_#34d399]'
-                          : `border-2 border-stone-500 bg-stone-900 ${
-                              isHovered && selectedProfile?.fuelType === 'green'
-                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
-                                : ''
-                            }`
-                      }`}
-                      title={plot.crop === 'peas' && !battery.green ? '🟢 Recharging Leaf Fuel via Peas (Active)!' : undefined}
-                    />
-
-                    {/* 🟡 Yellow Light (Root fuel) */}
-                    <span
-                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
-                        battery.yellow
-                          ? `bg-amber-400 shadow-[0_0_6px_#fbbf24] ${
-                              isHovered && selectedProfile?.fuelType === 'yellow'
-                                ? 'ring-2 ring-white scale-125 animate-pulse'
-                                : ''
-                            }`
-                          : `border-2 border-stone-500 bg-stone-900 ${
-                              isHovered && selectedProfile?.fuelType === 'yellow'
-                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
-                              : ''
-                            }`
-                      }`}
-                    />
-
-                    {/* 🔴 Red Light (Fruit / Flower fuel) */}
-                    <span
-                      className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full transition-all duration-200 ${
-                        battery.red
-                          ? `bg-rose-500 shadow-[0_0_6px_#f43f5e] ${
-                              isHovered && selectedProfile?.fuelType === 'red'
-                                ? 'ring-2 ring-white scale-125 animate-pulse'
-                                : ''
-                            }`
-                          : `border-2 border-stone-500 bg-stone-900 ${
-                              isHovered && selectedProfile?.fuelType === 'red'
-                                ? 'border-amber-400 ring-2 ring-amber-400 animate-ping'
-                                : ''
-                            }`
-                      }`}
-                    />
                   </div>
 
                   {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
@@ -979,12 +870,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     ) : (
                       <div className="flex flex-col items-center select-none">
                         <span className="text-2xl filter drop-shadow">
-                          {isDepleted ? '🪨' : (isWatered ? '💧' : '🌱')}
+                          {isWatered ? '💧' : '🌱'}
                         </span>
-                        <span className={`text-[9px] font-bold mt-0.5 ${
-                          isDepleted ? 'text-stone-300' : 'text-amber-200/90'
-                        }`}>
-                          {isDepleted ? 'Tired Soil' : (isWatered ? 'Moist Soil' : 'Full Energy')}
+                        <span className="text-[9px] font-bold mt-0.5 text-amber-200/90">
+                          {isWatered ? 'Moist Soil' : 'Ready to Plant'}
                         </span>
                       </div>
                     )
@@ -993,174 +882,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   {/* Drag & Hover Visual Stamp / Pre-Plant Previews */}
                   {isEmpty && isHovered && (
                     <div className="absolute inset-0 z-30 bg-black/70 backdrop-blur-[1px] flex flex-col items-center justify-center p-1 animate-in fade-in duration-150">
-                      {selectedProfile?.isRestorative ? (
-                        <>
-                          <div className="px-2 py-1 rounded-lg bg-teal-950/95 border-2 border-teal-400 text-teal-200 text-[9px] sm:text-[10px] font-black shadow-xl flex items-center gap-1 animate-pulse">
-                            <span>🫛</span>
-                            <span>Restorative Crop</span>
-                          </div>
-                          <span className="text-[8px] font-bold text-teal-300/95 mt-0.5 text-center leading-tight">
-                            Fully recharges 🟢 Green Energy on harvest
-                          </span>
-                        </>
-                      ) : isChargedForSelected ? (
-                        <>
-                          <div className="px-2 py-1 rounded-lg bg-emerald-950/95 border-2 border-emerald-400 text-emerald-300 text-[10px] sm:text-xs font-black shadow-xl flex items-center gap-1 animate-pulse">
-                            <span>✨</span>
-                            <span>+3 Harvest (Fast)</span>
-                          </div>
-                          <span className="text-[8px] font-bold text-emerald-300/90 mt-0.5">
-                            Full Energy Match
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <div className="px-1.5 py-0.5 rounded-lg bg-amber-950/95 border-2 border-amber-500 text-amber-300 text-[9px] sm:text-[10px] font-black shadow-xl flex items-center gap-1 animate-pulse">
-                            <span>⚠️</span>
-                            <span>Only 1x Harvest (Slow)</span>
-                          </div>
-                          {/* Floating Quick Fix Hint Bubble directly on plot */}
-                          <div
-                            className="mt-1 flex flex-wrap items-center justify-center gap-1 z-40 max-w-[96%]"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              disabled={towerWater < 15}
-                              onClick={(e) => handleFlushBed(plot.id, e)}
-                              className={`px-1.5 py-0.5 rounded text-[8px] font-black tracking-tight flex items-center gap-0.5 shadow-md border ${
-                                towerWater >= 15
-                                  ? towerWater >= 200
-                                    ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 text-white border-blue-400 cursor-pointer'
-                                    : 'bg-amber-600 hover:bg-amber-500 active:scale-95 text-white border-amber-400 cursor-pointer'
-                                  : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
-                              }`}
-                              title={
-                                towerWater >= 200
-                                  ? 'Flush bed with 15L Tower Water to instantly restore all nutrients'
-                                  : towerWater >= 15
-                                  ? `Stage 1 Override: Uses 15L Tower Water (${Math.round(towerWater)}L available)`
-                                  : `Tower Water below 15L (${Math.round(towerWater)}L) — Refill Tower first`
-                              }
-                            >
-                              <span>🌊</span>
-                              <span>Flush Bed</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => handleApplyBioDressing(plot.id, e)}
-                              className="px-1.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md border border-emerald-400"
-                              title="Apply Universal Bio-Dressing (Instant 100% Recharge, uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
-                            >
-                              <span>🧪</span>
-                              <span>
-                                {(barn?.universal_bio_dressing || 0) > 0
-                                  ? `Bio-Dress (${barn.universal_bio_dressing})`
-                                  : (globalReputation?.spendableFavor || 0) >= 10
-                                  ? 'Bio-Dress (10🎖️)'
-                                  : coins >= 25
-                                  ? 'Bio-Dress (25🪙)'
-                                  : 'Bio-Dress'}
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => applyCompostToProps(plot.id)}
-                              className="px-1.5 py-0.5 rounded bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                              title="Add compost/manure/chaff mulch to instantly refill battery (free from barn/silo or 5🪙)"
-                            >
-                              <span>💩</span>
-                              <span>Compost</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedCrop('peas');
-                                plantCrop(plot.id, 'peas');
-                              }}
-                              className="px-1.5 py-0.5 rounded bg-teal-600 hover:bg-teal-500 active:scale-95 text-white text-[8px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                              title="Plant restorative Peas to recharge 🟢 Leaf/Stem fuel in 30s"
-                            >
-                              <span>🫛</span>
-                              <span>Peas</span>
-                            </button>
-                          </div>
-                        </>
-                      )}
+                      <div className="px-2 py-1 rounded-lg bg-emerald-950/95 border-2 border-emerald-400 text-emerald-300 text-[10px] sm:text-xs font-black shadow-xl flex items-center gap-1 animate-pulse">
+                        <span>{previewCrop.emoji}</span>
+                        <span>Plant {previewCrop.name}</span>
+                      </div>
+                      <span className="text-[8px] font-bold text-emerald-300/90 mt-0.5">
+                        {previewCrop.growTimeSec}s · +{previewCrop.yieldCount} Harvest
+                      </span>
                     </div>
                   )}
 
-                  {/* Contextual Action Bubble for Empty Depleted Plot */}
-                  {isEmpty && isDepleted && (activeActionPlotId === plot.id || isHovered) && (
-                    <div
-                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-stone-950/95 border border-cyan-400/90 px-2 py-1 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        disabled={towerWater < 15}
-                        onClick={(e) => handleFlushBed(plot.id, e)}
-                        className={`px-2 py-0.5 rounded-lg text-white text-[9px] font-black tracking-tight flex items-center gap-1 shadow-md transition-all border ${
-                          towerWater >= 15
-                            ? towerWater >= 200
-                              ? 'bg-blue-600 hover:bg-blue-500 active:scale-95 border-blue-400 cursor-pointer'
-                              : 'bg-amber-600 hover:bg-amber-500 active:scale-95 border-amber-400 cursor-pointer'
-                            : 'bg-stone-800 text-stone-400 border-stone-600 cursor-not-allowed opacity-75'
-                        }`}
-                        title={
-                          towerWater >= 200
-                            ? 'Instantly restore all depleted nutrient lights using 15L Gravity Tower water'
-                            : towerWater >= 15
-                            ? `Stage 1 Override: Uses 15L Tower Water (${Math.round(towerWater)}L available)`
-                            : `Tower Water too low (<15L available)`
-                        }
-                      >
-                        <span>🌊</span>
-                        <span>Flush Bed (-15L Tower Water)</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => handleApplyBioDressing(plot.id, e)}
-                        className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
-                        title="Apply Universal Bio-Dressing: 100% nutrient recharge & blight cleanse (Uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
-                      >
-                        <span>🧪</span>
-                        <span>
-                          {(barn?.universal_bio_dressing || 0) > 0
-                            ? `Bio-Dressing (${barn.universal_bio_dressing})`
-                            : (globalReputation?.spendableFavor || 0) >= 10
-                            ? 'Bio-Dress (10 🎖️)'
-                            : coins >= 25
-                            ? 'Bio-Dress (25 🪙)'
-                            : 'Bio-Dress (Shop)'}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          applyCompostToProps(plot.id);
-                        }}
-                        className="px-1.5 py-0.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-stone-950 text-[9px] font-black tracking-tight flex items-center gap-0.5 cursor-pointer shadow-md"
-                        title="Add compost/manure/chaff mulch to instantly refill battery (free from barn/silo or 5🪙)"
-                      >
-                        <span>💩</span>
-                        <span>Compost</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          plantCrop(plot.id, selectedCrop);
-                          setActiveActionPlotId(null);
-                        }}
-                        className="px-1.5 py-0.5 rounded-lg bg-stone-800 hover:bg-stone-700 active:scale-95 text-stone-300 text-[9px] font-bold border border-stone-600 cursor-pointer shadow-sm"
-                        title="Plant crop anyway (will suffer 1x harvest and slow growth)"
-                      >
-                        <span>🌱</span>
-                        <span>Plant {selectedCropDef.name}</span>
-                      </button>
-                    </div>
-                  )}
+
 
                   {/* Contextual Action Bubble for Growing Crop */}
                   {isGrowing && (activeActionPlotId === plot.id || isHovered) && (
@@ -1173,7 +905,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         type="button"
                         onClick={(e) => handleApplyBioDressing(plot.id, e)}
                         className="px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-emerald-400"
-                        title="Apply Universal Bio-Dressing: restores 100% soil energy & clears negative modifiers (Uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
+                        title="Apply Universal Bio-Dressing: restores soil & clears negative modifiers (Uses 1 dose or auto-buys for 10 Favor / 25 Coins)"
                       >
                         <span>🧪</span>
                         <span>

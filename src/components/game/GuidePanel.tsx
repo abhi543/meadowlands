@@ -281,10 +281,10 @@ function FarmGuide() {
     <div className="space-y-4">
       <div>
         <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
-          🌾 Farm Plots, Soil Battery &amp; Hydrology Engine
+          🌾 Farm Plots &amp; Hydrology Engine
         </h4>
         <p className="text-xs text-stone-500 dark:text-gray-400">
-          Complete guide to planting, soil nutrient channels, closed-loop hydration, and soil remediation.
+          Complete guide to planting, closed-loop hydration, and soil remediation.
         </p>
       </div>
 
@@ -455,7 +455,7 @@ function FarmGuide() {
             </div>
             <div>
               <strong className="text-amber-400">2. Organic Soil Mulch:</strong>
-              <p>Apply 2x Chaff Mulch to empty/tired plots to restore battery energy and refill Nitrogen to 100% when organic compost is depleted.</p>
+              <p>Apply 2x Chaff Mulch to empty plots to nourish soil and retain moisture when organic compost is depleted.</p>
             </div>
             <div>
               <strong className="text-cyan-400">3. Soil &amp; Organic Compost:</strong>
@@ -465,41 +465,7 @@ function FarmGuide() {
         </div>
       </div>
 
-      {/* 3. Soil Battery Agronomy System */}
-      <div className="bg-gradient-to-r from-emerald-950/20 via-amber-950/20 to-rose-950/20 border border-emerald-500/40 rounded-xl p-3 text-xs space-y-2">
-        <div className="flex items-center justify-between flex-wrap gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">🔋</span>
-            <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100">3-Color Soil Battery System</h5>
-          </div>
-          <span className="text-[10px] bg-stone-900 text-stone-300 font-mono px-2 py-0.5 rounded-full border border-stone-700">
-            Nutrient Channels
-          </span>
-        </div>
-        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
-          Each plot displays a 3-light battery indicating its nutrient reserves. Planting matching crops ensures fast growth and full yield:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-emerald-400/60 shadow-xs">
-            <span className="font-bold text-emerald-700 dark:text-emerald-400">🟢 Leaf &amp; Stem Fuel</span>
-            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Wheat</strong> &amp; <strong>Corn</strong>.</p>
-          </div>
-          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-amber-400/60 shadow-xs">
-            <span className="font-bold text-amber-700 dark:text-amber-400">🟡 Root Fuel</span>
-            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Carrots</strong>.</p>
-          </div>
-          <div className="bg-white/80 dark:bg-stone-900/90 p-2 rounded-lg border border-rose-400/60 shadow-xs">
-            <span className="font-bold text-rose-700 dark:text-rose-400">🔴 Fruit &amp; Flower Fuel</span>
-            <p className="text-stone-600 dark:text-stone-400 mt-0.5">Consumed by <strong>Strawberry, Cotton, Pumpkin</strong>.</p>
-          </div>
-        </div>
-        <div className="bg-teal-50 dark:bg-teal-950/40 p-2 rounded-lg border border-teal-300 dark:border-teal-700/60 text-teal-800 dark:text-teal-200">
-          <strong>🫛 Restorative Legumes (Peas &amp; Soybeans):</strong> Require <em>zero fuel</em> to plant! Harvesting or tilling them under automatically recharges the <strong>🟢 Green Light to 100% full</strong>.
-        </div>
-        <div className="text-[11px] text-stone-500 dark:text-stone-400">
-          ⚠️ <strong>Tired Soil Penalty:</strong> Sowing a crop into an empty channel doubles growth duration and caps harvest yield at a flat 1x. Sowing in empty tired plots displays treatment buttons instead of planting immediately.
-        </div>
-      </div>
+
 
       {/* 3. Soil Remediation Toolkit */}
       <div className="bg-stone-50 dark:bg-stone-900/40 border border-stone-200 dark:border-stone-800 rounded-xl p-3 text-xs space-y-2">
@@ -509,19 +475,19 @@ function FarmGuide() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
           <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-amber-700 dark:text-amber-300">💩 Organic Compost (Restore Soil):</span>
-            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Use barn compost or 🪙5 coins to refill all 3 battery channels (🟢, 🟡, 🔴) to 100% full instantly.</p>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Use barn compost or 🪙5 coins to nourish soil and boost crop vitality.</p>
           </div>
           <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-blue-700 dark:text-blue-300">🌊 Flush Bed:</span>
-            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Draws 15L from the Elevated Gravity Tower to flush depleted salts, setting 100% nutrients and 80%+ moisture.</p>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Draws 15L from the Elevated Gravity Tower to flush soil and set 80%+ moisture.</p>
           </div>
           <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-teal-700 dark:text-teal-300">🚜 Till Under Crop (Green Manure):</span>
-            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Cleanses Crop Blight crises and enriches the bed. Tilling Peas instantly recharges 🟢 Leaf Energy.</p>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Cleanses Crop Blight crises and enriches the bed as natural green manure.</p>
           </div>
           <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-emerald-700 dark:text-emerald-300">🧪 Universal Bio-Dressing:</span>
-            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Emergency panacea (Favor/Coins): Cures Root Rot, Frostbite, Wilting, Blight, restores 100% battery, and sets 85% moisture.</p>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-400">Emergency panacea (Favor/Coins): Cures Root Rot, Frostbite, Wilting, Blight, and sets 85% moisture.</p>
           </div>
         </div>
       </div>
