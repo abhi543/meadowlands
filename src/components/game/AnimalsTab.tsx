@@ -75,7 +75,6 @@ export function AnimalsTab() {
     prehistoricSanctuary,
     domesticTroughs,
     slurryPits,
-    gasProductionLab,
     activeSumpModalPitId,
     setActiveSumpModalPitId,
     sprayAndWashdownStalls,
@@ -491,11 +490,11 @@ export function AnimalsTab() {
                   Estate Slurry Pits & Sump Runoff
                 </span>
                 <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  Gas Lab Feedstock
+                  Organic Fertilizer
                 </span>
               </div>
               <span className="text-[10px] text-stone-400">
-                Species-specific excretion rates, fluid viscosities & biochemical distillation profiles
+                Species-specific excretion rates, fluid viscosities & organic fertilizer profiles
               </span>
             </div>
           </div>
@@ -515,9 +514,9 @@ export function AnimalsTab() {
                 setShowSlurryModal(true);
               }}
               className="px-2.5 py-1 rounded-xl text-[11px] font-black bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:brightness-110 text-stone-950 shadow-xs transition-all flex items-center gap-1 cursor-pointer active:scale-95"
-              title="Open Gas Production Lab & Anaerobic Digester Console"
+              title="Open Slurry Collection & Sump Hub Console"
             >
-              <span>⚗️ Gas Lab ({Math.round(gasProductionLab?.digesterCurrentLiters || 0)}L)</span>
+              <span>🚰 Slurry Sumps</span>
             </button>
           </div>
         </div>
@@ -544,7 +543,7 @@ export function AnimalsTab() {
                   setShowSlurryModal(true);
                 }}
                 className="p-2 rounded-xl bg-stone-900/90 border border-stone-800 hover:border-amber-500/50 transition-all cursor-pointer flex flex-col justify-between group shadow-2xs hover:shadow-sm"
-                title={`Click to open Sump Valve & Gas Lab profile for ${p?.name || label}`}
+                title={`Click to open Sump Valve for ${p?.name || label}`}
               >
                 <div className="flex items-center justify-between text-[11px] font-bold">
                   <span className="flex items-center gap-1 text-stone-200 group-hover:text-amber-300 transition-colors">
@@ -1213,7 +1212,7 @@ export function AnimalsTab() {
                       <div className="font-mono font-black text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                         {(selectedAnimalForWelfare.slurryDailyRate ?? 8.5).toFixed(1)} L / day
                       </div>
-                      <div className="text-[9px] text-stone-400">Feeds Gas Lab digester</div>
+                      <div className="text-[9px] text-stone-400">Feeds collection sump</div>
                     </div>
                   </div>
 
@@ -1296,7 +1295,7 @@ export function AnimalsTab() {
         onClose={() => setShowAnimalItemsModal(false)}
       />
 
-      {/* Slurry Hub & Gas Lab Anaerobic Digester Modal */}
+      {/* Slurry Hub & Sump Collection Modal */}
       <SlurryCollectionModal
         isOpen={showSlurryModal || Boolean(activeSumpModalPitId)}
         onClose={() => {

@@ -301,212 +301,7 @@ function FarmGuide() {
         </ul>
       </div>
 
-      {/* 2. Dynamic Gas Ecosystem System (CO2, O2, N) */}
-      <div className="bg-gradient-to-r from-sky-950/25 via-emerald-950/25 to-teal-950/25 border border-cyan-500/40 rounded-xl p-3.5 text-xs space-y-3 shadow-sm">
-        <div className="flex items-center justify-between flex-wrap gap-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">💨</span>
-            <div>
-              <h5 className="font-black text-sm text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
-                <span>Dynamic Gas Ecosystem Engine (CO₂, O₂, N)</span>
-                <span className="text-[10px] bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-mono px-2 py-0.5 rounded-full border border-cyan-400/40">
-                  0%–100% Atmospheric Grid
-                </span>
-              </h5>
-              <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                Coupled with weather, plot proximity, water saturation, and crop rotation — converting planting into tactical agronomy.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* 3 Gas Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
-          {/* Carbon Dioxide (CO2) */}
-          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-amber-400/50 shadow-xs flex flex-col justify-between space-y-2">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-extrabold text-amber-700 dark:text-amber-400 flex items-center gap-1 text-xs">
-                  <span>💨</span> CO₂: 0%–100%
-                </span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
-                  Speed Engine
-                </span>
-              </div>
-              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
-                <strong>Primary Role:</strong> Governs vegetative crop growth speed. Outdoor ambient baseline: <strong>25%</strong>.
-              </p>
-
-              <div className="mt-2 space-y-1 text-[10.5px]">
-                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span>➕ Sources of Boost:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>Nearby Livestock Pen / Habitat (&le;3 tiles): <strong>+40%</strong></li>
-                    <li>Compost Heap / Fermentation Barrels: <strong>+25%</strong></li>
-                    <li>Sunny / Heatwave weather: <strong>+15%</strong></li>
-                    <li>Neighboring mature crop canopy: <strong>+10%</strong></li>
-                  </ul>
-                </div>
-
-                <div className="text-rose-700 dark:text-rose-400 font-semibold pt-1">
-                  <span>➖ Sources of Drain:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>High Gale / Windstorm events: <strong>-30%</strong></li>
-                    <li>Isolated / Remote plot location: <strong>-15%</strong></li>
-                    <li>Barren / Fallow empty dirt: <strong>-10%</strong></li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-stone-200 dark:border-stone-800 text-[10.5px] space-y-1">
-              <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                <span>🟢 &gt;60% (Optimal Boost):</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">+1% speed per 2% over 60% (up to +40%).</span>
-              </div>
-              <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
-                <span>🟡 20%–59%:</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Standard 1.0x baseline speed.</span>
-              </div>
-              <div className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
-                <span>🔴 &lt;20% (Thin Air Penalty):</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Crop takes +20% longer duration.</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Oxygen (O2) */}
-          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-cyan-400/50 shadow-xs flex flex-col justify-between space-y-2">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-extrabold text-cyan-700 dark:text-cyan-400 flex items-center gap-1 text-xs">
-                  <span>🫧</span> O₂: 0%–100%
-                </span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 font-bold">
-                  Soil Breath
-                </span>
-              </div>
-              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
-                <strong>Primary Role:</strong> Root aeration &amp; waterlogging guard. Target range: <strong>45%–75%</strong> (Aerated Loam).
-              </p>
-
-              <div className="mt-2 space-y-1 text-[10.5px]">
-                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span>➕ Sources of Aeration:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>Manual Tilling (Tool action): <strong>Resets to 60%</strong></li>
-                    <li>Harvesting Root Crops (Carrots): <strong>+20% O₂</strong></li>
-                    <li>Connected Drainage Furrow / Trench: <strong>+25%</strong></li>
-                    <li>Heatwave / Drought weather: <strong>+15%</strong> pore restoration</li>
-                  </ul>
-                </div>
-
-                <div className="text-rose-700 dark:text-rose-400 font-semibold pt-1">
-                  <span>➖ Sources of Suffocation:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>Torrential Rain / Downpour: <strong>-10% per 10s</strong></li>
-                    <li>Excessive / Unthrottled Canal Irrigation: <strong>-30%</strong></li>
-                    <li>Repeated monoculture planting without tilling: <strong>-15%</strong></li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-stone-200 dark:border-stone-800 text-[10.5px] space-y-1">
-              <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                <span>🟢 45%–75%:</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Optimal root-zone respiration.</span>
-              </div>
-              <div className="text-rose-600 dark:text-rose-400 font-bold">
-                <span>🔴 &lt;20% (CRITICAL FAILURE — Anoxia):</span>
-                <p className="font-normal text-stone-600 dark:text-stone-300 mt-0.5">
-                  Timer freezes completely with <code>🫧 Root Suffocation</code> alert! Till soil or drain water to resume.
-                </p>
-              </div>
-              <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
-                <span>🟡 &gt;85% (Parched Soil):</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Crop water consumption doubles (2x Tower drain).</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Nitrogen (N) */}
-          <div className="bg-white/90 dark:bg-stone-900/90 rounded-xl p-3 border border-teal-400/50 shadow-xs flex flex-col justify-between space-y-2">
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-extrabold text-teal-700 dark:text-teal-400 flex items-center gap-1 text-xs">
-                  <span>🌱</span> N: 0%–100%
-                </span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-teal-500/20 text-teal-700 dark:text-teal-300 font-bold">
-                  Yield Battery
-                </span>
-              </div>
-              <p className="text-[11px] text-stone-600 dark:text-stone-300 leading-snug">
-                <strong>Primary Role:</strong> Governs harvest yield multiplier &amp; weed resistance. Optimal: <strong>70%–100%</strong>.
-              </p>
-
-              <div className="mt-2 space-y-1 text-[10.5px]">
-                <div className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  <span>➕ Sources of Replenishment:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>Harvesting Restorative Legumes (Peas/Soybeans): <strong>+50% N</strong></li>
-                    <li>Animal Manure / Compost: <strong>Refills to 100% N</strong></li>
-                    <li>Prehistoric Humus / Universal Bio-Dressing: <strong>100% N</strong></li>
-                    <li>Fallow Cover Crop cycle: <strong>+15% N</strong></li>
-                  </ul>
-                </div>
-
-                <div className="text-rose-700 dark:text-rose-400 font-semibold pt-1">
-                  <span>➖ Sources of Depletion:</span>
-                  <ul className="list-disc ml-3.5 font-normal text-stone-600 dark:text-stone-300 space-y-0.5">
-                    <li>Harvesting Heavy Feeders (Wheat, Corn, Cotton): <strong>-35% N</strong></li>
-                    <li>Monoculture repeat penalty: <strong>-10% N</strong></li>
-                    <li>Bare Soil Leaching in Heavy Rain: <strong>-15% N</strong></li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-stone-200 dark:border-stone-800 text-[10.5px] space-y-1">
-              <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold">
-                <span>🟢 70%–100% (High Fertility):</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Maximum <strong>3x Harvest Yield</strong> at full speed.</span>
-              </div>
-              <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-bold">
-                <span>🟡 35%–69% (Moderate):</span>
-                <span className="font-normal text-stone-600 dark:text-stone-300">Delivers standard <strong>2x Harvest Yield</strong>.</span>
-              </div>
-              <div className="text-rose-600 dark:text-rose-400 font-bold">
-                <span>🔴 &lt;35% (CRITICAL DEFICIT — Exhausted):</span>
-                <p className="font-normal text-stone-600 dark:text-stone-300 mt-0.5">
-                  Drops to penalty <strong>1x Yield</strong>, doubles growth timer (<strong>2x time</strong>), and has 50% weed spawn risk!
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* UI Feedback Mechanics Explanation */}
-        <div className="bg-stone-100 dark:bg-stone-900/60 rounded-xl p-2.5 border border-stone-300 dark:border-stone-700/80 text-[11px] space-y-1.5">
-          <div className="font-bold text-stone-800 dark:text-stone-200 flex items-center gap-1.5">
-            <span>🔍</span> UI Display &amp; Pre-Plant Feedback Mechanics:
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-stone-600 dark:text-stone-300">
-            <div>
-              <strong>📊 Centralized Console &amp; Color Progress Bars:</strong>
-              <p className="mt-0.5">
-                Displays live percentages with color-coded meters (🟢 Green: Optimal, 🟡 Yellow: Warning, 🔴 Red / Flashing: Failure Penalty).
-              </p>
-            </div>
-            <div>
-              <strong>🎯 Pre-Plant Stamp Feedback:</strong>
-              <p className="mt-0.5">
-                Hovering seed packets previews dynamic modifier arrows and net outputs (e.g. <code>CO₂: 80% ▲ (+10% Spd) | O₂: 65% | N: 85% (3x Yield)</code>) along with critical warnings before sowing.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* 2.5 Dynamic Crop Disease & Blight Ecosystem */}
       <div className="bg-gradient-to-r from-red-950/30 via-rose-950/20 to-amber-950/30 border border-rose-500/50 rounded-xl p-3.5 text-xs space-y-3 shadow-sm">
@@ -663,8 +458,8 @@ function FarmGuide() {
               <p>Apply 2x Chaff Mulch to empty/tired plots to restore battery energy and refill Nitrogen to 100% when organic compost is depleted.</p>
             </div>
             <div>
-              <strong className="text-cyan-400">3. Anaerobic Digester:</strong>
-              <p>Feed 10x Chaff directly into the Gas Production Lab (+30L Organic Biomass Substrate) to boost continuous Biogas Methane generation.</p>
+              <strong className="text-cyan-400">3. Soil &amp; Organic Compost:</strong>
+              <p>Incorporate chaff into organic compost and animal bedding to enhance moisture retention and soil energy.</p>
             </div>
           </div>
         </div>
@@ -916,14 +711,14 @@ function AnimalsGuide() {
         </div>
       </div>
 
-      {/* Species-Specific Slurry Yield & Gas Production Lab System */}
+      {/* Species-Specific Slurry Yield & Sump Drainage System */}
       <div className="bg-emerald-950/20 border border-emerald-500/40 rounded-xl p-3.5 text-xs text-emerald-200 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">
-            <span className="text-xl">⚗️</span>
+            <span className="text-xl">🚰</span>
             <div>
-              <h5 className="font-bold text-sm text-emerald-300">Species-Specific Slurry Yield &amp; Gas Production Lab</h5>
-              <p className="text-[11px] text-emerald-400/80">Every livestock and sanctuary animal produces biologically distinct slurry fueling the Anaerobic Digester.</p>
+              <h5 className="font-bold text-sm text-emerald-300">Species-Specific Slurry Yield &amp; Sump Drainage</h5>
+              <p className="text-[11px] text-emerald-400/80">Every livestock and sanctuary animal produces biologically distinct slurry collected in pen sumps.</p>
             </div>
           </div>
           <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
@@ -947,7 +742,7 @@ function AnimalsGuide() {
               <span>🐖 Medium Livestock (Swine &amp; Ruminants)</span>
               <span className="text-amber-400">Pigs: 8–12 L | Sheep: 3–5 L</span>
             </div>
-            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Swine slurry has the highest methane yield and rapid anaerobic digestion. Sheep/Goat pellets require macerator/agitator blades.</p>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Rich organic manure slurry. Sheep/Goat pellets require macerator/agitator blades.</p>
             <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Slatted pen runoff drains directly into exterior masonry sump pits.</p>
           </div>
 
@@ -956,8 +751,8 @@ function AnimalsGuide() {
               <span>🐄 Large Livestock (Bovine &amp; Equine)</span>
               <span className="text-amber-400">25 – 40 L/day</span>
             </div>
-            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Heavy fibrous straw emulsion. High pH buffering capacity; produces balanced CO₂ and liquid Nitrogen digestate.</p>
-            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Barn gutter scrapers or automated wash-down flush valves push slurry into 1,000L holding tanks.</p>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> Heavy fibrous straw emulsion. High pH buffering capacity; produces balanced organic soil nutrition.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Barn gutter scrapers or automated wash-down flush valves push slurry into holding tanks.</p>
           </div>
 
           <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 space-y-1">
@@ -965,8 +760,8 @@ function AnimalsGuide() {
               <span>🦕 Sanctuary Mega-Fauna (Prehistoric)</span>
               <span className="text-amber-400">Dimetrodon: 15 L | Bronto: 150–250 L</span>
             </div>
-            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> &quot;Primeval Slurry&quot; with prehistoric microbial flora. Boosts anaerobic distillation velocity by +50% and supercharges soil nutrition.</p>
-            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Heavy-duty wash bays and reinforced high-bore concrete sluice channels feeding the bio-reactor.</p>
+            <p className="text-stone-300 text-[10px]"><strong>Slurry Profile:</strong> &quot;Primeval Slurry&quot; with prehistoric microbial flora. Supercharges soil nutrition and organic compost potency.</p>
+            <p className="text-stone-400 text-[10px]"><strong>Collection:</strong> Heavy-duty wash bays and reinforced high-bore concrete sluice channels.</p>
           </div>
         </div>
 
@@ -980,7 +775,7 @@ function AnimalsGuide() {
             </div>
             <div>
               <strong className="text-amber-400">Weather Extremes:</strong>
-              <p>Heatwave triggers 2.5x water intake (+30% volume, -20% gas potency). Deluges risk pit overflow leaching unless covered. Frost freezes unheated pipes.</p>
+              <p>Heatwave triggers 2.5x water intake (+30% volume, -20% nutrient potency). Deluges risk pit overflow leaching unless covered. Frost freezes unheated pipes.</p>
             </div>
             <div>
               <strong className="text-sky-400">Collection &amp; Piping:</strong>
@@ -989,21 +784,17 @@ function AnimalsGuide() {
           </div>
         </div>
 
-        {/* Gas Lab Outputs */}
+        {/* Slurry Utilization */}
         <div className="bg-stone-900/90 p-2.5 rounded-lg border border-emerald-500/30 text-[11px] space-y-1">
-          <span className="font-bold text-emerald-300 text-xs">⚗️ Anaerobic Digester &amp; Gas Lab Products:</span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-stone-300 pt-1">
+          <span className="font-bold text-emerald-300 text-xs">🚰 Slurry &amp; Organic Fertilizer Uses:</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-stone-300 pt-1">
             <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
-              <strong className="text-amber-400">🔥 Biogas Methane (CH₄):</strong>
-              <p>Fermented from high-methane swine and bovine slurries, stored in pressurized tanks for energy monetization.</p>
+              <strong className="text-amber-400">🛢️ 50L Inventory Drums:</strong>
+              <p>Draw concentrated slurry into inventory drums for field application and barter value.</p>
             </div>
             <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
-              <strong className="text-cyan-400">💨 Biogas Carbon Dioxide (CO₂):</strong>
-              <p>Piped directly to the crop canopy, elevating atmospheric CO₂ to boost crop photosynthetic velocity.</p>
-            </div>
-            <div className="p-1.5 rounded bg-stone-950/60 border border-stone-800">
-              <strong className="text-emerald-400">🌱 Liquid Nitrogen Digestate:</strong>
-              <p>Nutrient-dense liquid fertilizer. Instantly refills plot soil Nitrogen to 100% N, ensuring maximum 3x harvest yields.</p>
+              <strong className="text-emerald-400">🌱 Organic Soil Enrichment:</strong>
+              <p>Apply nutrient-dense slurry to restore soil energy and maximize harvest yields across your farmstead.</p>
             </div>
           </div>
         </div>

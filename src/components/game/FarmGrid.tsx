@@ -81,7 +81,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
   const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
-  const [isGasConsoleExpanded, setIsGasConsoleExpanded] = useState(false);
   const [activeActionPlotId, setActiveActionPlotId] = useState<number | null>(null);
   const [flushingPlotId, setFlushingPlotId] = useState<number | null>(null);
   const [flushedFloatingTextPlotId, setFlushedFloatingTextPlotId] = useState<number | null>(null);
@@ -172,77 +171,18 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const dayRemainingSecFormatted = `${dayRemainingMin}:${(dayRemainingSec % 60).toString().padStart(2, '0')}`;
   const isMorningPhase = clock.activeShift === 'morning';
 
-  // Estate-wide atmospheric gas metrics (Consolidated for all plots)
-  const plotsWithGases = visiblePlots.filter(p => p.gases);
-  const avgCo2 = plotsWithGases.length > 0
-    ? Math.round(plotsWithGases.reduce((acc, p) => acc + (p.gases?.co2 ?? 65), 0) / plotsWithGases.length)
-    : 65;
-  const avgO2 = plotsWithGases.length > 0
-    ? Math.round(plotsWithGases.reduce((acc, p) => acc + (p.gases?.o2 ?? 60), 0) / plotsWithGases.length)
-    : 60;
-  const avgN = plotsWithGases.length > 0
-    ? Math.round(plotsWithGases.reduce((acc, p) => acc + (p.gases?.nitrogen ?? 85), 0) / plotsWithGases.length)
-    : 85;
-  const penaltyPlots = visiblePlots.filter(p => p.gases?.hasAnyPenalty);
-
-  const inspectedPlot = hoveredPlotId !== null ? visiblePlots.find(p => p.id === hoveredPlotId) : null;
-  const activeDisplayGases = inspectedPlot?.gases || {
-    co2: avgCo2,
-    o2: avgO2,
-    nitrogen: avgN,
-    co2Arrow: avgCo2 > 60 ? '▲' : '●',
-    o2Arrow: avgO2 < 35 ? '▼' : avgO2 > 75 ? '▲' : '●',
-    nitrogenArrow: avgN >= 70 ? '▲' : avgN >= 35 ? '●' : '▼',
-    co2BreakdownText: activeProfile?.name ? `+15% ${activeProfile.name}` : 'Estate Ambient',
-    o2BreakdownText: avgO2 < 35 ? '-10%/10s Flooding Risk' : avgO2 > 85 ? 'Parched Ground' : 'Optimal Aeration',
-    nitrogenBreakdownText: avgN >= 70 ? '3x Full Yield' : avgN >= 35 ? '2x Harvest Yield' : '-35% Low N Penalty',
-    growthSpeedMultiplier: avgCo2 > 60 ? 1 + Math.min(0.40, (avgCo2 - 60) / 200) : avgCo2 < 20 ? 1 / 1.2 : 1,
-    isAnoxiaSuffocated: avgO2 < 20,
-    isParchedDoubleDrain: avgO2 > 85,
-    nitrogenYieldMultiplier: (avgN >= 70 ? 3 : avgN >= 35 ? 2 : 1) as 1 | 2 | 3,
-    isPenaltyCo2: avgCo2 < 20,
-    isPenaltyO2: avgO2 < 20 || avgO2 > 85,
-    isPenaltyNitrogen: avgN < 35,
-    hasAnyPenalty: avgCo2 < 20 || avgO2 < 20 || avgO2 > 85 || avgN < 35,
-  };
-
   // Pre-plant stamp hover feedback calculation
   const previewCropId = hoveredCropId || selectedCrop;
   const previewCrop = CROPS[previewCropId] || CROPS.wheat;
   let previewCropRoleLabel = 'Standard Crop';
   if (previewCropId === 'peas' || previewCropId === 'soybean') {
-    previewCropRoleLabel = '🫛 Legume Restorer (+50% N on harvest)';
+    previewCropRoleLabel = '🫛 Legume Restorer';
   } else if (previewCropId === 'wheat' || previewCropId === 'corn' || previewCropId === 'cotton') {
-    previewCropRoleLabel = '🌾 Heavy Feeder (-35% N on harvest)';
+    previewCropRoleLabel = '🌾 Heavy Feeder';
   } else if (previewCropId === 'carrot') {
-    previewCropRoleLabel = '🥕 Root Aerator (+20% O₂ on harvest)';
+    previewCropRoleLabel = '🥕 Root Aerator';
   } else if (previewCropId === 'strawberry' || previewCropId === 'pumpkin' || previewCropId === 'wild_berries') {
     previewCropRoleLabel = '🍓 Fruit & Berry Feeder';
-  }
-
-  const prePlantAlerts: { type: 'danger' | 'warning'; text: string }[] = [];
-  if (activeDisplayGases.o2 < 20) {
-    prePlantAlerts.push({
-      type: 'danger',
-      text: `⚠️ WARNING: O₂ at ${activeDisplayGases.o2}% (Roots Choking) — Drain water before planting!`,
-    });
-  } else if (activeDisplayGases.o2 > 85) {
-    prePlantAlerts.push({
-      type: 'warning',
-      text: `⚠️ WARNING: O₂ at ${activeDisplayGases.o2}% (Parched Soil) — Crop water consumption doubles (2x Tower drain)!`,
-    });
-  }
-  if (activeDisplayGases.nitrogen < 35) {
-    prePlantAlerts.push({
-      type: 'danger',
-      text: `⚠️ WARNING: Nitrogen at ${activeDisplayGases.nitrogen}% (Exhausted Soil) — Penalty 1x Yield, 2x Grow Time & 50% Weed Risk!`,
-    });
-  }
-  if (activeDisplayGases.co2 < 20) {
-    prePlantAlerts.push({
-      type: 'warning',
-      text: `⚠️ WARNING: CO₂ at ${activeDisplayGases.co2}% (Thin Air) — Growth takes +20% longer to finish!`,
-    });
   }
 
   return (
@@ -498,75 +438,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           })}
         </div>
 
-        {/* Pre-Plant Stamp Feedback (Dynamic Modifiers, Net Output & Tactical Warnings) */}
-        <div className="mt-2 pt-2 border-t border-amber-200/80 dark:border-amber-900/60 space-y-1.5">
+        {/* Pre-Plant Stamp Feedback */}
+        <div className="mt-2 pt-2 border-t border-amber-200/80 dark:border-amber-900/60">
           <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
             <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
               <span className="text-base">{previewCrop.emoji}</span>
-              <span>Pre-Plant Stamp ({previewCrop.name}):</span>
+              <span>Selected Crop: {previewCrop.name}</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200 font-semibold border border-amber-500/30">
                 {previewCropRoleLabel}
               </span>
             </div>
-            <div className="text-[10px] text-stone-500 dark:text-stone-400 font-mono">
-              {inspectedPlot ? `Targeting: Plot #${inspectedPlot.id + 1}` : 'Target: Farm Atmospheric Baseline'}
-            </div>
           </div>
-
-          {/* Dynamic modifier preview bar */}
-          <div className="bg-stone-900/90 text-stone-200 rounded-lg p-2 border border-stone-700 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono shadow-inner">
-            <div className="flex items-center gap-1.5">
-              <span className="text-stone-400">CO₂:</span>
-              <span className={`font-black ${activeDisplayGases.co2 > 60 ? 'text-emerald-400' : activeDisplayGases.co2 >= 20 ? 'text-amber-300' : 'text-rose-400'}`}>
-                {activeDisplayGases.co2}% {activeDisplayGases.co2Arrow}
-              </span>
-              <span className="text-[10px] text-stone-300">
-                ({activeDisplayGases.co2 > 60 ? `+${Math.min(40, ((activeDisplayGases.co2 - 60) / 2)).toFixed(0)}% Spd` : activeDisplayGases.co2 < 20 ? '-20% Spd' : '1.0x Spd'})
-              </span>
-            </div>
-
-            <div className="text-stone-600 hidden xs:inline">|</div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-stone-400">O₂:</span>
-              <span className={`font-black ${activeDisplayGases.o2 >= 45 && activeDisplayGases.o2 <= 75 ? 'text-emerald-400' : (activeDisplayGases.o2 >= 20 && activeDisplayGases.o2 < 45) || (activeDisplayGases.o2 > 75 && activeDisplayGases.o2 <= 85) ? 'text-amber-300' : 'text-rose-400'}`}>
-                {activeDisplayGases.o2}% {activeDisplayGases.o2Arrow}
-              </span>
-              <span className="text-[10px] text-stone-300">
-                ({activeDisplayGases.o2 >= 45 && activeDisplayGases.o2 <= 75 ? 'Optimal' : activeDisplayGases.o2 < 20 ? 'Choking' : activeDisplayGases.o2 > 85 ? 'Parched' : 'Caution'})
-              </span>
-            </div>
-
-            <div className="text-stone-600 hidden xs:inline">|</div>
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-stone-400">N:</span>
-              <span className={`font-black ${activeDisplayGases.nitrogen >= 70 ? 'text-emerald-400' : activeDisplayGases.nitrogen >= 35 ? 'text-amber-300' : 'text-rose-400'}`}>
-                {activeDisplayGases.nitrogen}% {activeDisplayGases.nitrogenArrow}
-              </span>
-              <span className="text-[10px] text-stone-300">
-                ({activeDisplayGases.nitrogen >= 70 ? '3x Yield' : activeDisplayGases.nitrogen >= 35 ? '2x Yield' : '1x Penalty'})
-              </span>
-            </div>
-          </div>
-
-          {/* Pre-plant warning alerts */}
-          {prePlantAlerts.length > 0 && (
-            <div className="space-y-1">
-              {prePlantAlerts.map((alert, idx) => (
-                <div
-                  key={idx}
-                  className={`px-2 py-1 rounded text-[11px] font-bold flex items-center gap-1.5 shadow-xs ${
-                    alert.type === 'danger'
-                      ? 'bg-rose-950/70 border border-rose-500/80 text-rose-200 animate-pulse'
-                      : 'bg-amber-950/70 border border-amber-500/80 text-amber-200'
-                  }`}
-                >
-                  <span>{alert.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -706,366 +588,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         </button>
       </div>
 
-      {/* Centralized Atmospheric Soil Gas Console (All Plots Gas Metrics at One Place) */}
-      <div className={`rounded-2xl p-3 border transition-all duration-300 shadow-md ${
-        activeDisplayGases.hasAnyPenalty
-          ? 'bg-gradient-to-r from-stone-900 via-yellow-950/40 to-stone-900 border-yellow-500/80 shadow-[0_0_15px_rgba(250,204,21,0.25)]'
-          : 'bg-gradient-to-r from-stone-900/90 via-stone-850 to-stone-900/90 border-stone-700/80'
-      }`}>
-        {/* Top Header Row */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-stone-800">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">💨</span>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black uppercase tracking-wide text-white">
-                  {inspectedPlot ? `Plot #${inspectedPlot.id + 1} Gas Metrics` : 'Farm Atmosphere (All Plots)'}
-                </span>
-                {inspectedPlot ? (
-                  <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono font-bold border border-amber-500/40">
-                    Inspecting {inspectedPlot.crop ? `${CROPS[inspectedPlot.crop].emoji} ${CROPS[inspectedPlot.crop].name}` : 'Empty Bed'}
-                  </span>
-                ) : (
-                  <span className="px-1.5 py-0.2 rounded bg-stone-800 text-stone-300 text-[10px] font-mono font-bold border border-stone-700">
-                    Average of {visiblePlots.length} Plots
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] sm:text-[11px] text-stone-400">
-                {inspectedPlot
-                  ? 'Real-time soil gas percentages and environmental modifiers for this plot.'
-                  : 'Hover over any plot below to inspect its individual live gas percentages.'}
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            {penaltyPlots.length > 0 && (
-              <span className="px-2 py-1 rounded-lg bg-yellow-400 text-stone-950 text-[10px] sm:text-xs font-black animate-pulse flex items-center gap-1 shadow-xs">
-                <span>⚠️</span>
-                <span>{penaltyPlots.length} in Penalty Zone</span>
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsGasConsoleExpanded(prev => !prev)}
-              className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-750 text-stone-200 text-[11px] font-bold border border-stone-600 transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-xs"
-            >
-              <span>📊</span>
-              <span>{isGasConsoleExpanded ? 'Hide All Plots' : `View All Plots (${visiblePlots.length})`}</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 3 Gas Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-          {/* Carbon Dioxide (CO2) */}
-          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
-            activeDisplayGases.isPenaltyCo2
-              ? 'bg-rose-950/40 border-rose-500/80 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
-              : activeDisplayGases.co2 > 60
-              ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-200'
-              : 'bg-stone-950/60 border-stone-800 text-stone-200'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono font-bold text-stone-400">CO₂ (Carbon Dioxide)</span>
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-black/40 border border-white/10">
-                  {activeDisplayGases.growthSpeedMultiplier > 1
-                    ? `⚡ +${((activeDisplayGases.growthSpeedMultiplier - 1) * 100).toFixed(0)}% Spd`
-                    : activeDisplayGases.co2 < 20
-                    ? '🐢 -20% Spd'
-                    : 'Standard Spd'}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl sm:text-2xl font-black font-mono">
-                  {activeDisplayGases.co2}%
-                </span>
-                <span className="text-sm font-bold text-amber-300">
-                  {activeDisplayGases.co2Arrow}
-                </span>
-                <span className="text-[11px] text-stone-300 truncate">
-                  ({activeDisplayGases.co2BreakdownText})
-                </span>
-              </div>
-            </div>
-
-            {/* Percentage Bar & Color-coded status */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 space-y-1">
-              <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-stone-800">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    activeDisplayGases.co2 > 60
-                      ? 'bg-gradient-to-r from-emerald-500 to-green-400 shadow-[0_0_8px_rgba(16,185,129,0.7)]'
-                      : activeDisplayGases.co2 >= 20
-                      ? 'bg-gradient-to-r from-amber-400 to-yellow-400'
-                      : 'bg-gradient-to-r from-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.7)]'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, activeDisplayGases.co2))}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className={`font-bold flex items-center gap-1 ${
-                  activeDisplayGases.co2 > 60
-                    ? 'text-emerald-400'
-                    : activeDisplayGases.co2 >= 20
-                    ? 'text-amber-400'
-                    : 'text-rose-400 font-black animate-pulse'
-                }`}>
-                  {activeDisplayGases.co2 > 60
-                    ? '🟢 Optimal Boost (>60%)'
-                    : activeDisplayGases.co2 >= 20
-                    ? '🟡 Standard (20%–59%)'
-                    : '🔴 Thin Air Penalty (<20%)'}
-                </span>
-                <span className="text-stone-500 font-mono text-[9px]">Target: &gt;60%</span>
-              </div>
-            </div>
-
-            {/* Description & Action Guidance */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
-              <p>
-                <strong className="text-amber-400">Photosynthetic Speed Engine:</strong> Governs vegetative crop growth speed. Baseline is 25%. Values &gt;60% accelerate growth up to +40% speed boost.
-              </p>
-              <div className="text-[9px] text-amber-300/90 font-mono bg-stone-900/60 p-1 rounded border border-amber-500/20">
-                <span>💡 Boost:</span> Livestock pens (&le;3 tiles: +40%) • Compost (+25%) • Gas Lab canopy line
-              </div>
-            </div>
-          </div>
-
-          {/* Oxygen (O2) */}
-          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
-            activeDisplayGases.isPenaltyO2
-              ? 'bg-rose-950/40 border-rose-500/80 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
-              : 'bg-stone-950/60 border-stone-800 text-stone-200'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono font-bold text-stone-400">O₂ (Oxygen)</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                  activeDisplayGases.isAnoxiaSuffocated
-                    ? 'bg-rose-500 text-white border-rose-300 animate-pulse'
-                    : activeDisplayGases.isParchedDoubleDrain
-                    ? 'bg-amber-500/30 text-amber-300 border-amber-400'
-                    : 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30'
-                }`}>
-                  {activeDisplayGases.isAnoxiaSuffocated
-                    ? '🛑 Suffocation Paused'
-                    : activeDisplayGases.isParchedDoubleDrain
-                    ? '🔥 Parched (2x Drain)'
-                    : 'Optimal Aeration'}
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl sm:text-2xl font-black font-mono">
-                  {activeDisplayGases.o2}%
-                </span>
-                <span className="text-sm font-bold text-cyan-300">
-                  {activeDisplayGases.o2Arrow}
-                </span>
-                <span className="text-[11px] text-stone-300 truncate">
-                  ({activeDisplayGases.o2BreakdownText})
-                </span>
-              </div>
-            </div>
-
-            {/* Percentage Bar & Color-coded status */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 space-y-1">
-              <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-stone-800">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    activeDisplayGases.o2 >= 45 && activeDisplayGases.o2 <= 75
-                      ? 'bg-gradient-to-r from-emerald-500 to-cyan-400 shadow-[0_0_8px_rgba(16,185,129,0.7)]'
-                      : (activeDisplayGases.o2 >= 20 && activeDisplayGases.o2 < 45) || (activeDisplayGases.o2 > 75 && activeDisplayGases.o2 <= 85)
-                      ? 'bg-gradient-to-r from-amber-400 to-yellow-400'
-                      : 'bg-gradient-to-r from-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.7)]'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, activeDisplayGases.o2))}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className={`font-bold flex items-center gap-1 ${
-                  activeDisplayGases.o2 >= 45 && activeDisplayGases.o2 <= 75
-                    ? 'text-emerald-400'
-                    : activeDisplayGases.o2 < 20 || activeDisplayGases.o2 > 85
-                    ? 'text-rose-400 font-black animate-pulse'
-                    : 'text-amber-400'
-                }`}>
-                  {activeDisplayGases.o2 >= 45 && activeDisplayGases.o2 <= 75
-                    ? '🟢 Aerated Loam (45%–75%)'
-                    : activeDisplayGases.o2 < 20
-                    ? '🔴 Root Suffocation (<20%)'
-                    : activeDisplayGases.o2 > 85
-                    ? '🔴 Parched (2x Drain >85%)'
-                    : '🟡 Moderate / Caution'}
-                </span>
-                <span className="text-stone-500 font-mono text-[9px]">Target: 45%–75%</span>
-              </div>
-            </div>
-
-            {/* Description & Action Guidance */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
-              <p>
-                <strong className="text-cyan-400">Soil Aeration &amp; Breath:</strong> Governs root-zone respiration &amp; drainage. Flooded soil (&ge;80% moisture) drains O₂ (-10%/10s). Below 20% causes <span className="text-rose-400 font-bold">Root Suffocation</span> (growth paused). Above 85% causes <span className="text-amber-400 font-bold">Parched Ground</span> (2x water drain).
-              </p>
-              <div className="text-[9px] text-cyan-300/90 font-mono bg-stone-900/60 p-1 rounded border border-cyan-500/20">
-                <span>💡 Fix/Get O₂:</span> Till bed (instant 60%) • Pull Carrots (+20%) • Drain flooding
-              </div>
-            </div>
-          </div>
-
-          {/* Nitrogen (N) */}
-          <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${
-            activeDisplayGases.isPenaltyNitrogen
-              ? 'bg-rose-950/40 border-rose-500/80 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.3)]'
-              : activeDisplayGases.nitrogen >= 70
-              ? 'bg-teal-950/30 border-teal-500/40 text-teal-200'
-              : 'bg-stone-950/60 border-stone-800 text-stone-200'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-mono font-bold text-stone-400">N (Nitrogen)</span>
-                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
-                  activeDisplayGases.nitrogenYieldMultiplier === 3
-                    ? 'bg-teal-500/30 text-teal-300 border-teal-400'
-                    : activeDisplayGases.nitrogenYieldMultiplier === 2
-                    ? 'bg-blue-500/30 text-blue-300 border-blue-400'
-                    : 'bg-rose-500 text-white border-rose-300 animate-pulse'
-                }`}>
-                  {activeDisplayGases.nitrogenYieldMultiplier}x Harvest Yield
-                </span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl sm:text-2xl font-black font-mono">
-                  {activeDisplayGases.nitrogen}%
-                </span>
-                <span className="text-sm font-bold text-teal-300">
-                  {activeDisplayGases.nitrogenArrow}
-                </span>
-                <span className="text-[11px] text-stone-300 truncate">
-                  ({activeDisplayGases.nitrogenBreakdownText})
-                </span>
-              </div>
-            </div>
-
-            {/* Percentage Bar & Color-coded status */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 space-y-1">
-              <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-stone-800">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    activeDisplayGases.nitrogen >= 70
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_8px_rgba(16,185,129,0.7)]'
-                      : activeDisplayGases.nitrogen >= 35
-                      ? 'bg-gradient-to-r from-amber-400 to-yellow-400'
-                      : 'bg-gradient-to-r from-rose-500 to-red-500 animate-pulse shadow-[0_0_8px_rgba(244,63,94,0.7)]'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, activeDisplayGases.nitrogen))}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className={`font-bold flex items-center gap-1 ${
-                  activeDisplayGases.nitrogen >= 70
-                    ? 'text-emerald-400'
-                    : activeDisplayGases.nitrogen >= 35
-                    ? 'text-amber-400'
-                    : 'text-rose-400 font-black animate-pulse'
-                }`}>
-                  {activeDisplayGases.nitrogen >= 70
-                    ? '🟢 High Fertility (3x Yield)'
-                    : activeDisplayGases.nitrogen >= 35
-                    ? '🟡 Moderate Fertility (2x)'
-                    : '🔴 Exhausted Deficit (<35%)'}
-                </span>
-                <span className="text-stone-500 font-mono text-[9px]">Target: 70%–100%</span>
-              </div>
-            </div>
-
-            {/* Description & Action Guidance */}
-            <div className="mt-2 pt-1.5 border-t border-stone-800/80 text-[10px] text-stone-300 leading-snug space-y-1">
-              <p>
-                <strong className="text-teal-400">Soil Fertility Battery:</strong> Governs final harvest yield multiplier. High fertility (70%–100%) guarantees full 3x yields. Deficit (&lt;35%) drops harvest to 1x.
-              </p>
-              <div className="text-[9px] text-teal-300/90 font-mono bg-stone-900/60 p-1 rounded border border-teal-500/20">
-                <span>💡 Refill N:</span> Harvest Peas/Soybeans (+50%) • Compost/Manure/Chaff Mulch (100%) • Gas Lab digestate
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Expandable All Plots Matrix Table */}
-        {isGasConsoleExpanded && (
-          <div className="mt-3 pt-3 border-t border-stone-800 animate-in fade-in duration-200">
-            <div className="text-xs font-bold text-stone-300 mb-1.5 flex items-center justify-between">
-              <span>All Plots Real-Time Gas Percentages:</span>
-              <span className="text-[10px] text-stone-400">Click any plot below or in table to inspect</span>
-            </div>
-            <div className="overflow-x-auto max-h-56 overflow-y-auto rounded-xl border border-stone-800 bg-black/40">
-              <table className="w-full text-left text-[11px] font-mono">
-                <thead className="bg-stone-900/90 text-stone-400 uppercase text-[9px] sticky top-0 border-b border-stone-800">
-                  <tr>
-                    <th className="py-1.5 px-2.5">Plot</th>
-                    <th className="py-1.5 px-2">Crop</th>
-                    <th className="py-1.5 px-2">CO₂ (%)</th>
-                    <th className="py-1.5 px-2">O₂ (%)</th>
-                    <th className="py-1.5 px-2">Nitrogen (%)</th>
-                    <th className="py-1.5 px-2">Yield / Velocity Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-800/60">
-                  {visiblePlots.map((plot) => {
-                    const g = plot.gases || { co2: 65, o2: 60, nitrogen: 85, co2Arrow: '▲', o2Arrow: '●', nitrogenArrow: '●', co2BreakdownText: '', o2BreakdownText: '', nitrogenBreakdownText: '', growthSpeedMultiplier: 1, isAnoxiaSuffocated: false, isParchedDoubleDrain: false, nitrogenYieldMultiplier: 3, isPenaltyCo2: false, isPenaltyO2: false, isPenaltyNitrogen: false, hasAnyPenalty: false };
-                    const isSelected = hoveredPlotId === plot.id;
-                    return (
-                      <tr
-                        key={plot.id}
-                        onMouseEnter={() => setHoveredPlotId(plot.id)}
-                        className={`transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-amber-950/50 text-white'
-                            : g.hasAnyPenalty
-                            ? 'bg-yellow-950/20 text-yellow-200 hover:bg-yellow-950/40'
-                            : 'hover:bg-stone-800/50 text-stone-300'
-                        }`}
-                      >
-                        <td className="py-1 px-2.5 font-bold">
-                          Plot #{plot.id + 1}
-                        </td>
-                        <td className="py-1 px-2 font-sans">
-                          {plot.crop ? `${CROPS[plot.crop].emoji} ${CROPS[plot.crop].name}` : 'Empty'}
-                        </td>
-                        <td className={`py-1 px-2 ${g.isPenaltyCo2 ? 'text-rose-400 font-bold' : g.co2 > 60 ? 'text-emerald-300' : 'text-amber-300'}`}>
-                          <span className="mr-1 text-[9px]">{g.co2 > 60 ? '🟢' : g.isPenaltyCo2 ? '🔴' : '🟡'}</span>
-                          {g.co2}% {g.co2Arrow}
-                        </td>
-                        <td className={`py-1 px-2 ${g.isPenaltyO2 ? 'text-rose-400 font-bold' : (g.o2 >= 45 && g.o2 <= 75) ? 'text-emerald-300' : 'text-amber-300'}`}>
-                          <span className="mr-1 text-[9px]">{(g.o2 >= 45 && g.o2 <= 75) ? '🟢' : g.isPenaltyO2 ? '🔴' : '🟡'}</span>
-                          {g.o2}% {g.o2Arrow}
-                        </td>
-                        <td className={`py-1 px-2 ${g.isPenaltyNitrogen ? 'text-rose-400 font-bold' : g.nitrogen >= 70 ? 'text-emerald-300' : 'text-amber-300'}`}>
-                          <span className="mr-1 text-[9px]">{g.nitrogen >= 70 ? '🟢' : g.isPenaltyNitrogen ? '🔴' : '🟡'}</span>
-                          {g.nitrogen}% {g.nitrogenArrow}
-                        </td>
-                        <td className="py-1 px-2 text-[10px] font-sans">
-                          {g.isAnoxiaSuffocated ? (
-                            <span className="text-yellow-400 font-bold">🛑 Anoxia (Paused)</span>
-                          ) : g.isParchedDoubleDrain ? (
-                            <span className="text-yellow-400 font-bold">🔥 Parched (2x Drain)</span>
-                          ) : g.growthSpeedMultiplier > 1 ? (
-                            <span className="text-emerald-300 font-bold">⚡ +{((g.growthSpeedMultiplier - 1) * 100).toFixed(0)}% Spd · {g.nitrogenYieldMultiplier}x</span>
-                          ) : (
-                            <span className="text-stone-400">{g.nitrogenYieldMultiplier}x Harvest Yield</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Farm Grid */}
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 sm:gap-2.5">
@@ -1240,11 +763,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 }
               }}
               onClick={handlePlotClick}
-              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses} ${
-                plot.gases?.hasAnyPenalty
-                  ? 'ring-2 ring-yellow-400 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.75)] animate-pulse'
-                  : ''
-              }`}
+              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses}`}
             >
               {/* Crisis Overlay 0: Crop Blight */}
               {hasBlight ? (
