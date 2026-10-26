@@ -10233,10 +10233,21 @@ export const useGameStore = create<GameState>()(
         const gasSimRes = stepGasBottlingSimulation(state.gasRefinery || createDefaultGasBottlingRefinery(), now);
         let updatedGasRefinery = gasSimRes.updatedRefinery;
 
-        // Passive herd slurry generation directly into refinery feedstock
+        // 100% Automated passive herd slurry generation directly into refinery feedstock
         let totalHerdSlurryLps = 0;
         for (const a of newAnimals) {
-          totalHerdSlurryLps += ((a.slurryDailyRate || 8) / 86400) * 20;
+          // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
+          const baseRateLps = a.species === 'cow' ? (2.5 / 60)
+            : a.species === 'pig' ? (1.5 / 60)
+            : a.species === 'sheep' ? (1.0 / 60)
+            : (0.5 / 60);
+          totalHerdSlurryLps += baseRateLps * (faunaEval.waterConsumptionMultiplier || 1.0);
+        }
+        // Prehistoric reserve creatures contribute high-volume primeval slurry
+        for (const enc of prehistoricList) {
+          if (enc.specimenCount > 0) {
+            totalHerdSlurryLps += (enc.specimenCount * (5.0 / 60)); // 5.0 L/min per prehistoric creature
+          }
         }
         if (totalHerdSlurryLps > 0) {
           const addedSlurry = totalHerdSlurryLps * deltaSeconds;

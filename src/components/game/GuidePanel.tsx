@@ -1259,7 +1259,7 @@ function GasRefineryGuide() {
               </div>
             </div>
             <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
-              Produced passively by cattle, swine, and poultry. Click <em>&quot;Muck Out Pens&quot;</em> in the Animals tab for instant +40L, or transfer directly via the intake manifold.
+              100% automated pipeline: piped directly from cattle, swine, sheep, and poultry into the refinery intake tank (+0.5 to 2.5 L/min per animal). Click <em>&quot;Muck Out Pens&quot;</em> in the Animals tab for instant +40L!
             </p>
           </div>
 

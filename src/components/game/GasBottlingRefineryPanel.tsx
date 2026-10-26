@@ -19,15 +19,22 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     hydrology,
     coins,
     orders = [],
+    animals = [],
     startGasCompressorBatch,
     collectGasCompressorOutput,
     loadCanisterToShippingCrate,
     liquidateShippingCrate,
-    addRefinerySlurryFeedstock,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
   const [isCompressingAnim, setIsCompressingAnim] = useState(false);
+
+  // Calculate live automatic herd slurry generation (L/min)
+  const animalCount = (animals || []).length;
+  const autoInflowPerMin = (animals || []).reduce((sum, a) => {
+    const rate = a.species === 'cow' ? 2.5 : a.species === 'pig' ? 1.5 : a.species === 'sheep' ? 1.0 : 0.5;
+    return sum + rate;
+  }, 0);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -209,16 +216,18 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                   style={{ width: `${Math.min(100, Math.round((slurryStock / maxSlurry) * 100))}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1">
-                <span>Inflow: Animal pens muck-out &amp; passive herd digestion</span>
-                <button
-                  type="button"
-                  onClick={() => addRefinerySlurryFeedstock(40)}
-                  className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold cursor-pointer transition-all active:scale-95"
-                  title="Manually dump 40L of raw slurry into the intake manifold"
-                >
-                  +40L Dump
-                </button>
+              <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1 flex-wrap gap-1">
+                <span>Pipeline: 100% Automated Inflow</span>
+                {autoInflowPerMin > 0 ? (
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    +{autoInflowPerMin.toFixed(1)} L/min ({animalCount} livestock)
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-amber-400/90 italic">
+                    0 L/min (No livestock in pasture)
+                  </span>
+                )}
               </div>
             </div>
 
