@@ -74,6 +74,7 @@ export default function Home() {
   const isSluiceModalOpen = useGameStore(s => s.isSluiceModalOpen);
   const setSluiceModalOpen = useGameStore(s => s.setSluiceModalOpen);
   const [activeTab, setActiveTab] = useState<TabId>('farm');
+  const [guideInitialTab, setGuideInitialTab] = useState<any>(undefined);
 
   useEffect(() => {
     if (isSluiceModalOpen) {
@@ -264,7 +265,15 @@ export default function Home() {
             {activeTab === 'water' && <WaterTab />}
             {activeTab === 'animals' && <AnimalsTab />}
             {activeTab === 'production' && <ProductionPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
-            {activeTab === 'gas' && <GasBottlingRefineryPanel onNavigateToOrders={() => setActiveTab('orders')} />}
+            {activeTab === 'gas' && (
+              <GasBottlingRefineryPanel
+                onNavigateToOrders={() => setActiveTab('orders')}
+                onNavigateToGuide={() => {
+                  setGuideInitialTab('gas');
+                  setActiveTab('guide');
+                }}
+              />
+            )}
             {activeTab === 'orders' && <OrderBoard />}
             {activeTab === 'shop' && <ShopPanel />}
             {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
@@ -275,7 +284,7 @@ export default function Home() {
             {activeTab === 'wilderness' && <PrehistoricSanctuaryPanel />}
             {activeTab === 'territory' && <TerritoryMapView />}
             {activeTab === 'market' && <LivestockMarketPanel />}
-            {activeTab === 'guide' && <GuidePanel />}
+            {activeTab === 'guide' && <GuidePanel initialTab={guideInitialTab} />}
           </div>
         </main>
       </div>

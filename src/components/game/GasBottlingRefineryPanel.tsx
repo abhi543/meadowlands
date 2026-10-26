@@ -8,9 +8,10 @@ import { playCashRegisterSound, playSumpValveSound } from '@/lib/soundEffects';
 
 interface GasBottlingRefineryPanelProps {
   onNavigateToOrders?: () => void;
+  onNavigateToGuide?: () => void;
 }
 
-export function GasBottlingRefineryPanel({ onNavigateToOrders }: GasBottlingRefineryPanelProps) {
+export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide }: GasBottlingRefineryPanelProps) {
   const {
     gasRefinery,
     silo,
@@ -162,94 +163,21 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders }: GasBottlingRefi
         </div>
       </div>
 
-      {/* Visual Gas Manufacturing Reference Banner */}
-      <div className="bg-stone-900/90 rounded-2xl border border-stone-800 p-4 space-y-2.5 shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">⚗️</span>
-            <h3 className="text-xs sm:text-sm font-black text-amber-300 uppercase tracking-wider">
-              Industrial Gas Manufacturing Guide — How Every Gas Is Produced
-            </h3>
-          </div>
-          <span className="text-[10px] text-stone-400 font-mono">3 Refined Commodities</span>
+      {/* Gas Refinery Guide Reference Bar */}
+      <div className="bg-stone-900/60 rounded-xl border border-stone-800/80 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2 text-xs shadow-sm">
+        <div className="flex items-center gap-2 text-stone-300">
+          <span className="text-base">📖</span>
+          <span>Feedstock formulas, harvesting pipelines, and export logistics are available in the <strong>Guide</strong> page.</span>
         </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-          {/* CO2 Flow */}
-          <div className="bg-stone-950/80 rounded-xl p-3 border border-amber-500/30 space-y-1.5 flex flex-col justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
-                  <span>💨</span> Carbon Dioxide (CO₂)
-                </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
-                  💰 45c
-                </span>
-              </div>
-              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
-                <p>
-                  <strong className="text-amber-300">1. Raw Slurry (40L):</strong> Animals generate this passively. Click <span className="text-amber-300 font-bold">&quot;Muck Out Pens&quot;</span> in Animals tab for instant +40L!
-                </p>
-                <p>
-                  <strong className="text-stone-200">2. Dry Chaff (10x):</strong> Threshed automatically as a free byproduct whenever you harvest grain crops (Wheat, Corn, Soybeans).
-                </p>
-              </div>
-            </div>
-            <div className="p-1.5 rounded bg-amber-950/40 border border-amber-500/20 text-[10px] text-amber-200 mt-2">
-              ⚡ <em>Ferments organic chaff into dense, carbonated gas cylinders.</em>
-            </div>
-          </div>
-
-          {/* O2 Flow */}
-          <div className="bg-stone-950/80 rounded-xl p-3 border border-cyan-500/30 space-y-1.5 flex flex-col justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-cyan-400 flex items-center gap-1.5">
-                  <span>🫧</span> Refined Oxygen (O₂)
-                </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold">
-                  💰 65c
-                </span>
-              </div>
-              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
-                <p>
-                  <strong className="text-cyan-300">1. Clean Water (30L):</strong> Piped directly from Deep Well manual pump or Gravity Tower in the Hydrology tab.
-                </p>
-                <p>
-                  <strong className="text-emerald-300">2. Green Biomass (5x):</strong> Harvest leafy legume crops (Peas or Soybeans) grown on your outdoor farm grid.
-                </p>
-              </div>
-            </div>
-            <div className="p-1.5 rounded bg-cyan-950/40 border border-cyan-500/20 text-[10px] text-cyan-200 mt-2">
-              ⚡ <em>Electrolyzes fresh water through active chlorophyll cells into medical oxygen.</em>
-            </div>
-          </div>
-
-          {/* N2 Flow */}
-          <div className="bg-stone-950/80 rounded-xl p-3 border border-indigo-500/30 space-y-1.5 flex flex-col justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-indigo-400 flex items-center gap-1.5">
-                  <span>❄️</span> Liquid Nitrogen (N₂)
-                </span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
-                  💰 110c
-                </span>
-              </div>
-              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
-                <p>
-                  <strong className="text-amber-300">1. Conc. Slurry (50L):</strong> High-nitrogen cattle &amp; swine slurry generated by your pasture herd.
-                </p>
-                <p>
-                  <strong className="text-rose-300">2. Thermal Fuel:</strong> Any thermal fuel item in your barn (or a quick 15 Coins preheat charge).
-                </p>
-              </div>
-            </div>
-            <div className="p-1.5 rounded bg-indigo-950/40 border border-indigo-500/20 text-[10px] text-indigo-200 mt-2">
-              ⚡ <em>Thermally cracks nitrogen compounds, then flash-freezes into cryogenic Dewars.</em>
-            </div>
-          </div>
-        </div>
+        {onNavigateToGuide && (
+          <button
+            onClick={onNavigateToGuide}
+            className="px-3 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1"
+          >
+            <span>Open Gas Guide</span>
+            <span>→</span>
+          </button>
+        )}
       </div>
 
       {/* Main Grid: Feedstocks & Compressor */}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BUILDINGS, ANIMALS, CROPS, WORKERS, WATER_ZONES, ROD_TIERS, ROD_TIER_ORDER,
   PRODUCTS, BREED_REGISTRY, TIER_COLORS, TIER_LABELS, BIOMES, LURES,
@@ -23,6 +23,7 @@ import {
 } from '@/game/eventsData';
 import { SUDDEN_EVENT_TEMPLATES } from '@/lib/eventDirector';
 import { FARM_TIER_DROPS, PREHISTORIC_DROPS } from './AnimalProductsQuickReference';
+import { CANISTER_RECIPES } from '@/game/gasBottlingEngine';
 
 type GuideTab =
   | 'overview'
@@ -30,6 +31,7 @@ type GuideTab =
   | 'animals'
   | 'breeding'
   | 'production'
+  | 'gas'
   | 'orders'
   | 'shop'
   | 'events'
@@ -48,11 +50,12 @@ interface TabItem {
 }
 
 const GUIDE_TABS: TabItem[] = [
-  { id: 'overview',   label: 'All Pages Atlas', emoji: '🗺️', badge: '12 Sections' },
+  { id: 'overview',   label: 'All Pages Atlas', emoji: '🗺️', badge: '13 Sections' },
   { id: 'farm',       label: 'Farm & Well',     emoji: '🌾' },
   { id: 'animals',    label: 'Animals',         emoji: '🐔' },
   { id: 'breeding',   label: 'Breeding',        emoji: '🧬' },
   { id: 'production', label: 'Production',      emoji: '⚙️' },
+  { id: 'gas',        label: 'Gas Refinery',    emoji: '⚗️', badge: 'Commodity' },
   { id: 'orders',     label: 'Deliveries & Rep',emoji: '🚚', badge: 'Overhaul' },
   { id: 'shop',       label: 'Shop & Economy',  emoji: '🏪' },
   { id: 'events',     label: 'Events & Relics', emoji: '📡', badge: '10 Regional' },
@@ -64,8 +67,14 @@ const GUIDE_TABS: TabItem[] = [
   { id: 'tips',       label: 'Pro Strategies',  emoji: '💡' },
 ];
 
-export function GuidePanel() {
-  const [activeTab, setActiveTab] = useState<GuideTab>('overview');
+export function GuidePanel({ initialTab }: { initialTab?: GuideTab }) {
+  const [activeTab, setActiveTab] = useState<GuideTab>(initialTab || 'overview');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   return (
     <div className="space-y-3 pb-8">
@@ -114,6 +123,7 @@ export function GuidePanel() {
         {activeTab === 'animals'    && <AnimalsGuide />}
         {activeTab === 'breeding'   && <BreedingGuide />}
         {activeTab === 'production' && <ProductionChainGuide />}
+        {activeTab === 'gas'        && <GasRefineryGuide />}
         {activeTab === 'orders'     && <OrdersGuide />}
         {activeTab === 'shop'       && <ShopGuide />}
         {activeTab === 'events'     && <EventsGuide />}
@@ -129,7 +139,7 @@ export function GuidePanel() {
 }
 
 // -------------------------------------------------------------
-// 1. ALL PAGES ATLAS (Visual Breakdown of each of the 12 sections)
+// 1. ALL PAGES ATLAS (Visual Breakdown of each of the 13 sections)
 // -------------------------------------------------------------
 function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }) {
   const pages = [
@@ -158,8 +168,16 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
       color: 'border-orange-200 bg-orange-50/50 dark:bg-orange-950/20 dark:border-orange-900/40',
     },
     {
+      tabId: 'gas' as GuideTab,
+      label: '4. Gas Refinery (⚗️)',
+      role: 'Heavy Hydraulic Bottling & Export',
+      desc: 'Compress agricultural byproducts (Slurry, Chaff, Fresh Water, Biomass, Thermal Fuel) into valuable industrial gases: CO₂ (45c), Refined O₂ (65c), and Liquid N₂ (110c) for freight crates and town contracts.',
+      action: 'Read Gas Manufacturing Guide',
+      color: 'border-cyan-200 bg-cyan-50/50 dark:bg-cyan-950/20 dark:border-cyan-900/40',
+    },
+    {
       tabId: 'orders' as GuideTab,
-      label: '4. Deliveries (🚚)',
+      label: '5. Deliveries (🚚)',
       role: 'Logistics Engine & Client Reputations',
       desc: 'Fulfill premium orders (140%–220% value) for 5 recurring Client Personas. Manage Timed Rush & Futures contracts, and choose Safe Highway vs Wild Shortcut routes.',
       action: 'Read Logistics Guide',
@@ -167,7 +185,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'shop' as GuideTab,
-      label: '5. Shop (🏪)',
+      label: '6. Shop (🏪)',
       role: 'Emergency Liquidation (60% Value)',
       desc: 'Clear warehouse bottlenecks by dumping surplus items at 60% liquidation rates. Quick "Sell All Surplus" button protects critical seeds and animal feed.',
       action: 'Read Shop Guide',
@@ -175,7 +193,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'events' as GuideTab,
-      label: '6. Events & Relics (📡)',
+      label: '7. Events & Relics (📡)',
       role: 'Regional Phenomena & Horizon Radar',
       desc: 'Track 10 Regional Phenomena via live Horizon Radar anomaly ETAs, resolve 30s–75s sudden crises, and mount permanent relics in the Relics Vault.',
       action: 'Explore Regional Events',
@@ -183,7 +201,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'workers' as GuideTab,
-      label: '7. Workers (👷)',
+      label: '8. Workers (👷)',
       role: 'Automated Guilds & Idle Progress',
       desc: 'Hire 10 specialized workers across Field Hands, Autonomous Gatherers, and Guild Masters. Level them up (up to Lv.120) with Auto-Sell and Hoard modes.',
       action: 'Learn Automation',
@@ -191,7 +209,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'fishery' as GuideTab,
-      label: '8. Fishery (🎣)',
+      label: '9. Fishery (🎣)',
       role: 'Parallel Aquatic Harvesting',
       desc: '5 Water Zones (Pond, River, Estuary, Lake, Ocean) operating in parallel. Hire fishermen directly, upgrade rods, and fill the Aquatic Codex for gems.',
       action: 'Read Fishery Guide',
@@ -199,7 +217,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'wilderness' as GuideTab,
-      label: '9. Wild (🏕️)',
+      label: '10. Wild (🏕️)',
       role: 'Scout Expeditions & Exotic Tiers',
       desc: 'Craft bait lures and send scouts to 4 uncharted wilderness biomes. Make mid-trail risk/reward decisions to bring home rare wild animal breeds.',
       action: 'Read Wilderness Guide',
@@ -207,7 +225,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'territory' as GuideTab,
-      label: '10. Map (🗺️)',
+      label: '11. Map (🗺️)',
       role: 'Estate Expansion & Aura Buffs',
       desc: 'Clear land debris across 7 parcels. Unlock massive estate-wide auras (Irrigation, Logistics, Margins) and fulfill massive Freight Cargo Contracts.',
       action: 'Explore Territory Map',
@@ -215,7 +233,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'market' as GuideTab,
-      label: '11. Market (💰)',
+      label: '12. Market (💰)',
       role: 'Livestock Trading & Elder Retirement',
       desc: 'Purchase new animal stock across all tiers. Monitor your animals remaining life cycles, and sell Elder animals for large retirement payouts.',
       action: 'Explore Livestock Market',
@@ -223,7 +241,7 @@ function AllPagesAtlas({ onSelectTab }: { onSelectTab: (tab: GuideTab) => void }
     },
     {
       tabId: 'breeding' as GuideTab,
-      label: '12. Breeding & Codex (🧬)',
+      label: '13. Breeding & Codex (🧬)',
       role: 'Genetics, Mutations & Codex Gems',
       desc: 'Pair two adult animals in Breeding Pens to hatch higher-tier offspring (Uncommon, Rare, Legendary) and unlock permanent Codex Gem bounties.',
       action: 'Learn Breeding System',
@@ -1105,6 +1123,268 @@ function ProductionChainGuide() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// 5. INDUSTRIAL GAS MANUFACTURING & EXPORT REFINERY GUIDE
+// -------------------------------------------------------------
+function GasRefineryGuide() {
+  return (
+    <div className="space-y-4">
+      <div>
+        <h4 className="font-bold text-base text-stone-800 dark:text-gray-100 flex items-center gap-2">
+          ⚗️ Industrial Gas Bottling &amp; Export Refinery Guide
+        </h4>
+        <p className="text-xs text-stone-500 dark:text-gray-400">
+          Heavy hydraulic compression of agricultural byproducts into high-value bottled trade commodities for direct export.
+        </p>
+      </div>
+
+      {/* Visual Gas Manufacturing Reference Banner */}
+      <div className="bg-stone-900/95 rounded-2xl border border-stone-800 p-4 space-y-2.5 shadow-xl text-stone-100">
+        <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚗️</span>
+            <h3 className="text-xs sm:text-sm font-black text-amber-300 uppercase tracking-wider">
+              Industrial Gas Manufacturing Guide — How Every Gas Is Produced
+            </h3>
+          </div>
+          <span className="text-[10px] text-stone-400 font-mono">3 Refined Commodities</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+          {/* CO2 Flow */}
+          <div className="bg-stone-950/80 rounded-xl p-3 border border-amber-500/30 space-y-1.5 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                  <span>💨</span> Carbon Dioxide (CO₂)
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
+                  💰 45c
+                </span>
+              </div>
+              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
+                <p>
+                  <strong className="text-amber-300">1. Raw Slurry (40L):</strong> Animals generate this passively. Click <span className="text-amber-300 font-bold">&quot;Muck Out Pens&quot;</span> in Animals tab for instant +40L!
+                </p>
+                <p>
+                  <strong className="text-stone-200">2. Dry Chaff (10x):</strong> Threshed automatically as a free byproduct whenever you harvest grain crops (Wheat, Corn, Soybeans).
+                </p>
+              </div>
+            </div>
+            <div className="p-1.5 rounded bg-amber-950/40 border border-amber-500/20 text-[10px] text-amber-200 mt-2">
+              ⚡ <em>Ferments organic chaff into dense, carbonated gas cylinders.</em>
+            </div>
+          </div>
+
+          {/* O2 Flow */}
+          <div className="bg-stone-950/80 rounded-xl p-3 border border-cyan-500/30 space-y-1.5 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-cyan-400 flex items-center gap-1.5">
+                  <span>🫧</span> Refined Oxygen (O₂)
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold">
+                  💰 65c
+                </span>
+              </div>
+              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
+                <p>
+                  <strong className="text-cyan-300">1. Clean Water (30L):</strong> Piped directly from Deep Well manual pump or Gravity Tower in the Hydrology tab.
+                </p>
+                <p>
+                  <strong className="text-emerald-300">2. Green Biomass (5x):</strong> Harvest leafy legume crops (Peas or Soybeans) grown on your outdoor farm grid.
+                </p>
+              </div>
+            </div>
+            <div className="p-1.5 rounded bg-cyan-950/40 border border-cyan-500/20 text-[10px] text-cyan-200 mt-2">
+              ⚡ <em>Electrolyzes fresh water through active chlorophyll cells into medical oxygen.</em>
+            </div>
+          </div>
+
+          {/* N2 Flow */}
+          <div className="bg-stone-950/80 rounded-xl p-3 border border-indigo-500/30 space-y-1.5 flex flex-col justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-indigo-400 flex items-center gap-1.5">
+                  <span>❄️</span> Liquid Nitrogen (N₂)
+                </span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-bold">
+                  💰 110c
+                </span>
+              </div>
+              <div className="text-[11px] text-stone-300 leading-relaxed space-y-1 pt-1">
+                <p>
+                  <strong className="text-amber-300">1. Conc. Slurry (50L):</strong> High-nitrogen cattle &amp; swine slurry generated by your pasture herd.
+                </p>
+                <p>
+                  <strong className="text-rose-300">2. Thermal Fuel:</strong> Any thermal fuel item in your barn (or a quick 15 Coins preheat charge).
+                </p>
+              </div>
+            </div>
+            <div className="p-1.5 rounded bg-indigo-950/40 border border-indigo-500/20 text-[10px] text-indigo-200 mt-2">
+              ⚡ <em>Thermally cracks nitrogen compounds, then flash-freezes into cryogenic Dewars.</em>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Core Design Shift Note */}
+      <div className="bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 rounded-xl p-3.5 space-y-2 text-xs">
+        <h5 className="font-bold text-sm text-stone-800 dark:text-stone-100 flex items-center gap-2">
+          <span>🔄</span> The Industrial Gas Commodity Overhaul
+        </h5>
+        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
+          Gases (CO₂, O₂, N₂) are <strong>not</strong> soil decay mechanics. Outdoor crop plots have zero gas meters and zero suffocation penalties.
+          Instead, gases are <strong>high-margin export commodities</strong> processed in the specialized <strong>Gas Lab</strong> and sold directly to regional distributors and town contracts.
+        </p>
+      </div>
+
+      {/* Feedstock Procurement Breakdown */}
+      <div className="space-y-2">
+        <h5 className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-gray-400">
+          Feedstock Sourcing &amp; Procurement Pipeline
+        </h5>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🛢️</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Raw &amp; Conc. Slurry</h6>
+                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Animal Pens &amp; Herds</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Produced passively by cattle, swine, and poultry. Click <em>&quot;Muck Out Pens&quot;</em> in the Animals tab for instant +40L, or transfer directly via the intake manifold.
+            </p>
+          </div>
+
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🌾</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Dry Chaff</h6>
+                <span className="text-[10px] text-stone-500 dark:text-stone-400 font-semibold">Grain Threshing Byproduct</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Free threshing residue harvested automatically alongside grain crops (Wheat, Corn, Soybeans) on your outdoor farm grid. Stored in your Barn inventory.
+            </p>
+          </div>
+
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💧</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Hydrology Clean Water</h6>
+                <span className="text-[10px] text-cyan-600 dark:text-cyan-400 font-semibold">Deep Well &amp; Gravity Tower</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Drawn from the estate well and gravity tower network. Plentiful and constantly refilled by rain, manual pumping, or automated siphon pipelines.
+            </p>
+          </div>
+
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🌿</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Green Biomass</h6>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Legume Harvests</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Harvested from leafy field crops such as Peas or Soybeans. Chlorophyll rich, providing organic catalyst cells for water electrolysis.
+            </p>
+          </div>
+
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🔥</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Thermal Fuel</h6>
+                <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold">Barn Fuel or Coin Heating</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Uses any solid thermal fuel in your barn (such as Peat, Hardwood, or Thermal Scutes) or an on-demand 15 Coin electrical preheating charge.
+            </p>
+          </div>
+
+          <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3 bg-stone-50/50 dark:bg-stone-900/40 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📦</span>
+              <div>
+                <h6 className="font-bold text-xs text-stone-800 dark:text-gray-200">Output Storage Racks</h6>
+                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">Canister Warehouse</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+              Finished cylinders are automatically stacked into laboratory racks upon cycle completion, ready to be crated or dispatched for delivery contracts.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Hydraulic Compressor Mechanics */}
+      <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3.5 bg-stone-50/50 dark:bg-stone-900/30 space-y-2 text-xs">
+        <h5 className="font-bold text-sm text-stone-800 dark:text-stone-100 flex items-center gap-2">
+          <span>⚙️</span> Heavy Hydraulic Compressor Operation
+        </h5>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-stone-800 dark:text-stone-200">⏱️ 60-Second Cycle:</span>
+            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+              The compressor runs automated 60-second compression strokes. Single-batch operation guarantees zero cross-contamination of gas streams.
+            </p>
+          </div>
+          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-stone-800 dark:text-stone-200">📥 Automated Transfer:</span>
+            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+              When compression completes, click <em>&quot;Rack Finished Gas Cylinder&quot;</em> to instantly transfer canisters into the output staging rack.
+            </p>
+          </div>
+          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-stone-800 dark:text-stone-200">🛡️ Safety Limits:</span>
+            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+              Refinery intake tanks store up to 2,500L of slurry with zero pressure leak penalties. Your output racks store unlimited bottled stock.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Logistics & Direct Sales */}
+      <div className="bg-gradient-to-r from-amber-950/20 via-orange-950/20 to-stone-950/20 border border-amber-500/30 rounded-xl p-3.5 text-xs space-y-2">
+        <h5 className="font-bold text-sm text-amber-300 flex items-center gap-2">
+          <span>🚢</span> Export Logistics: Estate Freight Crate &amp; Town Contracts
+        </h5>
+        <p className="text-stone-300 leading-relaxed">
+          You have three distinct avenues to monetize your bottled industrial gas inventory:
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1 text-[11px]">
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-amber-500/20">
+            <strong className="text-amber-400">📦 Estate Shipping Crate:</strong>
+            <p className="mt-1 text-stone-300">
+              Load cylinders directly into the freight crate. Liquidates automatically during the estate daily cycle (every 300 seconds) for baseline export cash.
+            </p>
+          </div>
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-amber-500/20">
+            <strong className="text-emerald-400">⚡ Immediate Freight Dispatch:</strong>
+            <p className="mt-1 text-stone-300">
+              Need cash immediately? Hit <em>&quot;Dispatch Immediate Freight&quot;</em> to instantly cash out all loaded canisters without waiting for the courier timer.
+            </p>
+          </div>
+          <div className="bg-stone-900/90 p-2.5 rounded-lg border border-amber-500/20">
+            <strong className="text-cyan-400">📜 Town Notice Board Contracts:</strong>
+            <p className="mt-1 text-stone-300">
+              Breweries, medical clinics, and cryogenic research clients post high-yield contracts paying <strong>160% to 220% bonus coins</strong> and reputation!
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );
