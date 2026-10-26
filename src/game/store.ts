@@ -15079,6 +15079,10 @@ export const useGameStore = create<GameState>()(
         hydrology: state.hydrology,
         amberBioLab: state.amberBioLab,
         prehistoricSanctuary: state.prehistoricSanctuary,
+        pastureWelfare: state.pastureWelfare,
+        slurryPits: state.slurryPits,
+        gasProductionLab: state.gasProductionLab,
+        gasRefinery: state.gasRefinery,
         isOfflineMode: state.isOfflineMode,
         offlineStartTime: state.offlineStartTime,
         lastOfflineSummary: state.lastOfflineSummary,
@@ -15568,12 +15572,39 @@ export const useGameStore = create<GameState>()(
           merged.pastureWelfare = createDefaultPastureWelfare();
         }
 
-        // Migration: Species-Specific Slurry Pits & Gas Production Lab
+        // Migration: Species-Specific Slurry Pits, Gas Production Lab & Gas Bottling Refinery
         if (!merged.slurryPits) {
           merged.slurryPits = createDefaultSlurryPits();
         }
         if (!merged.gasProductionLab) {
           merged.gasProductionLab = createDefaultGasProductionLab();
+        }
+        if (!merged.gasRefinery) {
+          merged.gasRefinery = createDefaultGasBottlingRefinery();
+        } else {
+          const defRef = createDefaultGasBottlingRefinery();
+          merged.gasRefinery = {
+            ...defRef,
+            ...merged.gasRefinery,
+            outputRack: { ...defRef.outputRack, ...(merged.gasRefinery.outputRack || {}) },
+            dailyShippingCrate: { ...defRef.dailyShippingCrate, ...(merged.gasRefinery.dailyShippingCrate || {}) },
+            activeBatches: { ...defRef.activeBatches, ...(merged.gasRefinery.activeBatches || {}) },
+            automatedGases: { ...defRef.automatedGases, ...(merged.gasRefinery.automatedGases || {}) },
+          };
+        }
+
+        // Emergency Gas & Slurry Auto-Recovery:
+        // Because gasRefinery was previously unpersisted during rapid updates, restore a generous 2,200L feedstock buffer
+        // and 4 of each pressurized canister (CO₂, O₂, N₂) into the laboratory rack so no player loses progress!
+        if ((merged.gasRefinery.storedSlurryFeedstock || 0) < 500) {
+          merged.gasRefinery.storedSlurryFeedstock = 2200;
+          merged.gasRefinery.isWorkerSlurryActive = true;
+        }
+        const rack = merged.gasRefinery.outputRack;
+        if ((rack.co2_cylinder || 0) + (rack.oxygen_canister || 0) + (rack.nitrogen_dewar || 0) === 0) {
+          rack.co2_cylinder = 4;
+          rack.oxygen_canister = 4;
+          rack.nitrogen_dewar = 4;
         }
 
         return merged as GameState;
