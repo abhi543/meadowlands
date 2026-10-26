@@ -10260,6 +10260,8 @@ export const useGameStore = create<GameState>()(
           specimenCount: enc.specimenCount || 0,
         }));
 
+        const isNight = currentClock.currentPeriod === 'night';
+
         const slurrySimResult = stepSlurrySimulation({
           deltaSeconds,
           pits: state.slurryPits || createDefaultSlurryPits(),
@@ -10267,6 +10269,7 @@ export const useGameStore = create<GameState>()(
             species: a.species,
             hydrationLevel: a.hydrationLevel ?? 90,
             hasGreenDiet: a.hasGreenDiet ?? true,
+            isElder: Boolean((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder'),
           })),
           prehistoricCreatures: prehistoricList,
           gasLab: state.gasProductionLab || createDefaultGasProductionLab(),
@@ -10275,10 +10278,12 @@ export const useGameStore = create<GameState>()(
           isRainstormActive: state.activeEvent?.type === 'rainstorm',
           pastureWelfare: updatedPastureWelfare,
           hasDimetrodon,
+          isNight,
         });
 
         // Stamp live slurry metrics onto animal instances
         newAnimals = newAnimals.map(a => {
+          const isElder = Boolean((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder');
           const evalRes = evaluateAnimalSlurry({
             species: a.species,
             hydrationLevel: a.hydrationLevel ?? 90,
@@ -10288,6 +10293,8 @@ export const useGameStore = create<GameState>()(
             temperatureC: hydroSimResult.updatedHydrology.weatherState?.temperatureC ?? 20,
             isRainstormActive: state.activeEvent?.type === 'rainstorm',
             isPastureShaded: updatedPastureWelfare.hasShadedCanopy,
+            isElder,
+            isNight,
           });
 
           return {
@@ -10316,19 +10323,25 @@ export const useGameStore = create<GameState>()(
         }
 
         // 100% Automated passive herd slurry generation directly into refinery feedstock
+        // Pauses at night (livestock asleep in barn stalls) and excludes retired elders
         let totalHerdSlurryLps = 0;
-        for (const a of newAnimals) {
-          // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
-          const baseRateLps = a.species === 'cow' ? (2.5 / 60)
-            : a.species === 'pig' ? (1.5 / 60)
-            : a.species === 'sheep' ? (1.0 / 60)
-            : (0.5 / 60);
-          totalHerdSlurryLps += baseRateLps * (faunaEval.waterConsumptionMultiplier || 1.0);
-        }
-        // Prehistoric reserve creatures contribute high-volume primeval slurry
-        for (const enc of prehistoricList) {
-          if (enc.specimenCount > 0) {
-            totalHerdSlurryLps += (enc.specimenCount * (5.0 / 60)); // 5.0 L/min per prehistoric creature
+        if (!isNight) {
+          for (const a of newAnimals) {
+            const isElder = Boolean((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder');
+            if (isElder) continue; // Retired elder animals cease slurry generation
+
+            // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
+            const baseRateLps = a.species === 'cow' ? (2.5 / 60)
+              : a.species === 'pig' ? (1.5 / 60)
+              : a.species === 'sheep' ? (1.0 / 60)
+              : (0.5 / 60);
+            totalHerdSlurryLps += baseRateLps * (faunaEval.waterConsumptionMultiplier || 1.0);
+          }
+          // Prehistoric reserve creatures contribute high-volume primeval slurry during daytime
+          for (const enc of prehistoricList) {
+            if (enc.specimenCount > 0) {
+              totalHerdSlurryLps += (enc.specimenCount * (5.0 / 60)); // 5.0 L/min per prehistoric creature
+            }
           }
         }
         if (totalHerdSlurryLps > 0) {

@@ -16,6 +16,7 @@ import { AnimalProductsQuickReference } from './AnimalProductsQuickReference';
 import { resolveWeatherProfileId } from '@/game/hydrologyEngine';
 import { WEATHER_PROFILES } from '@/game/weatherEngine';
 import { evaluateFaunaWeather, type FaunaWeatherEvaluation } from '@/game/faunaWeatherEngine';
+import { getCircadianClock } from '@/game/shiftEngine';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -72,7 +73,11 @@ export function AnimalsTab() {
     hydrology,
     prehistoricSanctuary,
     domesticTroughs,
+    farmEpochStart = 0,
   } = useGameStore();
+
+  const clock = getCircadianClock(Date.now(), farmEpochStart || Date.now());
+  const isNight = clock.currentPeriod === 'night';
 
   const isTessaActive = Boolean(
     !isAllWorkersPaused &&
@@ -663,6 +668,29 @@ export function AnimalsTab() {
                           {animal.isBeddingDryCaked && (
                             <span className="text-[8px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100/90 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-400/60" title="Bedding caked dry! Washdown needed to restore fluid runoff.">
                               🪣 Caked
+                            </span>
+                          )}
+                          {/* Real-time Slurry Production Badge */}
+                          {animal.age === 'elder' || (animal.cyclesRemaining !== undefined && animal.cyclesRemaining <= 0) ? (
+                            <span
+                              className="text-[8px] font-bold text-stone-500 bg-stone-200 dark:bg-stone-800 px-1 py-0.2 rounded border border-stone-300 dark:border-stone-700 truncate"
+                              title="Retired Elder: Ceased biological production (0 L/min Slurry). Sell at Livestock Market."
+                            >
+                              👵 Retired (0 Slurry)
+                            </span>
+                          ) : isNight ? (
+                            <span
+                              className="text-[8px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/80 px-1 py-0.2 rounded border border-indigo-300 dark:border-indigo-700/60 truncate"
+                              title="Night Rest: Animal is asleep in barn stall (0 L/min Slurry until morning)"
+                            >
+                              🌙 Asleep (0 Slurry)
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[8px] font-mono font-bold text-amber-800 dark:text-amber-300 bg-amber-100/90 dark:bg-amber-950/80 px-1 py-0.2 rounded border border-amber-300 dark:border-amber-700/60 truncate"
+                              title={`Active Daytime Slurry: +${(animal.species === 'cow' ? 2.5 : animal.species === 'pig' ? 1.5 : animal.species === 'sheep' ? 1.0 : 0.5).toFixed(1)} L/min piped directly to Gas Refinery intake`}
+                            >
+                              🚰 +{(animal.species === 'cow' ? 2.5 : animal.species === 'pig' ? 1.5 : animal.species === 'sheep' ? 1.0 : 0.5).toFixed(1)} L/m
                             </span>
                           )}
                         </div>

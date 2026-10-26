@@ -5,6 +5,7 @@ import { useGameStore, getStorageAvailableStock } from '@/game/store';
 import { CANISTER_RECIPES, type CanisterTierId, type CompressorBatch, getCrateTotalCanisterCount, calculateCrateLiquidationValue } from '@/game/gasBottlingEngine';
 import { CLIENT_DEFINITIONS } from '@/game/deliveryData';
 import { playCashRegisterSound, playSumpValveSound } from '@/lib/soundEffects';
+import { getCircadianClock } from '@/game/shiftEngine';
 
 interface GasBottlingRefineryPanelProps {
   onNavigateToOrders?: () => void;
@@ -20,6 +21,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     coins,
     orders = [],
     animals = [],
+    farmEpochStart = 0,
     startGasCompressorBatch,
     startAllGasCompressors,
     toggleGasAutomation,
@@ -32,12 +34,24 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const [now, setNow] = useState(Date.now());
   const [isCompressingAnim, setIsCompressingAnim] = useState(false);
 
+  const clock = getCircadianClock(now, farmEpochStart || now);
+  const isNight = clock.currentPeriod === 'night';
+
   // Calculate live automatic herd slurry generation (L/min)
-  const animalCount = (animals || []).length;
-  const autoInflowPerMin = (animals || []).reduce((sum, a) => {
+  // Excludes retired elder livestock (cyclesRemaining <= 0) and pauses at night when herd is asleep
+  const allAnimals = animals || [];
+  const activeAnimals = allAnimals.filter(
+    (a) => !((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder')
+  );
+  const elderAnimalCount = allAnimals.length - activeAnimals.length;
+  const activeAnimalCount = activeAnimals.length;
+
+  const daytimeInflowPerMin = activeAnimals.reduce((sum, a) => {
     const rate = a.species === 'cow' ? 2.5 : a.species === 'pig' ? 1.5 : a.species === 'sheep' ? 1.0 : 0.5;
     return sum + rate;
   }, 0);
+
+  const autoInflowPerMin = isNight ? 0 : daytimeInflowPerMin;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -261,7 +275,16 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                 {autoInflowPerMin > 0 ? (
                   <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    +{autoInflowPerMin.toFixed(1)} L/min ({animalCount} livestock)
+                    ☀️ +{autoInflowPerMin.toFixed(1)} L/min ({activeAnimalCount} active{elderAnimalCount > 0 ? `, ${elderAnimalCount} elder` : ''})
+                  </span>
+                ) : isNight ? (
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-500/30 px-2 py-0.5 rounded-full" title="Livestock are asleep in the barn during the night shift. Slurry production pauses until morning.">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
+                    🌙 Night Rest: 0 L/min (Herd Asleep in Barn)
+                  </span>
+                ) : elderAnimalCount > 0 && activeAnimalCount === 0 ? (
+                  <span className="text-[10px] text-amber-400/90 italic" title="Elder animals have retired from biological production and do not produce slurry.">
+                    👵 0 L/min ({elderAnimalCount} elder livestock retired)
                   </span>
                 ) : (
                   <span className="text-[10px] text-amber-400/90 italic">

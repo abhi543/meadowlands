@@ -1259,7 +1259,7 @@ function GasRefineryGuide() {
               </div>
             </div>
             <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
-              100% automated pipeline: piped directly from cattle, swine, sheep, and poultry into the refinery intake tank (+0.5 to 2.5 L/min per animal). Click <em>&quot;Muck Out Pens&quot;</em> in the Animals tab for instant +40L!
+              Automated herd pipeline: piped directly from cattle, swine, sheep, and poultry into the refinery intake tank during daytime (+0.5 to 2.5 L/min per active animal). Note: When livestock retire as Elders (0 cycles remaining) or during the 20-minute Night Shift while the herd sleeps in the barn, slurry output pauses (0 L/min). Click <em>&quot;Muck Out Pens&quot;</em> in the Animals tab for instant +40L!
             </p>
           </div>
 

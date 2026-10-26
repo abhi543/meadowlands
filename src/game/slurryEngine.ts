@@ -576,6 +576,8 @@ export function evaluateAnimalSlurry(params: {
   isRainstormActive?: boolean;
   isPastureShaded?: boolean;
   isBeddingMucked?: boolean;
+  isElder?: boolean;       // Retired elder livestock (cyclesRemaining <= 0) produce 0 slurry
+  isNight?: boolean;       // During nocturnal rest (night shift), livestock sleep and produce 0 slurry
 }): AnimalSlurryEvaluation {
   const profile = SPECIES_SLURRY_REGISTRY[params.species] || SPECIES_SLURRY_REGISTRY.cow;
   const hydration = params.hydrationLevel !== undefined ? params.hydrationLevel : 90;
@@ -620,25 +622,42 @@ export function evaluateAnimalSlurry(params: {
 
   // Calculate final daily rate in liters (1 game day = 1,800 seconds)
   let netRateLiters = profile.baseWasteRateLitersPerDay;
-  if (isDehydrated) {
+  if (params.isElder) {
+    netRateLiters = 0; // Retired elders cease slurry generation
+  } else if (params.isNight) {
+    netRateLiters = 0; // Nocturnal sleep dormancy: herd asleep in barn stalls
+  } else if (isDehydrated) {
     netRateLiters = 0;
   } else {
     const totalModifierMultiplier = 1 + ((dietModifierPercent + weatherModifierPercent) / 100);
     netRateLiters = Math.max(0.1, Number((profile.baseWasteRateLitersPerDay * totalModifierMultiplier).toFixed(2)));
   }
 
-  const ratePerSecond = isDehydrated ? 0 : netRateLiters / 1800;
+  const ratePerSecond = (isDehydrated || params.isElder || params.isNight) ? 0 : netRateLiters / 1800;
   const washDownNeededLiters = Number((netRateLiters * profile.washDownWaterRatio * 0.1).toFixed(1));
 
   // Build inspection badge string
   let qualityLabel = `${profile.name} Quality`;
-  if (profile.qualityGrade === 'swine_methane') qualityLabel = 'Swine Quality (High Methane)';
-  if (profile.qualityGrade === 'poultry_uric') qualityLabel = 'Poultry Quality (Uric N Spike)';
-  if (profile.qualityGrade === 'bovine_balanced') qualityLabel = 'Bovine Quality (Balanced Digestate)';
-  if (profile.qualityGrade === 'primeval_flora') qualityLabel = 'Primeval Quality (+50% Distillation)';
+  if (params.isElder) {
+    qualityLabel = 'Retired Elder (0 L/day)';
+  } else if (params.isNight) {
+    qualityLabel = 'Night Rest (Asleep in Barn)';
+  } else if (profile.qualityGrade === 'swine_methane') {
+    qualityLabel = 'Swine Quality (High Methane)';
+  } else if (profile.qualityGrade === 'poultry_uric') {
+    qualityLabel = 'Poultry Quality (Uric N Spike)';
+  } else if (profile.qualityGrade === 'bovine_balanced') {
+    qualityLabel = 'Bovine Quality (Balanced Digestate)';
+  } else if (profile.qualityGrade === 'primeval_flora') {
+    qualityLabel = 'Primeval Quality (+50% Distillation)';
+  }
 
   let badge = `Hydration: ${Math.round(hydration)}% | Slurry: ${netRateLiters.toFixed(1)}L/day (${qualityLabel})`;
-  if (isDehydrated) {
+  if (params.isElder) {
+    badge = 'Retired Elder | Slurry Production Ceased (0 L/day)';
+  } else if (params.isNight) {
+    badge = 'Night Rest | Livestock Asleep in Barn (0 L/day Slurry)';
+  } else if (isDehydrated) {
     badge = `Hydration: ${Math.round(hydration)}% (DEHYDRATED) | Slurry Output Frozen! Refill Troughs`;
   } else if (isDryCaked) {
     badge += ' ⚠️ Caked Bedding: Washdown needed';
@@ -671,7 +690,7 @@ export function evaluateAnimalSlurry(params: {
 export function stepSlurrySimulation(params: {
   deltaSeconds: number;
   pits: Record<SlurryPitId, SlurryPitState>;
-  animals: Array<{ species: string; hydrationLevel?: number; hasGreenDiet?: boolean }>;
+  animals: Array<{ species: string; hydrationLevel?: number; hasGreenDiet?: boolean; isElder?: boolean }>;
   prehistoricCreatures: Array<{ speciesId: string; specimenCount: number }>;
   gasLab: GasProductionLabState;
   activeWeatherId: WeatherProfileId;
@@ -679,6 +698,7 @@ export function stepSlurrySimulation(params: {
   isRainstormActive: boolean;
   pastureWelfare?: Partial<PastureWelfareState>;
   hasDimetrodon?: boolean;
+  isNight?: boolean;
 }): {
   updatedPits: Record<SlurryPitId, SlurryPitState>;
   updatedGasLab: GasProductionLabState;
@@ -695,6 +715,7 @@ export function stepSlurrySimulation(params: {
     isRainstormActive,
     pastureWelfare,
     hasDimetrodon = false,
+    isNight = false,
   } = params;
 
   const notifications: string[] = [];
@@ -718,6 +739,8 @@ export function stepSlurrySimulation(params: {
       temperatureC,
       isRainstormActive,
       isPastureShaded: pastureWelfare?.hasShadedCanopy,
+      isElder: a.isElder,
+      isNight,
     });
 
     if (evalResult.ratePerSecond <= 0) continue;
