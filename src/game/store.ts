@@ -9952,6 +9952,13 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        const currentNotifications = get().notifications || [];
+        // Deduplicate identical notifications arriving within 8 seconds
+        const recentDuplicate = currentNotifications.find(
+          n => n.message === message && (Date.now() - n.createdAt < 8000)
+        );
+        if (recentDuplicate) return;
+
         const notification: NotificationItem = {
           id: generateId(),
           message,
@@ -9965,7 +9972,7 @@ export const useGameStore = create<GameState>()(
           resolved: false,
         };
         // Retain up to 150 items for rich chronological audit trail
-        const newNotifications = [notification, ...state.notifications].slice(0, 150);
+        const newNotifications = [notification, ...currentNotifications].slice(0, 150);
         set({ notifications: newNotifications });
       },
 
@@ -10027,6 +10034,11 @@ export const useGameStore = create<GameState>()(
         // Closed-Loop Hydrological Estate Simulation Step
         const deltaSeconds = state.lastTick ? Math.min(30, Math.max(0.1, (now - state.lastTick) / 1000)) : 1;
         const currentClock = getCircadianClock(now, state.farmEpochStart || now);
+
+        let newCoins = state.coins;
+        let newXp = state.xp;
+        let newBarn = { ...state.barn };
+        let newSilo = { ...state.silo };
 
         // Worker hydrology shift duty checks
         const fieldHandWorker = state.unifiedWorkers?.farmer;
@@ -10791,10 +10803,6 @@ export const useGameStore = create<GameState>()(
         }
 
         // Multi-zone fishery: iterate ALL unlocked zones in parallel
-        let newCoins = state.coins;
-        let newXp = state.xp;
-        let newBarn = { ...state.barn };
-        let newSilo = { ...state.silo };
         if ((newBarn as Record<string, number>).honey_comb) {
           const stranded = (newBarn as Record<string, number>).honey_comb || 0;
           if (stranded > 0) {
@@ -12536,7 +12544,7 @@ export const useGameStore = create<GameState>()(
             coldInfusedDrinks: Math.round(newColdDrinks * 10) / 10,
             totalWaterConsumedLiters: Math.round(totalWaterConsumed * 10) / 10,
           },
-          notifications: state.notifications.filter(
+          notifications: (get().notifications || state.notifications).filter(
             n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
           ),
           lastTick: now,
