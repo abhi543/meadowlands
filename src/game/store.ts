@@ -101,6 +101,7 @@ import {
 import {
   type CanisterId,
   type GasBottlingRefineryState,
+  type CompressorBatch,
   createDefaultGasBottlingRefinery,
   CANISTER_RECIPES,
   calculateCrateLiquidationValue,
@@ -948,6 +949,7 @@ export interface GameState {
   // Automated Gas Bottling & Export Refinery
   gasRefinery: GasBottlingRefineryState;
   startGasCompressorBatch: (recipeId: CanisterId) => boolean;
+  startAllGasCompressors: () => number;
   collectGasCompressorOutput: () => void;
   loadCanisterToShippingCrate: (canisterId: CanisterId, qty?: number) => boolean;
   liquidateShippingCrate: (immediate?: boolean) => { coinsEarned: number; count: number };
@@ -6955,8 +6957,14 @@ export const useGameStore = create<GameState>()(
         const recipe = CANISTER_RECIPES[recipeId];
         if (!recipe) return false;
 
-        if (refinery.activeBatch) {
-          state.addNotification('⚙️ Heavy Hydraulic Gas Compressor is currently cycling! Please wait for completion.', '⚠️', 'info');
+        const currentBatches: Record<CanisterId, CompressorBatch | null> = {
+          co2_cylinder: refinery.activeBatches?.co2_cylinder || (refinery.activeBatch?.canisterId === 'co2_cylinder' ? refinery.activeBatch : null),
+          oxygen_canister: refinery.activeBatches?.oxygen_canister || (refinery.activeBatch?.canisterId === 'oxygen_canister' ? refinery.activeBatch : null),
+          nitrogen_dewar: refinery.activeBatches?.nitrogen_dewar || (refinery.activeBatch?.canisterId === 'nitrogen_dewar' ? refinery.activeBatch : null),
+        };
+
+        if (currentBatches[recipeId]) {
+          state.addNotification(`⚙️ ${recipe.name} chamber is already cycling! Please wait for this batch to complete.`, '⚠️', 'info');
           return false;
         }
 
@@ -7035,8 +7043,8 @@ export const useGameStore = create<GameState>()(
           refinery.storedSlurryFeedstock = Math.max(0, refinery.storedSlurryFeedstock - 50);
         }
 
-        refinery.activeBatch = {
-          id: `batch_${Date.now()}`,
+        const newBatch: CompressorBatch = {
+          id: `batch_${recipeId}_${Date.now()}`,
           canisterId: recipeId,
           name: recipe.name,
           emoji: recipe.emoji,
@@ -7044,6 +7052,10 @@ export const useGameStore = create<GameState>()(
           durationSec: recipe.processingDurationSec,
           outputQty: 1,
         };
+
+        currentBatches[recipeId] = newBatch;
+        refinery.activeBatches = currentBatches;
+        refinery.activeBatch = Object.values(currentBatches).find(b => b !== null) || null;
 
         playSumpValveSound();
         set({
@@ -7055,8 +7067,22 @@ export const useGameStore = create<GameState>()(
           isDirty: true,
         });
 
-        state.addNotification(`⚙️ Hydraulic Gas Compressor Engaged: Bottling 1x ${recipe.name} (60s cycle).`, '⚙️', 'discovery');
+        state.addNotification(`⚙️ Engaged ${recipe.name} Compressor Chamber (60s cycle).`, '⚙️', 'discovery');
         return true;
+      },
+
+      startAllGasCompressors: () => {
+        const state = get();
+        let started = 0;
+        const order: CanisterId[] = ['co2_cylinder', 'oxygen_canister', 'nitrogen_dewar'];
+        for (const cid of order) {
+          const res = get().startGasCompressorBatch(cid);
+          if (res) started++;
+        }
+        if (started > 1) {
+          state.addNotification(`⚙️ Tri-Chamber Overdrive: ${started} gas compressors running simultaneously in parallel!`, '🚀', 'event');
+        }
+        return started;
       },
 
       collectGasCompressorOutput: () => {
@@ -10232,6 +10258,11 @@ export const useGameStore = create<GameState>()(
         // Gas Bottling & Export Refinery Simulation Tick
         const gasSimRes = stepGasBottlingSimulation(state.gasRefinery || createDefaultGasBottlingRefinery(), now);
         let updatedGasRefinery = gasSimRes.updatedRefinery;
+        if (gasSimRes.completedBatches && gasSimRes.completedBatches.length > 0) {
+          for (const b of gasSimRes.completedBatches) {
+            state.addNotification(`🛢️ Compression Complete: 1x ${b.name} placed in Laboratory Output!`, '🛢️', 'discovery');
+          }
+        }
 
         // 100% Automated passive herd slurry generation directly into refinery feedstock
         let totalHerdSlurryLps = 0;

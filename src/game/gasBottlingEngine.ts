@@ -85,8 +85,9 @@ export interface CompressorBatch {
 
 export interface GasBottlingRefineryState {
   storedSlurryFeedstock: number; // Liters of raw slurry available in the refinery's bulk intake tank
-  maxSlurryCapacity: number;     // e.g. 2000L default
-  activeBatch: CompressorBatch | null;
+  maxSlurryCapacity: number;     // e.g. 2500L default
+  activeBatch?: CompressorBatch | null; // Kept for backwards compatibility
+  activeBatches?: Record<CanisterId, CompressorBatch | null>; // Tri-chamber parallel compression
   outputRack: Record<CanisterId, number>; // Canisters ready in laboratory storage
   dailyShippingCrate: Record<CanisterId, number>; // Canisters loaded onto Estate Export Cart
   lastDailyLiquidationTimestamp: number;
@@ -100,6 +101,11 @@ export function createDefaultGasBottlingRefinery(): GasBottlingRefineryState {
     storedSlurryFeedstock: 120, // Initial feedstock to allow instant experimentation
     maxSlurryCapacity: 2500,
     activeBatch: null,
+    activeBatches: {
+      co2_cylinder: null,
+      oxygen_canister: null,
+      nitrogen_dewar: null,
+    },
     outputRack: {
       co2_cylinder: 0,
       oxygen_canister: 0,
@@ -137,7 +143,7 @@ export function getCrateTotalCanisterCount(crate: Record<CanisterId, number>): n
 
 /**
  * Steps the Heavy Hydraulic Gas Compressor simulation.
- * When the 60-second compression cycle completes, bottles are moved to the output rack.
+ * Multi-chamber parallel simulation: when each 60-second compression cycle completes, bottles are moved to the output rack.
  */
 export function stepGasBottlingSimulation(
   refinery: GasBottlingRefineryState,
@@ -145,28 +151,45 @@ export function stepGasBottlingSimulation(
 ): {
   updatedRefinery: GasBottlingRefineryState;
   completedBatch: CompressorBatch | null;
+  completedBatches: CompressorBatch[];
 } {
-  if (!refinery.activeBatch) {
-    return { updatedRefinery: refinery, completedBatch: null };
+  // Normalize batches across single activeBatch and tri-chamber activeBatches
+  const activeBatches: Record<CanisterId, CompressorBatch | null> = {
+    co2_cylinder: refinery.activeBatches?.co2_cylinder || (refinery.activeBatch?.canisterId === 'co2_cylinder' ? refinery.activeBatch : null),
+    oxygen_canister: refinery.activeBatches?.oxygen_canister || (refinery.activeBatch?.canisterId === 'oxygen_canister' ? refinery.activeBatch : null),
+    nitrogen_dewar: refinery.activeBatches?.nitrogen_dewar || (refinery.activeBatch?.canisterId === 'nitrogen_dewar' ? refinery.activeBatch : null),
+  };
+
+  const hasAnyActive = Boolean(activeBatches.co2_cylinder || activeBatches.oxygen_canister || activeBatches.nitrogen_dewar);
+  if (!hasAnyActive) {
+    return { updatedRefinery: refinery, completedBatch: null, completedBatches: [] };
   }
 
-  const batch = refinery.activeBatch;
-  const elapsedSec = (now - batch.startedAt) / 1000;
+  const completedBatches: CompressorBatch[] = [];
+  const newOutputRack = { ...refinery.outputRack };
 
-  if (elapsedSec >= batch.durationSec) {
-    // Completed!
-    const newOutputRack = { ...refinery.outputRack };
-    newOutputRack[batch.canisterId] = (newOutputRack[batch.canisterId] || 0) + batch.outputQty;
-
-    return {
-      updatedRefinery: {
-        ...refinery,
-        activeBatch: null,
-        outputRack: newOutputRack,
-      },
-      completedBatch: batch,
-    };
+  for (const cid of ['co2_cylinder', 'oxygen_canister', 'nitrogen_dewar'] as CanisterId[]) {
+    const batch = activeBatches[cid];
+    if (batch) {
+      const elapsedSec = (now - batch.startedAt) / 1000;
+      if (elapsedSec >= batch.durationSec) {
+        newOutputRack[cid] = (newOutputRack[cid] || 0) + batch.outputQty;
+        activeBatches[cid] = null;
+        completedBatches.push(batch);
+      }
+    }
   }
 
-  return { updatedRefinery: refinery, completedBatch: null };
+  const remainingActiveBatch = Object.values(activeBatches).find(b => b !== null) || null;
+
+  return {
+    updatedRefinery: {
+      ...refinery,
+      activeBatch: remainingActiveBatch,
+      activeBatches,
+      outputRack: newOutputRack,
+    },
+    completedBatch: completedBatches[0] || null,
+    completedBatches,
+  };
 }

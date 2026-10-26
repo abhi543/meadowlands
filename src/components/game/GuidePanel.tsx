@@ -1333,25 +1333,25 @@ function GasRefineryGuide() {
       {/* Hydraulic Compressor Mechanics */}
       <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3.5 bg-stone-50/50 dark:bg-stone-900/30 space-y-2 text-xs">
         <h5 className="font-bold text-sm text-stone-800 dark:text-stone-100 flex items-center gap-2">
-          <span>⚙️</span> Heavy Hydraulic Compressor Operation
+          <span>⚙️</span> Tri-Chamber Hydraulic Compressor Operation (Simultaneous Bottling)
         </h5>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-stone-800 dark:text-stone-200">⏱️ 60-Second Cycle:</span>
+            <span className="font-bold text-stone-800 dark:text-stone-200">⚡ Tri-Chamber Parallel Bottling:</span>
             <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              The compressor runs automated 60-second compression strokes. Single-batch operation guarantees zero cross-contamination of gas streams.
+              All 3 gases (CO₂, O₂, N₂) operate in separate, isolated hydraulic chambers. You can produce all gases simultaneously or click <em>&quot;Bottle All Available Gases In Parallel&quot;</em> to fire all chambers at once!
             </p>
           </div>
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-stone-800 dark:text-stone-200">📥 Automated Transfer:</span>
+            <span className="font-bold text-stone-800 dark:text-stone-200">⏱️ Independent 60s Cycles:</span>
             <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              When compression completes, click <em>&quot;Rack Finished Gas Cylinder&quot;</em> to instantly transfer canisters into the output staging rack.
+              Each chamber runs an independent 60-second compression stroke. Completed canisters are racked automatically to output storage without blocking other active gases.
             </p>
           </div>
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-stone-800 dark:text-stone-200">🛡️ Safety Limits:</span>
+            <span className="font-bold text-stone-800 dark:text-stone-200">🛡️ High-Capacity Storage:</span>
             <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              Refinery intake tanks store up to 2,500L of slurry with zero pressure leak penalties. Your output racks store unlimited bottled stock.
+              Refinery intake tanks store up to 2,500L of slurry with zero pressure leak penalties. Your output racks store unlimited bottled stock ready for freight export.
             </p>
           </div>
         </div>
