@@ -10421,6 +10421,25 @@ export const useGameStore = create<GameState>()(
         }
 
         // --- Automated Gas Refinery Workers (Tri-Chamber Dispatch) ---
+        // Slurry Governor Hysteresis Rule:
+        // Workers start working when slurry goes >= 2000L and stop when it drops below 500L
+        const currentSlurry = updatedGasRefinery.storedSlurryFeedstock || 0;
+        let isWorkerSlurryActive = Boolean(updatedGasRefinery.isWorkerSlurryActive);
+
+        if (currentSlurry >= 2000) {
+          if (!isWorkerSlurryActive) {
+            state.addNotification('🛢️ Refinery Governor: Slurry reached 2,000L buffer! Automated gas workers engaged.', '🚀', 'discovery');
+          }
+          isWorkerSlurryActive = true;
+        } else if (currentSlurry < 500) {
+          if (isWorkerSlurryActive) {
+            state.addNotification('🛡️ Refinery Governor: Slurry fell below 500L cutoff! Automated gas workers paused to protect reserves.', '⚠️', 'info');
+          }
+          isWorkerSlurryActive = false;
+        }
+
+        updatedGasRefinery.isWorkerSlurryActive = isWorkerSlurryActive;
+
         // Defaults: CO2 automated (Technician), N2 automated (Cryo-Distiller), O2 manual (Player Controlled)
         const autoGases: Record<CanisterId, boolean> = {
           co2_cylinder: true,
@@ -10434,8 +10453,8 @@ export const useGameStore = create<GameState>()(
           oxygen_canister: updatedGasRefinery.activeBatches?.oxygen_canister || null,
         };
 
-        // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff)
-        if (autoGases.co2_cylinder && !activeBatchesInRefinery.co2_cylinder) {
+        // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff, only if worker slurry governor is active)
+        if (isWorkerSlurryActive && autoGases.co2_cylinder && !activeBatchesInRefinery.co2_cylinder) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const chaffAvail = (newSilo.chaff || 0) + (newBarn.chaff || 0);
           if (slurryAvail >= 40 && chaffAvail >= 10) {
@@ -10460,8 +10479,8 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // 2. Check N2 Chamber (Needs 50L Slurry + 1 Fuel or 15 Coins)
-        if (autoGases.nitrogen_dewar && !activeBatchesInRefinery.nitrogen_dewar) {
+        // 2. Check N2 Chamber (Needs 50L Slurry + 1 Fuel or 15 Coins, only if worker slurry governor is active)
+        if (isWorkerSlurryActive && autoGases.nitrogen_dewar && !activeBatchesInRefinery.nitrogen_dewar) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           if (slurryAvail >= 50) {
             let hasFuel = false;
@@ -10494,7 +10513,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 3. Check O2 Chamber (Only runs automatically if player turned on automation for Oxygen)
-        if (autoGases.oxygen_canister && !activeBatchesInRefinery.oxygen_canister) {
+        if (isWorkerSlurryActive && autoGases.oxygen_canister && !activeBatchesInRefinery.oxygen_canister) {
           const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
           let bioTotal = 0;
           const bioCandidates: (keyof typeof newSilo)[] = ['peas', 'wheat', 'soybean', 'corn'];

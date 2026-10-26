@@ -1339,7 +1339,7 @@ function GasRefineryGuide() {
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-stone-800 dark:text-stone-200">👷 Automated Workers (CO₂ &amp; N₂):</span>
             <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              Dedicated refinery technicians automatically start the next compression cycle for CO₂ and Liquid N₂ as soon as slurry, chaff, and thermal fuel are replenished.
+              Dedicated refinery technicians automatically bottle CO₂ and Liquid N₂. To protect estate slurry reserves, workers <strong>start working when slurry reaches 2,000L</strong> and <strong>stop when it drops below 500L</strong>.
             </p>
           </div>
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">

@@ -77,6 +77,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     ...(refinery.automatedGases || {}),
   };
   const autoWorkerCount = (Object.values(automatedGases) as boolean[]).filter(Boolean).length;
+  const isWorkerSlurryActive = Boolean(refinery.isWorkerSlurryActive);
 
   // Next daily liquidation countdown
   const cycleMs = (refinery.dailyCycleSeconds || 300) * 1000;
@@ -234,14 +235,29 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                   {slurryStock}L / {maxSlurry}L
                 </span>
               </div>
-              <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800">
+              <div className="w-full bg-stone-900 rounded-full h-2.5 overflow-hidden border border-stone-800 relative">
                 <div
                   className="bg-gradient-to-r from-amber-700 to-yellow-600 h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.round((slurryStock / maxSlurry) * 100))}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1 flex-wrap gap-1">
-                <span>Pipeline: 100% Automated Inflow</span>
+
+              {/* Governor Threshold Markers */}
+              <div className="flex items-center justify-between text-[9px] font-mono text-stone-500 border-b border-stone-800/60 pb-1">
+                <span className={slurryStock < 500 ? 'text-red-400 font-bold' : ''}>🛑 Cutoff &lt;500L</span>
+                <span className="text-stone-400">Buffer: 500L–2000L</span>
+                <span className={slurryStock >= 2000 ? 'text-emerald-400 font-bold' : ''}>🟢 Start ≥2000L</span>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-stone-400 pt-0.5 flex-wrap gap-1">
+                <span>
+                  Governor:{' '}
+                  {isWorkerSlurryActive ? (
+                    <strong className="text-emerald-400">🟢 Workers Active (Down to 500L)</strong>
+                  ) : (
+                    <strong className="text-amber-400">⏳ Standby (Wait for 2,000L)</strong>
+                  )}
+                </span>
                 {autoInflowPerMin > 0 ? (
                   <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -359,14 +375,23 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                 <div className="flex items-center gap-2">
                   <span className="text-xl">👷</span>
                   <div>
-                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2 flex-wrap">
                       Refinery Workforce &amp; Chamber Automation
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-800 text-stone-300 border border-stone-700">
                         {autoWorkerCount}/3 Automated
                       </span>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
+                        isWorkerSlurryActive
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-950/80 text-amber-300 border-amber-500/40'
+                      }`}>
+                        {isWorkerSlurryActive
+                          ? `🟢 Governor Active (≥2,000L Triggered • Runs to <500L)`
+                          : `🛡️ Governor Standby (${slurryStock}L / 2,000L to Start)`}
+                      </span>
                     </h4>
                     <p className="text-[11px] text-stone-400">
-                      Automated workers auto-queue the next batch as soon as ingredients arrive.
+                      Automated workers engage when slurry reaches <strong>2,000L</strong> and stop automatically below <strong>500L</strong> to protect estate slurry reserves.
                     </p>
                   </div>
                 </div>
@@ -509,7 +534,13 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                             </span>
                             <span className="text-[9px] text-stone-400 block truncate">
                               {isAutomated
-                                ? (thisBatch ? '⚡ Compressing auto-batch' : canCraft ? '🟢 Ready for auto-stroke' : `⏳ Standby (${missingReason})`)
+                                ? (thisBatch
+                                    ? '⚡ Compressing auto-batch'
+                                    : !isWorkerSlurryActive
+                                    ? `🛡️ Standby: Waiting for 2,000L Slurry (${slurryStock}L/2,000L)`
+                                    : canCraft
+                                    ? '🟢 Ready for auto-stroke'
+                                    : `⏳ Standby (${missingReason})`)
                                 : 'Awaiting your manual click'}
                             </span>
                           </div>
@@ -617,7 +648,9 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                           Boolean(thisBatch)
                             ? 'bg-stone-800 text-amber-300 border border-amber-500/30 opacity-90 cursor-not-allowed'
                             : isAutomated
-                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 cursor-default'
+                            ? !isWorkerSlurryActive
+                              ? 'bg-stone-800/80 text-amber-300/90 border border-amber-500/30 cursor-default'
+                              : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 cursor-default'
                             : !canCraft
                             ? 'bg-stone-800 text-stone-500 cursor-not-allowed opacity-60'
                             : canisterId === 'co2_cylinder'
@@ -630,7 +663,11 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                         {thisBatch ? (
                           <span className="animate-pulse">⚡ Compressing ({thisRemainingSec}s)...</span>
                         ) : isAutomated ? (
-                          <span>👷 Worker Operating (Auto-Queue)</span>
+                          !isWorkerSlurryActive ? (
+                            <span>🛡️ Worker Standby (Slurry &lt; 2,000L)</span>
+                          ) : (
+                            <span>👷 Worker Operating (Auto-Queue)</span>
+                          )
                         ) : !canCraft ? (
                           <span>{missingReason}</span>
                         ) : (
