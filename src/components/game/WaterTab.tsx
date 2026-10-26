@@ -467,11 +467,11 @@ export function WaterTab() {
           <div className="pt-2 border-t border-sky-100 dark:border-stone-800 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => transferCisternToTower()}
-              disabled={cisternLiters < 100 || towerLiters >= towerCapacity}
+              onClick={() => transferCisternToTower(100)}
+              disabled={cisternLiters <= 0 || towerLiters >= towerCapacity}
               className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-sky-500/10 hover:bg-sky-500/20 disabled:bg-stone-100 dark:bg-sky-600/20 dark:hover:bg-sky-600/40 dark:disabled:bg-stone-800/50 border border-sky-400/50 disabled:border-stone-300 dark:disabled:border-stone-700 text-sky-700 dark:text-sky-200 disabled:text-stone-400 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
             >
-              Transfer 100L &rarr; Tower
+              Transfer Rain &rarr; Tower
             </button>
             <button
               type="button"
@@ -572,11 +572,11 @@ export function WaterTab() {
           <div className="pt-2 border-t border-teal-100 dark:border-stone-800 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => pumpAquiferToTower()}
-              disabled={aquiferLiters < 50 || towerLiters >= towerCapacity}
+              onClick={() => pumpAquiferToTower(50)}
+              disabled={aquiferLiters <= 0 || towerLiters >= towerCapacity}
               className="flex-1 py-2 px-3 rounded-xl text-xs font-bold bg-teal-500/10 hover:bg-teal-500/20 disabled:bg-stone-100 dark:bg-teal-600/20 dark:hover:bg-teal-600/40 dark:disabled:bg-stone-800/50 border border-teal-400/50 disabled:border-stone-300 dark:disabled:border-stone-700 text-teal-800 dark:text-teal-200 disabled:text-stone-400 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
             >
-              Pump 50L &rarr; Tower
+              Pump Well &rarr; Tower
             </button>
             <button
               type="button"

@@ -603,10 +603,11 @@ export function stepHydrologySimulation(params: {
   const elapsedWeatherSec = Math.max((Date.now() - weatherStartedAt) / 1000, ticksElapsed * dt);
 
   // Auto-transition to next natural weather pattern when 1-day duration expires (30 min) or when game day advances
+  const isManualOverride = Boolean(hydrology.weatherState?.isManualOverride);
   const hasDayAdvanced = currentDay > weatherDay;
   const hasDurationExpired = elapsedWeatherSec >= weatherDurationSec;
 
-  if (!isRainstormActive && (hasDayAdvanced || hasDurationExpired)) {
+  if (!isRainstormActive && (!isManualOverride && hasDayAdvanced || hasDurationExpired)) {
     let nextWeatherId = rollNextNaturalWeather(activeProfileId);
     // If Markov roll picked the same weather, cycle to another viable atmospheric neighbor
     if (nextWeatherId === activeProfileId) {
@@ -690,10 +691,16 @@ export function stepHydrologySimulation(params: {
     }
   }
 
-  // 2. Closed-Loop Precipitation Catchment into Rain Cistern & Cistern Overflow
+  // 2. Closed-Loop Precipitation Catchment into Rain Cistern & Elevated Gravity Tower
   const precipInflowLPerMin = activeProfileId === 'snow' ? 0 : weatherProfile.precipitationInflowLPerMin;
   if (precipInflowLPerMin > 0) {
     const rainLitersGained = (precipInflowLPerMin / 60) * dt;
+
+    // Direct atmospheric rain catchment into Elevated Gravity Tower
+    if (currentTower < hydrology.towerCapacityLiters) {
+      currentTower = Math.min(hydrology.towerCapacityLiters, currentTower + rainLitersGained);
+    }
+
     const prospectiveCistern = currentCistern + rainLitersGained;
     if (prospectiveCistern >= effectiveCisternMax) {
       currentCistern = effectiveCisternMax;
@@ -1000,9 +1007,9 @@ export function stepHydrologySimulation(params: {
     cycleElapsedSeconds,
     canalTier: effectiveTier,
   });
-  // Heatwave / Drought: Evaporation rate triples: Plot water requirement jumps from 1x to 3x per cycle
+  // Heatwave / Drought: Evaporation rate triples. During rain/drizzle: baseEvaporativeFactor suppresses evaporation (e.g. 0.0)
   const isHeatwaveOrDrought = activeProfileId === 'heatwave' || activeProfileId === 'drought' || activeProfileId === 'plasma_firestorm';
-  const weatherEvapMult = isHeatwaveOrDrought ? 3.0 : 1.0;
+  const weatherEvapMult = isHeatwaveOrDrought ? 3.0 : (weatherProfile.baseEvaporativeFactor !== undefined ? weatherProfile.baseEvaporativeFactor : 1.0);
   const evapRatePctPerSec = (thermoEvap.evapRatePctPerMin * weatherEvapMult) / 60;
   const evapDeltaPct = evapRatePctPerSec * dt;
 

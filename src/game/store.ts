@@ -13724,7 +13724,7 @@ export const useGameStore = create<GameState>()(
         const towerSpace = currentHydro.towerCapacityLiters - currentHydro.towerLiters;
 
         if (towerSpace <= 0) {
-          state.addNotification('🗼 Elevated Gravity Tower is already at maximum capacity (800L)!', '🗼', 'info');
+          state.addNotification(`🗼 Elevated Gravity Tower is already at maximum capacity (${currentHydro.towerCapacityLiters}L)!`, '🗼', 'info');
           return false;
         }
         if (currentHydro.aquiferLiters <= 0) {
@@ -13761,7 +13761,7 @@ export const useGameStore = create<GameState>()(
         const towerSpace = currentHydro.towerCapacityLiters - currentHydro.towerLiters;
 
         if (towerSpace <= 0) {
-          state.addNotification('🗼 Elevated Gravity Tower is already at maximum capacity (800L)!', '🗼', 'info');
+          state.addNotification(`🗼 Elevated Gravity Tower is already at maximum capacity (${currentHydro.towerCapacityLiters}L)!`, '🗼', 'info');
           return false;
         }
         if (currentHydro.cisternLiters <= 0) {
@@ -13872,6 +13872,8 @@ export const useGameStore = create<GameState>()(
         const newAtmosphere = createDefaultWeatherState(profileId);
         newAtmosphere.weatherDay = clock.currentDay;
         newAtmosphere.weatherDurationSec = 1800; // 30 minutes (1 full in-game day: 10m morning, 20m night)
+        newAtmosphere.weatherStartedAt = Date.now();
+        newAtmosphere.isManualOverride = true;
         set({
           hydrology: {
             ...currentHydro,
