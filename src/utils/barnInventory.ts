@@ -189,6 +189,10 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   cull_biomass: { id: 'cull_biomass', name: 'Overripe Fruit / Cull Biomass', icon: '🍇', category: 'raw_crop', baseValue: 2, isEdibleFeed: true },
   raw_sulfur: { id: 'raw_sulfur', name: 'Raw Sulfur / Brimstone Dust', icon: '🌋', category: 'artisan', baseValue: 12, isEdibleFeed: false },
   bone_meal: { id: 'bone_meal', name: 'Bone Meal / Mineral Phosphorus', icon: '🦴', category: 'artisan', baseValue: 8, isEdibleFeed: false },
+
+  // Specialized Trait Livestock Products
+  golden_milk: { id: 'golden_milk', name: 'Golden Milk', icon: '🥛', category: 'animal_product', baseValue: 20, isEdibleFeed: false },
+  wild_truffle: { id: 'wild_truffle', name: 'Wild Truffle', icon: '🍄', category: 'animal_product', baseValue: 75, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {

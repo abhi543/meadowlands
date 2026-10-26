@@ -109,6 +109,16 @@ import {
   stepGasBottlingSimulation,
 } from '@/game/gasBottlingEngine';
 import {
+  type AnimalTraitId,
+  rollOffspringGenetics,
+  getDefaultCoat,
+  getCoatDefinition,
+  getTraitDefinition,
+  calculateAnimalResalePrice,
+  SPECIES_TRAIT_REGISTRY,
+  SPECIES_COAT_REGISTRY,
+} from '@/game/livestockGeneticsEngine';
+import {
   playWashdownHoseSound,
   playSlurryScoopSound,
   playSumpValveSound,
@@ -477,6 +487,13 @@ export interface AnimalInstance {
   maxCycles: number;
   cyclesRemaining: number;
   cyclesCompletedTotal: number;
+  // Livestock Genetics & Breeding Inheritance System
+  generation?: number;       // 0 for shop-bought, 1+ for bred
+  coat?: string;             // Sprite/coat ID (e.g. holstein, caramel_jersey, midnight_onyx)
+  trait?: string;            // Key from species trait pool (e.g. rich_nitrogen, golden_cream) or 'none'
+  outputMultiplier?: number; // 1.0 + (generation * 0.12)
+  dailyOutputBonus?: number; // Flat bonus or percentage
+  lastSnoutForageAt?: number;// Pig mineral snout cooldown tracker
   // Overclocking & Exhaustion (Step 4)
   isOverclocked?: boolean;
   overclockExpiresAt?: number | null;
@@ -1481,9 +1498,9 @@ const initialPlots: PlotState[] = Array.from({ length: MAX_FARM_PLOTS }, (_, i) 
 }));
 
 const initialAnimals: AnimalInstance[] = [
-  { id: 'a1', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0 },
-  { id: 'a2', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0 },
-  { id: 'a3', species: 'cow', tier: 'common', breedId: 'cow_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 12, cyclesRemaining: 12, cyclesCompletedTotal: 0 },
+  { id: 'a1', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0, generation: 0, coat: 'white_leghorn', trait: 'none', outputMultiplier: 1.0, dailyOutputBonus: 0 },
+  { id: 'a2', species: 'chicken', tier: 'common', breedId: 'chicken_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 15, cyclesRemaining: 15, cyclesCompletedTotal: 0, generation: 0, coat: 'white_leghorn', trait: 'none', outputMultiplier: 1.0, dailyOutputBonus: 0 },
+  { id: 'a3', species: 'cow', tier: 'common', breedId: 'cow_common', fed: false, fedAt: null, productReady: false, age: 'adult', maxCycles: 12, cyclesRemaining: 12, cyclesCompletedTotal: 0, generation: 0, coat: 'holstein', trait: 'none', outputMultiplier: 1.0, dailyOutputBonus: 0 },
 ];
 
 const initialOrders = generateOrders(6, 1);
@@ -3198,20 +3215,54 @@ export const useGameStore = create<GameState>()(
         let additionalXp = 5;
         const newCodex = { ...state.codex };
 
-        // 1. Primary Product Yield + Overclock Bonus & Weather Modifier
+        // 1. Primary Product Yield + Overclock Bonus & Weather Modifier & Genetics Multiplier
         const aOverclock = state.entityOverclocks?.[`animal_${animalId}`];
         const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
         const yieldMult = faunaEval.yieldMultiplier;
+        const genMult = animal.outputMultiplier || (1.0 + (animal.generation || 0) * 0.12);
+
+        // Hen Trait: double_yolk (30% chance to drop 2x eggs per laying cycle)
+        let isDoubleYolk = false;
+        if (animal.species === 'chicken' && animal.trait === 'double_yolk' && Math.random() < 0.30) {
+          isDoubleYolk = true;
+          state.addNotification('🥚 Double Yolk Hen dropped 2x eggs this cycle!', '🥚', 'discovery');
+        }
+        const doubleYolkMult = isDoubleYolk ? 2 : 1;
 
         if (breedDef) {
-          const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult)) + bonusYield;
+          const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult * genMult * doubleYolkMult)) + bonusYield;
           newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + finalYield;
           state.registerHarvestFreshness(breedDef.primaryProductKey, finalYield);
         } else {
           // Fallback to species default
-          const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult)) + bonusYield;
+          const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult * genMult * doubleYolkMult)) + bonusYield;
           newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + finalYield;
           state.registerHarvestFreshness(speciesDef.product, finalYield);
+        }
+
+        // Cow Trait: golden_cream (Milking gives "Golden Milk" sold for 2.5x base coin price)
+        if (animal.species === 'cow' && animal.trait === 'golden_cream') {
+          const goldenYield = Math.max(1, Math.round(1 * genMult));
+          newBarn.golden_milk = (newBarn.golden_milk || 0) + goldenYield;
+          state.addNotification(`🥛 Golden Cream Cow yielded ${goldenYield}x Golden Milk (2.5x coin value)!`, '🥛', 'discovery');
+        }
+
+        // Cow Trait: rich_nitrogen (Slurry adds 2x volume towards the Liquid Nitrogen Dewar (N₂) refinery tank)
+        let updatedRefineryOnCollect = state.gasRefinery ? { ...state.gasRefinery } : createDefaultGasBottlingRefinery();
+        if (animal.species === 'cow' && animal.trait === 'rich_nitrogen') {
+          const n2SlurryBonus = 35;
+          updatedRefineryOnCollect.storedSlurryFeedstock = Math.min(
+            updatedRefineryOnCollect.maxSlurryCapacity || 2500,
+            (updatedRefineryOnCollect.storedSlurryFeedstock || 0) + n2SlurryBonus
+          );
+          state.addNotification('🧪 Rich Nitrogen Cow contributed +35L Slurry directly towards N₂ Cryo-Dewars!', '🧪', 'discovery');
+        }
+
+        // Hen Trait: calcified_shells (Dropping an egg also drops 1x Bone Meal / Phosphorus)
+        if (animal.species === 'chicken' && animal.trait === 'calcified_shells') {
+          newBarn.bone_meal = (newBarn.bone_meal || 0) + 1;
+          updatedRefineryOnCollect.boneMealBags = (updatedRefineryOnCollect.boneMealBags || 0) + 1;
+          state.addNotification('🦴 Calcified Shells: Deposited 1x Bone Meal / Phosphorus into Gas Lab for PH₃!', '🦴', 'discovery');
         }
 
         // Animal Manure generation proc on harvest
@@ -3293,6 +3344,7 @@ export const useGameStore = create<GameState>()(
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + additionalXp, state.level);
         set({
           barn: newBarn,
+          gasRefinery: updatedRefineryOnCollect,
           animals: newAnimals,
           entityOverclocks: updatedOverclocks,
           xp: newXp,
@@ -3393,16 +3445,56 @@ export const useGameStore = create<GameState>()(
           const aOverclock = updatedOverclocks[`animal_${a.id}`];
           const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
           totalBonusYield += bonusYield;
+          const genMult = a.outputMultiplier || (1.0 + (a.generation || 0) * 0.12);
 
-          // 1. Primary Product Yield + Overclock Bonus & Weather Modifier
+          // Hen Trait: double_yolk (30% chance for 2x eggs)
+          let isDoubleYolk = false;
+          if (a.species === 'chicken' && a.trait === 'double_yolk' && Math.random() < 0.30) {
+            isDoubleYolk = true;
+          }
+          const doubleYolkMult = isDoubleYolk ? 2 : 1;
+
+          // 1. Primary Product Yield + Overclock Bonus & Weather Modifier & Genetics Multiplier
           if (breedDef) {
-            const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult)) + bonusYield;
+            const finalYield = Math.max(1, Math.round(breedDef.baseYieldAmount * yieldMult * genMult * doubleYolkMult)) + bonusYield;
             newBarn[breedDef.primaryProductKey] = (newBarn[breedDef.primaryProductKey] || 0) + finalYield;
             state.registerHarvestFreshness(breedDef.primaryProductKey, finalYield);
           } else {
-            const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult)) + bonusYield;
+            const finalYield = Math.max(1, Math.round(speciesDef.productYield * yieldMult * genMult * doubleYolkMult)) + bonusYield;
             newBarn[speciesDef.product] = (newBarn[speciesDef.product] || 0) + finalYield;
             state.registerHarvestFreshness(speciesDef.product, finalYield);
+          }
+
+          // Cow Trait: golden_cream
+          if (a.species === 'cow' && a.trait === 'golden_cream') {
+            const goldenYield = Math.max(1, Math.round(1 * genMult));
+            newBarn.golden_milk = (newBarn.golden_milk || 0) + goldenYield;
+          }
+
+          // Cow Trait: rich_nitrogen
+          if (a.species === 'cow' && a.trait === 'rich_nitrogen') {
+            const currentRefinery = state.gasRefinery || createDefaultGasBottlingRefinery();
+            set({
+              gasRefinery: {
+                ...currentRefinery,
+                storedSlurryFeedstock: Math.min(
+                  currentRefinery.maxSlurryCapacity || 2500,
+                  (currentRefinery.storedSlurryFeedstock || 0) + 20
+                ),
+              },
+            });
+          }
+
+          // Hen Trait: calcified_shells
+          if (a.species === 'chicken' && a.trait === 'calcified_shells') {
+            newBarn.bone_meal = (newBarn.bone_meal || 0) + 1;
+            const currentRefinery = state.gasRefinery || createDefaultGasBottlingRefinery();
+            set({
+              gasRefinery: {
+                ...currentRefinery,
+                boneMealBags: (currentRefinery.boneMealBags || 0) + 1,
+              },
+            });
           }
 
           // Manure generation on harvest
@@ -3521,6 +3613,11 @@ export const useGameStore = create<GameState>()(
           maxCycles,
           cyclesRemaining: maxCycles,
           cyclesCompletedTotal: 0,
+          generation: 0,
+          coat: getDefaultCoat(species),
+          trait: 'none',
+          outputMultiplier: 1.0,
+          dailyOutputBonus: 0,
         };
         set({
           coins: state.coins - cost,
@@ -3536,22 +3633,35 @@ export const useGameStore = create<GameState>()(
 
         // Use breed-specific elder market value from BREED_REGISTRY
         const breedDef = BREED_REGISTRY[animal.breedId];
-        let sellPrice: number;
+        let baseSellPrice: number;
         if (breedDef) {
           // Proportional price based on cycles completed vs max
           const cyclesCompleted = animal.maxCycles - animal.cyclesRemaining;
-          if (cyclesCompleted <= 0) sellPrice = 0;
-          else if (animal.cyclesRemaining <= 0) sellPrice = breedDef.elderMarketValue;
-          else sellPrice = Math.floor(breedDef.elderMarketValue * (cyclesCompleted / animal.maxCycles));
+          if (cyclesCompleted <= 0) baseSellPrice = 0;
+          else if (animal.cyclesRemaining <= 0) baseSellPrice = breedDef.elderMarketValue;
+          else baseSellPrice = Math.floor(breedDef.elderMarketValue * (cyclesCompleted / animal.maxCycles));
         } else {
-          sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+          baseSellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
         }
+
+        // Apply cosmetic coat resale multiplier and generation lineage bonus
+        const finalSellPrice = calculateAnimalResalePrice(
+          animal.species,
+          baseSellPrice,
+          animal.generation,
+          animal.coat
+        );
 
         const newAnimals = state.animals.filter(a => a.id !== animalId);
         set({
           animals: newAnimals,
-          coins: state.coins + sellPrice,
+          coins: state.coins + finalSellPrice,
         });
+        state.addNotification(
+          `💰 Sold Elder ${breedDef?.name || def.name} (${animal.coat || 'Standard'} Gen ${animal.generation || 0}) for ${finalSellPrice} coins!`,
+          '💰',
+          'coin'
+        );
       },
 
       sellAllElderAnimals: () => {
@@ -7667,6 +7777,9 @@ export const useGameStore = create<GameState>()(
         const breedName = breedDef?.name || TIER_LABELS[offspringTier];
         const maxCycles = breeding.isMutated ? 25 : (breedDef ? breedDef.maxCycles : randomMaxCycles(offspringTier));
 
+        // Livestock Genetics & Inheritance Roll
+        const genetics = rollOffspringGenetics(parent1 || {}, parent2 || {}, breeding.species);
+
         const newAnimal: AnimalInstance = {
           id: generateId(),
           species: breeding.species,
@@ -7682,6 +7795,12 @@ export const useGameStore = create<GameState>()(
           isMutated: breeding.isMutated,
           mutationVariant: breeding.mutationVariant,
           mutationBonus: breeding.mutationBonus,
+          // Genetics fields
+          generation: genetics.generation,
+          coat: genetics.coat,
+          trait: genetics.trait,
+          outputMultiplier: genetics.outputMultiplier,
+          dailyOutputBonus: 0,
         };
 
         const isNewCodex = !state.codex[breedId];
@@ -7826,6 +7945,7 @@ export const useGameStore = create<GameState>()(
         } else {
           sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
         }
+        sellPrice = calculateAnimalResalePrice(animal.species, sellPrice, animal.generation, animal.coat);
 
         const updatedReserve = (state.livestockReserve || []).filter(a => a.id !== animalId);
 
@@ -10576,12 +10696,46 @@ export const useGameStore = create<GameState>()(
             if (isElder) continue; // Retired elder animals cease slurry generation
 
             // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
-            const baseRateLps = a.species === 'cow' ? (2.5 / 60)
+            let baseRateLps = a.species === 'cow' ? (2.5 / 60)
               : a.species === 'pig' ? (1.5 / 60)
               : a.species === 'sheep' ? (1.0 / 60)
               : (0.5 / 60);
+
+            // Trait 1: Pig hyper_slurry (+60% slurry production rate)
+            if (a.species === 'pig' && a.trait === 'hyper_slurry') {
+              baseRateLps *= 1.6;
+            }
+
+            // Trait 1: Cow rich_nitrogen (Slurry adds 2x volume towards Liquid Nitrogen Dewar refinery tank)
+            if (a.species === 'cow' && a.trait === 'rich_nitrogen') {
+              baseRateLps *= 2.0;
+            }
+
             totalHerdSlurryLps += baseRateLps * (faunaEval.waterConsumptionMultiplier || 1.0);
           }
+
+          // Pig Trait 2: mineral_snout
+          // When grazing in outdoor dirt, 80% chance every 60s to unearth 1x Raw Sulfur Dust and 20% for Wild Truffle (75 coins)
+          newAnimals = newAnimals.map(a => {
+            if (a.species === 'pig' && a.trait === 'mineral_snout' && a.age !== 'elder') {
+              const lastForage = a.lastSnoutForageAt || 0;
+              if (now - lastForage >= 60000) {
+                const rollSnout = Math.random();
+                if (rollSnout < 0.80) {
+                  // 80% Raw Sulfur Dust
+                  newBarn.raw_sulfur = (newBarn.raw_sulfur || 0) + 1;
+                  updatedGasRefinery.rawSulfurDust = (updatedGasRefinery.rawSulfurDust || 0) + 1;
+                  state.addNotification('🌋 Mineral Snout Pig unearthed 1x Raw Sulfur Dust (SO₂ lab input)!', '🌋', 'discovery');
+                } else {
+                  // 20% Wild Truffle (75 coins)
+                  newBarn.wild_truffle = (newBarn.wild_truffle || 0) + 1;
+                  state.addNotification('🍄 Mineral Snout Pig unearthed a rare Wild Truffle (75c value)!', '🍄', 'discovery');
+                }
+                return { ...a, lastSnoutForageAt: now };
+              }
+            }
+            return a;
+          });
           // Prehistoric reserve creatures contribute high-volume primeval slurry during daytime
           for (const enc of prehistoricList) {
             if (enc.specimenCount > 0) {
@@ -15728,6 +15882,17 @@ export const useGameStore = create<GameState>()(
             if (updated.cyclesCompletedTotal === undefined) {
               updated = { ...updated, cyclesCompletedTotal: 0 };
             }
+            // Migration: add livestock genetics fields if missing
+            if (updated.generation === undefined) {
+              updated = {
+                ...updated,
+                generation: 0,
+                coat: getDefaultCoat(a.species),
+                trait: 'none',
+                outputMultiplier: 1.0,
+                dailyOutputBonus: 0,
+              };
+            }
             return updated;
           });
         }
@@ -15739,6 +15904,7 @@ export const useGameStore = create<GameState>()(
             'milk_rich_cream', 'milk_alpine', 'milk_starlight', 'churned_butter', 'yak_wool',
             'wool_patterned', 'wool_merino', 'wool_gilded', 'horn_shavings', 'lanolin_balm',
             'truffle_white', 'truffle_alba', 'truffle_diamond', 'ancient_coin', 'foraged_nut', 'ancient_hoard',
+            'golden_milk', 'wild_truffle',
           ];
           let barnUpdated = false;
           for (const key of newBarnKeys) {

@@ -15,6 +15,7 @@ import {
   getBreedingOddsBreakdown,
   INCUBATION_TIMES,
 } from '@/utils/breedingLogic';
+import { getCoatDefinition, getTraitDefinition } from '@/game/livestockGeneticsEngine';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 import {
   playGoldRushFanfare,
@@ -493,12 +494,23 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                               Apex Mutant
                             </span>
                           )}
+                          <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                            (parent1.generation || 0) === 0
+                              ? 'bg-stone-800 text-stone-400 border-stone-700'
+                              : 'bg-blue-900/60 text-blue-300 border-blue-600'
+                          }`}>
+                            {(parent1.generation || 0) === 0 ? 'Shop Stock' : `Gen ${parent1.generation}`}
+                          </span>
                         </div>
                         <div className="text-sm font-bold text-white truncate mt-0.5">
                           {BREED_REGISTRY[parent1.breedId]?.name || `${speciesDef.name}`}
                         </div>
-                        <div className="text-[10px] text-stone-400">
-                          {parent1.cyclesRemaining}/{parent1.maxCycles} lifetime cycles
+                        <div className="flex items-center gap-1.5 text-[10px] text-stone-400 mt-0.5 flex-wrap">
+                          <span>{getCoatDefinition(selectedSpecies, parent1.coat).emoji} {getCoatDefinition(selectedSpecies, parent1.coat).name.split(' ')[0]}</span>
+                          {getTraitDefinition(parent1.trait) && (
+                            <span className="text-amber-300 font-bold">• {getTraitDefinition(parent1.trait)?.name}</span>
+                          )}
+                          <span>• {parent1.cyclesRemaining}/{parent1.maxCycles}c</span>
                         </div>
                       </div>
                     </div>
@@ -535,7 +547,7 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                           backgroundColor: `${TIER_COLORS[parent2.tier]}15`,
                         }}
                       >
-                        {speciesDef.emoji}
+                        {getCoatDefinition(selectedSpecies, parent2.coat)?.emoji || speciesDef.emoji}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -553,12 +565,23 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                               Apex Mutant
                             </span>
                           )}
+                          <span className={`text-[9px] font-black px-1.5 py-0.2 rounded border ${
+                            (parent2.generation || 0) === 0
+                              ? 'bg-stone-800 text-stone-400 border-stone-700'
+                              : 'bg-blue-900/60 text-blue-300 border-blue-600'
+                          }`}>
+                            {(parent2.generation || 0) === 0 ? 'Shop Stock' : `Gen ${parent2.generation}`}
+                          </span>
                         </div>
                         <div className="text-sm font-bold text-white truncate mt-0.5">
                           {BREED_REGISTRY[parent2.breedId]?.name || `${speciesDef.name}`}
                         </div>
-                        <div className="text-[10px] text-stone-400">
-                          {parent2.cyclesRemaining}/{parent2.maxCycles} lifetime cycles
+                        <div className="flex items-center gap-1.5 text-[10px] text-stone-400 mt-0.5 flex-wrap">
+                          <span>{getCoatDefinition(selectedSpecies, parent2.coat).emoji} {getCoatDefinition(selectedSpecies, parent2.coat).name.split(' ')[0]}</span>
+                          {getTraitDefinition(parent2.trait) && (
+                            <span className="text-amber-300 font-bold">• {getTraitDefinition(parent2.trait)?.name}</span>
+                          )}
+                          <span>• {parent2.cyclesRemaining}/{parent2.maxCycles}c</span>
                         </div>
                       </div>
                     </div>
@@ -667,6 +690,89 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                     </span>
                   </div>
 
+                  {/* Generation & Genetics Inheritance Engine Forecast */}
+                  {(() => {
+                    const p1Gen = parent1.generation || 0;
+                    const p2Gen = parent2.generation || 0;
+                    const nextGen = Math.max(p1Gen, p2Gen) + 1;
+                    const outputBonusPct = Math.round(nextGen * 12);
+                    const p1Trait = getTraitDefinition(parent1.trait);
+                    const p2Trait = getTraitDefinition(parent2.trait);
+
+                    return (
+                      <div className="p-3 rounded-xl bg-stone-900/90 border border-violet-500/30 space-y-2 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-violet-300 text-[11px] tracking-wider uppercase flex items-center gap-1.5">
+                            <span>🧬</span> Offspring Genetics & Trait Inheritance Outlook
+                          </span>
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                            Guaranteed Generation {nextGen} (+{outputBonusPct}% Base Output)
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                          {/* Trait Roll Forecast */}
+                          <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-stone-400">Trait Inheritance Probability</span>
+                            <div className="text-[10px] text-stone-300 space-y-0.5">
+                              <div className="flex justify-between">
+                                <span>Parental Trait Carryover:</span>
+                                <span className="font-bold text-emerald-400">55%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Spontaneous Mutation:</span>
+                                <span className="font-bold text-cyan-400">30%</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Standard Baseline:</span>
+                                <span className="font-bold text-stone-500">15%</span>
+                              </div>
+                            </div>
+                            {(p1Trait || p2Trait) && (
+                              <div className="mt-1 pt-1 border-t border-stone-800 text-[9px] text-stone-400 truncate">
+                                Available from Parents: {[p1Trait?.name, p2Trait?.name].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Coat Roll Forecast */}
+                          <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex flex-col gap-1">
+                            <span className="text-[10px] font-bold text-stone-400">Cosmetic Coat & Resale Odds</span>
+                            <div className="text-[10px] text-stone-300 space-y-0.5">
+                              {nextGen >= 2 ? (
+                                <>
+                                  <div className="flex justify-between">
+                                    <span>Rare Shimmer Coat (3.5x-4x):</span>
+                                    <span className="font-bold text-amber-400">8%</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Gen 1+ Variant (1.75x):</span>
+                                    <span className="font-bold text-blue-400">32%</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Parent Lineage Carryover:</span>
+                                    <span className="font-bold text-stone-400">60%</span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex justify-between">
+                                    <span>Gen 1+ Variant (1.75x):</span>
+                                    <span className="font-bold text-blue-400">30%</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Baseline Parent Coat:</span>
+                                    <span className="font-bold text-stone-400">70%</span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* Start Breeding Button */}
                   <button
                     onClick={handleStartBreeding}
@@ -765,6 +871,24 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                           </div>
                           <div className="text-xs font-bold text-white truncate" title={breedName}>
                             {breedName}
+                          </div>
+                          {/* Genetics Lineage Badges */}
+                          <div className="flex items-center gap-1 flex-wrap mt-1">
+                            <span className={`text-[8px] font-black px-1 py-0.2 rounded border ${
+                              (animal.generation || 0) === 0
+                                ? 'bg-stone-800 text-stone-400 border-stone-700'
+                                : 'bg-blue-900/60 text-blue-300 border-blue-600'
+                            }`}>
+                              {(animal.generation || 0) === 0 ? 'Shop Stock' : `Gen ${animal.generation}`}
+                            </span>
+                            <span className="text-[8px] font-bold text-stone-300 bg-stone-800/80 px-1 py-0.2 rounded border border-stone-700">
+                              {getCoatDefinition(selectedSpecies, animal.coat).emoji} {getCoatDefinition(selectedSpecies, animal.coat).name.split(' ')[0]}
+                            </span>
+                            {getTraitDefinition(animal.trait) && (
+                              <span className="text-[8px] font-extrabold text-amber-300 bg-amber-950/80 px-1 py-0.2 rounded border border-amber-500/40 truncate max-w-[80px]">
+                                {getTraitDefinition(animal.trait)?.name}
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -904,11 +1028,46 @@ export function BreedingModal({ isOpen, onClose }: BreedingModalProps) {
                 </div>
 
                 {/* Details */}
-                <div className="bg-stone-900/80 border border-stone-800 rounded-xl p-3 text-xs text-stone-300 space-y-1">
+                <div className="bg-stone-900/80 border border-stone-800 rounded-xl p-3 text-xs text-stone-300 space-y-1.5">
                   <div className="flex justify-between">
                     <span className="text-stone-500">Species:</span>
                     <span className="font-bold capitalize">{hatchReveal.animal.species}</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span className="text-stone-500">Generation:</span>
+                    <span className="font-black text-amber-300">
+                      Generation {hatchReveal.animal.generation || 1} (+{Math.round(((hatchReveal.animal.outputMultiplier || 1) - 1) * 100)}% Output)
+                    </span>
+                  </div>
+                  {(() => {
+                    const hatchCoat = getCoatDefinition(hatchReveal.animal.species, hatchReveal.animal.coat);
+                    const hatchTrait = getTraitDefinition(hatchReveal.animal.trait);
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-stone-500">Cosmetic Coat:</span>
+                          <span className="font-bold text-emerald-300 flex items-center gap-1">
+                            <span>{hatchCoat.emoji}</span> {hatchCoat.name} ({hatchCoat.sellValueMultiplier}x Value)
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-stone-500">Inherited Trait:</span>
+                          {hatchTrait ? (
+                            <span className="font-black text-cyan-300 flex items-center gap-1">
+                              <span>{hatchTrait.emoji}</span> {hatchTrait.name}
+                            </span>
+                          ) : (
+                            <span className="text-stone-500 italic">None (Standard Output)</span>
+                          )}
+                        </div>
+                        {hatchTrait && (
+                          <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-800/40 text-[11px] text-cyan-200">
+                            <span className="font-bold">✨ Perk: </span>{hatchTrait.detailedEffect}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                   <div className="flex justify-between">
                     <span className="text-stone-500">Lifespan:</span>
                     <span className="font-bold">{hatchReveal.animal.maxCycles} Product Cycles</span>

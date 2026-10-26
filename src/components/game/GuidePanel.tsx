@@ -1052,6 +1052,76 @@ function BreedingGuide() {
           <li><strong>5% Apex Mutant Jackpot:</strong> Every egg has a bonus 5% roll to hatch as an Apex Mutant with permanent 1.5x production speed and +5 Gems!</li>
         </ul>
       </div>
+
+      {/* Genetics, Traits & Rare Coats */}
+      <div className="bg-gradient-to-r from-purple-50 via-indigo-50 to-amber-50 dark:from-purple-950/20 dark:via-indigo-950/20 dark:to-amber-950/20 border-2 border-purple-300/80 dark:border-purple-800/50 rounded-xl p-3.5 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🧬</span>
+            <h5 className="font-bold text-sm text-purple-950 dark:text-purple-200">
+              Livestock Trait Inheritance &amp; Cosmetic Coat System (Cow, Hen, Pig)
+            </h5>
+          </div>
+          <span className="text-[10px] bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-300 font-bold px-2 py-0.5 rounded-full border border-purple-300 dark:border-purple-700">
+            Gen 1+ Perks &amp; Lab Feedstocks
+          </span>
+        </div>
+
+        <p className="text-xs text-stone-600 dark:text-stone-300 leading-relaxed">
+          Store-bought livestock spawn as standard <strong>Generation 0</strong> with baseline coats and no traits. Bred offspring inherit higher generations (<code>gen = max(parentA, parentB) + 1</code>), compounding output yields (<strong>+12% per Gen</strong>), specialized perks, and rare cosmetic coat variations with boosted market resale value.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+          {/* Cow Traits */}
+          <div className="bg-white/80 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-800 rounded-lg p-2.5 space-y-1.5">
+            <div className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+              <span>🐄</span>
+              <span>Cow Traits &amp; Coats</span>
+            </div>
+            <div className="text-[11px] space-y-1">
+              <div><strong>⚡ Rich Nitrogen Slurry:</strong> Slurry collections add 2x volume (35L) directly toward Liquid Nitrogen (N₂) tank in Gas Lab.</div>
+              <div><strong>⚡ Golden Cream Milk:</strong> Milking yields rare <em>Golden Milk</em> (20🪙, 2.5x base price).</div>
+              <div className="pt-1 border-t border-stone-100 dark:border-stone-800 text-[10px] text-stone-500">
+                <strong>Coats:</strong> Holstein (1.0x), Caramel Jersey (Gen 1+, 1.75x resale), Midnight Onyx (Gen 2+, 3.5x resale).
+              </div>
+            </div>
+          </div>
+
+          {/* Pig Traits */}
+          <div className="bg-white/80 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-800 rounded-lg p-2.5 space-y-1.5">
+            <div className="font-bold text-pink-700 dark:text-pink-400 flex items-center gap-1.5">
+              <span>🐖</span>
+              <span>Pig Traits &amp; Coats</span>
+            </div>
+            <div className="text-[11px] space-y-1">
+              <div><strong>⚡ Hyper Slurry:</strong> +60% slurry production rate (+1.6x multiplier).</div>
+              <div><strong>⚡ Mineral Snout:</strong> Grazing outdoors forages every 60s for <em>Raw Sulfur Dust</em> (80%, SO₂ lab feedstock) and <em>Wild Truffles</em> (20%, 75🪙).</div>
+              <div className="pt-1 border-t border-stone-100 dark:border-stone-800 text-[10px] text-stone-500">
+                <strong>Coats:</strong> Standard Pink (1.0x), Spotted Mudback (Gen 1+, 1.75x resale), Wild Iron Bristle (Gen 2+, 3.5x resale).
+              </div>
+            </div>
+          </div>
+
+          {/* Hen Traits */}
+          <div className="bg-white/80 dark:bg-stone-900/80 border border-stone-200 dark:border-stone-800 rounded-lg p-2.5 space-y-1.5">
+            <div className="font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1.5">
+              <span>🐔</span>
+              <span>Hen Traits &amp; Coats</span>
+            </div>
+            <div className="text-[11px] space-y-1">
+              <div><strong>⚡ Double Yolk:</strong> 30% chance to drop 2x eggs per laying cycle.</div>
+              <div><strong>⚡ Calcified Shells:</strong> Egg drops also drop 1x <em>Bone Meal / Phosphorus</em> (PH₃ lab feedstock).</div>
+              <div className="pt-1 border-t border-stone-100 dark:border-stone-800 text-[10px] text-stone-500">
+                <strong>Coats:</strong> White Leghorn (1.0x), Silkie Silver (Gen 1+, 1.75x resale), Golden Phoenix (Gen 2+, 4.0x resale).
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-purple-800 dark:text-purple-300 bg-purple-500/10 p-2 rounded-lg border border-purple-400/30">
+          🎯 <strong>Genetics Inheritance Roll:</strong> Offspring have a <strong>55%</strong> chance to inherit a parent trait, <strong>30%</strong> chance for a random species mutation, and <strong>15%</strong> chance for no trait. Coat rolls unlock higher tiers with generation level!
+        </div>
+      </div>
     </div>
   );
 }

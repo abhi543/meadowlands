@@ -9,6 +9,7 @@ import {
 } from '@/game/data';
 import { BreedingPanel } from './BreedingPanel';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
+import { calculateAnimalResalePrice, getCoatDefinition, getTraitDefinition } from '@/game/livestockGeneticsEngine';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const TIERS: Tier[] = ['common', 'uncommon', 'rare', 'legendary'];
@@ -83,6 +84,18 @@ export function LivestockMarketPanel() {
               const tierCount = animals.filter(a => a.tier === animal.tier).length;
               const canDeploy = tierCount < 4;
 
+              const coatDef = getCoatDefinition(animal.species, animal.coat);
+              const traitDef = getTraitDefinition(animal.species, animal.trait);
+              const isGen0 = !animal.generation || animal.generation === 0;
+
+              let baseReserveSell: number;
+              if (breedDef && animal.age === 'elder') {
+                baseReserveSell = breedDef.elderMarketValue;
+              } else {
+                baseReserveSell = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
+              }
+              const reserveSellPrice = calculateAnimalResalePrice(animal.species, baseReserveSell, animal.generation, animal.coat);
+
               return (
                 <div
                   key={animal.id}
@@ -91,19 +104,45 @@ export function LivestockMarketPanel() {
                 >
                   <div className="text-center">
                     <div className="text-2xl mb-0.5">{def.emoji}</div>
-                    <div
-                      className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded inline-block"
-                      style={{
-                        color: TIER_COLORS[animal.tier],
-                        backgroundColor: `${TIER_COLORS[animal.tier]}20`,
-                      }}
-                    >
-                      {TIER_LABELS[animal.tier]}
+                    <div className="flex items-center justify-center gap-1 flex-wrap mb-1">
+                      <span
+                        className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded"
+                        style={{
+                          color: TIER_COLORS[animal.tier],
+                          backgroundColor: `${TIER_COLORS[animal.tier]}20`,
+                        }}
+                      >
+                        {TIER_LABELS[animal.tier]}
+                      </span>
+                      {isGen0 ? (
+                        <span className="text-[8px] font-bold px-1 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                          Shop Stock
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                          Gen {animal.generation}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate mt-1" title={breedName}>
+                    <div className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate mt-0.5" title={breedName}>
                       {breedName}
                     </div>
-                    <div className="text-[10px] text-stone-500 dark:text-stone-400">
+
+                    {/* Coat & Trait Badges */}
+                    <div className="mt-1 flex flex-col items-center gap-0.5 text-[8.5px]">
+                      {coatDef && (
+                        <span className="font-semibold text-stone-600 dark:text-stone-300 truncate max-w-full">
+                          🎨 {coatDef.name} {coatDef.resaleMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.resaleMultiplier}x)</span>}
+                        </span>
+                      )}
+                      {traitDef && animal.trait !== 'none' && (
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 truncate max-w-full">
+                          ⚡ {traitDef.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[10px] text-stone-500 dark:text-stone-400 mt-1">
                       {animal.cyclesRemaining}/{animal.maxCycles} cycles
                     </div>
                   </div>
@@ -121,7 +160,7 @@ export function LivestockMarketPanel() {
                       onClick={() => sellReserveAnimal(animal.id)}
                       className="w-full py-1 text-[9px] font-semibold rounded-lg bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors"
                     >
-                      Sell to Market
+                      Sell (🪙{reserveSellPrice})
                     </button>
                   </div>
                 </div>
@@ -216,6 +255,11 @@ export function LivestockMarketPanel() {
                 } else {
                   sellPrice = livestockSellPriceForAnimal(animal.species, animal.tier, animal.cyclesRemaining, animal.maxCycles);
                 }
+                sellPrice = calculateAnimalResalePrice(animal.species, sellPrice, animal.generation, animal.coat);
+
+                const coatDef = getCoatDefinition(animal.species, animal.coat);
+                const traitDef = getTraitDefinition(animal.species, animal.trait);
+                const isGen0 = !animal.generation || animal.generation === 0;
 
                 return (
                   <div
@@ -227,13 +271,39 @@ export function LivestockMarketPanel() {
                     }}
                   >
                     <div className="text-xl mb-0.5">{def.emoji}</div>
-                    <div className="text-[10px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
-                      {TIER_LABELS[animal.tier]}
+                    <div className="flex items-center justify-center gap-1 flex-wrap mb-1">
+                      <span className="text-[10px] font-bold" style={{ color: TIER_COLORS[animal.tier] }}>
+                        {TIER_LABELS[animal.tier]}
+                      </span>
+                      {isGen0 ? (
+                        <span className="text-[7.5px] font-bold px-1 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                          Shop Stock
+                        </span>
+                      ) : (
+                        <span className="text-[7.5px] font-extrabold px-1 py-0.2 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                          Gen {animal.generation}
+                        </span>
+                      )}
                     </div>
                     <div className="text-[9px] font-medium text-stone-600 dark:text-stone-300 truncate">
                       {breedName}
                     </div>
-                    <div className="text-[9px] text-stone-500 dark:text-gray-400">
+
+                    {/* Coat & Trait Badges */}
+                    <div className="mt-0.5 flex flex-col items-center gap-0.5 text-[8px]">
+                      {coatDef && (
+                        <span className="font-semibold text-stone-600 dark:text-stone-300 truncate max-w-full">
+                          🎨 {coatDef.name} {coatDef.resaleMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.resaleMultiplier}x)</span>}
+                        </span>
+                      )}
+                      {traitDef && animal.trait !== 'none' && (
+                        <span className="font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-1 py-0.2 rounded border border-indigo-200 dark:border-indigo-800 truncate max-w-full">
+                          ⚡ {traitDef.name}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[9px] text-stone-500 dark:text-gray-400 mt-0.5">
                       {animal.maxCycles} cycles done
                     </div>
                     <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-1">

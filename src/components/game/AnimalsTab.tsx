@@ -17,6 +17,7 @@ import { resolveWeatherProfileId } from '@/game/hydrologyEngine';
 import { WEATHER_PROFILES } from '@/game/weatherEngine';
 import { evaluateFaunaWeather, type FaunaWeatherEvaluation } from '@/game/faunaWeatherEngine';
 import { getCircadianClock } from '@/game/shiftEngine';
+import { getCoatDefinition, getTraitDefinition } from '@/game/livestockGeneticsEngine';
 
 const SPECIES_LIST: AnimalSpecies[] = ['chicken', 'cow', 'sheep', 'pig'];
 const COSTS: Record<AnimalSpecies, number> = { chicken: 50, cow: 150, sheep: 200, pig: 300 };
@@ -554,6 +555,10 @@ export function AnimalsTab() {
                     prodProgress = Math.max(0, Math.min(1, (Date.now() - safeFedAt) / (prodTimeSec * 1000)));
                   }
 
+                  const coatDef = getCoatDefinition(animal.species, animal.coat);
+                  const traitDef = getTraitDefinition(animal.trait);
+                  const generation = animal.generation || 0;
+
                   const isMutated = Boolean(animal.isMutated);
                   const isOverclocked = Boolean(
                     animal.isOverclocked && animal.overclockExpiresAt && animal.overclockExpiresAt > Date.now()
@@ -586,7 +591,7 @@ export function AnimalsTab() {
                       <div
                         className="min-h-0 cursor-pointer"
                         onClick={() => setSelectedAnimalForWelfare(animal)}
-                        title={`Hydration: ${Math.round(animal.hydrationLevel ?? 90)}% • Tap to inspect welfare`}
+                        title={`Hydration: ${Math.round(animal.hydrationLevel ?? 90)}% • Tap to inspect welfare & genetics`}
                       >
                         <div className="flex items-center justify-between gap-1">
                           <span
@@ -600,7 +605,7 @@ export function AnimalsTab() {
                                 : ''
                             }`}
                           >
-                            {def.emoji}
+                            {coatDef?.emoji || def.emoji}
                           </span>
                           <span
                             className="text-[11px] font-bold text-stone-800 dark:text-stone-100 truncate text-left flex-1"
@@ -611,6 +616,44 @@ export function AnimalsTab() {
                           <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 font-bold border border-stone-200/60 dark:border-stone-700/60 shrink-0">
                             {animal.cyclesRemaining}c
                           </span>
+                        </div>
+
+                        {/* Generation, Coat & Trait Genetics Badges */}
+                        <div className="flex items-center gap-1 flex-wrap mt-1">
+                          {/* Generation Badge */}
+                          <span
+                            className={`text-[8px] font-black px-1.5 py-0.2 rounded border shadow-2xs ${
+                              generation === 0
+                                ? 'bg-stone-100 text-stone-600 border-stone-300 dark:bg-stone-800 dark:text-stone-400'
+                                : generation === 1
+                                ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/80 dark:text-blue-300'
+                                : 'bg-amber-100 text-amber-900 border-amber-400 dark:bg-amber-950/80 dark:text-amber-200 ring-1 ring-amber-400/40'
+                            }`}
+                            title={`Generation ${generation} (${generation === 0 ? 'Base Shop Stock' : `+${Math.round(generation * 12)}% Output Yield`})`}
+                          >
+                            {generation === 0 ? 'Shop Stock' : generation === 1 ? 'Gen 1' : `Gen ${generation}+`}
+                          </span>
+
+                          {/* Coat Badge */}
+                          {coatDef && (
+                            <span
+                              className={`text-[8px] font-bold px-1.5 py-0.2 rounded border truncate max-w-[85px] ${coatDef.badgeColor}`}
+                              title={`Coat: ${coatDef.name} (${coatDef.sellValueMultiplier}x Market Resale Value)\n${coatDef.description}`}
+                            >
+                              <span>{coatDef.emoji}</span> {coatDef.name.split(' ')[0]}
+                            </span>
+                          )}
+
+                          {/* Trait Badge */}
+                          {traitDef && (
+                            <span
+                              className={`text-[8px] font-extrabold px-1.5 py-0.2 rounded border flex items-center gap-0.5 ${traitDef.badgeColor}`}
+                              title={`Specialized Trait: ${traitDef.name}\n${traitDef.detailedEffect}`}
+                            >
+                              <span>{traitDef.emoji}</span>
+                              <span className="truncate max-w-[70px]">{traitDef.name}</span>
+                            </span>
+                          )}
                         </div>
 
                         {/* Mutated / Apex / Breeding & Environmental Status Badges */}
@@ -1029,6 +1072,63 @@ export function AnimalsTab() {
               </div>
               <p className="text-[11px] leading-relaxed opacity-90">{faunaEval.statusBadge.tooltip}</p>
             </div>
+
+            {/* Genetics & Lineage Heritage */}
+            {(() => {
+              const modalCoatDef = getCoatDefinition(selectedAnimalForWelfare.species, selectedAnimalForWelfare.coat);
+              const modalTraitDef = getTraitDefinition(selectedAnimalForWelfare.trait);
+              const modalGen = selectedAnimalForWelfare.generation || 0;
+              const modalOutputMult = selectedAnimalForWelfare.outputMultiplier || (1.0 + modalGen * 0.12);
+
+              return (
+                <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-stone-950/60 border border-stone-200 dark:border-stone-800 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-black text-stone-800 dark:text-stone-200 text-[11px] tracking-wide uppercase flex items-center gap-1.5">
+                      <span>🧬</span> Lineage & Inherited Genetics
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded border ${
+                      modalGen === 0
+                        ? 'bg-stone-100 text-stone-600 border-stone-300 dark:bg-stone-800 dark:text-stone-400'
+                        : modalGen === 1
+                        ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950/80 dark:text-blue-300'
+                        : 'bg-amber-100 text-amber-900 border-amber-400 dark:bg-amber-950/80 dark:text-amber-200'
+                    }`}>
+                      {modalGen === 0 ? 'Shop Stock (Baseline)' : `Generation ${modalGen} (+${Math.round((modalOutputMult - 1) * 100)}% Yield)`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 flex flex-col">
+                      <span className="text-[10px] text-stone-400 font-semibold">Cosmetic Coat</span>
+                      <span className="font-bold text-stone-800 dark:text-stone-200 mt-0.5 flex items-center gap-1">
+                        <span>{modalCoatDef.emoji}</span> {modalCoatDef.name}
+                      </span>
+                      <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                        {modalCoatDef.sellValueMultiplier}x Market Resale Value
+                      </span>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 flex flex-col">
+                      <span className="text-[10px] text-stone-400 font-semibold">Specialized Trait</span>
+                      {modalTraitDef ? (
+                        <>
+                          <span className="font-bold text-stone-800 dark:text-stone-200 mt-0.5 flex items-center gap-1">
+                            <span>{modalTraitDef.emoji}</span> {modalTraitDef.name}
+                          </span>
+                          <span className="text-[9px] text-cyan-600 dark:text-cyan-400 font-medium mt-0.5 leading-tight">
+                            {modalTraitDef.summary}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-stone-400 text-[10px] mt-1 italic">
+                          None (Standard Output)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Metabolism & Resource Shifts Breakdown */}
             <div className="space-y-1.5 text-xs">

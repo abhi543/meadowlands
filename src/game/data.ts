@@ -336,7 +336,9 @@ export type ProductId =
   | 'co2_cylinder' | 'oxygen_canister' | 'nitrogen_dewar'
   | 'ethylene_cylinder' | 'ozone_canister' | 'sulfur_dioxide_flask' | 'phosphine_bomb'
   // Advanced Gas Feedstocks
-  | 'cull_biomass' | 'raw_sulfur' | 'bone_meal';
+  | 'cull_biomass' | 'raw_sulfur' | 'bone_meal'
+  // Specialized Trait Livestock Products
+  | 'golden_milk' | 'wild_truffle';
 
 /**
  * Calculates chaff byproduct from a crop harvest.
@@ -524,6 +526,10 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   cull_biomass:            { id: 'cull_biomass',            name: 'Overripe Fruit / Cull Biomass', emoji: '🍇', category: 'raw', sellPrice: 2 },
   raw_sulfur:              { id: 'raw_sulfur',              name: 'Raw Sulfur / Brimstone Dust', emoji: '🌋', category: 'raw', sellPrice: 12 },
   bone_meal:               { id: 'bone_meal',               name: 'Bone Meal / Mineral Phosphorus', emoji: '🦴', category: 'raw', sellPrice: 8 },
+
+  // --- Specialized Trait Livestock Products ---
+  golden_milk:             { id: 'golden_milk',             name: 'Golden Milk',                 emoji: '🥛', category: 'animal', sellPrice: 20 },
+  wild_truffle:            { id: 'wild_truffle',            name: 'Wild Truffle',                emoji: '🍄', category: 'animal', sellPrice: 75 },
 };
 
 // --- Production Buildings ---
