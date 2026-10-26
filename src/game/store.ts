@@ -99,6 +99,15 @@ import {
   SPECIES_SLURRY_REGISTRY,
 } from '@/game/slurryEngine';
 import {
+  type CanisterId,
+  type GasBottlingRefineryState,
+  createDefaultGasBottlingRefinery,
+  CANISTER_RECIPES,
+  calculateCrateLiquidationValue,
+  getCrateTotalCanisterCount,
+  stepGasBottlingSimulation,
+} from '@/game/gasBottlingEngine';
+import {
   playWashdownHoseSound,
   playSlurryScoopSound,
   playSumpValveSound,
@@ -936,6 +945,14 @@ export interface GameState {
   injectBioOxygenToPlots: () => number;
   aerateFisheryZoneWithOxygen: () => boolean;
 
+  // Automated Gas Bottling & Export Refinery
+  gasRefinery: GasBottlingRefineryState;
+  startGasCompressorBatch: (recipeId: CanisterId) => boolean;
+  collectGasCompressorOutput: () => void;
+  loadCanisterToShippingCrate: (canisterId: CanisterId, qty?: number) => boolean;
+  liquidateShippingCrate: (immediate?: boolean) => { coinsEarned: number; count: number };
+  addRefinerySlurryFeedstock: (liters: number) => void;
+
   // Dynamic Crop Disease & Blight Ecosystem
   isToolContaminated?: boolean;
   curePlotDisease: (plotId: number, remedy: 'dig_drain' | 'prune_mildew' | 'apply_lime') => boolean;
@@ -1762,6 +1779,7 @@ export const useGameStore = create<GameState>()(
       // Species-Specific Slurry Pits & Gas Production Lab
       slurryPits: createDefaultSlurryPits(),
       gasProductionLab: createDefaultGasProductionLab(),
+      gasRefinery: createDefaultGasBottlingRefinery(),
       activeSumpModalPitId: null,
       isToolContaminated: false,
 
@@ -6287,9 +6305,18 @@ export const useGameStore = create<GameState>()(
         newBarn.organic_compost = (newBarn.organic_compost || 0) + 2;
         newBarn.manure = (newBarn.manure || 0) + 1;
         const newAnimals = state.animals.map(a => ({ ...a, hasFootRot: false }));
+        const currentRefinery = state.gasRefinery || createDefaultGasBottlingRefinery();
+        const updatedSlurry = Math.min(
+          currentRefinery.maxSlurryCapacity || 2500,
+          Number(((currentRefinery.storedSlurryFeedstock || 0) + 40).toFixed(1))
+        );
         set({
           barn: newBarn,
           animals: newAnimals,
+          gasRefinery: {
+            ...currentRefinery,
+            storedSlurryFeedstock: updatedSlurry,
+          },
           pastureWelfare: {
             ...currentWelfare,
             mudExposureSec: 0,
@@ -6297,7 +6324,7 @@ export const useGameStore = create<GameState>()(
           },
           isDirty: true,
         });
-        state.addNotification('🧹 Pens Mucked Out! Soiled slurry removed (+2 Compost, +1 Manure) and pens sanitized.', '✨', 'discovery');
+        state.addNotification('🧹 Pens Mucked Out! Sanitized pens (+2 Compost, +1 Manure, +40L Slurry Feedstock to Gas Refinery).', '✨', 'discovery');
         return true;
       },
 
@@ -6919,6 +6946,225 @@ export const useGameStore = create<GameState>()(
           'discovery'
         );
         return true;
+      },
+
+      // --- Automated Gas Bottling & Export Refinery Actions ---
+      startGasCompressorBatch: (recipeId) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const recipe = CANISTER_RECIPES[recipeId];
+        if (!recipe) return false;
+
+        if (refinery.activeBatch) {
+          state.addNotification('⚙️ Heavy Hydraulic Gas Compressor is currently cycling! Please wait for completion.', '⚠️', 'info');
+          return false;
+        }
+
+        const newSilo = { ...state.silo };
+        const newBarn = { ...state.barn };
+        let newTowerLiters = state.hydrology?.towerLiters || 0;
+        let newCoins = state.coins;
+
+        if (recipeId === 'co2_cylinder') {
+          // 40L Slurry + 10 Chaff
+          let availableSlurry = refinery.storedSlurryFeedstock || 0;
+          if (availableSlurry < 40) {
+            state.addNotification(`Need at least 40L Slurry feedstock! (Currently have ${Math.round(availableSlurry)}L in intake tank)`, '⚠️', 'info');
+            return false;
+          }
+          const availableChaff = (newSilo.chaff || 0) + (newBarn.chaff || 0);
+          if (availableChaff < 10) {
+            state.addNotification(`Need at least 10 Chaff bundles to compress CO₂! (Currently have ${availableChaff})`, '⚠️', 'info');
+            return false;
+          }
+          refinery.storedSlurryFeedstock = Math.max(0, refinery.storedSlurryFeedstock - 40);
+          let chaffToDeduct = 10;
+          if ((newSilo.chaff || 0) >= chaffToDeduct) {
+            newSilo.chaff -= chaffToDeduct;
+          } else {
+            chaffToDeduct -= (newSilo.chaff || 0);
+            newSilo.chaff = 0;
+            newBarn.chaff = Math.max(0, (newBarn.chaff || 0) - chaffToDeduct);
+          }
+        } else if (recipeId === 'oxygen_canister') {
+          // 30L Water + 5 Green Biomass
+          if (newTowerLiters < 30) {
+            state.addNotification(`Need at least 30L clean water in Gravity Tower! (Currently have ${Math.round(newTowerLiters)}L)`, '⚠️', 'info');
+            return false;
+          }
+          let biomassNeeded = 5;
+          const biomassCandidates: (keyof typeof newSilo)[] = ['peas', 'wheat', 'soybean', 'corn'];
+          let totalBio = 0;
+          for (const k of biomassCandidates) totalBio += (newSilo[k] || 0);
+          if (totalBio < 5) {
+            state.addNotification(`Need at least 5 units of Green Biomass (peas, wheat, or soybean)! (Have ${totalBio})`, '⚠️', 'info');
+            return false;
+          }
+          newTowerLiters -= 30;
+          for (const k of biomassCandidates) {
+            if (biomassNeeded <= 0) break;
+            const take = Math.min(newSilo[k] || 0, biomassNeeded);
+            newSilo[k] = (newSilo[k] || 0) - take;
+            biomassNeeded -= take;
+          }
+        } else if (recipeId === 'nitrogen_dewar') {
+          // 50L Concentrated Slurry + 1 Thermal Fuel
+          let availableSlurry = refinery.storedSlurryFeedstock || 0;
+          if (availableSlurry < 50) {
+            state.addNotification(`Need at least 50L Concentrated Slurry! (Currently have ${Math.round(availableSlurry)}L in intake tank)`, '⚠️', 'info');
+            return false;
+          }
+          let hasFuel = false;
+          if ((newBarn.thermal_scutes || 0) > 0) {
+            newBarn.thermal_scutes -= 1;
+            hasFuel = true;
+          } else if ((newBarn.thermal_solvent || 0) > 0) {
+            newBarn.thermal_solvent -= 1;
+            hasFuel = true;
+          } else if ((newBarn.fired_hardwood || 0) > 0) {
+            newBarn.fired_hardwood -= 1;
+            hasFuel = true;
+          } else if (newCoins >= 15) {
+            newCoins -= 15;
+            hasFuel = true;
+          }
+          if (!hasFuel) {
+            state.addNotification('Need at least 1 Thermal Fuel unit (or 15 Coins for preheated charge)!', '⚠️', 'info');
+            return false;
+          }
+          refinery.storedSlurryFeedstock = Math.max(0, refinery.storedSlurryFeedstock - 50);
+        }
+
+        refinery.activeBatch = {
+          id: `batch_${Date.now()}`,
+          canisterId: recipeId,
+          name: recipe.name,
+          emoji: recipe.emoji,
+          startedAt: Date.now(),
+          durationSec: recipe.processingDurationSec,
+          outputQty: 1,
+        };
+
+        playSumpValveSound();
+        set({
+          gasRefinery: refinery,
+          silo: newSilo,
+          barn: newBarn,
+          coins: newCoins,
+          hydrology: state.hydrology ? { ...state.hydrology, towerLiters: newTowerLiters } : state.hydrology,
+          isDirty: true,
+        });
+
+        state.addNotification(`⚙️ Hydraulic Gas Compressor Engaged: Bottling 1x ${recipe.name} (60s cycle).`, '⚙️', 'discovery');
+        return true;
+      },
+
+      collectGasCompressorOutput: () => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const rack = { ...(refinery.outputRack || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 }) };
+        const totalCanisters = (rack.co2_cylinder || 0) + (rack.oxygen_canister || 0) + (rack.nitrogen_dewar || 0);
+
+        if (totalCanisters <= 0) {
+          state.addNotification('No finished gas canisters in the output rack to collect!', 'ℹ️', 'info');
+          return;
+        }
+
+        const newBarn = { ...state.barn };
+        newBarn.co2_cylinder = (newBarn.co2_cylinder || 0) + (rack.co2_cylinder || 0);
+        newBarn.oxygen_canister = (newBarn.oxygen_canister || 0) + (rack.oxygen_canister || 0);
+        newBarn.nitrogen_dewar = (newBarn.nitrogen_dewar || 0) + (rack.nitrogen_dewar || 0);
+
+        refinery.outputRack = { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+
+        set({
+          gasRefinery: refinery,
+          barn: newBarn,
+          isDirty: true,
+        });
+
+        state.addNotification(`🛢️ Transferred ${totalCanisters} Bottled Canisters to Barn Storage & Export Dock!`, '🛢️', 'discovery');
+      },
+
+      loadCanisterToShippingCrate: (canisterId, qty = 1) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const newBarn = { ...state.barn };
+        const rack = { ...(refinery.outputRack || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 }) };
+
+        let available = (rack[canisterId] || 0) + (newBarn[canisterId] || 0);
+        if (available < qty) {
+          state.addNotification(`Not enough ${CANISTER_RECIPES[canisterId]?.name || canisterId} available to load!`, '⚠️', 'info');
+          return false;
+        }
+
+        let needed = qty;
+        if ((rack[canisterId] || 0) >= needed) {
+          rack[canisterId] -= needed;
+          needed = 0;
+        } else {
+          needed -= (rack[canisterId] || 0);
+          rack[canisterId] = 0;
+          newBarn[canisterId] = Math.max(0, (newBarn[canisterId] || 0) - needed);
+        }
+
+        const newCrate = { ...(refinery.dailyShippingCrate || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 }) };
+        newCrate[canisterId] = (newCrate[canisterId] || 0) + qty;
+        refinery.outputRack = rack;
+        refinery.dailyShippingCrate = newCrate;
+
+        set({
+          gasRefinery: refinery,
+          barn: newBarn,
+          isDirty: true,
+        });
+
+        const recipe = CANISTER_RECIPES[canisterId];
+        state.addNotification(`📦 Loaded ${qty}x ${recipe?.name} into Estate Export Crate! (Est: +${(recipe?.baseExportCoins || 45) * qty} Coins)`, '📦', 'discovery');
+        return true;
+      },
+
+      liquidateShippingCrate: (immediate = true) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const crate = refinery.dailyShippingCrate || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+        const count = getCrateTotalCanisterCount(crate);
+        const coinsEarned = calculateCrateLiquidationValue(crate);
+
+        if (count <= 0) {
+          if (immediate) {
+            state.addNotification('Estate shipping crate is empty! Load filled canisters first.', 'ℹ️', 'info');
+          }
+          return { coinsEarned: 0, count: 0 };
+        }
+
+        refinery.dailyShippingCrate = { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+        refinery.totalLifetimeExportCoins = (refinery.totalLifetimeExportCoins || 0) + coinsEarned;
+        refinery.totalCanistersShipped = (refinery.totalCanistersShipped || 0) + count;
+        refinery.lastDailyLiquidationTimestamp = Date.now();
+
+        set({
+          coins: state.coins + coinsEarned,
+          gasRefinery: refinery,
+          isDirty: true,
+        });
+
+        state.addNotification(
+          `🚚 Estate Export Shipment Hauled! Liquidated ${count} Gas Canisters for +${coinsEarned} Coins into Estate Treasury!`,
+          '💰',
+          'discovery'
+        );
+        return { coinsEarned, count };
+      },
+
+      addRefinerySlurryFeedstock: (liters) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        refinery.storedSlurryFeedstock = Math.min(
+          refinery.maxSlurryCapacity || 2500,
+          Number(((refinery.storedSlurryFeedstock || 0) + liters).toFixed(1))
+        );
+        set({ gasRefinery: refinery, isDirty: true });
       },
 
       // Breeding
@@ -9502,32 +9748,22 @@ export const useGameStore = create<GameState>()(
             (workshopLoadout.sluiceGateSealsInstalled || 0) >= 2
           );
 
-          // Step Dynamic Gas Simulation for every plot
-          const cropProgress = (p.crop && p.plantedAt && !p.ready)
-            ? Math.min(1.0, (now - p.plantedAt) / ((CROPS[p.crop]?.growTimeSec || 60) * 1000))
-            : 0;
-
-          const currentGases = stepPlotGasSimulation(
-            {
-              crop: p.crop,
-              ready: p.ready,
-              moistureLevel: p.moistureLevel,
-              cropProgress,
-              currentGases: p.gases,
-            },
-            {
-              activeWeatherId,
-              isRainstormActive: state.activeEvent?.type === 'rainstorm',
-              hasAnimalsOrCompost: Boolean((state.animals && state.animals.length > 0 && faunaEval.co2CanopyActive) || ((state.barn?.organic_compost || 0) + (state.barn?.compost || 0) + (state.barn?.manure || 0)) > 0),
-              deltaSeconds,
-            }
-          );
-
-          // Oxygen Above 85%: "Parched Ground" — Crop water consumption doubles
+          // Outdoor crop plots have zero gas meters / penalties (Design Shift)
+          const currentGases = {
+            o2: 60,
+            co2: 65,
+            nitrogen: 85,
+            nitrogenYieldMultiplier: 1 as const,
+            nitrogenBreakdownText: '',
+            nitrogenArrow: '',
+            isPenaltyO2: false,
+            isPenaltyCo2: false,
+            isPenaltyNitrogen: false,
+            isParchedDoubleDrain: false,
+            isAnoxiaSuffocated: false,
+            hasAnyPenalty: false,
+          };
           let currentMoisture = p.moistureLevel !== undefined ? p.moistureLevel : 60.0;
-          if (currentGases.isParchedDoubleDrain && p.crop && !p.ready) {
-            currentMoisture = Math.max(0, currentMoisture - (0.35 * deltaSeconds));
-          }
 
           // Step Dynamic Crop Disease & Blight Simulation
           const diseaseRes = stepPlotDiseaseTick(
@@ -9993,6 +10229,26 @@ export const useGameStore = create<GameState>()(
           state.addNotification(notif, '🚰', 'info');
         }
 
+        // Gas Bottling & Export Refinery Simulation Tick
+        const gasSimRes = stepGasBottlingSimulation(state.gasRefinery || createDefaultGasBottlingRefinery(), now);
+        let updatedGasRefinery = gasSimRes.updatedRefinery;
+
+        // Passive herd slurry generation directly into refinery feedstock
+        let totalHerdSlurryLps = 0;
+        for (const a of newAnimals) {
+          totalHerdSlurryLps += ((a.slurryDailyRate || 8) / 86400) * 20;
+        }
+        if (totalHerdSlurryLps > 0) {
+          const addedSlurry = totalHerdSlurryLps * deltaSeconds;
+          updatedGasRefinery = {
+            ...updatedGasRefinery,
+            storedSlurryFeedstock: Math.min(
+              updatedGasRefinery.maxSlurryCapacity || 2500,
+              Number(((updatedGasRefinery.storedSlurryFeedstock || 0) + addedSlurry).toFixed(2))
+            ),
+          };
+        }
+
         // Update production queues (with Artisan Masterclass, Master Ledger, and Overclocking modifiers)
         const isArtisanMasterclass = state.systemicEvent?.id === 'artisan_masterclass' && state.systemicEvent.phase === 'active';
         const masterLedgerMultiplier = state.relics?.masterArtisanLedger ? 1.0526 : 1.0;
@@ -10040,6 +10296,35 @@ export const useGameStore = create<GameState>()(
             newSilo.honey_comb = (newSilo.honey_comb || 0) + stranded;
           }
           delete (newBarn as Record<string, number>).honey_comb;
+        }
+
+        // Daily shipping crate liquidation check (automatic daily export hauling)
+        const crateLiquidationPeriodMs = (updatedGasRefinery.dailyCycleSeconds || 300) * 1000;
+        const lastLiquidationAt = updatedGasRefinery.lastDailyLiquidationTimestamp || now;
+        if (now - lastLiquidationAt >= crateLiquidationPeriodMs) {
+          const crateItems = updatedGasRefinery.dailyShippingCrate || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+          const crateCount = getCrateTotalCanisterCount(crateItems);
+          if (crateCount > 0) {
+            const earnedCoins = calculateCrateLiquidationValue(crateItems);
+            newCoins += earnedCoins;
+            updatedGasRefinery = {
+              ...updatedGasRefinery,
+              dailyShippingCrate: { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 },
+              totalLifetimeExportCoins: (updatedGasRefinery.totalLifetimeExportCoins || 0) + earnedCoins,
+              totalCanistersShipped: (updatedGasRefinery.totalCanistersShipped || 0) + crateCount,
+              lastDailyLiquidationTimestamp: now,
+            };
+            state.addNotification(
+              `🚚 End-of-Day Logistics: Estate Export Crate hauled ${crateCount} Gas Canisters for +${earnedCoins} Coins!`,
+              '💰',
+              'discovery'
+            );
+          } else {
+            updatedGasRefinery = {
+              ...updatedGasRefinery,
+              lastDailyLiquidationTimestamp: now,
+            };
+          }
         }
 
         // Periodic Manure Generation from comfortable herd
@@ -11451,6 +11736,7 @@ export const useGameStore = create<GameState>()(
           pastureWelfare: updatedPastureWelfare,
           slurryPits: slurrySimResult.updatedPits,
           gasProductionLab: slurrySimResult.updatedGasLab,
+          gasRefinery: updatedGasRefinery,
           productionQueues: newQueues,
           barn: newBarn,
           silo: newSilo,

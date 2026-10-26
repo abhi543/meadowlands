@@ -54,6 +54,9 @@ function getItemSourceHint(itemId: string): string {
   if (itemId === 'savory_fish_pie') return 'Bake at Bakery';
   if (itemId === 'crab_bisque') return 'Bake at Bakery';
   if (itemId === 'golden_cornbread') return 'Bake at Bakery (2x Corn + 1x Egg)';
+  if (itemId === 'co2_cylinder') return 'Gas Bottling Refinery -> Heavy Hydraulic Gas Compressor (40L Raw Slurry + 10 Chaff)';
+  if (itemId === 'oxygen_canister') return 'Gas Bottling Refinery -> Heavy Hydraulic Gas Compressor (30L Water + 5 Biomass)';
+  if (itemId === 'nitrogen_dewar') return 'Gas Bottling Refinery -> Heavy Hydraulic Gas Compressor (50L Concentrated Slurry + 1 Fuel)';
   for (const [, bDef] of Object.entries(BUILDINGS)) {
     for (const recipe of bDef.recipes) {
       if (recipe.output.productId === itemId) {
@@ -88,7 +91,7 @@ export function OrderBoard() {
     hydrology,
   } = useGameStore();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'local' | 'merchant' | 'noble' | 'timed' | 'favor_shop' | 'reputation'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'local' | 'merchant' | 'noble' | 'timed' | 'industrial' | 'favor_shop' | 'reputation'>('all');
   const [selectedOrderForRoute, setSelectedOrderForRoute] = useState<DeliveryOrder | null>(null);
   const [isDispatching, setIsDispatching] = useState<string | null>(null);
   const [dispatchResult, setDispatchResult] = useState<{ id: string; message: string; hazard: boolean } | null>(null);
@@ -207,12 +210,19 @@ export function OrderBoard() {
   const merchantOrders = orders.filter(o => (o.contractTier || inferContractTier(o.type, level)) === 'tier2_merchant');
   const nobleOrders = orders.filter(o => (o.contractTier || inferContractTier(o.type, level)) === 'tier3_noble');
   const timedOrders = orders.filter(o => o.type === 'rush' || o.type === 'futures' || o.isRushOrder || o.isHighStakes);
+  const industrialOrders = orders.filter(
+    o => o.clientId === 'brewmaster_klaus' ||
+         o.clientId === 'dr_vanderberg' ||
+         o.clientId === 'foundryman_torval' ||
+         o.requiredItems?.some(it => it.itemId === 'co2_cylinder' || it.itemId === 'oxygen_canister' || it.itemId === 'nitrogen_dewar')
+  );
 
   let displayedOrders = orders;
   if (activeTab === 'local') displayedOrders = localOrders;
   else if (activeTab === 'merchant') displayedOrders = merchantOrders;
   else if (activeTab === 'noble') displayedOrders = nobleOrders;
   else if (activeTab === 'timed') displayedOrders = timedOrders;
+  else if (activeTab === 'industrial') displayedOrders = industrialOrders;
 
   return (
     <div className="space-y-4">
@@ -326,6 +336,17 @@ export function OrderBoard() {
                   {timedOrders.length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('industrial')}
+              className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                activeTab === 'industrial'
+                  ? 'bg-amber-600 text-stone-950 shadow-sm font-black'
+                  : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-amber-500/30'
+              }`}
+            >
+              <span>🏭 Industrial Gas</span>
+              <span className="text-[10px] opacity-75">({industrialOrders.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('favor_shop')}

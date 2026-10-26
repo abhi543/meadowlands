@@ -261,7 +261,7 @@ export default function Home() {
             {activeTab === 'farm' && <FarmGrid onSelectTab={setActiveTab} />}
             {activeTab === 'water' && <WaterTab />}
             {activeTab === 'animals' && <AnimalsTab />}
-            {activeTab === 'production' && <ProductionPanel />}
+            {activeTab === 'production' && <ProductionPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
             {activeTab === 'orders' && <OrderBoard />}
             {activeTab === 'shop' && <ShopPanel />}
             {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}

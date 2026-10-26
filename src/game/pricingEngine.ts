@@ -292,6 +292,11 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   subsoil_aquifer_casing:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 5 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 120, name: 'Subsoil Aquifer Casing', icon: '🏗️💧' },
   prismatic_light_lens:    { stage: 1, inputs: [{ id: 'prismatic_wing_membrane', qty: 2 }, { id: 'tempered_glass', qty: 2 }], outputQty: 1, timeSec: 150, name: 'Prismatic Light Lens', icon: '🔍🌈' },
   thermal_retaining_core:  { stage: 1, inputs: [{ id: 'thermal_scutes', qty: 2 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 180, name: 'Thermal Retaining Core', icon: '🔥💎' },
+
+  // Gas Bottling & Export Commodities (Hydraulic Gas Compressor)
+  co2_cylinder:            { stage: 1, inputs: [{ id: 'chaff', qty: 10 }], outputQty: 1, timeSec: 60, name: 'Pressurized CO₂ Cylinder', icon: '🫧' },
+  oxygen_canister:         { stage: 1, inputs: [{ id: 'wheat', qty: 5 }], outputQty: 1, timeSec: 60, name: 'Refined Oxygen Canister', icon: '🫁' },
+  nitrogen_dewar:          { stage: 1, inputs: [{ id: 'fired_hardwood', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Liquid Nitrogen Dewar', icon: '❄️' },
 };
 
 // Internal computed memoization cache

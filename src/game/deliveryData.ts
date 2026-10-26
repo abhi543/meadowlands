@@ -171,6 +171,54 @@ export const CLIENT_DEFINITIONS: Record<string, ClientDefinition> = {
       { level: 5, perkName: 'Mountain Sovereign', description: 'All territory parcel expansion coin costs reduced by 20%.' },
     ],
   },
+  brewmaster_klaus: {
+    id: 'brewmaster_klaus',
+    name: 'Brewmaster Klaus',
+    title: 'City Brewery & Fermenter Guild',
+    avatar: '🍺',
+    quote: 'Our craft ales and sparkling ciders require constant pressurized CO₂ cylinders for the autumn fermentation run!',
+    themeColor: 'from-amber-600 to-yellow-600',
+    preferredItems: ['co2_cylinder', 'wheat', 'corn', 'wild_berries'],
+    perks: [
+      { level: 1, perkName: 'Brewer Patron', description: 'Priority commercial standing with regional beverage halls.' },
+      { level: 2, perkName: 'Fermentation Subsidy', description: '+15% coin payouts on all bottled CO₂ cylinder orders.' },
+      { level: 3, perkName: 'Bulk Cask Charter', description: 'Canisters load into export carts with +10% cash bonus.' },
+      { level: 4, perkName: 'Guild Vault Line', description: 'Daily worker salary upkeep discounted by 15%.' },
+      { level: 5, perkName: 'Master Fermenter', description: '+25% bonus coins on all gas commodity industrial contracts.' },
+    ],
+  },
+  dr_vanderberg: {
+    id: 'dr_vanderberg',
+    name: 'Dr. Vanderberg',
+    title: 'Sanitarium Medical Director',
+    avatar: '🫁',
+    quote: 'Refined medical oxygen canisters are urgently required for patient pulmonary wards and high-altitude teams.',
+    themeColor: 'from-cyan-700 to-blue-600',
+    preferredItems: ['oxygen_canister', 'citrus_tea', 'honey', 'clean_water'],
+    perks: [
+      { level: 1, perkName: 'Sanitarium Trustee', description: 'Civic recognition across clinical institutions.' },
+      { level: 2, perkName: 'Medical Premium', description: '+20% coin bounty on all refined oxygen shipments.' },
+      { level: 3, perkName: 'Sanitation Grant', description: 'Hand tool washing water consumption cut in half.' },
+      { level: 4, perkName: 'Clinical Endorsement', description: 'All merchant contract deadlines extended by +50%.' },
+      { level: 5, perkName: 'Life-Support Sovereign', description: 'Permanent +30% gold yield on specialized gas contracts.' },
+    ],
+  },
+  foundryman_torval: {
+    id: 'foundryman_torval',
+    name: 'Overseer Torval',
+    title: 'Metropolitan Cryo-Foundry',
+    avatar: '❄️',
+    quote: 'We temper high-tensile alloys and aerospace ceramics using deep cryogenic liquid nitrogen dewars.',
+    themeColor: 'from-slate-700 to-indigo-700',
+    preferredItems: ['nitrogen_dewar', 'gold_nugget', 'fired_hardwood'],
+    perks: [
+      { level: 1, perkName: 'Foundry Accord', description: 'Industrial supply clearance with heavy manufacturing hubs.' },
+      { level: 2, perkName: 'Cryo Contract Bonus', description: '+25% coin payouts on liquid nitrogen dewar contracts.' },
+      { level: 3, perkName: 'Industrial Hauler', description: 'Estate shipping crate capacity doubled.' },
+      { level: 4, perkName: 'Alloy Reinforcement', description: 'Refinery compression duration accelerated by 20%.' },
+      { level: 5, perkName: 'Metropolitan Titan', description: 'Massive +40% coins and +100 Guild Reputation on industrial orders.' },
+    ],
+  },
 };
 
 export const REPUTATION_THRESHOLDS = [0, 100, 250, 500, 1000]; // Levels 1 through 5
@@ -287,6 +335,11 @@ export const ITEM_UNLOCK_LEVELS: Record<string, number> = {
   imperial_sturgeon_caviar: 12,
   marlin_tartare: 16,
   luminescent_chowder: 20,
+
+  // Gas Bottling & Export Commodities (Hydraulic Gas Compressor)
+  co2_cylinder: 2,
+  oxygen_canister: 3,
+  nitrogen_dewar: 4,
 };
 
 // --- Client Themed Progression Pools by Unlock Level ---
@@ -380,6 +433,24 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
     { itemId: 'honey_comb', minLevel: 12 },
     { itemId: 'wild_berries', minLevel: 16 },
     { itemId: 'gold_nugget', minLevel: 28 },
+  ],
+  brewmaster_klaus: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'corn', minLevel: 2 },
+    { itemId: 'co2_cylinder', minLevel: 2 },
+    { itemId: 'wild_berries', minLevel: 5 },
+  ],
+  dr_vanderberg: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'oxygen_canister', minLevel: 3 },
+    { itemId: 'citrus_tea', minLevel: 4 },
+    { itemId: 'honey', minLevel: 12 },
+  ],
+  foundryman_torval: [
+    { itemId: 'wheat', minLevel: 1 },
+    { itemId: 'nitrogen_dewar', minLevel: 4 },
+    { itemId: 'co2_cylinder', minLevel: 4 },
+    { itemId: 'gold_nugget', minLevel: 10 },
   ],
 };
 

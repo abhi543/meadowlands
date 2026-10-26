@@ -175,6 +175,11 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   subsoil_aquifer_casing: { id: 'subsoil_aquifer_casing', name: 'Subsoil Aquifer Casing', icon: '🏗️💧', category: 'artisan', baseValue: 650, isEdibleFeed: false },
   prismatic_light_lens: { id: 'prismatic_light_lens', name: 'Prismatic Light Lens', icon: '🔍🌈', category: 'artisan', baseValue: 850, isEdibleFeed: false },
   thermal_retaining_core: { id: 'thermal_retaining_core', name: 'Thermal Retaining Core', icon: '🔥💎', category: 'artisan', baseValue: 950, isEdibleFeed: false },
+
+  // Gas Bottling & Export Commodities
+  co2_cylinder: { id: 'co2_cylinder', name: 'Pressurized CO₂ Cylinder', icon: '🫧', category: 'artisan', baseValue: 45, isEdibleFeed: false },
+  oxygen_canister: { id: 'oxygen_canister', name: 'Refined Oxygen Canister', icon: '🫁', category: 'artisan', baseValue: 65, isEdibleFeed: false },
+  nitrogen_dewar: { id: 'nitrogen_dewar', name: 'Liquid Nitrogen Dewar', icon: '❄️', category: 'artisan', baseValue: 110, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {

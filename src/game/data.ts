@@ -331,7 +331,9 @@ export type ProductId =
   | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
   | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve'
   // Agricultural Byproducts
-  | 'chaff';
+  | 'chaff'
+  // Gas Bottling & Export Commodities
+  | 'co2_cylinder' | 'oxygen_canister' | 'nitrogen_dewar';
 
 /**
  * Calculates chaff byproduct from a crop harvest.
@@ -505,6 +507,11 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   prismatic_light_lens:    { id: 'prismatic_light_lens',    name: 'Prismatic Light Lens',        emoji: '🔍🌈', category: 'manufactured', sellPrice: 850 },
   thermal_retaining_core:  { id: 'thermal_retaining_core',  name: 'Thermal Retaining Core',      emoji: '🔥💎', category: 'manufactured', sellPrice: 950 },
   emergency_siphon_valve:  { id: 'emergency_siphon_valve',  name: 'Emergency Siphon Float Valve', emoji: '🚰⚡', category: 'manufactured', sellPrice: 750 },
+
+  // --- Gas Bottling & Export Commodities ---
+  co2_cylinder:            { id: 'co2_cylinder',            name: 'Pressurized CO₂ Cylinder',    emoji: '🫧',   category: 'manufactured', sellPrice: 45 },
+  oxygen_canister:         { id: 'oxygen_canister',         name: 'Refined Oxygen Canister',     emoji: '🫁',   category: 'manufactured', sellPrice: 65 },
+  nitrogen_dewar:          { id: 'nitrogen_dewar',          name: 'Liquid Nitrogen Dewar',       emoji: '❄️',   category: 'manufactured', sellPrice: 110 },
 };
 
 // --- Production Buildings ---

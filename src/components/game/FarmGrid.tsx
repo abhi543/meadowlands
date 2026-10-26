@@ -1127,11 +1127,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                           </span>
                         </>
                       )}
-                      {plot.crop === 'peas' && !isDiseaseActive && (
-                        <span className="text-[8px] font-black text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded-full border border-emerald-400/80 animate-pulse mt-0.5">
-                          ⚡ Recharging 🟢 Leaf
-                        </span>
-                      )}
                     </div>
                   )}
 

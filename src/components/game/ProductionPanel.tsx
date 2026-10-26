@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { getItemEconomicProfile } from '@/game/pricingEngine';
 import { WorkshopInstallationsPanel } from './WorkshopInstallationsPanel';
+import { GasBottlingRefineryPanel } from './GasBottlingRefineryPanel';
 
 const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop', 'workshop'];
 
@@ -142,7 +143,11 @@ function calcMaxCraftable(recipe: RecipeDef, silo: Record<string, number>, barn:
   return max === Infinity ? 0 : max;
 }
 
-export function ProductionPanel() {
+interface ProductionPanelProps {
+  onSelectTab?: (tab: string) => void;
+}
+
+export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
   const {
     productionQueues,
     silo,
@@ -164,6 +169,7 @@ export function ProductionPanel() {
     togglePauseAllWorkers,
     specialistWorkers,
   } = useGameStore();
+  const [productionMode, setProductionMode] = useState<'workshops' | 'gas_refinery'>('workshops');
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
   const [workshopSubTab, setWorkshopSubTab] = useState<'recipes' | 'installations'>('recipes');
   const [, setTick] = useState(0);
@@ -195,13 +201,48 @@ export function ProductionPanel() {
 
   return (
     <div className="space-y-3">
-      {/* Building Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
-        {BUILDING_LIST.map(bId => {
-          const b = BUILDINGS[bId];
-          const t = BUILDING_THEME[bId];
-          const q = productionQueues[bId] || [];
-          const slots = q.filter(s => !s.done).length;
+      {/* Production Facility Mode Switcher */}
+      <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-stone-900/90 border border-stone-800">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setProductionMode('workshops')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              productionMode === 'workshops'
+                ? 'bg-amber-600 text-stone-950 shadow-md'
+                : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
+            }`}
+          >
+            <span>⚙️ Artisan Workshops &amp; Mills</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setProductionMode('gas_refinery')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
+              productionMode === 'gas_refinery'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-stone-950 shadow-md'
+                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-amber-500/30'
+            }`}
+          >
+            <span>🏭 Gas Bottling &amp; Export Refinery</span>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/40">
+              DIRECT EXPORT
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {productionMode === 'gas_refinery' ? (
+        <GasBottlingRefineryPanel onNavigateToOrders={() => onSelectTab?.('orders')} />
+      ) : (
+        <>
+          {/* Building Tabs */}
+          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
+            {BUILDING_LIST.map(bId => {
+              const b = BUILDINGS[bId];
+              const t = BUILDING_THEME[bId];
+              const q = productionQueues[bId] || [];
+              const slots = q.filter(s => !s.done).length;
           const done = q.filter(s => s.done).length;
           const locked = b.unlockLevel ? level < b.unlockLevel : false;
           const isActive = activeBuilding === bId;
@@ -603,6 +644,8 @@ export function ProductionPanel() {
           </>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
