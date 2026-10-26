@@ -88,6 +88,7 @@ export interface GasBottlingRefineryState {
   maxSlurryCapacity: number;     // e.g. 2500L default
   activeBatch?: CompressorBatch | null; // Kept for backwards compatibility
   activeBatches?: Record<CanisterId, CompressorBatch | null>; // Tri-chamber parallel compression
+  automatedGases?: Record<CanisterId, boolean>; // Assigned automated refinery workers per chamber
   outputRack: Record<CanisterId, number>; // Canisters ready in laboratory storage
   dailyShippingCrate: Record<CanisterId, number>; // Canisters loaded onto Estate Export Cart
   lastDailyLiquidationTimestamp: number;
@@ -105,6 +106,11 @@ export function createDefaultGasBottlingRefinery(): GasBottlingRefineryState {
       co2_cylinder: null,
       oxygen_canister: null,
       nitrogen_dewar: null,
+    },
+    automatedGases: {
+      co2_cylinder: true,     // Automated Worker (CO₂ Technician)
+      oxygen_canister: false, // Manual Operation (Player Controlled)
+      nitrogen_dewar: true,   // Automated Worker (Cryo-Distiller Operator)
     },
     outputRack: {
       co2_cylinder: 0,

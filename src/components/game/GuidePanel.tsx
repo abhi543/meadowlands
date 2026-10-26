@@ -1333,25 +1333,25 @@ function GasRefineryGuide() {
       {/* Hydraulic Compressor Mechanics */}
       <div className="border border-stone-200 dark:border-gray-800 rounded-xl p-3.5 bg-stone-50/50 dark:bg-stone-900/30 space-y-2 text-xs">
         <h5 className="font-bold text-sm text-stone-800 dark:text-stone-100 flex items-center gap-2">
-          <span>⚙️</span> Tri-Chamber Hydraulic Compressor Operation (Simultaneous Bottling)
+          <span>⚙️</span> Tri-Chamber Hydraulic Compressor &amp; Refinery Workforce
         </h5>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
           <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-stone-800 dark:text-stone-200">👷 Automated Workers (CO₂ &amp; N₂):</span>
+            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+              Dedicated refinery technicians automatically start the next compression cycle for CO₂ and Liquid N₂ as soon as slurry, chaff, and thermal fuel are replenished.
+            </p>
+          </div>
+          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-stone-800 dark:text-stone-200">✋ Manual Oxygen Operation:</span>
+            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
+              Medical Oxygen (O₂) is reserved for manual player bottling so you can preserve Tower Water and Green Biomass. You can also toggle worker automation for any gas at any time.
+            </p>
+          </div>
+          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
             <span className="font-bold text-stone-800 dark:text-stone-200">⚡ Tri-Chamber Parallel Bottling:</span>
             <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              All 3 gases (CO₂, O₂, N₂) operate in separate, isolated hydraulic chambers. You can produce all gases simultaneously or click <em>&quot;Bottle All Available Gases In Parallel&quot;</em> to fire all chambers at once!
-            </p>
-          </div>
-          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-stone-800 dark:text-stone-200">⏱️ Independent 60s Cycles:</span>
-            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              Each chamber runs an independent 60-second compression stroke. Completed canisters are racked automatically to output storage without blocking other active gases.
-            </p>
-          </div>
-          <div className="bg-white dark:bg-stone-800/80 p-2.5 rounded-lg border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-stone-800 dark:text-stone-200">🛡️ High-Capacity Storage:</span>
-            <p className="mt-1 text-stone-600 dark:text-stone-400 text-[11px] leading-relaxed">
-              Refinery intake tanks store up to 2,500L of slurry with zero pressure leak penalties. Your output racks store unlimited bottled stock ready for freight export.
+              All 3 gases run on independent 60-second compression strokes. Finished cylinders automatically stack into Output Racks ready for shipping crate export.
             </p>
           </div>
         </div>

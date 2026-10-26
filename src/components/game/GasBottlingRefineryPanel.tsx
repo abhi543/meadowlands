@@ -22,6 +22,8 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     animals = [],
     startGasCompressorBatch,
     startAllGasCompressors,
+    toggleGasAutomation,
+    setGasAutomation,
     collectGasCompressorOutput,
     loadCanisterToShippingCrate,
     liquidateShippingCrate,
@@ -66,6 +68,15 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     .map((cid) => activeBatches[cid])
     .filter(Boolean) as CompressorBatch[];
   const activeCount = activeBatchesList.length;
+
+  // Tri-chamber automated refinery workers
+  const automatedGases: Record<CanisterTierId, boolean> = {
+    co2_cylinder: true,
+    nitrogen_dewar: true,
+    oxygen_canister: false,
+    ...(refinery.automatedGases || {}),
+  };
+  const autoWorkerCount = (Object.values(automatedGases) as boolean[]).filter(Boolean).length;
 
   // Next daily liquidation countdown
   const cycleMs = (refinery.dailyCycleSeconds || 300) * 1000;
@@ -342,32 +353,74 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
               </div>
             </div>
 
-            {/* Tri-Chamber Simultaneous Action Banner */}
-            <div className="bg-stone-950/80 rounded-xl p-3 border border-stone-800/80 flex items-center justify-between flex-wrap gap-2.5 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🚀</span>
-                <div>
-                  <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
-                    Simultaneous Multi-Gas Bottling
-                  </h4>
-                  <p className="text-[11px] text-stone-400">
-                    Compress CO₂, Medical Oxygen, and Liquid Nitrogen all at the same time in parallel chambers!
-                  </p>
+            {/* Tri-Chamber Simultaneous Action & Labor Controls Banner */}
+            <div className="bg-stone-950/90 rounded-xl p-3 border border-stone-800/80 space-y-2.5 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">👷</span>
+                  <div>
+                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                      Refinery Workforce &amp; Chamber Automation
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-800 text-stone-300 border border-stone-700">
+                        {autoWorkerCount}/3 Automated
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-stone-400">
+                      Automated workers auto-queue the next batch as soon as ingredients arrive.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Workforce Presets */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGasAutomation('co2_cylinder', true);
+                      setGasAutomation('nitrogen_dewar', true);
+                      setGasAutomation('oxygen_canister', false);
+                    }}
+                    className="px-2.5 py-1 rounded-md text-[10px] font-black bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                    title="Automate CO2 & N2, keep Oxygen manual"
+                  >
+                    ⚙️ CO₂ &amp; N₂ Auto (O₂ Manual)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGasAutomation('co2_cylinder', true);
+                      setGasAutomation('nitrogen_dewar', true);
+                      setGasAutomation('oxygen_canister', true);
+                    }}
+                    className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer"
+                  >
+                    ⚡ Automate All 3
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGasAutomation('co2_cylinder', false);
+                      setGasAutomation('nitrogen_dewar', false);
+                      setGasAutomation('oxygen_canister', false);
+                    }}
+                    className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer"
+                  >
+                    ✋ Manual All 3
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartAll}
+                    disabled={activeCount === 3}
+                    className={`px-3 py-1 rounded-md text-[10px] font-black transition-all flex items-center gap-1 shadow-md ${
+                      activeCount === 3
+                        ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
+                        : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 border border-amber-400 shadow-amber-500/20 active:scale-95 cursor-pointer'
+                    }`}
+                  >
+                    <span>⚡ Bottle All In Parallel</span>
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={handleStartAll}
-                disabled={activeCount === 3}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 shadow-md ${
-                  activeCount === 3
-                    ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
-                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 border border-amber-400 shadow-amber-500/20 active:scale-95 cursor-pointer'
-                }`}
-              >
-                <span>⚡</span>
-                <span>Bottle All Available Gases In Parallel</span>
-              </button>
             </div>
 
             {/* 3 Canister Recipes Grid (Independent Parallel Chambers) */}
@@ -375,6 +428,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
               {(Object.keys(CANISTER_RECIPES) as CanisterTierId[]).map((canisterId) => {
                 const recipe = CANISTER_RECIPES[canisterId];
                 const thisBatch = activeBatches[canisterId];
+                const isAutomated = Boolean(automatedGases[canisterId]);
                 let thisProgressPct = 0;
                 let thisRemainingSec = 0;
                 if (thisBatch) {
@@ -424,17 +478,55 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                         : 'bg-gradient-to-b from-stone-900 to-indigo-950/20 border-indigo-500/30'
                     }`}
                   >
-                    <div>
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-2xl">{recipe.emoji}</span>
                         <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                           💰 {recipe.baseExportCoins}c
                         </span>
                       </div>
-                      <h4 className="text-xs font-black text-white mt-1.5">{recipe.name}</h4>
-                      <p className="text-[10px] text-stone-400 mt-1 leading-relaxed">
-                        {recipe.description}
-                      </p>
+                      <div>
+                        <h4 className="text-xs font-black text-white">{recipe.name}</h4>
+                        <p className="text-[10px] text-stone-400 mt-0.5 leading-relaxed">
+                          {recipe.description}
+                        </p>
+                      </div>
+
+                      {/* Worker Assignment Card Header */}
+                      <div className="bg-stone-950/80 rounded-lg p-2 border border-stone-800 flex items-center justify-between gap-1.5 shadow-sm">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-base">{isAutomated ? '👷' : '✋'}</span>
+                          <div className="min-w-0">
+                            <span className="text-[10px] font-black block leading-tight text-stone-200">
+                              {isAutomated ? (
+                                <span className="text-emerald-400 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  Automated Worker
+                                </span>
+                              ) : (
+                                <span className="text-amber-400/90">Manual Mode</span>
+                              )}
+                            </span>
+                            <span className="text-[9px] text-stone-400 block truncate">
+                              {isAutomated
+                                ? (thisBatch ? '⚡ Compressing auto-batch' : canCraft ? '🟢 Ready for auto-stroke' : `⏳ Standby (${missingReason})`)
+                                : 'Awaiting your manual click'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleGasAutomation(canisterId)}
+                          className={`text-[9px] font-black px-2 py-1 rounded transition-all cursor-pointer whitespace-nowrap ${
+                            isAutomated
+                              ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                              : 'bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700'
+                          }`}
+                        >
+                          {isAutomated ? 'Set Manual' : 'Assign Worker'}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Active Chamber Progress Bar */}
@@ -442,7 +534,8 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                       <div className="bg-stone-950/80 rounded-lg p-2 border border-amber-500/30 space-y-1.5 shadow-inner">
                         <div className="flex justify-between text-[10px] font-mono">
                           <span className="text-amber-300 font-bold flex items-center gap-1">
-                            <span className="animate-spin text-xs">⚙️</span> Chamber Active
+                            <span className="animate-spin text-xs">⚙️</span>
+                            {isAutomated ? 'Worker Compressing' : 'Chamber Compressing'}
                           </span>
                           <span className="text-white font-bold">{thisRemainingSec}s</span>
                         </div>
@@ -519,10 +612,12 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                       <button
                         type="button"
                         onClick={() => handleStartCraft(canisterId)}
-                        disabled={Boolean(thisBatch) || !canCraft}
+                        disabled={Boolean(thisBatch) || !canCraft || isAutomated}
                         className={`w-full py-1.5 px-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 ${
                           Boolean(thisBatch)
                             ? 'bg-stone-800 text-amber-300 border border-amber-500/30 opacity-90 cursor-not-allowed'
+                            : isAutomated
+                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 cursor-default'
                             : !canCraft
                             ? 'bg-stone-800 text-stone-500 cursor-not-allowed opacity-60'
                             : canisterId === 'co2_cylinder'
@@ -534,10 +629,12 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                       >
                         {thisBatch ? (
                           <span className="animate-pulse">⚡ Compressing ({thisRemainingSec}s)...</span>
+                        ) : isAutomated ? (
+                          <span>👷 Worker Operating (Auto-Queue)</span>
                         ) : !canCraft ? (
                           <span>{missingReason}</span>
                         ) : (
-                          <span>Compress &amp; Bottle</span>
+                          <span>Compress &amp; Bottle (Manual)</span>
                         )}
                       </button>
                     </div>

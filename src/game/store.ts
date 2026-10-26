@@ -950,6 +950,8 @@ export interface GameState {
   gasRefinery: GasBottlingRefineryState;
   startGasCompressorBatch: (recipeId: CanisterId) => boolean;
   startAllGasCompressors: () => number;
+  toggleGasAutomation: (canisterId: CanisterId) => void;
+  setGasAutomation: (canisterId: CanisterId, enabled: boolean) => void;
   collectGasCompressorOutput: () => void;
   loadCanisterToShippingCrate: (canisterId: CanisterId, qty?: number) => boolean;
   liquidateShippingCrate: (immediate?: boolean) => { coinsEarned: number; count: number };
@@ -7085,6 +7087,55 @@ export const useGameStore = create<GameState>()(
         return started;
       },
 
+      toggleGasAutomation: (canisterId: CanisterId) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const auto = {
+          co2_cylinder: true,
+          nitrogen_dewar: true,
+          oxygen_canister: false,
+          ...(refinery.automatedGases || {}),
+        };
+        const nextVal = !auto[canisterId];
+        auto[canisterId] = nextVal;
+        refinery.automatedGases = auto;
+
+        set({
+          gasRefinery: refinery,
+          isDirty: true,
+        });
+
+        const gasName = CANISTER_RECIPES[canisterId]?.name || canisterId;
+        if (nextVal) {
+          state.addNotification(`👷 Refinery Worker Assigned: Auto-Compressing ${gasName}!`, '👷', 'discovery');
+          get().startGasCompressorBatch(canisterId);
+        } else {
+          state.addNotification(`✋ Manual Mode: Worker unassigned from ${gasName}.`, '✋', 'info');
+        }
+      },
+
+      setGasAutomation: (canisterId: CanisterId, enabled: boolean) => {
+        const state = get();
+        const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+        const auto = {
+          co2_cylinder: true,
+          nitrogen_dewar: true,
+          oxygen_canister: false,
+          ...(refinery.automatedGases || {}),
+        };
+        auto[canisterId] = enabled;
+        refinery.automatedGases = auto;
+
+        set({
+          gasRefinery: refinery,
+          isDirty: true,
+        });
+
+        if (enabled) {
+          get().startGasCompressorBatch(canisterId);
+        }
+      },
+
       collectGasCompressorOutput: () => {
         const state = get();
         const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
@@ -10368,6 +10419,110 @@ export const useGameStore = create<GameState>()(
             };
           }
         }
+
+        // --- Automated Gas Refinery Workers (Tri-Chamber Dispatch) ---
+        // Defaults: CO2 automated (Technician), N2 automated (Cryo-Distiller), O2 manual (Player Controlled)
+        const autoGases: Record<CanisterId, boolean> = {
+          co2_cylinder: true,
+          nitrogen_dewar: true,
+          oxygen_canister: false,
+          ...(updatedGasRefinery.automatedGases || {}),
+        };
+        const activeBatchesInRefinery: Record<CanisterId, CompressorBatch | null> = {
+          co2_cylinder: updatedGasRefinery.activeBatches?.co2_cylinder || null,
+          nitrogen_dewar: updatedGasRefinery.activeBatches?.nitrogen_dewar || null,
+          oxygen_canister: updatedGasRefinery.activeBatches?.oxygen_canister || null,
+        };
+
+        // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff)
+        if (autoGases.co2_cylinder && !activeBatchesInRefinery.co2_cylinder) {
+          const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
+          const chaffAvail = (newSilo.chaff || 0) + (newBarn.chaff || 0);
+          if (slurryAvail >= 40 && chaffAvail >= 10) {
+            updatedGasRefinery.storedSlurryFeedstock = Math.max(0, slurryAvail - 40);
+            let neededChaff = 10;
+            if ((newSilo.chaff || 0) >= neededChaff) {
+              newSilo.chaff -= neededChaff;
+            } else {
+              neededChaff -= (newSilo.chaff || 0);
+              newSilo.chaff = 0;
+              newBarn.chaff = Math.max(0, (newBarn.chaff || 0) - neededChaff);
+            }
+            activeBatchesInRefinery.co2_cylinder = {
+              id: `batch_co2_${now}`,
+              canisterId: 'co2_cylinder',
+              name: CANISTER_RECIPES.co2_cylinder.name,
+              emoji: CANISTER_RECIPES.co2_cylinder.emoji,
+              startedAt: now,
+              durationSec: CANISTER_RECIPES.co2_cylinder.processingDurationSec,
+              outputQty: 1,
+            };
+          }
+        }
+
+        // 2. Check N2 Chamber (Needs 50L Slurry + 1 Fuel or 15 Coins)
+        if (autoGases.nitrogen_dewar && !activeBatchesInRefinery.nitrogen_dewar) {
+          const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
+          if (slurryAvail >= 50) {
+            let hasFuel = false;
+            if ((newBarn.thermal_scutes || 0) > 0) {
+              newBarn.thermal_scutes -= 1;
+              hasFuel = true;
+            } else if ((newBarn.thermal_solvent || 0) > 0) {
+              newBarn.thermal_solvent -= 1;
+              hasFuel = true;
+            } else if ((newBarn.fired_hardwood || 0) > 0) {
+              newBarn.fired_hardwood -= 1;
+              hasFuel = true;
+            } else if (newCoins >= 15) {
+              newCoins -= 15;
+              hasFuel = true;
+            }
+            if (hasFuel) {
+              updatedGasRefinery.storedSlurryFeedstock = Math.max(0, slurryAvail - 50);
+              activeBatchesInRefinery.nitrogen_dewar = {
+                id: `batch_nitrogen_dewar_${now}`,
+                canisterId: 'nitrogen_dewar',
+                name: CANISTER_RECIPES.nitrogen_dewar.name,
+                emoji: CANISTER_RECIPES.nitrogen_dewar.emoji,
+                startedAt: now,
+                durationSec: CANISTER_RECIPES.nitrogen_dewar.processingDurationSec,
+                outputQty: 1,
+              };
+            }
+          }
+        }
+
+        // 3. Check O2 Chamber (Only runs automatically if player turned on automation for Oxygen)
+        if (autoGases.oxygen_canister && !activeBatchesInRefinery.oxygen_canister) {
+          const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
+          let bioTotal = 0;
+          const bioCandidates: (keyof typeof newSilo)[] = ['peas', 'wheat', 'soybean', 'corn'];
+          for (const k of bioCandidates) bioTotal += (newSilo[k] || 0);
+          if (towerWater >= 30 && bioTotal >= 5) {
+            hydroSimResult.updatedHydrology.towerLiters = Math.max(0, towerWater - 30);
+            let bioNeeded = 5;
+            for (const k of bioCandidates) {
+              if (bioNeeded <= 0) break;
+              const take = Math.min(newSilo[k] || 0, bioNeeded);
+              newSilo[k] = (newSilo[k] || 0) - take;
+              bioNeeded -= take;
+            }
+            activeBatchesInRefinery.oxygen_canister = {
+              id: `batch_oxygen_canister_${now}`,
+              canisterId: 'oxygen_canister',
+              name: CANISTER_RECIPES.oxygen_canister.name,
+              emoji: CANISTER_RECIPES.oxygen_canister.emoji,
+              startedAt: now,
+              durationSec: CANISTER_RECIPES.oxygen_canister.processingDurationSec,
+              outputQty: 1,
+            };
+          }
+        }
+
+        updatedGasRefinery.activeBatches = activeBatchesInRefinery;
+        updatedGasRefinery.activeBatch = Object.values(activeBatchesInRefinery).find(b => b !== null) || null;
+        updatedGasRefinery.automatedGases = autoGases;
 
         // Periodic Manure Generation from comfortable herd
         const lastManure = currentPastureWelfare.lastManureGenerationAt || 0;
