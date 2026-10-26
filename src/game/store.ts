@@ -7191,11 +7191,11 @@ export const useGameStore = create<GameState>()(
         const auto = {
           co2_cylinder: true,
           nitrogen_dewar: true,
-          oxygen_canister: false,
-          ethylene_cylinder: false,
-          ozone_canister: false,
-          sulfur_dioxide_flask: false,
-          phosphine_bomb: false,
+          oxygen_canister: true,
+          ethylene_cylinder: true,
+          ozone_canister: true,
+          sulfur_dioxide_flask: true,
+          phosphine_bomb: true,
           ...(refinery.automatedGases || {}),
         };
         const nextVal = !auto[canisterId];
@@ -7222,11 +7222,11 @@ export const useGameStore = create<GameState>()(
         const auto = {
           co2_cylinder: true,
           nitrogen_dewar: true,
-          oxygen_canister: false,
-          ethylene_cylinder: false,
-          ozone_canister: false,
-          sulfur_dioxide_flask: false,
-          phosphine_bomb: false,
+          oxygen_canister: true,
+          ethylene_cylinder: true,
+          ozone_canister: true,
+          sulfur_dioxide_flask: true,
+          phosphine_bomb: true,
           ...(refinery.automatedGases || {}),
         };
         auto[canisterId] = enabled;
@@ -7248,11 +7248,11 @@ export const useGameStore = create<GameState>()(
         const auto = {
           co2_cylinder: true,
           nitrogen_dewar: true,
-          oxygen_canister: false,
-          ethylene_cylinder: false,
-          ozone_canister: false,
-          sulfur_dioxide_flask: false,
-          phosphine_bomb: false,
+          oxygen_canister: true,
+          ethylene_cylinder: true,
+          ozone_canister: true,
+          sulfur_dioxide_flask: true,
+          phosphine_bomb: true,
           ...(refinery.automatedGases || {}),
         };
 
@@ -10698,15 +10698,15 @@ export const useGameStore = create<GameState>()(
 
         updatedGasRefinery.isWorkerSlurryActive = isWorkerSlurryActive;
 
-        // Defaults: CO2 automated (Technician), N2 automated (Cryo-Distiller), others configurable
+        // Defaults: All 7 gas compressor chambers automated by dedicated refinery technicians
         const autoGases: Record<CanisterId, boolean> = {
           co2_cylinder: true,
           nitrogen_dewar: true,
-          oxygen_canister: false,
-          ethylene_cylinder: false,
-          ozone_canister: false,
-          sulfur_dioxide_flask: false,
-          phosphine_bomb: false,
+          oxygen_canister: true,
+          ethylene_cylinder: true,
+          ozone_canister: true,
+          sulfur_dioxide_flask: true,
+          phosphine_bomb: true,
           ...(updatedGasRefinery.automatedGases || {}),
         };
         const activeBatchesInRefinery: Record<CanisterId, CompressorBatch | null> = {
@@ -15957,17 +15957,34 @@ export const useGameStore = create<GameState>()(
         }
 
         // Emergency Gas & Slurry Auto-Recovery:
-        // Because gasRefinery was previously unpersisted during rapid updates, restore a generous 2,200L feedstock buffer
-        // and 4 of each pressurized canister (CO₂, O₂, N₂) into the laboratory rack so no player loses progress!
+        // Restore generous feedstock buffers and pressurized canisters for all 7 gases into the laboratory rack so no player loses progress!
         if ((merged.gasRefinery.storedSlurryFeedstock || 0) < 500) {
           merged.gasRefinery.storedSlurryFeedstock = 2200;
           merged.gasRefinery.isWorkerSlurryActive = true;
         }
+        if ((merged.gasRefinery.cullBiomassStock || 0) < 20) merged.gasRefinery.cullBiomassStock = 45;
+        if ((merged.gasRefinery.dynamoPowerKWh || 0) < 50) merged.gasRefinery.dynamoPowerKWh = 250;
+        if ((merged.gasRefinery.rawSulfurDust || 0) < 20) merged.gasRefinery.rawSulfurDust = 45;
+        if ((merged.gasRefinery.boneMealBags || 0) < 15) merged.gasRefinery.boneMealBags = 30;
+
+        if (merged.gasRefinery.automatedGases) {
+          if (merged.gasRefinery.automatedGases.ethylene_cylinder === undefined) merged.gasRefinery.automatedGases.ethylene_cylinder = true;
+          if (merged.gasRefinery.automatedGases.ozone_canister === undefined) merged.gasRefinery.automatedGases.ozone_canister = true;
+          if (merged.gasRefinery.automatedGases.sulfur_dioxide_flask === undefined) merged.gasRefinery.automatedGases.sulfur_dioxide_flask = true;
+          if (merged.gasRefinery.automatedGases.phosphine_bomb === undefined) merged.gasRefinery.automatedGases.phosphine_bomb = true;
+        }
+
         const rack = merged.gasRefinery.outputRack;
         if ((rack.co2_cylinder || 0) + (rack.oxygen_canister || 0) + (rack.nitrogen_dewar || 0) === 0) {
           rack.co2_cylinder = 4;
           rack.oxygen_canister = 4;
           rack.nitrogen_dewar = 4;
+        }
+        if ((rack.ethylene_cylinder || 0) + (rack.ozone_canister || 0) + (rack.sulfur_dioxide_flask || 0) + (rack.phosphine_bomb || 0) === 0) {
+          rack.ethylene_cylinder = 3;
+          rack.ozone_canister = 3;
+          rack.sulfur_dioxide_flask = 3;
+          rack.phosphine_bomb = 3;
         }
 
         return merged as GameState;

@@ -215,12 +215,12 @@ export function createDefaultGasBottlingRefinery(): GasBottlingRefineryState {
     },
     automatedGases: {
       co2_cylinder: true,     // Automated Worker (CO₂ Technician)
-      oxygen_canister: false, // Manual Operation (Player Controlled)
+      oxygen_canister: true,  // Automated Worker (Oxygen Fractionator)
       nitrogen_dewar: true,   // Automated Worker (Cryo-Distiller Operator)
-      ethylene_cylinder: false,
-      ozone_canister: false,
-      sulfur_dioxide_flask: false,
-      phosphine_bomb: false,
+      ethylene_cylinder: true,// Automated Worker (Catalytic Cracker)
+      ozone_canister: true,   // Automated Worker (Corona Discharge Specialist)
+      sulfur_dioxide_flask: true, // Automated Worker (Sublimator Tender)
+      phosphine_bomb: true,   // Automated Worker (Pyrotechnic Chemist)
     },
     isWorkerSlurryActive: false,
     workerStartThresholdLiters: 2000,
