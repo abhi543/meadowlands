@@ -333,7 +333,10 @@ export type ProductId =
   // Agricultural Byproducts
   | 'chaff'
   // Gas Bottling & Export Commodities
-  | 'co2_cylinder' | 'oxygen_canister' | 'nitrogen_dewar';
+  | 'co2_cylinder' | 'oxygen_canister' | 'nitrogen_dewar'
+  | 'ethylene_cylinder' | 'ozone_canister' | 'sulfur_dioxide_flask' | 'phosphine_bomb'
+  // Advanced Gas Feedstocks
+  | 'cull_biomass' | 'raw_sulfur' | 'bone_meal';
 
 /**
  * Calculates chaff byproduct from a crop harvest.
@@ -512,6 +515,15 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   co2_cylinder:            { id: 'co2_cylinder',            name: 'Pressurized CO₂ Cylinder',    emoji: '🫧',   category: 'manufactured', sellPrice: 45 },
   oxygen_canister:         { id: 'oxygen_canister',         name: 'Refined Oxygen Canister',     emoji: '🫁',   category: 'manufactured', sellPrice: 65 },
   nitrogen_dewar:          { id: 'nitrogen_dewar',          name: 'Liquid Nitrogen Dewar',       emoji: '❄️',   category: 'manufactured', sellPrice: 110 },
+  ethylene_cylinder:       { id: 'ethylene_cylinder',       name: 'Ethylene Cylinder',           emoji: '🍇',   category: 'manufactured', sellPrice: 80 },
+  ozone_canister:          { id: 'ozone_canister',          name: 'Ozone Canister',              emoji: '⚡',   category: 'manufactured', sellPrice: 125 },
+  sulfur_dioxide_flask:    { id: 'sulfur_dioxide_flask',    name: 'Sulfur Dioxide Flask',        emoji: '🌋',   category: 'manufactured', sellPrice: 160 },
+  phosphine_bomb:          { id: 'phosphine_bomb',          name: 'Phosphine Heavy Bomb',        emoji: '☣️',   category: 'manufactured', sellPrice: 220 },
+
+  // --- Advanced Gas Feedstocks ---
+  cull_biomass:            { id: 'cull_biomass',            name: 'Overripe Fruit / Cull Biomass', emoji: '🍇', category: 'raw', sellPrice: 2 },
+  raw_sulfur:              { id: 'raw_sulfur',              name: 'Raw Sulfur / Brimstone Dust', emoji: '🌋', category: 'raw', sellPrice: 12 },
+  bone_meal:               { id: 'bone_meal',               name: 'Bone Meal / Mineral Phosphorus', emoji: '🦴', category: 'raw', sellPrice: 8 },
 };
 
 // --- Production Buildings ---

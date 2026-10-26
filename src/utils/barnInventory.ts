@@ -180,6 +180,15 @@ export const ITEM_CATALOG_META: Record<string, ItemCatalogMeta> = {
   co2_cylinder: { id: 'co2_cylinder', name: 'Pressurized CO₂ Cylinder', icon: '🫧', category: 'artisan', baseValue: 45, isEdibleFeed: false },
   oxygen_canister: { id: 'oxygen_canister', name: 'Refined Oxygen Canister', icon: '🫁', category: 'artisan', baseValue: 65, isEdibleFeed: false },
   nitrogen_dewar: { id: 'nitrogen_dewar', name: 'Liquid Nitrogen Dewar', icon: '❄️', category: 'artisan', baseValue: 110, isEdibleFeed: false },
+  ethylene_cylinder: { id: 'ethylene_cylinder', name: 'Ethylene Cylinder', icon: '🍇', category: 'artisan', baseValue: 80, isEdibleFeed: false },
+  ozone_canister: { id: 'ozone_canister', name: 'Ozone Canister', icon: '⚡', category: 'artisan', baseValue: 125, isEdibleFeed: false },
+  sulfur_dioxide_flask: { id: 'sulfur_dioxide_flask', name: 'Sulfur Dioxide Flask', icon: '🌋', category: 'artisan', baseValue: 160, isEdibleFeed: false },
+  phosphine_bomb: { id: 'phosphine_bomb', name: 'Phosphine Heavy Bomb', icon: '☣️', category: 'artisan', baseValue: 220, isEdibleFeed: false },
+
+  // Advanced Gas Feedstocks
+  cull_biomass: { id: 'cull_biomass', name: 'Overripe Fruit / Cull Biomass', icon: '🍇', category: 'raw_crop', baseValue: 2, isEdibleFeed: true },
+  raw_sulfur: { id: 'raw_sulfur', name: 'Raw Sulfur / Brimstone Dust', icon: '🌋', category: 'artisan', baseValue: 12, isEdibleFeed: false },
+  bone_meal: { id: 'bone_meal', name: 'Bone Meal / Mineral Phosphorus', icon: '🦴', category: 'artisan', baseValue: 8, isEdibleFeed: false },
 };
 
 export const SPECIES_FAVORITE_CROPS: Record<string, string[]> = {

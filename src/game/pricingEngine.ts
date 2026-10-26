@@ -297,6 +297,10 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   co2_cylinder:            { stage: 1, inputs: [{ id: 'chaff', qty: 10 }], outputQty: 1, timeSec: 60, name: 'Pressurized CO₂ Cylinder', icon: '🫧' },
   oxygen_canister:         { stage: 1, inputs: [{ id: 'wheat', qty: 5 }], outputQty: 1, timeSec: 60, name: 'Refined Oxygen Canister', icon: '🫁' },
   nitrogen_dewar:          { stage: 1, inputs: [{ id: 'fired_hardwood', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Liquid Nitrogen Dewar', icon: '❄️' },
+  ethylene_cylinder:       { stage: 1, inputs: [{ id: 'cull_biomass', qty: 15 }], outputQty: 1, timeSec: 45, name: 'Ethylene Cylinder', icon: '🍇' },
+  ozone_canister:          { stage: 1, inputs: [{ id: 'oxygen_canister', qty: 1 }], outputQty: 1, timeSec: 30, name: 'Ozone Canister', icon: '⚡' },
+  sulfur_dioxide_flask:    { stage: 1, inputs: [{ id: 'raw_sulfur', qty: 15 }], outputQty: 1, timeSec: 60, name: 'Sulfur Dioxide Flask', icon: '🌋' },
+  phosphine_bomb:          { stage: 1, inputs: [{ id: 'bone_meal', qty: 10 }], outputQty: 1, timeSec: 75, name: 'Phosphine Heavy Bomb', icon: '☣️' },
 };
 
 // Internal computed memoization cache

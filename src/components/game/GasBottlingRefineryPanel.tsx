@@ -26,13 +26,16 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     startAllGasCompressors,
     toggleGasAutomation,
     setGasAutomation,
+    automateAllTierGas,
     collectGasCompressorOutput,
     loadCanisterToShippingCrate,
     liquidateShippingCrate,
+    buyRefineryFeedstock,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
   const [isCompressingAnim, setIsCompressingAnim] = useState(false);
+  const [activeTier, setActiveTier] = useState<'primary' | 'advanced'>('primary');
 
   const clock = getCircadianClock(now, farmEpochStart || now);
   const isNight = clock.currentPeriod === 'night';
@@ -61,21 +64,54 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const refinery = gasRefinery || {
     storedSlurryFeedstock: 120,
     maxSlurryCapacity: 2500,
+    cullBiomassStock: 30,
+    dynamoPowerKWh: 120,
+    maxDynamoPowerKWh: 500,
+    rawSulfurDust: 30,
+    boneMealBags: 20,
     activeBatch: null,
-    activeBatches: { co2_cylinder: null, oxygen_canister: null, nitrogen_dewar: null },
-    outputRack: { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 },
-    dailyShippingCrate: { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 },
+    activeBatches: {
+      co2_cylinder: null,
+      oxygen_canister: null,
+      nitrogen_dewar: null,
+      ethylene_cylinder: null,
+      ozone_canister: null,
+      sulfur_dioxide_flask: null,
+      phosphine_bomb: null,
+    },
+    outputRack: {
+      co2_cylinder: 0,
+      oxygen_canister: 0,
+      nitrogen_dewar: 0,
+      ethylene_cylinder: 0,
+      ozone_canister: 0,
+      sulfur_dioxide_flask: 0,
+      phosphine_bomb: 0,
+    },
+    dailyShippingCrate: {
+      co2_cylinder: 0,
+      oxygen_canister: 0,
+      nitrogen_dewar: 0,
+      ethylene_cylinder: 0,
+      ozone_canister: 0,
+      sulfur_dioxide_flask: 0,
+      phosphine_bomb: 0,
+    },
     lastDailyLiquidationTimestamp: Date.now(),
     dailyCycleSeconds: 300,
     totalLifetimeExportCoins: 0,
     totalCanistersShipped: 0,
   };
 
-  // Tri-chamber parallel active batches
+  // 7-chamber parallel active batches
   const activeBatches: Record<CanisterTierId, CompressorBatch | null> = {
     co2_cylinder: refinery.activeBatches?.co2_cylinder || (refinery.activeBatch?.canisterId === 'co2_cylinder' ? refinery.activeBatch : null),
     oxygen_canister: refinery.activeBatches?.oxygen_canister || (refinery.activeBatch?.canisterId === 'oxygen_canister' ? refinery.activeBatch : null),
     nitrogen_dewar: refinery.activeBatches?.nitrogen_dewar || (refinery.activeBatch?.canisterId === 'nitrogen_dewar' ? refinery.activeBatch : null),
+    ethylene_cylinder: refinery.activeBatches?.ethylene_cylinder || (refinery.activeBatch?.canisterId === 'ethylene_cylinder' ? refinery.activeBatch : null),
+    ozone_canister: refinery.activeBatches?.ozone_canister || (refinery.activeBatch?.canisterId === 'ozone_canister' ? refinery.activeBatch : null),
+    sulfur_dioxide_flask: refinery.activeBatches?.sulfur_dioxide_flask || (refinery.activeBatch?.canisterId === 'sulfur_dioxide_flask' ? refinery.activeBatch : null),
+    phosphine_bomb: refinery.activeBatches?.phosphine_bomb || (refinery.activeBatch?.canisterId === 'phosphine_bomb' ? refinery.activeBatch : null),
   };
 
   const activeBatchesList = (Object.keys(activeBatches) as CanisterTierId[])
@@ -83,11 +119,15 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     .filter(Boolean) as CompressorBatch[];
   const activeCount = activeBatchesList.length;
 
-  // Tri-chamber automated refinery workers
+  // 7-chamber automated refinery workers
   const automatedGases: Record<CanisterTierId, boolean> = {
     co2_cylinder: true,
     nitrogen_dewar: true,
     oxygen_canister: false,
+    ethylene_cylinder: false,
+    ozone_canister: false,
+    sulfur_dioxide_flask: false,
+    phosphine_bomb: false,
     ...(refinery.automatedGases || {}),
   };
   const autoWorkerCount = (Object.values(automatedGases) as boolean[]).filter(Boolean).length;
@@ -101,7 +141,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const nextHaulMins = Math.floor(timeUntilNextHaul / 60000);
   const nextHaulSecs = Math.floor((timeUntilNextHaul % 60000) / 1000);
 
-  // Inventories for intake
+  // Inventories for intake (Standard & Advanced Feedstocks)
   const slurryStock = Math.round(refinery.storedSlurryFeedstock || 0);
   const maxSlurry = refinery.maxSlurryCapacity || 2500;
   const chaffStock = (silo.chaff || 0) + (barn.chaff || 0);
@@ -109,14 +149,46 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const biomassStock = (silo.peas || 0) + (silo.wheat || 0) + (silo.soybean || 0) + (silo.corn || 0);
   const fuelStock = (barn.thermal_scutes || 0) + (barn.thermal_solvent || 0) + (barn.fired_hardwood || 0);
 
+  // 4 Advanced Feedstocks
+  const cullBiomassStock = (refinery.cullBiomassStock || 0) + (barn.cull_biomass || 0);
+  const dynamoPowerKWh = Math.round(refinery.dynamoPowerKWh || 0);
+  const maxDynamoPowerKWh = refinery.maxDynamoPowerKWh || 500;
+  const rawSulfurDust = (refinery.rawSulfurDust || 0) + (barn.raw_sulfur || 0);
+  const boneMealBags = (refinery.boneMealBags || 0) + (barn.bone_meal || 0);
+
   // Crate status
-  const crate = refinery.dailyShippingCrate || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+  const crate = {
+    co2_cylinder: 0,
+    oxygen_canister: 0,
+    nitrogen_dewar: 0,
+    ethylene_cylinder: 0,
+    ozone_canister: 0,
+    sulfur_dioxide_flask: 0,
+    phosphine_bomb: 0,
+    ...(refinery.dailyShippingCrate || {}),
+  };
   const crateCount = getCrateTotalCanisterCount(crate);
   const crateValue = calculateCrateLiquidationValue(crate);
 
   // Output rack status
-  const rack = refinery.outputRack || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
-  const totalRackCount = rack.co2_cylinder + rack.oxygen_canister + rack.nitrogen_dewar;
+  const rack = {
+    co2_cylinder: 0,
+    oxygen_canister: 0,
+    nitrogen_dewar: 0,
+    ethylene_cylinder: 0,
+    ozone_canister: 0,
+    sulfur_dioxide_flask: 0,
+    phosphine_bomb: 0,
+    ...(refinery.outputRack || {}),
+  };
+  const totalRackCount =
+    rack.co2_cylinder +
+    rack.oxygen_canister +
+    rack.nitrogen_dewar +
+    rack.ethylene_cylinder +
+    rack.ozone_canister +
+    rack.sulfur_dioxide_flask +
+    rack.phosphine_bomb;
 
   // Active industrial contracts on notice board
   const industrialOrders = orders.filter(
@@ -124,7 +196,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
       o.clientId === 'brewmaster_klaus' ||
       o.clientId === 'dr_vanderberg' ||
       o.clientId === 'foundryman_torval' ||
-      o.requiredItems?.some((it) => it.itemId === 'co2_cylinder' || it.itemId === 'oxygen_canister' || it.itemId === 'nitrogen_dewar')
+      o.requiredItems?.some((it) => Object.keys(CANISTER_RECIPES).includes(it.itemId))
   );
 
   const handleStartCraft = (canisterId: CanisterTierId) => {
@@ -133,27 +205,23 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     startGasCompressorBatch(canisterId);
   };
 
-  const handleStartAll = () => {
+  const handleStartAll = (tier?: 'primary' | 'advanced' | 'all') => {
     setIsCompressingAnim(true);
     setTimeout(() => setIsCompressingAnim(false), 600);
     if (startAllGasCompressors) {
-      startAllGasCompressors();
+      startAllGasCompressors(tier || activeTier);
     }
   };
 
   const handleLoadAllToCrate = () => {
     let loaded = 0;
-    if (rack.co2_cylinder > 0) {
-      loadCanisterToShippingCrate('co2_cylinder', rack.co2_cylinder);
-      loaded += rack.co2_cylinder;
-    }
-    if (rack.oxygen_canister > 0) {
-      loadCanisterToShippingCrate('oxygen_canister', rack.oxygen_canister);
-      loaded += rack.oxygen_canister;
-    }
-    if (rack.nitrogen_dewar > 0) {
-      loadCanisterToShippingCrate('nitrogen_dewar', rack.nitrogen_dewar);
-      loaded += rack.nitrogen_dewar;
+    const allCids = Object.keys(CANISTER_RECIPES) as CanisterTierId[];
+    for (const cid of allCids) {
+      const count = rack[cid] || 0;
+      if (count > 0) {
+        loadCanisterToShippingCrate(cid, count);
+        loaded += count;
+      }
     }
     if (loaded > 0) {
       playSumpValveSound();
@@ -165,6 +233,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     playCashRegisterSound();
     liquidateShippingCrate(true);
   };
+
 
   return (
     <div className="space-y-4">
@@ -353,6 +422,109 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                 Thermal scutes, fired hardwood, or preheated emergency igniter charge for cryogenic Liquid Nitrogen distillation.
               </p>
             </div>
+
+            {/* 1. Overripe Fruit / Cull Biomass */}
+            <div className="bg-stone-950/70 rounded-xl p-3 border border-stone-800/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                  <span>🍇</span> Overripe Fruit / Cull Biomass
+                </span>
+                <span className="text-xs font-mono font-bold text-purple-300">
+                  {cullBiomassStock} units
+                </span>
+              </div>
+              <p className="text-[10px] text-stone-400 leading-relaxed">
+                Harvested orchard yields, over-mature farm plots, or Gas Lab compost cull. Cracks into Ethylene plant hormone.
+              </p>
+              {buyRefineryFeedstock && (
+                <button
+                  type="button"
+                  onClick={() => buyRefineryFeedstock('cull_biomass')}
+                  className="w-full py-1 px-2 rounded-lg text-[10px] font-bold bg-purple-950/60 hover:bg-purple-900/80 text-purple-200 border border-purple-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>🍇</span> Procure 15 Cull Biomass (8c)
+                </button>
+              )}
+            </div>
+
+            {/* 2. Lab Dynamo Power (HV Grid) */}
+            <div className="bg-stone-950/70 rounded-xl p-3 border border-stone-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <span>⚡</span> Lab Dynamo Power (HV Grid)
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-400">
+                  {dynamoPowerKWh} / {maxDynamoPowerKWh} kWh
+                </span>
+              </div>
+              <div className="w-full bg-stone-900 rounded-full h-2 overflow-hidden border border-stone-800 relative">
+                <div
+                  className="bg-gradient-to-r from-amber-500 to-yellow-300 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.round((dynamoPowerKWh / maxDynamoPowerKWh) * 100))}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-stone-400 leading-relaxed">
+                Windmill, Water Turbine, or Thermal Generator charging. Powers cold-plasma Ozone ionization.
+              </p>
+              {buyRefineryFeedstock && (
+                <button
+                  type="button"
+                  onClick={() => buyRefineryFeedstock('dynamo_power')}
+                  disabled={dynamoPowerKWh >= maxDynamoPowerKWh}
+                  className="w-full py-1 px-2 rounded-lg text-[10px] font-bold bg-amber-950/60 hover:bg-amber-900/80 text-amber-200 border border-amber-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span>⚡</span> Charge Grid +100 kWh (10c)
+                </button>
+              )}
+            </div>
+
+            {/* 3. Raw Sulfur / Brimstone Dust */}
+            <div className="bg-stone-950/70 rounded-xl p-3 border border-stone-800/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-orange-300 flex items-center gap-1.5">
+                  <span>🌋</span> Raw Sulfur / Brimstone Dust
+                </span>
+                <span className="text-xs font-mono font-bold text-orange-400">
+                  {rawSulfurDust} dust
+                </span>
+              </div>
+              <p className="text-[10px] text-stone-400 leading-relaxed">
+                Quarry excavation, deep well dredge, or Merchant bulk buy-in (12c). Scrubbed into Sulfur Dioxide anti-fungal.
+              </p>
+              {buyRefineryFeedstock && (
+                <button
+                  type="button"
+                  onClick={() => buyRefineryFeedstock('raw_sulfur')}
+                  className="w-full py-1 px-2 rounded-lg text-[10px] font-bold bg-orange-950/60 hover:bg-orange-900/80 text-orange-200 border border-orange-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>🌋</span> Merchant Buy-In 15 Dust (12c)
+                </button>
+              )}
+            </div>
+
+            {/* 4. Bone Meal / Mineral Phosphorus */}
+            <div className="bg-stone-950/70 rounded-xl p-3 border border-stone-800/80 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-lime-300 flex items-center gap-1.5">
+                  <span>🦴</span> Bone Meal / Mineral Phosphorus
+                </span>
+                <span className="text-xs font-mono font-bold text-lime-400">
+                  {boneMealBags} bags
+                </span>
+              </div>
+              <p className="text-[10px] text-stone-400 leading-relaxed">
+                Animal byproduct mill, fishery tailings, or Barn compost filter. Catalyzed into heavy Phosphine fumigant.
+              </p>
+              {buyRefineryFeedstock && (
+                <button
+                  type="button"
+                  onClick={() => buyRefineryFeedstock('bone_meal')}
+                  className="w-full py-1 px-2 rounded-lg text-[10px] font-bold bg-lime-950/60 hover:bg-lime-900/80 text-lime-200 border border-lime-500/30 transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <span>🦴</span> Mill 10 Bags Bone Meal (10c)
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -367,42 +539,39 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                    Tri-Chamber Heavy Gas Compressor
+                    Heavy Gas Compression &amp; Bottling Deck
                     {activeCount > 0 ? (
                       <span className="text-[10px] bg-amber-500 text-stone-950 font-black px-2 py-0.5 rounded-full animate-pulse">
-                        {activeCount} CHAMBER{activeCount > 1 ? 'S' : ''} ACTIVE
+                        {activeCount} / 7 ACTIVE
                       </span>
                     ) : (
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full border border-emerald-500/40">
-                        3 Parallel Chambers Ready
+                        7 Parallel Chambers Ready
                       </span>
                     )}
                   </h3>
                   <p className="text-xs text-stone-400">
-                    Parallel hydraulic chambers • All 3 gases can be bottled simultaneously
+                    Dual-Tier Compression • Primary Atmospheric (CO₂, O₂, N₂) &amp; Advanced Agri-Gases (C₂H₄, O₃, SO₂, PH₃)
                   </p>
                 </div>
               </div>
 
               <div className="text-right">
-                <span className="text-[10px] text-stone-400 font-mono block">Compressor State</span>
+                <span className="text-[10px] text-stone-400 font-mono block">Deck State</span>
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded-md ${activeCount > 0 ? 'bg-amber-950/80 text-amber-300 border border-amber-500/40' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/40'}`}>
-                  {activeCount === 3 ? '⚡ 3/3 Chambers Full Speed' : activeCount > 0 ? `⚡ ${activeCount}/3 Chambers Compressing` : '🟢 3 Chambers Ready'}
+                  {activeCount > 0 ? `⚡ ${activeCount}/7 Chambers Compressing` : '🟢 Chambers Standby'}
                 </span>
               </div>
             </div>
 
-            {/* Tri-Chamber Simultaneous Action & Labor Controls Banner */}
+            {/* Refinery Workforce & Chamber Automation Header */}
             <div className="bg-stone-950/90 rounded-xl p-3 border border-stone-800/80 space-y-2.5 shadow-sm">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">👷</span>
                   <div>
                     <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                      Refinery Workforce &amp; Chamber Automation
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-800 text-stone-300 border border-stone-700">
-                        {autoWorkerCount}/3 Automated
-                      </span>
+                      REFINERY WORKFORCE &amp; CHAMBER AUTOMATION ({autoWorkerCount}/7 AUTOMATED)
                       <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
                         isWorkerSlurryActive
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
@@ -414,66 +583,102 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                       </span>
                     </h4>
                     <p className="text-[11px] text-stone-400">
-                      Automated workers engage when slurry reaches <strong>2,000L</strong> and stop automatically below <strong>500L</strong> to protect estate slurry reserves.
+                      Slurry-consuming chambers engage when slurry reaches <strong>2,000L</strong> and stop automatically below <strong>500L</strong> to protect estate slurry reserves.
                     </p>
                   </div>
                 </div>
 
-                {/* Quick Workforce Presets */}
+                {/* Automation Control Buttons */}
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
-                      setGasAutomation('co2_cylinder', true);
-                      setGasAutomation('nitrogen_dewar', true);
-                      setGasAutomation('oxygen_canister', false);
+                      if (automateAllTierGas) {
+                        automateAllTierGas(activeTier, true);
+                      }
                     }}
                     className="px-2.5 py-1 rounded-md text-[10px] font-black bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
-                    title="Automate CO2 & N2, keep Oxygen manual"
+                    title={`Automate all ${activeTier === 'primary' ? '3 Primary Atmospheric' : '4 Advanced Agri-Gas'} chambers`}
                   >
-                    ⚙️ CO₂ &amp; N₂ Auto (O₂ Manual)
+                    ⚙️ Automate Active Tier
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setGasAutomation('co2_cylinder', true);
-                      setGasAutomation('nitrogen_dewar', true);
-                      setGasAutomation('oxygen_canister', true);
+                      if (automateAllTierGas) {
+                        automateAllTierGas('all', true);
+                      }
                     }}
-                    className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer"
+                    className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-stone-800 hover:bg-stone-700 text-emerald-300 border border-emerald-500/40 transition-all cursor-pointer"
+                    title="Assign automated workers to all 7 chambers"
                   >
-                    ⚡ Automate All 3
+                    ⚡ Automate All 7
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setGasAutomation('co2_cylinder', false);
-                      setGasAutomation('nitrogen_dewar', false);
-                      setGasAutomation('oxygen_canister', false);
+                      if (automateAllTierGas) {
+                        automateAllTierGas('all', false);
+                      }
                     }}
                     className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition-all cursor-pointer"
+                    title="Switch all 7 chambers to manual player operation"
                   >
-                    ✋ Manual All 3
+                    ✋ Manual All 7
                   </button>
                   <button
                     type="button"
-                    onClick={handleStartAll}
-                    disabled={activeCount === 3}
-                    className={`px-3 py-1 rounded-md text-[10px] font-black transition-all flex items-center gap-1 shadow-md ${
-                      activeCount === 3
-                        ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700'
-                        : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 border border-amber-400 shadow-amber-500/20 active:scale-95 cursor-pointer'
-                    }`}
+                    onClick={() => handleStartAll(activeTier)}
+                    className="px-3 py-1 rounded-md text-[10px] font-black bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-stone-950 border border-amber-400 shadow-amber-500/20 active:scale-95 cursor-pointer flex items-center gap-1"
+                    title={`Bottle all available gases in ${activeTier === 'primary' ? 'Primary' : 'Advanced'} tier`}
                   >
-                    <span>⚡ Bottle All In Parallel</span>
+                    <span>⚡ Bottle All Active</span>
                   </button>
                 </div>
               </div>
             </div>
 
-            {/* 3 Canister Recipes Grid (Independent Parallel Chambers) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
-              {(Object.keys(CANISTER_RECIPES) as CanisterTierId[]).map((canisterId) => {
+            {/* Tier Toggle Switch directly above the chamber deck */}
+            <div className="flex items-center gap-2 p-1.5 bg-stone-950/90 rounded-xl border border-stone-800 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setActiveTier('primary')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  activeTier === 'primary'
+                    ? 'bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-500 text-stone-950 shadow-md border border-amber-300'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                }`}
+              >
+                <span className="text-sm">🌐</span>
+                <span>Primary Atmospheric (CO₂, O₂, N₂)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTier('advanced')}
+                className={`flex-1 py-2 px-3 rounded-lg text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  activeTier === 'advanced'
+                    ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-500 text-white shadow-md border border-purple-400'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                }`}
+              >
+                <span className="text-sm">🔬</span>
+                <span>Advanced Agri-Gases (C₂H₄, O₃, SO₂, PH₃)</span>
+              </button>
+            </div>
+
+            {/* Chamber Cards Deck */}
+            <div
+              className={`grid gap-3 pt-1 ${
+                activeTier === 'primary'
+                  ? 'grid-cols-1 md:grid-cols-3'
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+              }`}
+            >
+              {(
+                activeTier === 'primary'
+                  ? (['co2_cylinder', 'oxygen_canister', 'nitrogen_dewar'] as CanisterTierId[])
+                  : (['ethylene_cylinder', 'ozone_canister', 'sulfur_dioxide_flask', 'phosphine_bomb'] as CanisterTierId[])
+              ).map((canisterId) => {
                 const recipe = CANISTER_RECIPES[canisterId];
                 const thisBatch = activeBatches[canisterId];
                 const isAutomated = Boolean(automatedGases[canisterId]);
@@ -513,6 +718,39 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                     canCraft = false;
                     missingReason = 'Need Fuel or 15c';
                   }
+                } else if (canisterId === 'ethylene_cylinder') {
+                  if (slurryStock < 30) {
+                    canCraft = false;
+                    missingReason = 'Need 30L Slurry';
+                  } else if (cullBiomassStock < 15) {
+                    canCraft = false;
+                    missingReason = 'Need 15 Cull Biomass';
+                  }
+                } else if (canisterId === 'ozone_canister') {
+                  const o2Avail = (rack.oxygen_canister || 0) + (barn.oxygen_canister || 0);
+                  if (o2Avail < 1) {
+                    canCraft = false;
+                    missingReason = 'Need 1 O₂ Canister';
+                  } else if (dynamoPowerKWh < 40) {
+                    canCraft = false;
+                    missingReason = 'Need 40 kWh Power';
+                  }
+                } else if (canisterId === 'sulfur_dioxide_flask') {
+                  if (rawSulfurDust < 15) {
+                    canCraft = false;
+                    missingReason = 'Need 15 Sulfur Dust';
+                  } else if (waterStock < 20) {
+                    canCraft = false;
+                    missingReason = 'Need 20L Water';
+                  }
+                } else if (canisterId === 'phosphine_bomb') {
+                  if (boneMealBags < 10) {
+                    canCraft = false;
+                    missingReason = 'Need 10 Bone Meal';
+                  } else if (slurryStock < 25) {
+                    canCraft = false;
+                    missingReason = 'Need 25L Slurry';
+                  }
                 }
 
                 return (
@@ -523,18 +761,29 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                         ? 'bg-gradient-to-b from-stone-900 to-amber-950/20 border-amber-500/30'
                         : canisterId === 'oxygen_canister'
                         ? 'bg-gradient-to-b from-stone-900 to-cyan-950/20 border-cyan-500/30'
-                        : 'bg-gradient-to-b from-stone-900 to-indigo-950/20 border-indigo-500/30'
+                        : canisterId === 'nitrogen_dewar'
+                        ? 'bg-gradient-to-b from-stone-900 to-indigo-950/20 border-indigo-500/30'
+                        : canisterId === 'ethylene_cylinder'
+                        ? 'bg-gradient-to-b from-stone-900 to-purple-950/20 border-purple-500/30'
+                        : canisterId === 'ozone_canister'
+                        ? 'bg-gradient-to-b from-stone-900 to-yellow-950/20 border-yellow-500/30'
+                        : canisterId === 'sulfur_dioxide_flask'
+                        ? 'bg-gradient-to-b from-stone-900 to-orange-950/20 border-orange-500/30'
+                        : 'bg-gradient-to-b from-stone-900 to-lime-950/20 border-lime-500/30'
                     }`}
                   >
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-2xl">{recipe.emoji}</span>
                         <span className="text-[10px] font-mono font-black px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          💰 {recipe.baseExportCoins}c
+                          🪙 {recipe.baseExportCoins}c
                         </span>
                       </div>
                       <div>
-                        <h4 className="text-xs font-black text-white">{recipe.name}</h4>
+                        <h4 className="text-xs font-black text-white flex items-center justify-between">
+                          <span>{recipe.name}</span>
+                          <span className="text-[10px] font-mono text-stone-400">({recipe.chemicalFormula})</span>
+                        </h4>
                         <p className="text-[10px] text-stone-400 mt-0.5 leading-relaxed">
                           {recipe.description}
                         </p>
@@ -549,7 +798,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                               {isAutomated ? (
                                 <span className="text-emerald-400 flex items-center gap-1">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  Automated Worker
+                                  Automated
                                 </span>
                               ) : (
                                 <span className="text-amber-400/90">Manual Mode</span>
@@ -558,13 +807,13 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                             <span className="text-[9px] text-stone-400 block truncate">
                               {isAutomated
                                 ? (thisBatch
-                                    ? '⚡ Compressing auto-batch'
-                                    : !isWorkerSlurryActive
-                                    ? `🛡️ Standby: Waiting for 2,000L Slurry (${slurryStock}L/2,000L)`
+                                    ? '⚡ Compressing batch'
+                                    : (canisterId === 'co2_cylinder' || canisterId === 'nitrogen_dewar' || canisterId === 'ethylene_cylinder' || canisterId === 'phosphine_bomb') && !isWorkerSlurryActive
+                                    ? `🛡️ Standby (<2,000L Slurry)`
                                     : canCraft
                                     ? '🟢 Ready for auto-stroke'
                                     : `⏳ Standby (${missingReason})`)
-                                : 'Awaiting your manual click'}
+                                : 'Manual operation'}
                             </span>
                           </div>
                         </div>
@@ -661,6 +910,82 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                             </div>
                           </>
                         )}
+                        {canisterId === 'ethylene_cylinder' && (
+                          <>
+                            <div className="flex justify-between">
+                              <span>Raw Slurry:</span>
+                              <span className={slurryStock >= 30 ? 'text-purple-400 font-bold' : 'text-red-400 font-bold'}>
+                                {slurryStock}/30L
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Overripe Biomass:</span>
+                              <span className={cullBiomassStock >= 15 ? 'text-purple-300 font-bold' : 'text-red-400 font-bold'}>
+                                {cullBiomassStock}/15 units
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-purple-300/80 bg-purple-950/40 p-1 rounded border border-purple-500/20">
+                              📍 <strong>Source:</strong> Animal Slurry Sump + Orchard / Farm Cull
+                            </div>
+                          </>
+                        )}
+                        {canisterId === 'ozone_canister' && (
+                          <>
+                            <div className="flex justify-between">
+                              <span>O₂ Canister (Rack):</span>
+                              <span className={((rack.oxygen_canister || 0) + (barn.oxygen_canister || 0)) >= 1 ? 'text-cyan-400 font-bold' : 'text-red-400 font-bold'}>
+                                {(rack.oxygen_canister || 0) + (barn.oxygen_canister || 0)}/1 can
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Dynamo Power:</span>
+                              <span className={dynamoPowerKWh >= 40 ? 'text-amber-400 font-bold' : 'text-red-400 font-bold'}>
+                                {dynamoPowerKWh}/40 kWh
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-amber-300/80 bg-amber-950/40 p-1 rounded border border-amber-500/20">
+                              📍 <strong>Source:</strong> Gas Lab O₂ Output + Windmill / Dynamo Grid
+                            </div>
+                          </>
+                        )}
+                        {canisterId === 'sulfur_dioxide_flask' && (
+                          <>
+                            <div className="flex justify-between">
+                              <span>Raw Sulfur Dust:</span>
+                              <span className={rawSulfurDust >= 15 ? 'text-orange-400 font-bold' : 'text-red-400 font-bold'}>
+                                {rawSulfurDust}/15 dust
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Tower Water / O₂:</span>
+                              <span className={waterStock >= 20 ? 'text-cyan-400 font-bold' : 'text-red-400 font-bold'}>
+                                {waterStock}/20L
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-orange-300/80 bg-orange-950/40 p-1 rounded border border-orange-500/20">
+                              📍 <strong>Source:</strong> Estate Quarry / Merchant + Hydrology Tower
+                            </div>
+                          </>
+                        )}
+                        {canisterId === 'phosphine_bomb' && (
+                          <>
+                            <div className="flex justify-between">
+                              <span>Bone Meal / Phosphorus:</span>
+                              <span className={boneMealBags >= 10 ? 'text-lime-400 font-bold' : 'text-red-400 font-bold'}>
+                                {boneMealBags}/10 bags
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Conc. Slurry Acid:</span>
+                              <span className={slurryStock >= 25 ? 'text-amber-400 font-bold' : 'text-red-400 font-bold'}>
+                                {slurryStock}/25L
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-lime-300/80 bg-lime-950/40 p-1 rounded border border-lime-500/20">
+                              📍 <strong>Source:</strong> Livestock Byproduct Mill + Concentrated Slurry Sump
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       <button
@@ -671,7 +996,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                           Boolean(thisBatch)
                             ? 'bg-stone-800 text-amber-300 border border-amber-500/30 opacity-90 cursor-not-allowed'
                             : isAutomated
-                            ? !isWorkerSlurryActive
+                            ? (canisterId === 'co2_cylinder' || canisterId === 'nitrogen_dewar' || canisterId === 'ethylene_cylinder' || canisterId === 'phosphine_bomb') && !isWorkerSlurryActive
                               ? 'bg-stone-800/80 text-amber-300/90 border border-amber-500/30 cursor-default'
                               : 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 cursor-default'
                             : !canCraft
@@ -680,14 +1005,22 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                             ? 'bg-amber-600 hover:bg-amber-500 text-stone-950 active:scale-95'
                             : canisterId === 'oxygen_canister'
                             ? 'bg-cyan-600 hover:bg-cyan-500 text-white active:scale-95'
-                            : 'bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95'
+                            : canisterId === 'nitrogen_dewar'
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95'
+                            : canisterId === 'ethylene_cylinder'
+                            ? 'bg-purple-600 hover:bg-purple-500 text-white active:scale-95'
+                            : canisterId === 'ozone_canister'
+                            ? 'bg-yellow-500 hover:bg-yellow-400 text-stone-950 active:scale-95'
+                            : canisterId === 'sulfur_dioxide_flask'
+                            ? 'bg-orange-600 hover:bg-orange-500 text-white active:scale-95'
+                            : 'bg-lime-600 hover:bg-lime-500 text-stone-950 active:scale-95'
                         }`}
                       >
                         {thisBatch ? (
                           <span className="animate-pulse">⚡ Compressing ({thisRemainingSec}s)...</span>
                         ) : isAutomated ? (
-                          !isWorkerSlurryActive ? (
-                            <span>🛡️ Worker Standby (Slurry &lt; 2,000L)</span>
+                          (canisterId === 'co2_cylinder' || canisterId === 'nitrogen_dewar' || canisterId === 'ethylene_cylinder' || canisterId === 'phosphine_bomb') && !isWorkerSlurryActive ? (
+                            <span>🛡️ Standby (Slurry &lt; 2,000L)</span>
                           ) : (
                             <span>👷 Worker Operating (Auto-Queue)</span>
                           )
@@ -721,7 +1054,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                   </span>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {/* CO2 Racks */}
                   <div className="flex items-center justify-between p-2 rounded-lg bg-stone-950/70 border border-stone-800/80">
                     <div className="flex items-center gap-2">
@@ -817,6 +1150,134 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                       </button>
                     </div>
                   </div>
+
+                  {/* Ethylene Racks */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-stone-950/70 border border-stone-800/80">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🍇</span>
+                      <div>
+                        <span className="text-xs font-bold text-stone-200 block">Ethylene Cylinders</span>
+                        <span className="text-[10px] text-stone-400">Value: 80c each</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-black text-purple-400">{rack.ethylene_cylinder}</span>
+                      <button
+                        type="button"
+                        onClick={() => loadCanisterToShippingCrate('ethylene_cylinder', 1)}
+                        disabled={rack.ethylene_cylinder <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Load 1 into Estate Export Crate"
+                      >
+                        Load 📦
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => collectGasCompressorOutput()}
+                        disabled={rack.ethylene_cylinder <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Collect to Barn inventory"
+                      >
+                        Barn 🎒
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Ozone Racks */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-stone-950/70 border border-stone-800/80">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">⚡</span>
+                      <div>
+                        <span className="text-xs font-bold text-stone-200 block">Ozone Canisters</span>
+                        <span className="text-[10px] text-stone-400">Value: 125c each</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-black text-yellow-400">{rack.ozone_canister}</span>
+                      <button
+                        type="button"
+                        onClick={() => loadCanisterToShippingCrate('ozone_canister', 1)}
+                        disabled={rack.ozone_canister <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-300 border border-yellow-500/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Load 1 into Estate Export Crate"
+                      >
+                        Load 📦
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => collectGasCompressorOutput()}
+                        disabled={rack.ozone_canister <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Collect to Barn inventory"
+                      >
+                        Barn 🎒
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Sulfur Dioxide Racks */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-stone-950/70 border border-stone-800/80">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🌋</span>
+                      <div>
+                        <span className="text-xs font-bold text-stone-200 block">Sulfur Dioxide Flasks</span>
+                        <span className="text-[10px] text-stone-400">Value: 160c each</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-black text-orange-400">{rack.sulfur_dioxide_flask}</span>
+                      <button
+                        type="button"
+                        onClick={() => loadCanisterToShippingCrate('sulfur_dioxide_flask', 1)}
+                        disabled={rack.sulfur_dioxide_flask <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 border border-orange-500/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Load 1 into Estate Export Crate"
+                      >
+                        Load 📦
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => collectGasCompressorOutput()}
+                        disabled={rack.sulfur_dioxide_flask <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Collect to Barn inventory"
+                      >
+                        Barn 🎒
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Phosphine Racks */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-stone-950/70 border border-stone-800/80">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">☣️</span>
+                      <div>
+                        <span className="text-xs font-bold text-stone-200 block">Phosphine Bombs</span>
+                        <span className="text-[10px] text-stone-400">Value: 220c each</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono font-black text-lime-400">{rack.phosphine_bomb}</span>
+                      <button
+                        type="button"
+                        onClick={() => loadCanisterToShippingCrate('phosphine_bomb', 1)}
+                        disabled={rack.phosphine_bomb <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-lime-500/20 hover:bg-lime-500/30 text-lime-300 border border-lime-500/30 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Load 1 into Estate Export Crate"
+                      >
+                        Load 📦
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => collectGasCompressorOutput()}
+                        disabled={rack.phosphine_bomb <= 0}
+                        className="px-2 py-1 text-[10px] font-bold rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        title="Collect to Barn inventory"
+                      >
+                        Barn 🎒
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -853,20 +1314,44 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
-                    <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
-                      <span className="text-stone-400 block">💨 CO₂</span>
-                      <span className="text-amber-300 font-bold">{crate.co2_cylinder}</span>
+                  {/* 2-Row Compact Matrix */}
+                  <div className="space-y-1.5">
+                    {/* Row 1: CO2, O2, N2 */}
+                    <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-mono">
+                      <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-stone-400 block">💨 CO₂</span>
+                        <span className="text-amber-300 font-bold">{crate.co2_cylinder}</span>
+                      </div>
+                      <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-stone-400 block">🫧 O₂</span>
+                        <span className="text-cyan-300 font-bold">{crate.oxygen_canister}</span>
+                      </div>
+                      <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-stone-400 block">❄️ N₂</span>
+                        <span className="text-indigo-300 font-bold">{crate.nitrogen_dewar}</span>
+                      </div>
                     </div>
-                    <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
-                      <span className="text-stone-400 block">🫧 O₂</span>
-                      <span className="text-cyan-300 font-bold">{crate.oxygen_canister}</span>
-                    </div>
-                    <div className="p-1.5 rounded bg-stone-900 border border-stone-800">
-                      <span className="text-stone-400 block">❄️ N₂</span>
-                      <span className="text-indigo-300 font-bold">{crate.nitrogen_dewar}</span>
+                    {/* Row 2: C2H4, O3, SO2, PH3 */}
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-[9px] font-mono">
+                      <div className="p-1 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-purple-300 block">🍇 C₂H₄</span>
+                        <span className="text-purple-300 font-bold">{crate.ethylene_cylinder}</span>
+                      </div>
+                      <div className="p-1 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-yellow-300 block">⚡ O₃</span>
+                        <span className="text-yellow-300 font-bold">{crate.ozone_canister}</span>
+                      </div>
+                      <div className="p-1 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-orange-300 block">🌋 SO₂</span>
+                        <span className="text-orange-300 font-bold">{crate.sulfur_dioxide_flask}</span>
+                      </div>
+                      <div className="p-1 rounded bg-stone-900 border border-stone-800">
+                        <span className="text-lime-300 block">☣️ PH₃</span>
+                        <span className="text-lime-300 font-bold">{crate.phosphine_bomb}</span>
+                      </div>
                     </div>
                   </div>
+
 
                   <div className="flex items-center justify-between pt-1 border-t border-stone-800">
                     <span className="text-xs font-bold text-stone-400">Projected Value:</span>
