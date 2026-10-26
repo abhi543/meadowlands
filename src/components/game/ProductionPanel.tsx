@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { getItemEconomicProfile } from '@/game/pricingEngine';
 import { WorkshopInstallationsPanel } from './WorkshopInstallationsPanel';
-import { GasBottlingRefineryPanel } from './GasBottlingRefineryPanel';
 
 const BUILDING_LIST: BuildingId[] = ['animal_feed', 'feed_mill', 'bakery', 'dairy', 'loom', 'press', 'textiles', 'tailor_shop', 'workshop'];
 
@@ -169,7 +168,6 @@ export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
     togglePauseAllWorkers,
     specialistWorkers,
   } = useGameStore();
-  const [productionMode, setProductionMode] = useState<'workshops' | 'gas_refinery'>('workshops');
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
   const [workshopSubTab, setWorkshopSubTab] = useState<'recipes' | 'installations'>('recipes');
   const [, setTick] = useState(0);
@@ -201,43 +199,22 @@ export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
 
   return (
     <div className="space-y-3">
-      {/* Production Facility Mode Switcher */}
-      <div className="flex items-center justify-between gap-2 p-1.5 rounded-2xl bg-stone-900/90 border border-stone-800">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setProductionMode('workshops')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-              productionMode === 'workshops'
-                ? 'bg-amber-600 text-stone-950 shadow-md'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
-            }`}
-          >
-            <span>⚙️ Artisan Workshops &amp; Mills</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setProductionMode('gas_refinery')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-              productionMode === 'gas_refinery'
-                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-stone-950 shadow-md'
-                : 'bg-stone-800 text-stone-300 hover:bg-stone-700 border border-amber-500/30'
-            }`}
-          >
-            <span>🏭 Gas Bottling &amp; Export Refinery</span>
-            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-mono border border-amber-500/40">
-              DIRECT EXPORT
-            </span>
-          </button>
-        </div>
+      {/* Gas Lab Shortcut Ribbon */}
+      <div className="flex items-center justify-between gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-950/40 to-stone-900 border border-amber-500/30 text-xs">
+        <span className="text-amber-300 font-bold flex items-center gap-1.5">
+          <span>🏭</span> Looking for Heavy Gas Bottling &amp; Export Commodities?
+        </span>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('gas')}
+          className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold transition-all cursor-pointer text-xs"
+        >
+          Open Gas Lab Tab →
+        </button>
       </div>
 
-      {productionMode === 'gas_refinery' ? (
-        <GasBottlingRefineryPanel onNavigateToOrders={() => onSelectTab?.('orders')} />
-      ) : (
-        <>
-          {/* Building Tabs */}
-          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
+      {/* Building Tabs */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-1.5">
             {BUILDING_LIST.map(bId => {
               const b = BUILDINGS[bId];
               const t = BUILDING_THEME[bId];
@@ -644,8 +621,6 @@ export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
           </>
         )}
       </div>
-        </>
-      )}
     </div>
   );
 }

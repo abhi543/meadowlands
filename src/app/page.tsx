@@ -26,9 +26,10 @@ import { BackupModal } from '@/components/game/BackupModal';
 import { BarnTab } from '@/components/game/BarnTab';
 import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { WaterTab } from '@/components/game/WaterTab';
+import { GasBottlingRefineryPanel } from '@/components/game/GasBottlingRefineryPanel';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
-type TabId = 'farm' | 'water' | 'animals' | 'production' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
+type TabId = 'farm' | 'water' | 'animals' | 'production' | 'gas' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
 
 interface TabDef {
   id: TabId;
@@ -44,6 +45,7 @@ const TABS: TabDef[] = [
   { id: 'water',      label: 'Water',    emoji: '💧', color: 'text-cyan-600 dark:text-cyan-400',         bgActive: 'bg-cyan-100 dark:bg-cyan-900/40',       bgInactive: 'hover:bg-cyan-50 dark:hover:bg-cyan-900/20' },
   { id: 'animals',    label: 'Animals',  emoji: '🐔', color: 'text-amber-600 dark:text-amber-400',       bgActive: 'bg-amber-100 dark:bg-amber-900/40',     bgInactive: 'hover:bg-amber-50 dark:hover:bg-amber-900/20' },
   { id: 'production', label: 'Produce',  emoji: '⚙️', color: 'text-orange-600 dark:text-orange-400',     bgActive: 'bg-orange-100 dark:bg-orange-900/40',   bgInactive: 'hover:bg-orange-50 dark:hover:bg-orange-900/20' },
+  { id: 'gas',        label: 'Gas Lab',  emoji: '🏭', color: 'text-amber-500 dark:text-amber-300',       bgActive: 'bg-amber-100 dark:bg-amber-900/40',     bgInactive: 'hover:bg-amber-50 dark:hover:bg-amber-900/20' },
   { id: 'orders',     label: 'Orders',   emoji: '🚚', color: 'text-blue-600 dark:text-blue-400',         bgActive: 'bg-blue-100 dark:bg-blue-900/40',       bgInactive: 'hover:bg-blue-50 dark:hover:bg-blue-900/20' },
   { id: 'shop',       label: 'Shop',     emoji: '🏪', color: 'text-emerald-600 dark:text-emerald-400',   bgActive: 'bg-emerald-100 dark:bg-emerald-900/40', bgInactive: 'hover:bg-emerald-50 dark:hover:bg-emerald-900/20' },
   { id: 'barn',       label: 'Barn',     emoji: '🏠', color: 'text-amber-700 dark:text-amber-300',       bgActive: 'bg-amber-100 dark:bg-amber-900/40',     bgInactive: 'hover:bg-amber-50 dark:hover:bg-amber-900/20' },
@@ -262,6 +264,7 @@ export default function Home() {
             {activeTab === 'water' && <WaterTab />}
             {activeTab === 'animals' && <AnimalsTab />}
             {activeTab === 'production' && <ProductionPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
+            {activeTab === 'gas' && <GasBottlingRefineryPanel onNavigateToOrders={() => setActiveTab('orders')} />}
             {activeTab === 'orders' && <OrderBoard />}
             {activeTab === 'shop' && <ShopPanel />}
             {activeTab === 'barn' && <BarnTab onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
