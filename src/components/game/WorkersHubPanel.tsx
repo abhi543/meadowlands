@@ -13,6 +13,7 @@ import {
 } from '@/game/data';
 import { OverclockActionMenu } from './OverclockActionMenu';
 import { SpecialistWorkersSection } from './SpecialistWorkersSection';
+import { GasChamberWorkersSection } from './GasChamberWorkersSection';
 import { StaffCommissaryCommandCard } from './StaffCommissaryCommandCard';
 import { FarmClockBanner } from './FarmClockBanner';
 import { BunkhouseFacilityPanel } from './BunkhouseFacilityPanel';
@@ -135,9 +136,10 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     assignWorkerShift,
     callEmergencyOvertime,
     isAllWorkersPaused,
+    gasRefinery,
     workerAncestors,
   } = useGameStore();
-  type WorkerHubTab = 'workforce' | 'specialists' | 'shifts' | 'commissary' | 'bunkhouse' | 'hall_of_fame';
+  type WorkerHubTab = 'workforce' | 'specialists' | 'gas_chambers' | 'shifts' | 'commissary' | 'bunkhouse' | 'hall_of_fame';
   const [activeTab, setActiveTab] = useState<WorkerHubTab>('workforce');
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
@@ -179,6 +181,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   }
 
   const hiredSpecialistCount = Object.values(specialistWorkers || {}).filter(sp => sp?.isHired).length;
+  const activeGasWorkersCount = Object.values(gasRefinery?.automatedGases || {}).filter(Boolean).length;
 
   return (
     <div className="space-y-4">
@@ -265,6 +268,12 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
             label: 'Specialists',
             icon: '🤠',
             badge: hiredSpecialistCount > 0 ? `${hiredSpecialistCount}` : undefined,
+          },
+          {
+            id: 'gas_chambers',
+            label: 'Gas Chambers',
+            icon: '🛢️',
+            badge: `${activeGasWorkersCount}/7`,
           },
           {
             id: 'shifts',
@@ -996,6 +1005,13 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
               setIsArbitrationOpen(true);
             }}
           />
+        </div>
+      )}
+
+      {/* 3. Gas Chambers Tab (Compressor Technicians: CO2, O2, N2, Ethylene, Ozone, SO2, Phosphine) */}
+      {activeTab === 'gas_chambers' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <GasChamberWorkersSection />
         </div>
       )}
 
