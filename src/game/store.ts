@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage, SAVE_KEY } from '@/lib/idbStorage';
 import {
+  type WorkerGenetics,
+  type WorkerAncestorRecord,
+  generateRandomWorkerGenetics,
+  isValidWorkerGenetics,
+  ensureWorkerGenetics,
+  getGenerationalSpeedMultiplier,
+  inheritWorkerGenetics,
+  canWorkerRetire,
+  calculateRetirementSeverance,
+  toRomanNumeral,
+  RETIREMENT_REQUIRED_LEVEL,
+} from './workerGenetics';
+import {
   CROPS, ANIMALS, PRODUCTS, BUILDINGS, FARMHANDS, WORKERS,
   WATER_ZONES, FISH_SPECIES, ROD_TIERS, ROD_TIER_ORDER, OUTFITS,
   HOURLY_EVENTS, SMUGGLER_LOOT, CHEF_ORDER_TEMPLATES,
@@ -616,6 +629,7 @@ export interface FarmhandInstance {
   level: number;
   xp: number;
   equippedOutfit: OutfitId | null;
+  genetics?: WorkerGenetics;
 }
 
 // Fishery
@@ -646,6 +660,7 @@ export interface UnifiedWorkerInstance {
   role: WorkerRole;
   isHired: boolean;
   level: number;           // 1–120
+  generation?: number;     // Gen 1, Gen 2, etc. (2^(gen-1)x speed multiplier)
   autoSell: boolean;       // true = Auto-Sell Mode, false = Hoard Mode
   isPaused?: boolean;      // true = Paused by player
   lastActionTimestamp: number;
@@ -675,6 +690,7 @@ export interface UnifiedWorkerInstance {
   sabbaticalLockedDebtCoins?: number | null;
   sabbaticalLockedFoodUnits?: number | null;
   sabbaticalRemainingDesertionSec?: number | null;
+  genetics?: WorkerGenetics;
 }
 
 // Hourly Events
@@ -835,6 +851,7 @@ export interface GameState {
   // Unified Workers (v2.0)
   unifiedWorkers: Record<WorkerRole, UnifiedWorkerInstance>;
   isAllWorkersPaused?: boolean;
+  workerAncestors: WorkerAncestorRecord[];
 
   // Specialist Workers (Livestock, Expeditions & Genetics)
   specialistWorkers: Record<SpecialistWorkerId, SpecialistWorkerState>;
@@ -1050,6 +1067,7 @@ export interface GameState {
   togglePauseUnifiedWorker: (role: WorkerRole) => void;
   togglePauseAllWorkers: (pause?: boolean) => void;
   bulkUpgradeUnifiedWorker: (role: WorkerRole, mode: BulkMode) => void;
+  retireWorker: (role: WorkerRole) => { success: boolean; message: string; pensionCoins: number; pensionGems: number; nextGeneration: number } | null;
 
   // Specialist Workers (Livestock, Expeditions & Genetics)
   hireSpecialistWorker: (workerId: SpecialistWorkerId) => boolean;
@@ -1530,6 +1548,8 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
       missedCycles: 0,
       shiftType: getDefaultWorkerShift(role),
       stamina: 100,
+      generation: 1,
+      genetics: generateRandomWorkerGenetics(),
     };
   }
   return workers as Record<WorkerRole, UnifiedWorkerInstance>;
@@ -1768,6 +1788,7 @@ export const useGameStore = create<GameState>()(
       autonomousWorkers: [],
       unifiedWorkers: initialUnifiedWorkers,
       isAllWorkersPaused: false,
+      workerAncestors: [],
       activeEvent: null,
       lastEventTriggerTime: Date.now(),
 
@@ -5430,6 +5451,7 @@ export const useGameStore = create<GameState>()(
         if (state.coins < cfg.baseCost) return;
         const now = Date.now();
         const newWorkers = { ...state.unifiedWorkers };
+        const existingWorker = state.unifiedWorkers[role];
         newWorkers[role] = {
           role,
           isHired: true,
@@ -5439,6 +5461,8 @@ export const useGameStore = create<GameState>()(
           lastActionTimestamp: now,
           bufferCount: 0,
           stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+          generation: existingWorker?.generation || 1,
+          genetics: ensureWorkerGenetics(existingWorker?.genetics),
         };
         let newFishery = state.fishery;
         if (role === 'fisherman' || role === 'auto_fisherman') {
@@ -5557,6 +5581,84 @@ export const useGameStore = create<GameState>()(
           willPause ? '⏸️' : '▶️',
           'info'
         );
+      },
+
+      retireWorker: (role: WorkerRole) => {
+        const state = get();
+        const worker = state.unifiedWorkers[role];
+        if (!worker || !worker.isHired) {
+          return { success: false, message: 'Worker is not currently hired.', pensionCoins: 0, pensionGems: 0, nextGeneration: 1 };
+        }
+        if (!canWorkerRetire(worker.level)) {
+          return {
+            success: false,
+            message: `Worker must reach Level ${RETIREMENT_REQUIRED_LEVEL} to earn honorable retirement.`,
+            pensionCoins: 0,
+            pensionGems: 0,
+            nextGeneration: worker.generation || 1,
+          };
+        }
+
+        const currentGen = worker.generation || 1;
+        const nextGen = currentGen + 1;
+        const cfg = WORKER_REGISTRY[role];
+        const severance = calculateRetirementSeverance(currentGen);
+
+        // Record the ancestor in the Dynastic Hall of Fame
+        const ancestorRecord: WorkerAncestorRecord = {
+          id: `ancestor_${role}_gen${currentGen}_${Date.now()}`,
+          role,
+          name: cfg?.name || role,
+          emoji: cfg?.emoji || '👤',
+          generation: currentGen,
+          retiredAt: Date.now(),
+          finalLevel: worker.level,
+          totalCoinsEarned: worker.stats?.totalCoinsEarned || 0,
+          totalItemsProduced: worker.stats?.totalItemsProduced || 0,
+          totalGemsEarned: worker.stats?.totalGemsEarned || 0,
+          genetics: worker.genetics ? { ...worker.genetics } : generateRandomWorkerGenetics(),
+          pensionCoinsPaid: severance.pensionCoins,
+          pensionGemsPaid: severance.pensionGems,
+        };
+
+        // Successor inherits genetics with generational mentorship drift (+1 to +5)
+        const inheritedGenetics = inheritWorkerGenetics(worker.genetics);
+
+        const newWorkers = { ...state.unifiedWorkers };
+        newWorkers[role] = {
+          ...worker,
+          level: 1, // Automation reset to Level 1
+          generation: nextGen,
+          genetics: inheritedGenetics,
+          bufferCount: 0,
+          lastActionTimestamp: Date.now(),
+          stats: { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 },
+        };
+
+        const updatedAncestors = [ancestorRecord, ...(state.workerAncestors || [])];
+
+        set({
+          coins: state.coins + severance.pensionCoins,
+          gems: (state.gems || 0) + severance.pensionGems,
+          unifiedWorkers: newWorkers,
+          workerAncestors: updatedAncestors,
+        });
+
+        playCashRegisterSound();
+        const nextSpeedMult = getGenerationalSpeedMultiplier(nextGen);
+        state.addNotification(
+          `👑 ${cfg.name} retired with honor! Gen ${toRomanNumeral(nextGen)} takes over at ${nextSpeedMult}x Speed (+🪙${severance.pensionCoins.toLocaleString()}, +💎${severance.pensionGems})!`,
+          '👑',
+          'discovery'
+        );
+
+        return {
+          success: true,
+          message: `Honorable Retirement Complete! Successor starts at Gen ${toRomanNumeral(nextGen)} with ${nextSpeedMult}x Speed.`,
+          pensionCoins: severance.pensionCoins,
+          pensionGems: severance.pensionGems,
+          nextGeneration: nextGen,
+        };
       },
 
       // Specialist Livestock & Expedition Staff (Hauler, Wrangler, Stable Master)
@@ -11613,7 +11715,7 @@ export const useGameStore = create<GameState>()(
             const trowelSpeed = (hasChitinTrowel && role === 'farmer') ? 0.70 : 1.0;
             // Load-Shedding Crew Rationing & Dehydration speed penalty (-30% in Stage 2, -50% in Stage 3)
             const towerWorkerSpeedPenalty = loadSheddingStage === 3 ? 0.50 : (loadSheddingStage === 2 ? 0.70 : 1.0);
-            const effectiveInterval = ((workerEffectiveInterval(role, worker.level) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier)) / towerWorkerSpeedPenalty;
+            const effectiveInterval = ((workerEffectiveInterval(role, worker.level, worker.generation || 1) * outfitSpeed * trowelSpeed) / (wMultiplier * moraleMultiplier * shiftSpeedMultiplier)) / towerWorkerSpeedPenalty;
             const elapsed = now - worker.lastActionTimestamp;
 
             if (elapsed >= effectiveInterval) {
@@ -15576,6 +15678,7 @@ export const useGameStore = create<GameState>()(
         autonomousWorkers: state.autonomousWorkers,
         unifiedWorkers: state.unifiedWorkers,
         isAllWorkersPaused: state.isAllWorkersPaused,
+        workerAncestors: state.workerAncestors,
         specialistWorkers: state.specialistWorkers,
         lastSpecialistWageTime: state.lastSpecialistWageTime,
         wranglerPolicy: state.wranglerPolicy,
@@ -15747,6 +15850,7 @@ export const useGameStore = create<GameState>()(
 
         // Migration: add missing state fields
         if (!merged.autonomousWorkers) merged.autonomousWorkers = [];
+        if (!merged.workerAncestors || !Array.isArray(merged.workerAncestors)) merged.workerAncestors = [];
         if (!merged.unifiedWorkers) {
           merged.unifiedWorkers = createDefaultUnifiedWorkers();
         } else {
@@ -15757,6 +15861,12 @@ export const useGameStore = create<GameState>()(
             } else {
               // Resilience Auto-Recovery: if worker has any level progress or accumulated stats, preserve hired state!
               const currentW = merged.unifiedWorkers[r];
+              if (!currentW.generation || currentW.generation < 1) {
+                currentW.generation = 1;
+              }
+              if (!currentW.genetics || !isValidWorkerGenetics(currentW.genetics)) {
+                currentW.genetics = generateRandomWorkerGenetics();
+              }
               if (currentW.level > 1 || (currentW.stats?.totalItemsProduced || 0) > 0 || (currentW.stats?.totalCoinsEarned || 0) > 0) {
                 currentW.isHired = true;
                 if (currentW.moraleTier === 'deserted') {
@@ -15783,6 +15893,9 @@ export const useGameStore = create<GameState>()(
               merged.specialistWorkers[sId] = defaultSpecialists[sId];
             } else {
               const currentSp = merged.specialistWorkers[sId];
+              if (!currentSp.genetics || !isValidWorkerGenetics(currentSp.genetics)) {
+                currentSp.genetics = generateRandomWorkerGenetics();
+              }
               if ((currentSp.totalWagesPaid || 0) > 0 || currentSp.isStriking) {
                 currentSp.isHired = true;
                 if (currentSp.moraleTier === 'deserted') {
@@ -15797,6 +15910,15 @@ export const useGameStore = create<GameState>()(
               if (currentSp.missedCycles === undefined) currentSp.missedCycles = 0;
               currentSp.shiftType = 'morning';
               if (currentSp.stamina === undefined) currentSp.stamina = 100;
+            }
+          }
+        }
+
+        // Initialize genetics for any existing farmhands if missing
+        if (merged.farmhands && Array.isArray(merged.farmhands)) {
+          for (const fh of merged.farmhands) {
+            if (!fh.genetics || !isValidWorkerGenetics(fh.genetics)) {
+              fh.genetics = generateRandomWorkerGenetics();
             }
           }
         }

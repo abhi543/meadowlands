@@ -1,3 +1,5 @@
+import { type WorkerGenetics, generateRandomWorkerGenetics } from '@/game/workerGenetics';
+
 export type WorkerSpecialty = 'crop_tender' | 'artisan_crafter' | 'wild_hauler' | 'paddock_wrangler' | 'stable_master' | 'feed_master';
 
 export type SpecialistWorkerId = 'worker_caravaner_orin' | 'worker_wrangler_tessa' | 'worker_stablemaster_elric' | 'worker_feedmaster_barnaby';
@@ -148,6 +150,7 @@ export interface SpecialistWorkerState {
   sabbaticalLockedDebtCoins?: number | null;
   sabbaticalLockedFoodUnits?: number | null;
   sabbaticalRemainingDesertionSec?: number | null;
+  genetics?: WorkerGenetics;
 }
 
 export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, SpecialistWorkerState> {
@@ -164,6 +167,7 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       missedCycles: 0,
       shiftType: 'night',
       stamina: 100,
+      genetics: generateRandomWorkerGenetics(),
     },
     worker_wrangler_tessa: {
       id: 'worker_wrangler_tessa',
@@ -177,6 +181,7 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       missedCycles: 0,
       shiftType: 'morning',
       stamina: 100,
+      genetics: generateRandomWorkerGenetics(),
     },
     worker_stablemaster_elric: {
       id: 'worker_stablemaster_elric',
@@ -190,6 +195,7 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       missedCycles: 0,
       shiftType: 'night',
       stamina: 100,
+      genetics: generateRandomWorkerGenetics(),
     },
     worker_feedmaster_barnaby: {
       id: 'worker_feedmaster_barnaby',
@@ -203,6 +209,7 @@ export function createDefaultSpecialistWorkers(): Record<SpecialistWorkerId, Spe
       missedCycles: 0,
       shiftType: 'night',
       stamina: 100,
+      genetics: generateRandomWorkerGenetics(),
     },
   };
 }

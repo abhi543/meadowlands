@@ -19,6 +19,14 @@ import { BunkhouseFacilityPanel } from './BunkhouseFacilityPanel';
 import { DualRosterCommandDeck } from './DualRosterCommandDeck';
 import { PicketAlertBanner } from './PicketAlertBanner';
 import { GrievanceResolutionModal } from './GrievanceResolutionModal';
+import { WorkerRetirementModal } from './WorkerRetirementModal';
+import { WorkerHallOfFameModal } from './WorkerHallOfFameModal';
+import {
+  getGenerationalSpeedMultiplier,
+  canWorkerRetire,
+  toRomanNumeral,
+  RETIREMENT_REQUIRED_LEVEL,
+} from '@/game/workerGenetics';
 import {
   getWorkerScheduleTelemetry,
   type ShiftType,
@@ -127,12 +135,15 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     assignWorkerShift,
     callEmergencyOvertime,
     isAllWorkersPaused,
+    workerAncestors,
   } = useGameStore();
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
   const [shiftFilter, setShiftFilter] = useState<ShiftType | 'all'>('all');
   const [arbitrationWorkerId, setArbitrationWorkerId] = useState<string | null>(null);
   const [isArbitrationOpen, setIsArbitrationOpen] = useState(false);
+  const [retiringRole, setRetiringRole] = useState<WorkerRole | null>(null);
+  const [isHallOfFameOpen, setIsHallOfFameOpen] = useState(false);
 
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -176,20 +187,36 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
           <span className="text-xs text-stone-500 dark:text-gray-400">{hiredCount}/{totalWorkers} hired</span>
         </div>
 
-        {hiredCount > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => togglePauseAllWorkers(!isAllWorkersPaused)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
-              isAllWorkersPaused
-                ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-emerald-500/20 ring-2 ring-emerald-500/30'
-                : 'bg-stone-100 hover:bg-amber-100 dark:bg-stone-800 dark:hover:bg-amber-950/40 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 hover:border-amber-400'
-            }`}
-            title={isAllWorkersPaused ? "Resume all automated operations and production" : "Pause all automated operations and worker cycles"}
+            onClick={() => setIsHallOfFameOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 transition-all cursor-pointer shadow-xs active:scale-95"
+            title="View the lineage of retired workers and their generational accomplishments"
           >
-            <span>{isAllWorkersPaused ? '▶️' : '⏸️'}</span>
-            <span>{isAllWorkersPaused ? 'Resume All Workers' : 'Pause All Workers'}</span>
+            <span>🏛️</span>
+            <span>Hall of Fame</span>
+            {(workerAncestors?.length || 0) > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-stone-950 font-black text-[10px]">
+                {workerAncestors.length}
+              </span>
+            )}
           </button>
-        )}
+
+          {hiredCount > 0 && (
+            <button
+              onClick={() => togglePauseAllWorkers(!isAllWorkersPaused)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+                isAllWorkersPaused
+                  ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-emerald-500/20 ring-2 ring-emerald-500/30'
+                  : 'bg-stone-100 hover:bg-amber-100 dark:bg-stone-800 dark:hover:bg-amber-950/40 text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 hover:border-amber-400'
+              }`}
+              title={isAllWorkersPaused ? "Resume all automated operations and production" : "Pause all automated operations and worker cycles"}
+            >
+              <span>{isAllWorkersPaused ? '▶️' : '⏸️'}</span>
+              <span>{isAllWorkersPaused ? 'Resume All Workers' : 'Pause All Workers'}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Global Workforce Paused Banner */}
@@ -288,7 +315,10 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
 
           const isUnlocked = level >= cfg.unlockLevel;
           const rank = getMilestoneRank(worker.level);
-          const effectiveInterval = workerEffectiveInterval(role, worker.level);
+          const gen = worker.generation || 1;
+          const genSpeedMult = getGenerationalSpeedMultiplier(gen);
+          const isRetirementEligible = worker.isHired && canWorkerRetire(worker.level);
+          const effectiveInterval = workerEffectiveInterval(role, worker.level, gen);
           const elapsed = worker.isHired ? now - worker.lastActionTimestamp : 0;
           const progress = worker.isHired ? Math.min(1, elapsed / effectiveInterval) : 0;
           const doubleChance = workerDoubleProcChance(worker.level);
@@ -367,6 +397,17 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                       {cfg.name}
                     </h4>
                     <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                      {worker.isHired && (
+                        <span
+                          className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/50 flex items-center gap-1 shadow-xs"
+                          title={`Dynastic Generation ${gen}: Works with ${genSpeedMult}x inherited speed multiplier.`}
+                        >
+                          👑 Gen {toRomanNumeral(gen)}
+                          {genSpeedMult > 1 && (
+                            <span className="text-[9px] text-amber-600 dark:text-amber-400 font-bold">({genSpeedMult}x ⚡)</span>
+                          )}
+                        </span>
+                      )}
                       {worker.isHired && isStriking && (
                         <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-red-500/25 text-red-600 dark:text-red-300 border border-red-500/50 whitespace-nowrap animate-pulse">
                           🛑 On Strike
@@ -464,6 +505,21 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                           style={{ width: `${(worker.isPaused || isStriking ? 0.35 : progress) * 100}%` }}
                         />
                       </div>
+                    </div>
+                  )}
+
+                  {/* Worker Genetics Aptitude Mini Bar */}
+                  {worker.isHired && worker.genetics && (
+                    <div
+                      className="mt-1 flex items-center gap-2 text-[9px] font-mono text-stone-500 dark:text-stone-400 bg-stone-100 dark:bg-stone-900/60 rounded px-2 py-0.5 border border-stone-200 dark:border-stone-800 flex-wrap"
+                      title="Inherited Genetic Aptitude (STR = Strength, STM = Stamina, FRM = Farming, LRN = Learning, EFF = Efficiency)"
+                    >
+                      <span className="font-semibold text-stone-600 dark:text-stone-300">🧬 Aptitude:</span>
+                      <span>STR <b className="text-stone-700 dark:text-stone-200">{worker.genetics.strength}</b></span>
+                      <span>STM <b className="text-stone-700 dark:text-stone-200">{worker.genetics.stamina}</b></span>
+                      <span>FRM <b className="text-stone-700 dark:text-stone-200">{worker.genetics.farmingAptitude}</b></span>
+                      <span>LRN <b className="text-stone-700 dark:text-stone-200">{worker.genetics.learningAbility}</b></span>
+                      <span>EFF <b className="text-stone-700 dark:text-stone-200">{worker.genetics.workEfficiency}</b></span>
                     </div>
                   )}
 
@@ -853,6 +909,18 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
                     {worker.isHired && worker.level >= WORKER_MAX_LEVEL && (
                       <span className="text-[10px] font-bold text-fuchsia-600 dark:text-fuchsia-400">{'\u{1F52E}'} MAX LEVEL</span>
                     )}
+
+                    {isRetirementEligible && (
+                      <button
+                        onClick={() => setRetiringRole(role)}
+                        className="w-full mt-2 py-2 px-3 rounded-lg bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 hover:from-amber-600 hover:to-yellow-500 text-stone-950 font-black text-xs shadow-md shadow-amber-500/25 border border-amber-300 flex items-center justify-center gap-2 animate-pulse transition-all cursor-pointer active:scale-98"
+                        title={`Hold an honorable retirement ceremony for ${cfg.name}! Successor starts at Gen ${toRomanNumeral(gen + 1)} with ${genSpeedMult * 2}x speed!`}
+                      >
+                        <span>👑</span>
+                        <span>Retire with Honor (Gen {toRomanNumeral(gen + 1)}: {genSpeedMult * 2}x Speed)</span>
+                        <span>✨</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -866,6 +934,19 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
         isOpen={isArbitrationOpen}
         onClose={() => setIsArbitrationOpen(false)}
         initialWorkerId={arbitrationWorkerId}
+      />
+
+      {/* Honorable Worker Retirement Ceremony Modal */}
+      <WorkerRetirementModal
+        isOpen={Boolean(retiringRole)}
+        onClose={() => setRetiringRole(null)}
+        role={retiringRole}
+      />
+
+      {/* Dynastic Hall of Fame Ancestor Records */}
+      <WorkerHallOfFameModal
+        isOpen={isHallOfFameOpen}
+        onClose={() => setIsHallOfFameOpen(false)}
       />
     </div>
   );

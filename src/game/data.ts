@@ -1455,10 +1455,12 @@ export function workerOverdrive(level: number): number {
   return level >= WORKER_MAX_LEVEL ? 0.8 : 1.0;
 }
 
-/** Effective interval in ms for a worker at given level */
-export function workerEffectiveInterval(role: WorkerRole, level: number): number {
+/** Effective interval in ms for a worker at given level and generation (each generation doubles speed) */
+export function workerEffectiveInterval(role: WorkerRole, level: number, generation: number = 1): number {
   const cfg = WORKER_REGISTRY[role];
-  return Math.floor(cfg.baseIntervalMs * workerSpeedMultiplier(level) * workerOverdrive(level));
+  const genSpeedMultiplier = Math.pow(2, Math.max(0, Math.floor(generation) - 1));
+  const baseInterval = Math.floor(cfg.baseIntervalMs * workerSpeedMultiplier(level) * workerOverdrive(level));
+  return Math.max(250, Math.floor(baseInterval / genSpeedMultiplier));
 }
 
 /** Double proc chance: 0% at L1, ~60% at L120 */
