@@ -16,6 +16,13 @@ const FEED_MILLER_ROLES: { role: WorkerRole; feedName: string; cropName: string;
   { role: 'feed_miller_soy', feedName: 'Soy Chow', cropName: 'Soybean', icon: '🫘' },
 ];
 
+const FEED_MILL_ARTISAN_ROLES: { role: WorkerRole; feedName: string; cropName: string; icon: string }[] = [
+  { role: 'feed_miller_algae', feedName: 'Algae Paste', cropName: 'Wheat + Berries', icon: '🧪' },
+  { role: 'feed_miller_insect', feedName: 'Insect Mash', cropName: 'Wheat + Soy', icon: '🥣' },
+  { role: 'feed_miller_grain_mash', feedName: 'Grain Mash', cropName: 'Wheat + Corn', icon: '🌾' },
+  { role: 'feed_miller_hay', feedName: 'Mountain Hay', cropName: 'Wheat + Cotton', icon: '📦🌾' },
+];
+
 const BUILDING_THEME: Record<BuildingId, {
   emoji: string; color: string; bgActive: string; borderActive: string;
   headerFrom: string; headerTo: string; headerText: string; headerSub: string;
@@ -167,6 +174,7 @@ export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
     isAllWorkersPaused,
     togglePauseAllWorkers,
     specialistWorkers,
+    prehistoricSanctuary,
   } = useGameStore();
   const [activeBuilding, setActiveBuilding] = useState<BuildingId>('animal_feed');
   const [workshopSubTab, setWorkshopSubTab] = useState<'recipes' | 'installations'>('recipes');
@@ -344,161 +352,188 @@ export function ProductionPanel({ onSelectTab }: ProductionPanelProps = {}) {
               </div>
             )}
 
-            {/* Feed Millers Automation Roster for All Feed Types */}
-            {activeBuilding === 'animal_feed' && (
-              <div className="mx-3 mt-3 p-3 rounded-2xl bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 border border-amber-300 dark:border-amber-700/60 shadow-xs">
-                <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🥣</span>
-                    <div>
-                      <h4 className="font-black text-xs sm:text-sm text-stone-800 dark:text-stone-100 flex items-center gap-1.5 flex-wrap">
-                        Feed Millers Guild (All Animal Feed Types)
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                          {FEED_MILLER_ROLES.filter(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused).length}/4 Active
-                        </span>
-                      </h4>
-                      <p className="text-[11px] text-stone-500 dark:text-stone-400">
-                        Hire specialized millers to automate feed production for every grain and livestock type.
-                      </p>
+            {/* Feed Millers & Diet Artisans Automation Roster */}
+            {(activeBuilding === 'animal_feed' || activeBuilding === 'feed_mill') && (() => {
+              const isFeedMill = activeBuilding === 'feed_mill';
+              const currentRoles = isFeedMill ? FEED_MILL_ARTISAN_ROLES : FEED_MILLER_ROLES;
+              const hasArthropleura = Boolean(
+                prehistoricSanctuary?.enclosures?.enclosure_sylvan_floor?.specimenCount &&
+                prehistoricSanctuary.enclosures.enclosure_sylvan_floor.specimenCount > 0 &&
+                !prehistoricSanctuary.enclosures.enclosure_sylvan_floor.isStarving
+              );
+              const activeCount = currentRoles.filter(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused).length;
+
+              return (
+                <div className={`mx-3 mt-3 p-3 rounded-2xl border shadow-xs ${
+                  isFeedMill
+                    ? 'bg-gradient-to-r from-slate-500/10 via-teal-500/10 to-emerald-500/10 border-slate-300 dark:border-slate-700/60'
+                    : 'bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-orange-500/10 border-amber-300 dark:border-amber-700/60'
+                }`}>
+                  <div className="flex items-center justify-between gap-2 flex-wrap mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{isFeedMill ? '⚙️' : '🥣'}</span>
+                      <div>
+                        <h4 className="font-black text-xs sm:text-sm text-stone-800 dark:text-stone-100 flex items-center gap-1.5 flex-wrap">
+                          {isFeedMill ? 'Feed Mill Artisans Guild (Primeval & Specialized Diets)' : 'Feed Millers Guild (All Animal Feed Types)'}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                            isFeedMill
+                              ? 'bg-teal-500/20 text-teal-700 dark:text-teal-300'
+                              : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                          }`}>
+                            {activeCount}/{currentRoles.length} Active
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                          {isFeedMill
+                            ? 'Hire specialized artisans to passively mill Algae Paste, Insect Mash, Grain Mash, and Mountain Hay.'
+                            : 'Hire specialized millers to automate feed production for every grain and livestock type.'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {specialistWorkers?.worker_feedmaster_barnaby?.isHired && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-200 shadow-xs">
+                          <span className="text-sm">🥣</span>
+                          <span>Barnaby: +30% Speed, +1 Bonus</span>
+                        </div>
+                      )}
+                      {isFeedMill && hasArthropleura && (
+                        <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-500/15 border border-purple-400/50 text-[11px] font-bold text-purple-800 dark:text-purple-200 shadow-xs">
+                          <span className="text-sm">🦗</span>
+                          <span>Arthropleura: 2x Speed</span>
+                        </div>
+                      )}
+                      {currentRoles.some(f => unifiedWorkers?.[f.role]?.isHired) && (
+                        <button
+                          onClick={() => {
+                            const anyActive = currentRoles.some(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused);
+                            currentRoles.forEach(f => {
+                              const w = unifiedWorkers?.[f.role];
+                              if (w?.isHired && (anyActive ? !w.isPaused : w.isPaused)) {
+                                togglePauseUnifiedWorker(f.role);
+                              }
+                            });
+                          }}
+                          className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-white/80 dark:bg-stone-800 hover:bg-white text-stone-700 dark:text-stone-200 border border-stone-300 dark:border-stone-700 shadow-xs transition-all active:scale-95 cursor-pointer"
+                          title="Toggle pause on all hired millers in this guild"
+                        >
+                          {currentRoles.some(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused)
+                            ? '⏸️ Pause Artisans'
+                            : '▶️ Resume Artisans'}
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {specialistWorkers?.worker_feedmaster_barnaby?.isHired && (
-                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[11px] font-bold text-emerald-800 dark:text-emerald-200 shadow-xs">
-                        <span className="text-sm">🥣</span>
-                        <span>Barnaby: +30% Speed, +1 Bonus</span>
-                      </div>
-                    )}
-                    {FEED_MILLER_ROLES.some(f => unifiedWorkers?.[f.role]?.isHired) && (
-                      <button
-                        onClick={() => {
-                          const anyActive = FEED_MILLER_ROLES.some(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused);
-                          FEED_MILLER_ROLES.forEach(f => {
-                            const w = unifiedWorkers?.[f.role];
-                            if (w?.isHired && (anyActive ? !w.isPaused : w.isPaused)) {
-                              togglePauseUnifiedWorker(f.role);
-                            }
-                          });
-                        }}
-                        className="px-2.5 py-1 rounded-xl text-[10px] font-bold bg-white/80 dark:bg-stone-800 hover:bg-white text-stone-700 dark:text-stone-200 border border-stone-300 dark:border-stone-700 shadow-xs transition-all active:scale-95 cursor-pointer"
-                        title="Toggle pause on all hired feed millers"
-                      >
-                        {FEED_MILLER_ROLES.some(f => unifiedWorkers?.[f.role]?.isHired && !unifiedWorkers?.[f.role]?.isPaused)
-                          ? '⏸️ Pause Millers'
-                          : '▶️ Resume Millers'}
-                      </button>
-                    )}
-                  </div>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                    {currentRoles.map(({ role, feedName, cropName, icon }) => {
+                      const cfg = WORKER_REGISTRY[role];
+                      const worker = unifiedWorkers?.[role];
+                      const isHired = Boolean(worker?.isHired);
+                      const isPaused = Boolean(worker?.isPaused);
+                      const canAfford = coins >= cfg.baseCost;
+                      const isUnlocked = level >= cfg.unlockLevel;
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                  {FEED_MILLER_ROLES.map(({ role, feedName, cropName, icon }) => {
-                    const cfg = WORKER_REGISTRY[role];
-                    const worker = unifiedWorkers?.[role];
-                    const isHired = Boolean(worker?.isHired);
-                    const isPaused = Boolean(worker?.isPaused);
-                    const canAfford = coins >= cfg.baseCost;
-                    const isUnlocked = level >= cfg.unlockLevel;
-
-                    return (
-                      <div
-                        key={role}
-                        className={`p-2.5 rounded-xl border transition-all ${
-                          isHired
-                            ? isPaused
-                              ? 'bg-amber-50/70 dark:bg-stone-900/90 border-amber-500/50 shadow-xs opacity-90'
-                              : 'bg-white/90 dark:bg-stone-900/90 border-amber-400/80 shadow-xs'
-                            : 'bg-stone-50/70 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800 opacity-90'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-1.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-xl">{icon}</span>
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-stone-800 dark:text-stone-100 truncate">
-                                {cfg.name}
-                              </div>
-                              <div className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
-                                {cropName} &rarr; {feedName}
+                      return (
+                        <div
+                          key={role}
+                          className={`p-2.5 rounded-xl border transition-all ${
+                            isHired
+                              ? isPaused
+                                ? 'bg-amber-50/70 dark:bg-stone-900/90 border-amber-500/50 shadow-xs opacity-90'
+                                : 'bg-white/90 dark:bg-stone-900/90 border-amber-400/80 shadow-xs'
+                              : 'bg-stone-50/70 dark:bg-stone-900/40 border-stone-200 dark:border-stone-800 opacity-90'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1 mb-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xl">{icon}</span>
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs text-stone-800 dark:text-stone-100 truncate">
+                                  {cfg.name}
+                                </div>
+                                <div className="text-[10px] text-stone-400 dark:text-stone-500 truncate">
+                                  {cropName} &rarr; {feedName}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          {isHired && (
-                            <div className="flex items-center gap-1 shrink-0">
-                              {isPaused && (
-                                <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                                  ⏸️ Paused
+                            {isHired && (
+                              <div className="flex items-center gap-1 shrink-0">
+                                {isPaused && (
+                                  <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                    ⏸️ Paused
+                                  </span>
+                                )}
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                                  Lv.{worker?.level || 1}
                                 </span>
-                              )}
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
-                                Lv.{worker?.level || 1}
-                              </span>
+                              </div>
+                            )}
+                          </div>
+
+                          {isHired ? (
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1">
+                                  {isPaused ? (
+                                    <>
+                                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
+                                      <span className="text-amber-600 dark:text-amber-400 font-semibold">Paused</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                                      <span>{worker?.autoSell ? 'Auto-Selling' : (cfg.hoardIsSilo ? 'Milling to Silo' : 'Milling to Barn')}</span>
+                                    </>
+                                  )}
+                                </span>
+                                <span className="font-semibold text-stone-600 dark:text-stone-300">
+                                  {worker?.stats?.totalItemsProduced || 0} batches
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-1">
+                                <button
+                                  onClick={() => togglePauseUnifiedWorker(role)}
+                                  className={`py-1 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-0.5 shadow-xs active:scale-95 ${
+                                    isPaused
+                                      ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-200 border-emerald-400'
+                                      : 'bg-stone-100 hover:bg-amber-100 dark:bg-stone-800 dark:hover:bg-amber-950/40 text-stone-700 dark:text-stone-300 border-stone-300 dark:border-stone-700'
+                                  }`}
+                                  title={isPaused ? "Resume this miller" : "Temporarily pause this miller"}
+                                >
+                                  <span>{isPaused ? '▶️ Resume' : '⏸️ Pause'}</span>
+                                </button>
+                                <button
+                                  onClick={() => toggleUnifiedWorkerMode(role)}
+                                  className="py-1 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-0.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 border-stone-300 dark:border-stone-700"
+                                  title={`Toggle between Hoard mode (deposits ${feedName} in ${cfg.hoardIsSilo ? 'Silo' : 'Barn'}) and Auto-Sell (converts to coins)`}
+                                >
+                                  <span>{worker?.autoSell ? '🪙 Sell' : (cfg.hoardIsSilo ? '🥣 Silo' : '📦 Barn')}</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                                {!isUnlocked ? `Unlocks at Lv.${cfg.unlockLevel}` : `Cost: ${cfg.baseCost}🪙`}
+                              </div>
+                              <button
+                                onClick={() => hireUnifiedWorker(role)}
+                                disabled={!isUnlocked || !canAfford}
+                                className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold text-stone-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 transition-all active:scale-95 cursor-pointer shadow-xs disabled:cursor-not-allowed"
+                              >
+                                {!isUnlocked ? `Reach Lv.${cfg.unlockLevel}` : `Hire (${cfg.baseCost}🪙)`}
+                              </button>
                             </div>
                           )}
                         </div>
-
-                        {isHired ? (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-[10px]">
-                              <span className="text-stone-500 dark:text-stone-400 flex items-center gap-1">
-                                {isPaused ? (
-                                  <>
-                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block" />
-                                    <span className="text-amber-600 dark:text-amber-400 font-semibold">Paused</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                                    <span>{worker?.autoSell ? 'Auto-Selling' : 'Milling to Silo'}</span>
-                                  </>
-                                )}
-                              </span>
-                              <span className="font-semibold text-stone-600 dark:text-stone-300">
-                                {worker?.stats?.totalItemsProduced || 0} batches
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-1">
-                              <button
-                                onClick={() => togglePauseUnifiedWorker(role)}
-                                className={`py-1 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-0.5 shadow-xs active:scale-95 ${
-                                  isPaused
-                                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-800 dark:text-emerald-200 border-emerald-400'
-                                    : 'bg-stone-100 hover:bg-amber-100 dark:bg-stone-800 dark:hover:bg-amber-950/40 text-stone-700 dark:text-stone-300 border-stone-300 dark:border-stone-700'
-                                }`}
-                                title={isPaused ? "Resume this miller" : "Temporarily pause this miller"}
-                              >
-                                <span>{isPaused ? '▶️ Resume' : '⏸️ Pause'}</span>
-                              </button>
-                              <button
-                                onClick={() => toggleUnifiedWorkerMode(role)}
-                                className="py-1 px-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-0.5 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 border-stone-300 dark:border-stone-700"
-                                title="Toggle between Hoard mode (deposits feed in Silo) and Auto-Sell (converts to coins)"
-                              >
-                                <span>{worker?.autoSell ? '🪙 Sell' : '🥣 Silo'}</span>
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1.5">
-                            <div className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
-                              {!isUnlocked ? `Unlocks at Lv.${cfg.unlockLevel}` : `Cost: ${cfg.baseCost}🪙`}
-                            </div>
-                            <button
-                              onClick={() => hireUnifiedWorker(role)}
-                              disabled={!isUnlocked || !canAfford}
-                              className="w-full py-1 px-1.5 rounded-lg text-[10px] font-bold text-stone-900 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 disabled:opacity-40 transition-all active:scale-95 cursor-pointer shadow-xs disabled:cursor-not-allowed"
-                            >
-                              {!isUnlocked ? `Reach Lv.${cfg.unlockLevel}` : `Hire (${cfg.baseCost}🪙)`}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Recipes */}
             <div className="p-3 space-y-2">

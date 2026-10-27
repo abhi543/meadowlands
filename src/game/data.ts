@@ -1222,8 +1222,9 @@ export type WorkerDivision = 'farmhand' | 'millers' | 'autonomous' | 'utility';
 export type WorkerRole =
   // Division A: Farmhands (Site Buffers)
   | 'farmer' | 'herder' | 'lumberjack' | 'fisherman' | 'artisan'
-  // Division B: Feed Millers (Animal Feed for All Types)
+  // Division B: Feed Millers (Animal Feed & Primeval Diets)
   | 'feed_miller_wheat' | 'feed_miller_corn' | 'feed_miller_carrot' | 'feed_miller_soy'
+  | 'feed_miller_algae' | 'feed_miller_insect' | 'feed_miller_grain_mash' | 'feed_miller_hay'
   // Division C: Autonomous Specialists (Passive Harvesters)
   | 'auto_fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector'
   // Division D: Utility Specialists (Converters)
@@ -1238,7 +1239,10 @@ export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: st
   millers: {
     label: 'Feed Millers',
     emoji: '🥣',
-    roles: ['feed_miller_wheat', 'feed_miller_corn', 'feed_miller_carrot', 'feed_miller_soy'],
+    roles: [
+      'feed_miller_wheat', 'feed_miller_corn', 'feed_miller_carrot', 'feed_miller_soy',
+      'feed_miller_algae', 'feed_miller_insect', 'feed_miller_grain_mash', 'feed_miller_hay',
+    ],
   },
   autonomous: {
     label: 'Harvesters',
@@ -1337,6 +1341,34 @@ export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
     baseCost: 400, baseIntervalMs: 25000, exponent: 1.071, unlockLevel: 4,
     autoSellPayout: 18, hoardItem: 'feed', hoardItemEmoji: '🥣', hoardIsSilo: true,
     rareItem: 'soybean', rareItemEmoji: '🫘', rareItemSellPrice: 14,
+  },
+  feed_miller_algae: {
+    role: 'feed_miller_algae', name: 'Algae Paste Miller', emoji: '🧪',
+    description: 'Blends wheat and wild berries into nutritious Algae Paste for prehistoric marine fauna', division: 'millers',
+    baseCost: 280, baseIntervalMs: 20000, exponent: 1.070, unlockLevel: 3,
+    autoSellPayout: 16, hoardItem: 'algae_paste', hoardItemEmoji: '🧪', hoardIsSilo: false,
+    rareItem: 'wild_berries', rareItemEmoji: '🫐', rareItemSellPrice: 12,
+  },
+  feed_miller_insect: {
+    role: 'feed_miller_insect', name: 'Insect Mash Grinder', emoji: '🥣',
+    description: 'Grinds wheat and soybeans into protein-dense Insect Mash for prehistoric Meganeura', division: 'millers',
+    baseCost: 350, baseIntervalMs: 22000, exponent: 1.071, unlockLevel: 3,
+    autoSellPayout: 20, hoardItem: 'insect_mash', hoardItemEmoji: '🥣', hoardIsSilo: false,
+    rareItem: 'soybean', rareItemEmoji: '🫘', rareItemSellPrice: 14,
+  },
+  feed_miller_grain_mash: {
+    role: 'feed_miller_grain_mash', name: 'Grain Mash Masher', emoji: '🌾',
+    description: 'Crushes wheat and corn into fibrous mash for prehistoric Arthropleura & fauna', division: 'millers',
+    baseCost: 260, baseIntervalMs: 20000, exponent: 1.069, unlockLevel: 2,
+    autoSellPayout: 18, hoardItem: 'crushed_grain_mash', hoardItemEmoji: '🌾', hoardIsSilo: false,
+    rareItem: 'corn', rareItemEmoji: '🌽', rareItemSellPrice: 8,
+  },
+  feed_miller_hay: {
+    role: 'feed_miller_hay', name: 'Mountain Hay Bundler', emoji: '📦🌾',
+    description: 'Bundles wheat, cotton, and chaff into dense Mountain Hay Bales for Woolly Mammoths', division: 'millers',
+    baseCost: 420, baseIntervalMs: 24000, exponent: 1.072, unlockLevel: 4,
+    autoSellPayout: 24, hoardItem: 'mountain_hay_bales', hoardItemEmoji: '🌾', hoardIsSilo: false,
+    rareItem: 'cotton', rareItemEmoji: '☁️', rareItemSellPrice: 16,
   },
   // --- Division B: Autonomous Specialists ---
   auto_fisherman: {

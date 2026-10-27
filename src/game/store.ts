@@ -1512,6 +1512,7 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
   const allRoles: WorkerRole[] = [
     'farmer', 'herder', 'lumberjack', 'fisherman', 'artisan',
     'feed_miller_wheat', 'feed_miller_corn', 'feed_miller_carrot', 'feed_miller_soy',
+    'feed_miller_algae', 'feed_miller_insect', 'feed_miller_grain_mash', 'feed_miller_hay',
     'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
     'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
   ];
@@ -3658,7 +3659,7 @@ export const useGameStore = create<GameState>()(
           coins: state.coins + finalSellPrice,
         });
         state.addNotification(
-          `💰 Sold Elder ${breedDef?.name || def.name} (${animal.coat || 'Standard'} Gen ${animal.generation || 0}) for ${finalSellPrice} coins!`,
+          `💰 Sold Elder ${breedDef?.name || ANIMALS[animal.species]?.name || 'Animal'} (${animal.coat || 'Standard'} Gen ${animal.generation || 0}) for ${finalSellPrice} coins!`,
           '💰',
           'coin'
         );
@@ -11791,6 +11792,32 @@ export const useGameStore = create<GameState>()(
                     } else if (role === 'feed_miller_soy' && !isSoyLocked && (newSilo.soybean || 0) > 2) {
                       newSilo.soybean -= 1;
                       qty += multiplier * (4 * baseBatch);
+                    } else if (role === 'feed_miller_algae' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
+                      newSilo.wheat -= 1;
+                      const isBerryLocked = barnLocks['wild_berries']?.isLockedForWorkers;
+                      if (!isBerryLocked && (newBarn.wild_berries || 0) > 1) {
+                        newBarn.wild_berries -= 1;
+                      }
+                      qty += multiplier * (2 * baseBatch);
+                    } else if (role === 'feed_miller_insect' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
+                      newSilo.wheat -= 1;
+                      if (!isSoyLocked && (newSilo.soybean || 0) > 1) {
+                        newSilo.soybean -= 1;
+                      }
+                      qty += multiplier * (2 * baseBatch);
+                    } else if (role === 'feed_miller_grain_mash' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
+                      newSilo.wheat -= 1;
+                      if (!isCornLocked && (newSilo.corn || 0) > 1) {
+                        newSilo.corn -= 1;
+                      }
+                      qty += multiplier * (2 * baseBatch);
+                    } else if (role === 'feed_miller_hay' && !isWheatLocked && (newSilo.wheat || 0) > 2) {
+                      newSilo.wheat -= 1;
+                      const isCottonLocked = barnLocks['cotton']?.isLockedForWorkers;
+                      if (!isCottonLocked && (newBarn.cotton || 0) > 1) {
+                        newBarn.cotton -= 1;
+                      }
+                      qty += multiplier * (2 * baseBatch);
                     }
 
                     if (cfg.hoardIsSilo) {
