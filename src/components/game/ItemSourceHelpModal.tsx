@@ -683,7 +683,7 @@ export function ItemSourceHelpModal({
                 className="p-3 rounded-2xl bg-stone-950/60 border border-stone-800 hover:border-stone-700 transition-all space-y-1.5 flex flex-col justify-between"
               >
                 <div>
-                  <div className="flex items-center justify-between pb-1 border-b border-stone-850">
+                  <div className="flex items-center justify-between pb-1 border-b border-stone-800">
                     <div className="flex items-center gap-2">
                       <span className="text-xl select-none">{item.emoji}</span>
                       <div>
@@ -708,7 +708,7 @@ export function ItemSourceHelpModal({
                   </p>
                 </div>
 
-                <div className="pt-1.5 border-t border-stone-850 flex items-center justify-between text-[10px]">
+                <div className="pt-1.5 border-t border-stone-800 flex items-center justify-between text-[10px]">
                   <span className="font-bold text-emerald-400 flex items-center gap-1">
                     <span>➡️</span>
                     <span>{item.tabTarget}</span>
