@@ -20,7 +20,7 @@ import { DualRosterCommandDeck } from './DualRosterCommandDeck';
 import { PicketAlertBanner } from './PicketAlertBanner';
 import { GrievanceResolutionModal } from './GrievanceResolutionModal';
 import { WorkerRetirementModal } from './WorkerRetirementModal';
-import { WorkerHallOfFameModal } from './WorkerHallOfFameModal';
+import { WorkerHallOfFameModal, WorkerHallOfFameView } from './WorkerHallOfFameModal';
 import {
   getGenerationalSpeedMultiplier,
   canWorkerRetire,
@@ -137,6 +137,8 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     isAllWorkersPaused,
     workerAncestors,
   } = useGameStore();
+  type WorkerHubTab = 'workforce' | 'specialists' | 'shifts' | 'commissary' | 'bunkhouse' | 'hall_of_fame';
+  const [activeTab, setActiveTab] = useState<WorkerHubTab>('workforce');
   const [activeDivision, setActiveDivision] = useState<WorkerDivision>('farmhand');
   const [bulkMode, setBulkMode] = useState<BulkMode>('x1');
   const [shiftFilter, setShiftFilter] = useState<ShiftType | 'all'>('all');
@@ -176,6 +178,8 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
     if (w.isHired) divisionCounts[WORKER_REGISTRY[w.role].division]++;
   }
 
+  const hiredSpecialistCount = Object.values(specialistWorkers || {}).filter(sp => sp?.isHired).length;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -189,14 +193,20 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => setIsHallOfFameOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40 transition-all cursor-pointer shadow-xs active:scale-95"
+            onClick={() => setActiveTab('hall_of_fame')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95 ${
+              activeTab === 'hall_of_fame'
+                ? 'bg-amber-500 text-stone-950 font-black ring-2 ring-amber-400'
+                : 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/40'
+            }`}
             title="View the lineage of retired workers and their generational accomplishments"
           >
             <span>🏛️</span>
             <span>Hall of Fame</span>
             {(workerAncestors?.length || 0) > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-stone-950 font-black text-[10px]">
+              <span className={`px-1.5 py-0.2 rounded-full font-black text-[10px] ${
+                activeTab === 'hall_of_fame' ? 'bg-stone-950 text-amber-300' : 'bg-amber-500 text-stone-950'
+              }`}>
                 {workerAncestors.length}
               </span>
             )}
@@ -241,31 +251,76 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
       {/* Picket Alert Banner for Labor Disputes */}
       <PicketAlertBanner />
 
-      {/* Master Farm Clock & Shift Timeline (Top Banner) */}
-      <FarmClockBanner
-        selectedShiftFilter={shiftFilter}
-        onSelectShiftFilter={setShiftFilter}
-      />
+      {/* Primary Section Tabs Navigation Bar */}
+      <div className="flex items-center gap-1.5 p-1.5 bg-stone-100 dark:bg-stone-900/90 border border-stone-200 dark:border-stone-800 rounded-2xl overflow-x-auto shadow-inner custom-scrollbar">
+        {[
+          {
+            id: 'workforce',
+            label: 'Workforce',
+            icon: '🌾',
+            badge: hiredCount > 0 ? `${hiredCount}/${totalWorkers}` : undefined,
+          },
+          {
+            id: 'specialists',
+            label: 'Specialists',
+            icon: '🤠',
+            badge: hiredSpecialistCount > 0 ? `${hiredSpecialistCount}` : undefined,
+          },
+          {
+            id: 'shifts',
+            label: 'Shifts & Clock',
+            icon: '🕒',
+          },
+          {
+            id: 'commissary',
+            label: 'Payroll & Pantry',
+            icon: '💰',
+          },
+          {
+            id: 'bunkhouse',
+            label: 'Bunkhouse & Rest',
+            icon: '🏠',
+          },
+          {
+            id: 'hall_of_fame',
+            label: 'Hall of Fame',
+            icon: '🏛️',
+            badge: (workerAncestors?.length || 0) > 0 ? `${workerAncestors.length}` : undefined,
+          },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as WorkerHubTab)}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer select-none active:scale-95 ${
+                isActive
+                  ? 'bg-amber-500 text-stone-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-400 font-black'
+                  : 'bg-white/80 dark:bg-stone-800/80 text-stone-600 dark:text-stone-300 hover:bg-stone-200/80 dark:hover:bg-stone-700/80 hover:text-stone-900 dark:hover:text-white border border-stone-200/60 dark:border-stone-700/60'
+              }`}
+            >
+              <span className="text-sm">{tab.icon}</span>
+              <span className="whitespace-nowrap">{tab.label}</span>
+              {tab.badge && (
+                <span
+                  className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
+                    isActive
+                      ? 'bg-stone-950/20 text-stone-950'
+                      : 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Dual-Roster Command Deck (Slot A Morning Specialist, Slot B Night Specialist & Twilight Telemetry) */}
-      <DualRosterCommandDeck />
-
-      {/* Unified Executive Management Header: Staff Commissary & Payroll Vault Command Card */}
-      <StaffCommissaryCommandCard />
-
-      {/* Dedicated Living Accommodations: Bunkhouse Facility Panel */}
-      <BunkhouseFacilityPanel />
-
-      {/* Prominent Dedicated Specialist Workers Section */}
-      <SpecialistWorkersSection
-        onSelectTab={onSelectTab}
-        onOpenArbitration={(workerId) => {
-          setArbitrationWorkerId(workerId);
-          setIsArbitrationOpen(true);
-        }}
-      />
-
-      {/* Division Tabs */}
+      {/* 1. Workforce Tab (Field Hands, Millers, Autonomous, Utility) */}
+      {activeTab === 'workforce' && (
+        <div className="space-y-4">
+          {/* Division Tabs */}
       <div className="flex gap-1 bg-stone-100 dark:bg-gray-800 rounded-lg p-1">
         {(Object.entries(WORKER_DIVISIONS) as [WorkerDivision, typeof division][]).map(([divId, div]) => {
           const isActive = activeDivision === divId;
@@ -927,7 +982,54 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
             </div>
           );
         })}
+        </div>
       </div>
+      )}
+
+      {/* 2. Specialists Tab (Livestock Wranglers, Caravaners, Feedmasters, Stable Masters) */}
+      {activeTab === 'specialists' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <SpecialistWorkersSection
+            onSelectTab={onSelectTab}
+            onOpenArbitration={(workerId) => {
+              setArbitrationWorkerId(workerId);
+              setIsArbitrationOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* 3. Shifts & Clock Tab (Farm Clock, Schedules, Overtime & Dual Roster) */}
+      {activeTab === 'shifts' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <FarmClockBanner
+            selectedShiftFilter={shiftFilter}
+            onSelectShiftFilter={setShiftFilter}
+          />
+          <DualRosterCommandDeck />
+        </div>
+      )}
+
+      {/* 4. Payroll & Commissary Tab (Wage Settlement Vault & Pantry Food Reserves) */}
+      {activeTab === 'commissary' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <StaffCommissaryCommandCard />
+        </div>
+      )}
+
+      {/* 5. Bunkhouse & Living Accommodations Tab (Rest, Beds & Hydration Canteen) */}
+      {activeTab === 'bunkhouse' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <BunkhouseFacilityPanel />
+        </div>
+      )}
+
+      {/* 6. Dynastic Hall of Fame Tab (Retired Ancestors, Speed Lineage & Golden Pensions) */}
+      {activeTab === 'hall_of_fame' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <WorkerHallOfFameView />
+        </div>
+      )}
 
       {/* Guild Grievance Arbitration Dossier Modal */}
       <GrievanceResolutionModal
