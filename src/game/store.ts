@@ -26,6 +26,7 @@ import {
   workerUpgradeCost, workerEffectiveInterval, workerDoubleProcChance,
   workerTripleProcUnlocked, workerGemProcUnlocked, workerAutoSellBonus,
   workerHopperBuffer, workerAutoSellPayout, calculateBulkUpgrade,
+  workerSpeedMultiplier, workerOverdrive,
   calculateWorkerDailyWage, workerOutputBatchSize, workerRareItemProcChance,
   type CropId, type AnimalSpecies, type Tier, type BuildingId, type FarmhandRole, type RecipeDef,
   type WaterZoneId, type FishSpeciesId, type RodTier, type OutfitId,
@@ -1523,7 +1524,44 @@ const initialAnimals: AnimalInstance[] = [
 
 const initialOrders = generateOrders(6, 1);
 
-// Create default unified worker instances for all 13 roles
+export const GAS_CANISTER_TO_TECH: Record<CanisterId, WorkerRole> = {
+  co2_cylinder: 'gas_co2_tech',
+  oxygen_canister: 'gas_o2_tech',
+  nitrogen_dewar: 'gas_n2_tech',
+  ethylene_cylinder: 'gas_ethylene_tech',
+  ozone_canister: 'gas_ozone_tech',
+  sulfur_dioxide_flask: 'gas_so2_tech',
+  phosphine_bomb: 'gas_phosphine_tech',
+};
+
+export const TECH_TO_GAS_CANISTER: Partial<Record<WorkerRole, CanisterId>> = {
+  gas_co2_tech: 'co2_cylinder',
+  gas_o2_tech: 'oxygen_canister',
+  gas_n2_tech: 'nitrogen_dewar',
+  gas_ethylene_tech: 'ethylene_cylinder',
+  gas_ozone_tech: 'ozone_canister',
+  gas_so2_tech: 'sulfur_dioxide_flask',
+  gas_phosphine_tech: 'phosphine_bomb',
+};
+
+export function computeGasBatchSpecs(
+  worker: UnifiedWorkerInstance | undefined,
+  recipe: CanisterRecipeDef
+): { durationSec: number; outputQty: number } {
+  if (!worker || !worker.isHired) {
+    return { durationSec: recipe.processingDurationSec, outputQty: 1 };
+  }
+  const gen = worker.generation || 1;
+  const speedFactor = (workerSpeedMultiplier(worker.level) * workerOverdrive(worker.level)) / Math.pow(2, Math.max(0, gen - 1));
+  const durationSec = Math.max(2, Math.round(recipe.processingDurationSec * speedFactor));
+  let outputQty = 1;
+  if (Math.random() < workerDoubleProcChance(worker.level)) {
+    outputQty = (workerTripleProcUnlocked(worker.level) && Math.random() < 0.15) ? 3 : 2;
+  }
+  return { durationSec, outputQty };
+}
+
+// Create default unified worker instances for all 29 roles
 function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance> {
   const now = Date.now();
   const workers: Partial<Record<WorkerRole, UnifiedWorkerInstance>> = {};
@@ -1533,6 +1571,8 @@ function createDefaultUnifiedWorkers(): Record<WorkerRole, UnifiedWorkerInstance
     'feed_miller_algae', 'feed_miller_insect', 'feed_miller_grain_mash', 'feed_miller_hay',
     'auto_fisherman', 'beekeeper', 'forager', 'merchant', 'prospector',
     'alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer',
+    'gas_co2_tech', 'gas_o2_tech', 'gas_n2_tech', 'gas_ethylene_tech',
+    'gas_ozone_tech', 'gas_so2_tech', 'gas_phosphine_tech',
   ];
   for (const role of allRoles) {
     workers[role] = {
@@ -5474,7 +5514,16 @@ export const useGameStore = create<GameState>()(
           }
           newFishery = { ...state.fishery, lastCatchTimestamps: newTimestamps };
         }
-        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers, fishery: newFishery });
+        const gasCid = TECH_TO_GAS_CANISTER[role];
+        let newGasRefinery = state.gasRefinery;
+        if (gasCid) {
+          const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+          const auto = { ...(refinery.automatedGases || {}) };
+          auto[gasCid] = true;
+          refinery.automatedGases = auto;
+          newGasRefinery = refinery;
+        }
+        set({ coins: state.coins - cfg.baseCost, unifiedWorkers: newWorkers, fishery: newFishery, gasRefinery: newGasRefinery });
         state.addNotification(`${cfg.name} hired!`, cfg.emoji, 'info');
       },
 
@@ -5531,8 +5580,18 @@ export const useGameStore = create<GameState>()(
         // If all hired unified workers are paused, sync global pause flag
         const hiredList = Object.values(newWorkers).filter(w => w.isHired);
         const allPaused = hiredList.length > 0 && hiredList.every(w => w.isPaused);
+        const gasCid = TECH_TO_GAS_CANISTER[role];
+        let newGasRefinery = state.gasRefinery;
+        if (gasCid) {
+          const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
+          const auto = { ...(refinery.automatedGases || {}) };
+          auto[gasCid] = !newPaused;
+          refinery.automatedGases = auto;
+          newGasRefinery = refinery;
+        }
         set({
           unifiedWorkers: newWorkers,
+          gasRefinery: newGasRefinery,
           isAllWorkersPaused: allPaused ? true : (newPaused ? state.isAllWorkersPaused : false),
         });
         state.addNotification(
@@ -7348,14 +7407,18 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        const techRole = GAS_CANISTER_TO_TECH[recipeId];
+        const tech = state.unifiedWorkers?.[techRole];
+        const { durationSec, outputQty } = computeGasBatchSpecs(tech, recipe);
+
         const newBatch: CompressorBatch = {
           id: `batch_${recipeId}_${Date.now()}`,
           canisterId: recipeId,
           name: recipe.name,
           emoji: recipe.emoji,
           startedAt: Date.now(),
-          durationSec: recipe.processingDurationSec,
-          outputQty: 1,
+          durationSec,
+          outputQty,
         };
 
         currentBatches[recipeId] = newBatch;
@@ -7415,8 +7478,19 @@ export const useGameStore = create<GameState>()(
         auto[canisterId] = nextVal;
         refinery.automatedGases = auto;
 
+        const role = GAS_CANISTER_TO_TECH[canisterId];
+        const newUnified = { ...state.unifiedWorkers };
+        if (newUnified[role]) {
+          newUnified[role] = {
+            ...newUnified[role],
+            isPaused: !nextVal,
+            isHired: true,
+          };
+        }
+
         set({
           gasRefinery: refinery,
+          unifiedWorkers: newUnified,
           isDirty: true,
         });
 
@@ -7445,8 +7519,19 @@ export const useGameStore = create<GameState>()(
         auto[canisterId] = enabled;
         refinery.automatedGases = auto;
 
+        const role = GAS_CANISTER_TO_TECH[canisterId];
+        const newUnified = { ...state.unifiedWorkers };
+        if (newUnified[role]) {
+          newUnified[role] = {
+            ...newUnified[role],
+            isPaused: !enabled,
+            isHired: true,
+          };
+        }
+
         set({
           gasRefinery: refinery,
+          unifiedWorkers: newUnified,
           isDirty: true,
         });
 
@@ -7473,13 +7558,23 @@ export const useGameStore = create<GameState>()(
         const advancedList: CanisterId[] = ['ethylene_cylinder', 'ozone_canister', 'sulfur_dioxide_flask', 'phosphine_bomb'];
         const targets = tier === 'primary' ? primaryList : tier === 'advanced' ? advancedList : [...primaryList, ...advancedList];
 
+        const newUnified = { ...state.unifiedWorkers };
         for (const cid of targets) {
           auto[cid] = enabled;
+          const role = GAS_CANISTER_TO_TECH[cid];
+          if (newUnified[role]) {
+            newUnified[role] = {
+              ...newUnified[role],
+              isPaused: !enabled,
+              isHired: true,
+            };
+          }
         }
         refinery.automatedGases = auto;
 
         set({
           gasRefinery: refinery,
+          unifiedWorkers: newUnified,
           isDirty: true,
         });
 
@@ -10793,12 +10888,51 @@ export const useGameStore = create<GameState>()(
           state.addNotification(notif, '🚰', 'info');
         }
 
+        // Unified Worker Tick state (initialized early so gas refinery & workers share state)
+        const areWorkersPaused = Boolean(state.isAllWorkersPaused || (state.workersPausedUntil && now < state.workersPausedUntil));
+        let unifiedWorkersModified = false;
+        const updatedUnifiedWorkers = { ...state.unifiedWorkers };
+        let newGems = state.gems;
+
         // Gas Bottling & Export Refinery Simulation Tick
         const gasSimRes = stepGasBottlingSimulation(state.gasRefinery || createDefaultGasBottlingRefinery(), now);
         let updatedGasRefinery = gasSimRes.updatedRefinery;
         if (gasSimRes.completedBatches && gasSimRes.completedBatches.length > 0) {
           for (const b of gasSimRes.completedBatches) {
-            state.addNotification(`🛢️ Compression Complete: 1x ${b.name} placed in Laboratory Output!`, '🛢️', 'discovery');
+            const role = GAS_CANISTER_TO_TECH[b.canisterId];
+            const worker = updatedUnifiedWorkers[role];
+            if (worker && worker.isHired) {
+              unifiedWorkersModified = true;
+              worker.stats.totalItemsProduced = (worker.stats.totalItemsProduced || 0) + b.outputQty;
+              if (worker.autoSell) {
+                const baseVal = CANISTER_RECIPES[b.canisterId]?.baseExportCoins || 50;
+                const bonusPct = workerAutoSellBonus(worker.level);
+                const totalEarned = Math.round(baseVal * b.outputQty * (1 + bonusPct / 100));
+                newCoins += totalEarned;
+                worker.stats.totalCoinsEarned = (worker.stats.totalCoinsEarned || 0) + totalEarned;
+                if (updatedGasRefinery.outputRack?.[b.canisterId]) {
+                  updatedGasRefinery.outputRack[b.canisterId] = Math.max(0, updatedGasRefinery.outputRack[b.canisterId] - b.outputQty);
+                }
+                state.addNotification(
+                  `💰 ${WORKER_REGISTRY[role].name} Auto-Sold ${b.outputQty}x ${b.name} for +${totalEarned} Coins!`,
+                  '💰',
+                  'discovery'
+                );
+              } else {
+                state.addNotification(
+                  `🛢️ Compression Complete: ${b.outputQty}x ${b.name} placed in Laboratory Output!`,
+                  '🛢️',
+                  'discovery'
+                );
+              }
+              if (workerGemProcUnlocked(worker.level) && Math.random() < 0.05) {
+                newGems += 1;
+                worker.stats.totalGemsEarned = (worker.stats.totalGemsEarned || 0) + 1;
+                state.addNotification(`💎 ${WORKER_REGISTRY[role].name} extracted a pristine Gem from compression heat!`, '💎', 'event');
+              }
+            } else {
+              state.addNotification(`🛢️ Compression Complete: ${b.outputQty}x ${b.name} placed in Laboratory Output!`, '🛢️', 'discovery');
+            }
           }
         }
 
@@ -10985,7 +11119,8 @@ export const useGameStore = create<GameState>()(
         };
 
         // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff, only if worker slurry governor is active)
-        if (isWorkerSlurryActive && autoGases.co2_cylinder && !activeBatchesInRefinery.co2_cylinder) {
+        const isCo2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_co2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_co2_tech?.isPaused;
+        if (isWorkerSlurryActive && autoGases.co2_cylinder && isCo2Active && !activeBatchesInRefinery.co2_cylinder) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const chaffAvail = (newSilo.chaff || 0) + (newBarn.chaff || 0);
           if (slurryAvail >= 40 && chaffAvail >= 10) {
@@ -10998,20 +11133,22 @@ export const useGameStore = create<GameState>()(
               newSilo.chaff = 0;
               newBarn.chaff = Math.max(0, (newBarn.chaff || 0) - neededChaff);
             }
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_co2_tech, CANISTER_RECIPES.co2_cylinder);
             activeBatchesInRefinery.co2_cylinder = {
               id: `batch_co2_${now}`,
               canisterId: 'co2_cylinder',
               name: CANISTER_RECIPES.co2_cylinder.name,
               emoji: CANISTER_RECIPES.co2_cylinder.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.co2_cylinder.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
 
         // 2. Check N2 Chamber (Needs 50L Slurry + 1 Fuel or 15 Coins, only if worker slurry governor is active)
-        if (isWorkerSlurryActive && autoGases.nitrogen_dewar && !activeBatchesInRefinery.nitrogen_dewar) {
+        const isN2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_n2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_n2_tech?.isPaused;
+        if (isWorkerSlurryActive && autoGases.nitrogen_dewar && isN2Active && !activeBatchesInRefinery.nitrogen_dewar) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           if (slurryAvail >= 50) {
             let hasFuel = false;
@@ -11030,21 +11167,23 @@ export const useGameStore = create<GameState>()(
             }
             if (hasFuel) {
               updatedGasRefinery.storedSlurryFeedstock = Math.max(0, slurryAvail - 50);
+              const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_n2_tech, CANISTER_RECIPES.nitrogen_dewar);
               activeBatchesInRefinery.nitrogen_dewar = {
                 id: `batch_nitrogen_dewar_${now}`,
                 canisterId: 'nitrogen_dewar',
                 name: CANISTER_RECIPES.nitrogen_dewar.name,
                 emoji: CANISTER_RECIPES.nitrogen_dewar.emoji,
                 startedAt: now,
-                durationSec: CANISTER_RECIPES.nitrogen_dewar.processingDurationSec,
-                outputQty: 1,
+                durationSec: specs.durationSec,
+                outputQty: specs.outputQty,
               };
             }
           }
         }
 
         // 3. Check O2 Chamber (Only runs automatically if player turned on automation for Oxygen)
-        if (autoGases.oxygen_canister && !activeBatchesInRefinery.oxygen_canister) {
+        const isO2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_o2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_o2_tech?.isPaused;
+        if (autoGases.oxygen_canister && isO2Active && !activeBatchesInRefinery.oxygen_canister) {
           const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
           let bioTotal = 0;
           const bioCandidates: (keyof typeof newSilo)[] = ['peas', 'wheat', 'soybean', 'corn'];
@@ -11058,20 +11197,22 @@ export const useGameStore = create<GameState>()(
               newSilo[k] = (newSilo[k] || 0) - take;
               bioNeeded -= take;
             }
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_o2_tech, CANISTER_RECIPES.oxygen_canister);
             activeBatchesInRefinery.oxygen_canister = {
               id: `batch_oxygen_canister_${now}`,
               canisterId: 'oxygen_canister',
               name: CANISTER_RECIPES.oxygen_canister.name,
               emoji: CANISTER_RECIPES.oxygen_canister.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.oxygen_canister.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
 
         // 4. Check Ethylene Chamber (Needs 30L Slurry + 15 Cull Biomass, governor active)
-        if (isWorkerSlurryActive && autoGases.ethylene_cylinder && !activeBatchesInRefinery.ethylene_cylinder) {
+        const isEthyleneActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_ethylene_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_ethylene_tech?.isPaused;
+        if (isWorkerSlurryActive && autoGases.ethylene_cylinder && isEthyleneActive && !activeBatchesInRefinery.ethylene_cylinder) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const cullAvail = (updatedGasRefinery.cullBiomassStock || 0) + (newBarn.cull_biomass || 0);
           if (slurryAvail >= 30 && cullAvail >= 15) {
@@ -11085,20 +11226,22 @@ export const useGameStore = create<GameState>()(
               updatedGasRefinery.cullBiomassStock = 0;
               newBarn.cull_biomass = Math.max(0, (newBarn.cull_biomass || 0) - neededCull);
             }
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_ethylene_tech, CANISTER_RECIPES.ethylene_cylinder);
             activeBatchesInRefinery.ethylene_cylinder = {
               id: `batch_ethylene_${now}`,
               canisterId: 'ethylene_cylinder',
               name: CANISTER_RECIPES.ethylene_cylinder.name,
               emoji: CANISTER_RECIPES.ethylene_cylinder.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.ethylene_cylinder.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
 
         // 5. Check Ozone Chamber (Needs 1 O2 Canister from Rack/Barn + 40 kWh Dynamo Power)
-        if (autoGases.ozone_canister && !activeBatchesInRefinery.ozone_canister) {
+        const isOzoneActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_ozone_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_ozone_tech?.isPaused;
+        if (autoGases.ozone_canister && isOzoneActive && !activeBatchesInRefinery.ozone_canister) {
           const rackO2 = updatedGasRefinery.outputRack?.oxygen_canister || 0;
           const barnO2 = newBarn.oxygen_canister || 0;
           const powerAvail = updatedGasRefinery.dynamoPowerKWh || 0;
@@ -11109,20 +11252,22 @@ export const useGameStore = create<GameState>()(
               newBarn.oxygen_canister = Math.max(0, barnO2 - 1);
             }
             updatedGasRefinery.dynamoPowerKWh = Math.max(0, powerAvail - 40);
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_ozone_tech, CANISTER_RECIPES.ozone_canister);
             activeBatchesInRefinery.ozone_canister = {
               id: `batch_ozone_${now}`,
               canisterId: 'ozone_canister',
               name: CANISTER_RECIPES.ozone_canister.name,
               emoji: CANISTER_RECIPES.ozone_canister.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.ozone_canister.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
 
         // 6. Check Sulfur Dioxide Chamber (Needs 15 Sulfur Dust + 20L Tower Water)
-        if (autoGases.sulfur_dioxide_flask && !activeBatchesInRefinery.sulfur_dioxide_flask) {
+        const isSo2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_so2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_so2_tech?.isPaused;
+        if (autoGases.sulfur_dioxide_flask && isSo2Active && !activeBatchesInRefinery.sulfur_dioxide_flask) {
           const sulfurAvail = (updatedGasRefinery.rawSulfurDust || 0) + (newBarn.raw_sulfur || 0);
           const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
           if (sulfurAvail >= 15 && towerWater >= 20) {
@@ -11136,20 +11281,22 @@ export const useGameStore = create<GameState>()(
               updatedGasRefinery.rawSulfurDust = 0;
               newBarn.raw_sulfur = Math.max(0, (newBarn.raw_sulfur || 0) - neededSulfur);
             }
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_so2_tech, CANISTER_RECIPES.sulfur_dioxide_flask);
             activeBatchesInRefinery.sulfur_dioxide_flask = {
               id: `batch_so2_${now}`,
               canisterId: 'sulfur_dioxide_flask',
               name: CANISTER_RECIPES.sulfur_dioxide_flask.name,
               emoji: CANISTER_RECIPES.sulfur_dioxide_flask.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.sulfur_dioxide_flask.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
 
         // 7. Check Phosphine Chamber (Needs 10 Bone Meal + 25L Slurry, governor active)
-        if (isWorkerSlurryActive && autoGases.phosphine_bomb && !activeBatchesInRefinery.phosphine_bomb) {
+        const isPhosActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_phosphine_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_phosphine_tech?.isPaused;
+        if (isWorkerSlurryActive && autoGases.phosphine_bomb && isPhosActive && !activeBatchesInRefinery.phosphine_bomb) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const boneAvail = (updatedGasRefinery.boneMealBags || 0) + (newBarn.bone_meal || 0);
           if (slurryAvail >= 25 && boneAvail >= 10) {
@@ -11163,14 +11310,15 @@ export const useGameStore = create<GameState>()(
               updatedGasRefinery.boneMealBags = 0;
               newBarn.bone_meal = Math.max(0, (newBarn.bone_meal || 0) - neededBone);
             }
+            const specs = computeGasBatchSpecs(updatedUnifiedWorkers.gas_phosphine_tech, CANISTER_RECIPES.phosphine_bomb);
             activeBatchesInRefinery.phosphine_bomb = {
               id: `batch_ph3_${now}`,
               canisterId: 'phosphine_bomb',
               name: CANISTER_RECIPES.phosphine_bomb.name,
               emoji: CANISTER_RECIPES.phosphine_bomb.emoji,
               startedAt: now,
-              durationSec: CANISTER_RECIPES.phosphine_bomb.processingDurationSec,
-              outputQty: 1,
+              durationSec: specs.durationSec,
+              outputQty: specs.outputQty,
             };
           }
         }
@@ -11189,12 +11337,9 @@ export const useGameStore = create<GameState>()(
             newBarn.manure = (newBarn.manure || 0) + manureGenerated;
           }
         }
-        let newGems = state.gems;
         let newCodex = { ...state.codex };
         let newFishCodex = { ...state.fishery.fishCodex };
         const newCatchTimestamps = { ...state.fishery.lastCatchTimestamps };
-        // Check if workers are paused due to user master pause or sudden crisis penalty
-        const areWorkersPaused = Boolean(state.isAllWorkersPaused || (state.workersPausedUntil && now < state.workersPausedUntil));
 
         // Only catch fish if at least one active fisherman exists (farmhand, autonomous, or unpaused unified)
         const hasFisherman = !areWorkersPaused && (
@@ -11586,12 +11731,14 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // Unified Worker Tick (v2.0) — 13 workers, 120-level scaling
-        let unifiedWorkersModified = false;
-        const updatedUnifiedWorkers = { ...state.unifiedWorkers };
+        // Unified Worker Tick (v2.0) — 29 workers, 120-level scaling
         let updatedWorkerOverclocks = state.entityOverclocks;
         if (!areWorkersPaused) {
           for (const role of Object.keys(updatedUnifiedWorkers) as WorkerRole[]) {
+            if (role.startsWith('gas_')) {
+              // Gas technicians are simulated in their dedicated compressor vats
+              continue;
+            }
             const worker = updatedUnifiedWorkers[role];
             const hasLegacyFarmhand = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder');
             if (!worker || (!worker.isHired && !hasLegacyFarmhand)) continue;
@@ -15879,6 +16026,10 @@ export const useGameStore = create<GameState>()(
               if (currentW.missedCycles === undefined) currentW.missedCycles = 0;
               currentW.shiftType = 'morning';
               if (currentW.stamina === undefined) currentW.stamina = 100;
+              if (r.startsWith('gas_') && !currentW.isHired) {
+                // Ensure existing saves have their gas technicians hired so players don't lose automation
+                currentW.isHired = true;
+              }
             }
           }
         }

@@ -175,7 +175,7 @@ export function WorkersHubPanel({ onSelectTab }: { onSelectTab?: (tab: string) =
   const totalWorkers = Object.keys(WORKER_REGISTRY).length;
 
   // Count workers per division
-  const divisionCounts: Record<WorkerDivision, number> = { farmhand: 0, millers: 0, autonomous: 0, utility: 0 };
+  const divisionCounts: Record<WorkerDivision, number> = { farmhand: 0, millers: 0, autonomous: 0, utility: 0, refinery: 0 };
   for (const w of Object.values(unifiedWorkers)) {
     if (w.isHired) divisionCounts[WORKER_REGISTRY[w.role].division]++;
   }

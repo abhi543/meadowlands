@@ -8,6 +8,14 @@ import {
   type CanisterId,
   type CompressorBatch,
 } from '@/game/gasBottlingEngine';
+import {
+  workerUpgradeCost,
+  workerSpeedMultiplier,
+  workerOverdrive,
+  WORKER_MAX_LEVEL,
+} from '@/game/data';
+import { GAS_CANISTER_TO_TECH } from '@/game/store';
+import { toRomanNumeral } from '@/game/workerGenetics';
 import { playCashRegisterSound, playSumpValveSound } from '@/lib/soundEffects';
 
 export interface GasChamberWorkerDef {
@@ -114,6 +122,9 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
     hydrology,
     coins = 0,
     animals = [],
+    unifiedWorkers,
+    bulkUpgradeUnifiedWorker,
+    toggleUnifiedWorkerMode,
     toggleGasAutomation,
     automateAllTierGas,
     startGasCompressorBatch,
@@ -335,6 +346,79 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
                   </button>
                 </div>
               </div>
+
+              {/* Worker Progression: Level, Speed Multiplier & Upgrade */}
+              {(() => {
+                const techRole = GAS_CANISTER_TO_TECH[worker.canisterId];
+                const tech = unifiedWorkers?.[techRole];
+                const techLevel = tech?.level || 1;
+                const techGen = tech?.generation || 1;
+                const speedFactor = (workerSpeedMultiplier(techLevel) * workerOverdrive(techLevel)) / Math.pow(2, Math.max(0, techGen - 1));
+                const speedMult = Math.round((1 / speedFactor) * 10) / 10;
+                const nextCost = workerUpgradeCost(techRole, techLevel);
+                const canAfford = coins >= nextCost && techLevel < WORKER_MAX_LEVEL;
+
+                return (
+                  <div className="space-y-1.5 p-2 rounded-xl bg-stone-950/90 border border-stone-800">
+                    <div className="flex items-center justify-between text-xs gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-black text-amber-300 text-xs px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/30">
+                          Lv.{techLevel} {techGen > 1 && `(Gen ${toRomanNumeral(techGen)})`}
+                        </span>
+                        <span className="text-[11px] text-emerald-400 font-bold" title="Compression cycle acceleration from worker level and generational lineage">
+                          ⚡ {speedMult}x Spd
+                        </span>
+                      </div>
+
+                      {techLevel < WORKER_MAX_LEVEL ? (
+                        <button
+                          onClick={() => bulkUpgradeUnifiedWorker(techRole, 'x1')}
+                          disabled={!canAfford}
+                          className={`px-2.5 py-1 rounded-lg font-black text-[11px] transition-all cursor-pointer shadow-xs active:scale-95 ${
+                            canAfford
+                              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold'
+                              : 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                          }`}
+                          title={canAfford ? `Upgrade to Lv.${techLevel + 1} for ${nextCost.toLocaleString()} coins` : `Need ${nextCost.toLocaleString()} coins`}
+                        >
+                          +1 Lv ({nextCost.toLocaleString()} 🪙)
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-black text-purple-400 uppercase">Max Lv.120</span>
+                      )}
+                    </div>
+
+                    {/* Level Progress Bar (1..120) */}
+                    <div className="w-full bg-stone-900 rounded-full h-1 overflow-hidden">
+                      <div
+                        className="bg-amber-400 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${(techLevel / WORKER_MAX_LEVEL) * 100}%` }}
+                      />
+                    </div>
+
+                    {/* Mode Toggle: Auto-Sell vs Hoard Output Rack */}
+                    <div className="flex items-center justify-between text-[10px] text-stone-400 pt-0.5">
+                      <span className="flex items-center gap-1">
+                        <span>Mode:</span>
+                        <button
+                          onClick={() => toggleUnifiedWorkerMode(techRole)}
+                          className={`px-1.5 py-0.5 rounded font-bold cursor-pointer transition-all ${
+                            tech?.autoSell
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          }`}
+                          title={tech?.autoSell ? 'Auto-sells canisters immediately upon batch completion for coins' : 'Deposits finished canisters into laboratory rack for shipping crate export'}
+                        >
+                          {tech?.autoSell ? '💰 Auto-Sell' : '📦 Hoard (Rack)'}
+                        </button>
+                      </span>
+                      <span className="text-stone-500">
+                        Wage: {tech?.level ? tech.level * 4 + 16 : 20}c/day
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Status & Timing Indicator */}
               <div className="p-2.5 rounded-xl bg-stone-950/90 border border-stone-800 space-y-1.5 text-xs">

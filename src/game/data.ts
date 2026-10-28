@@ -1217,7 +1217,7 @@ export function livestockBuyPrice(species: AnimalSpecies, tier: Tier): number {
 // Unified Master Worker Ecosystem (v2.0) — 13 Workers, 120 Levels
 // ============================================================
 
-export type WorkerDivision = 'farmhand' | 'millers' | 'autonomous' | 'utility';
+export type WorkerDivision = 'farmhand' | 'millers' | 'autonomous' | 'utility' | 'refinery';
 
 export type WorkerRole =
   // Division A: Farmhands (Site Buffers)
@@ -1228,7 +1228,10 @@ export type WorkerRole =
   // Division C: Autonomous Specialists (Passive Harvesters)
   | 'auto_fisherman' | 'beekeeper' | 'forager' | 'merchant' | 'prospector'
   // Division D: Utility Specialists (Converters)
-  | 'alchemist' | 'barn_overseer' | 'cellar_ager' | 'tinkerer';
+  | 'alchemist' | 'barn_overseer' | 'cellar_ager' | 'tinkerer'
+  // Division E: Gas Refinery Crew (Compressor Technicians)
+  | 'gas_co2_tech' | 'gas_o2_tech' | 'gas_n2_tech' | 'gas_ethylene_tech'
+  | 'gas_ozone_tech' | 'gas_so2_tech' | 'gas_phosphine_tech';
 
 export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: string; roles: WorkerRole[] }> = {
   farmhand: {
@@ -1253,6 +1256,14 @@ export const WORKER_DIVISIONS: Record<WorkerDivision, { label: string; emoji: st
     label: 'Specialists',
     emoji: '\u{2699}',
     roles: ['alchemist', 'barn_overseer', 'cellar_ager', 'tinkerer'],
+  },
+  refinery: {
+    label: 'Gas Crew',
+    emoji: '🛢️',
+    roles: [
+      'gas_co2_tech', 'gas_o2_tech', 'gas_n2_tech', 'gas_ethylene_tech',
+      'gas_ozone_tech', 'gas_so2_tech', 'gas_phosphine_tech',
+    ],
   },
 };
 
@@ -1429,6 +1440,56 @@ export const WORKER_REGISTRY: Record<WorkerRole, WorkerRegistryDef> = {
     description: 'Overclocks buildings 2x and salvages parts', division: 'utility',
     baseCost: 12500, baseIntervalMs: 300000, exponent: 1.082, unlockLevel: 30,
     autoSellPayout: 50, hoardItem: 'nails', hoardItemEmoji: '\u{1F529}', hoardIsSilo: false,
+  },
+  // --- Division E: Gas Refinery Crew (Compressor Technicians) ---
+  gas_co2_tech: {
+    role: 'gas_co2_tech', name: 'Gareth Vance', emoji: '🫧',
+    description: 'Compresses CO₂ gas from anaerobic slurry & chaff for breweries and cellars', division: 'refinery',
+    baseCost: 350, baseIntervalMs: 60000, exponent: 1.071, unlockLevel: 5,
+    autoSellPayout: 45, hoardItem: 'co2_cylinder', hoardItemEmoji: '🫧', hoardIsSilo: false,
+    rareItem: 'co2_cylinder', rareItemEmoji: '🫧', rareItemSellPrice: 50,
+  },
+  gas_o2_tech: {
+    role: 'gas_o2_tech', name: 'Dr. Clara Lin', emoji: '🫁',
+    description: 'Fractionates high-purity medical oxygen from aeration water & biomass', division: 'refinery',
+    baseCost: 500, baseIntervalMs: 60000, exponent: 1.072, unlockLevel: 6,
+    autoSellPayout: 65, hoardItem: 'oxygen_canister', hoardItemEmoji: '🫁', hoardIsSilo: false,
+    rareItem: 'oxygen_canister', rareItemEmoji: '🫁', rareItemSellPrice: 75,
+  },
+  gas_n2_tech: {
+    role: 'gas_n2_tech', name: 'Torval Frost', emoji: '❄️',
+    description: 'Cryogenically isolates liquid nitrogen for cold chains & foundries', division: 'refinery',
+    baseCost: 800, baseIntervalMs: 60000, exponent: 1.073, unlockLevel: 8,
+    autoSellPayout: 110, hoardItem: 'nitrogen_dewar', hoardItemEmoji: '❄️', hoardIsSilo: false,
+    rareItem: 'nitrogen_dewar', rareItemEmoji: '❄️', rareItemSellPrice: 125,
+  },
+  gas_ethylene_tech: {
+    role: 'gas_ethylene_tech', name: 'Silas Croft', emoji: '🍇',
+    description: 'Catalytically cracks plant ripening ethylene from slurry & cull fruit', division: 'refinery',
+    baseCost: 1200, baseIntervalMs: 45000, exponent: 1.074, unlockLevel: 10,
+    autoSellPayout: 80, hoardItem: 'ethylene_cylinder', hoardItemEmoji: '🍇', hoardIsSilo: false,
+    rareItem: 'ethylene_cylinder', rareItemEmoji: '🍇', rareItemSellPrice: 95,
+  },
+  gas_ozone_tech: {
+    role: 'gas_ozone_tech', name: 'Tesla Sparks', emoji: '⚡',
+    description: 'Corona discharge synthesizer generating sterilizing ozone gas', division: 'refinery',
+    baseCost: 1800, baseIntervalMs: 30000, exponent: 1.075, unlockLevel: 12,
+    autoSellPayout: 125, hoardItem: 'ozone_canister', hoardItemEmoji: '⚡', hoardIsSilo: false,
+    rareItem: 'ozone_canister', rareItemEmoji: '⚡', rareItemSellPrice: 145,
+  },
+  gas_so2_tech: {
+    role: 'gas_so2_tech', name: 'Ignatius Brim', emoji: '🌋',
+    description: 'Fume scrubber purifying sulfur dioxide for vineyard preservation', division: 'refinery',
+    baseCost: 2400, baseIntervalMs: 60000, exponent: 1.075, unlockLevel: 14,
+    autoSellPayout: 160, hoardItem: 'sulfur_dioxide_flask', hoardItemEmoji: '🌋', hoardIsSilo: false,
+    rareItem: 'sulfur_dioxide_flask', rareItemEmoji: '🌋', rareItemSellPrice: 185,
+  },
+  gas_phosphine_tech: {
+    role: 'gas_phosphine_tech', name: 'Viktor Mortis', emoji: '☣️',
+    description: 'Synthesizes deep-penetrating phosphine fumigant from bone meal', division: 'refinery',
+    baseCost: 3500, baseIntervalMs: 75000, exponent: 1.076, unlockLevel: 16,
+    autoSellPayout: 220, hoardItem: 'phosphine_bomb', hoardItemEmoji: '☣️', hoardIsSilo: false,
+    rareItem: 'phosphine_bomb', rareItemEmoji: '☣️', rareItemSellPrice: 260,
   },
 };
 
