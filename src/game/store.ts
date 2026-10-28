@@ -12445,6 +12445,7 @@ export const useGameStore = create<GameState>()(
               state.claimHatchedAnimal(rb.id);
             });
             finalActiveBreedings = get().activeBreedings;
+            newAnimals = [...get().animals];
           }
         } else {
           let hasNewReadyEgg = false;
@@ -12476,7 +12477,7 @@ export const useGameStore = create<GameState>()(
           }).isOnDuty
         );
 
-        let finalReserve = [...(state.livestockReserve || [])];
+        let finalReserve = [...(get().livestockReserve || [])];
         if (isOrinActive && finalReserve.length > 0) {
           const nextReserve: AnimalInstance[] = [];
           let movedCount = 0;

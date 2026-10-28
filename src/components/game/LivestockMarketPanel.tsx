@@ -82,10 +82,11 @@ export function LivestockMarketPanel() {
               const breedDef = BREED_REGISTRY[animal.breedId];
               const breedName = breedDef?.name || TIER_LABELS[animal.tier];
               const tierCount = animals.filter(a => a.tier === animal.tier).length;
-              const canDeploy = tierCount < 4;
+              const maxCap = animal.tier === 'common' ? 50 : 4;
+              const canDeploy = tierCount < maxCap;
 
               const coatDef = getCoatDefinition(animal.species, animal.coat);
-              const traitDef = getTraitDefinition(animal.species, animal.trait);
+              const traitDef = getTraitDefinition(animal.trait);
               const isGen0 = !animal.generation || animal.generation === 0;
 
               let baseReserveSell: number;
@@ -132,7 +133,7 @@ export function LivestockMarketPanel() {
                     <div className="mt-1 flex flex-col items-center gap-0.5 text-[8.5px]">
                       {coatDef && (
                         <span className="font-semibold text-stone-600 dark:text-stone-300 truncate max-w-full">
-                          🎨 {coatDef.name} {coatDef.resaleMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.resaleMultiplier}x)</span>}
+                          🎨 {coatDef.name} {coatDef.sellValueMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.sellValueMultiplier}x)</span>}
                         </span>
                       )}
                       {traitDef && animal.trait !== 'none' && (
@@ -152,9 +153,9 @@ export function LivestockMarketPanel() {
                       onClick={() => moveToPasture(animal.id)}
                       disabled={!canDeploy}
                       className="w-full py-1 text-[10px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all shadow-xs"
-                      title={canDeploy ? 'Deploy into active pasture' : `${TIER_LABELS[animal.tier]} Pasture is full (4/4)`}
+                      title={canDeploy ? 'Deploy into active pasture' : `${TIER_LABELS[animal.tier]} Pasture is full (${tierCount}/${maxCap})`}
                     >
-                      {canDeploy ? 'Deploy to Pasture' : 'Pasture Full (4/4)'}
+                      {canDeploy ? 'Deploy to Pasture' : `Pasture Full (${tierCount}/${maxCap})`}
                     </button>
                     <button
                       onClick={() => sellReserveAnimal(animal.id)}
@@ -258,7 +259,7 @@ export function LivestockMarketPanel() {
                 sellPrice = calculateAnimalResalePrice(animal.species, sellPrice, animal.generation, animal.coat);
 
                 const coatDef = getCoatDefinition(animal.species, animal.coat);
-                const traitDef = getTraitDefinition(animal.species, animal.trait);
+                const traitDef = getTraitDefinition(animal.trait);
                 const isGen0 = !animal.generation || animal.generation === 0;
 
                 return (
@@ -280,7 +281,7 @@ export function LivestockMarketPanel() {
                           Shop Stock
                         </span>
                       ) : (
-                        <span className="text-[7.5px] font-extrabold px-1 py-0.2 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                        <span className="text-[7.5px] font-extrabold px-1.5 py-0.2 rounded bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
                           Gen {animal.generation}
                         </span>
                       )}
@@ -293,7 +294,7 @@ export function LivestockMarketPanel() {
                     <div className="mt-0.5 flex flex-col items-center gap-0.5 text-[8px]">
                       {coatDef && (
                         <span className="font-semibold text-stone-600 dark:text-stone-300 truncate max-w-full">
-                          🎨 {coatDef.name} {coatDef.resaleMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.resaleMultiplier}x)</span>}
+                          🎨 {coatDef.name} {coatDef.sellValueMultiplier > 1 && <span className="text-amber-600 dark:text-amber-400 font-bold">({coatDef.sellValueMultiplier}x)</span>}
                         </span>
                       )}
                       {traitDef && animal.trait !== 'none' && (

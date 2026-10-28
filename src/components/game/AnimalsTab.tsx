@@ -977,7 +977,8 @@ export function AnimalsTab() {
                   const breedDef = BREED_REGISTRY[animal.breedId];
                   const breedName = breedDef?.name || TIER_LABELS[animal.tier];
                   const tierCount = animals.filter(a => a.tier === animal.tier).length;
-                  const canDeploy = tierCount < 4;
+                  const maxCap = animal.tier === 'common' ? 50 : 4;
+                  const canDeploy = tierCount < maxCap;
 
                   return (
                     <div
@@ -1010,7 +1011,7 @@ export function AnimalsTab() {
                           disabled={!canDeploy}
                           className="w-full py-1 text-[10px] font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all shadow-xs"
                         >
-                          {canDeploy ? 'Deploy to Pasture' : 'Pasture Full (4/4)'}
+                          {canDeploy ? 'Deploy to Pasture' : `Pasture Full (${tierCount}/${maxCap})`}
                         </button>
                         <button
                           onClick={() => sellReserveAnimal(animal.id)}
