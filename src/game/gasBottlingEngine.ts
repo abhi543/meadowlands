@@ -192,6 +192,7 @@ export interface GasBottlingRefineryState {
   dailyCycleSeconds?: number;
   totalLifetimeExportCoins: number;
   totalCanistersShipped: number;
+  lastSanctuarySlurryNotifTimestamp?: number;
 }
 
 export function createDefaultGasBottlingRefinery(): GasBottlingRefineryState {

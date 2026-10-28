@@ -21,6 +21,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     coins,
     orders = [],
     animals = [],
+    prehistoricSanctuary,
     farmEpochStart = 0,
     startGasCompressorBatch,
     startAllGasCompressors,
@@ -40,7 +41,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const clock = getCircadianClock(now, farmEpochStart || now);
   const isNight = clock.currentPeriod === 'night';
 
-  // Calculate live automatic herd slurry generation (L/min)
+  // Calculate live automatic herd & sanctuary slurry generation (L/min)
   // Excludes retired elder livestock (cyclesRemaining <= 0) and pauses at night when herd is asleep
   const allAnimals = animals || [];
   const activeAnimals = allAnimals.filter(
@@ -49,11 +50,19 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const elderAnimalCount = allAnimals.length - activeAnimals.length;
   const activeAnimalCount = activeAnimals.length;
 
-  const daytimeInflowPerMin = activeAnimals.reduce((sum, a) => {
+  const domesticInflowPerMin = activeAnimals.reduce((sum, a) => {
     const rate = a.species === 'cow' ? 2.5 : a.species === 'pig' ? 1.5 : a.species === 'sheep' ? 1.0 : 0.5;
     return sum + rate;
   }, 0);
 
+  // Prehistoric Sanctuary Mega-Fauna: +5.0 L/min per nourished specimen piped via Primeval Sluice
+  const enclosures = Object.values(prehistoricSanctuary?.enclosures || {});
+  const activeEnclosures = enclosures.filter((e) => (e.specimenCount || 0) > 0 && !e.isStarving);
+  const totalSanctuaryCreatures = activeEnclosures.reduce((sum, e) => sum + (e.specimenCount || 0), 0);
+  const starvingEnclosureCount = enclosures.filter((e) => (e.specimenCount || 0) > 0 && e.isStarving).length;
+  const sanctuaryInflowPerMin = totalSanctuaryCreatures * 5.0;
+
+  const daytimeInflowPerMin = domesticInflowPerMin + sanctuaryInflowPerMin;
   const autoInflowPerMin = isNight ? 0 : daytimeInflowPerMin;
 
   useEffect(() => {
@@ -312,7 +321,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
             <div className="bg-stone-950/70 rounded-xl p-3 border border-stone-800/80 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-stone-300 flex items-center gap-1.5">
-                  <span>💩</span> Raw Livestock Slurry
+                  <span>💩</span> Raw Livestock &amp; Primeval Slurry
                 </span>
                 <span className="text-xs font-mono font-bold text-amber-400">
                   {slurryStock}L / {maxSlurry}L
@@ -342,25 +351,49 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                   )}
                 </span>
                 {autoInflowPerMin > 0 ? (
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  <span
+                    className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 rounded-full"
+                    title={`Inflow Breakdown: +${domesticInflowPerMin.toFixed(1)} L/min from ${activeAnimalCount} domestic livestock${totalSanctuaryCreatures > 0 ? ` + ${sanctuaryInflowPerMin.toFixed(1)} L/min from ${totalSanctuaryCreatures} Sanctuary fauna` : ''}`}
+                  >
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    ☀️ +{autoInflowPerMin.toFixed(1)} L/min ({activeAnimalCount} active{elderAnimalCount > 0 ? `, ${elderAnimalCount} elder` : ''})
+                    ☀️ +{autoInflowPerMin.toFixed(1)} L/min ({activeAnimalCount} herd{totalSanctuaryCreatures > 0 ? `, ${totalSanctuaryCreatures} sanctuary` : ''}{elderAnimalCount > 0 ? `, ${elderAnimalCount} elder` : ''})
                   </span>
                 ) : isNight ? (
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-500/30 px-2 py-0.5 rounded-full" title="Livestock are asleep in the barn during the night shift. Slurry production pauses until morning.">
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-500/30 px-2 py-0.5 rounded-full" title="Livestock and sanctuary fauna are asleep during the night shift. Slurry production pauses until morning.">
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                    🌙 Night Rest: 0 L/min (Herd Asleep in Barn)
+                    🌙 Night Rest: 0 L/min (Herd &amp; Sanctuary Asleep)
                   </span>
-                ) : elderAnimalCount > 0 && activeAnimalCount === 0 ? (
+                ) : elderAnimalCount > 0 && activeAnimalCount === 0 && totalSanctuaryCreatures === 0 ? (
                   <span className="text-[10px] text-amber-400/90 italic" title="Elder animals have retired from biological production and do not produce slurry.">
                     👵 0 L/min ({elderAnimalCount} elder livestock retired)
                   </span>
                 ) : (
                   <span className="text-[10px] text-amber-400/90 italic">
-                    0 L/min (No livestock in pasture)
+                    0 L/min (No active livestock or sanctuary fauna)
                   </span>
                 )}
               </div>
+
+              {/* Dedicated Sanctuary Primeval Sluice Intake Strip */}
+              {totalSanctuaryCreatures > 0 && (
+                <div className="flex items-center justify-between text-[10px] bg-amber-950/40 border border-amber-600/30 rounded-lg px-2.5 py-1 text-amber-300">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <span>🦕</span> Primeval Sanctuary Sluice Intake
+                  </span>
+                  <span className="font-mono text-amber-200">
+                    {isNight ? (
+                      <span className="text-stone-400 text-[9px]">🌙 Resting (0 L/min)</span>
+                    ) : (
+                      <span className="text-emerald-400 font-bold">🟢 Active: +{sanctuaryInflowPerMin.toFixed(1)} L/min ({totalSanctuaryCreatures} ancient specimen{totalSanctuaryCreatures !== 1 ? 's' : ''})</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {starvingEnclosureCount > 0 && (
+                <div className="flex items-center justify-between text-[9px] bg-rose-950/40 border border-rose-600/30 rounded-lg px-2 py-0.5 text-rose-300">
+                  <span>⚠️ {starvingEnclosureCount} sanctuary enclosure(s) empty: primeval slurry paused</span>
+                </div>
+              )}
             </div>
 
             {/* Dry Chaff Bundles */}
@@ -868,7 +901,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                               </span>
                             </div>
                             <div className="text-[9px] text-amber-300/80 bg-amber-950/40 p-1 rounded border border-amber-500/20">
-                              📍 <strong>Source:</strong> Animals Tab + Wheat/Corn harvests
+                              📍 <strong>Source:</strong> Animals Tab / Sanctuary Sluice + Wheat/Corn harvests
                             </div>
                           </>
                         )}

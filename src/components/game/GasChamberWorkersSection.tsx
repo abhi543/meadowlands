@@ -122,6 +122,7 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
     hydrology,
     coins = 0,
     animals = [],
+    prehistoricSanctuary,
     unifiedWorkers,
     bulkUpgradeUnifiedWorker,
     toggleUnifiedWorkerMode,
@@ -169,15 +170,20 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
   const activeWorkerCount = Object.values(automatedGases).filter(Boolean).length;
   const currentlyCompressingCount = Object.values(activeBatches).filter(Boolean).length;
 
-  // Herd slurry inflow calculation
+  // Slurry inflow calculation (Domestic Herd + Sanctuary Primeval Sluice)
   const allAnimals = animals || [];
   const activeAnimals = allAnimals.filter(
     (a) => !((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder')
   );
-  const daytimeInflowPerMin = activeAnimals.reduce((sum, a) => {
+  const domesticInflow = activeAnimals.reduce((sum, a) => {
     const rate = a.species === 'cow' ? 2.5 : a.species === 'pig' ? 1.5 : a.species === 'sheep' ? 1.0 : 0.5;
     return sum + rate;
   }, 0);
+
+  const enclosures = Object.values(prehistoricSanctuary?.enclosures || {});
+  const totalSanctuaryCreatures = enclosures.reduce((sum, e) => sum + (!e.isStarving ? (e.specimenCount || 0) : 0), 0);
+  const sanctuaryInflow = totalSanctuaryCreatures * 5.0;
+  const daytimeInflowPerMin = domesticInflow + sanctuaryInflow;
 
   const handleToggleWorker = (canisterId: CanisterId) => {
     toggleGasAutomation(canisterId);
@@ -265,11 +271,13 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
           </div>
 
           <div className="p-2 rounded-lg bg-stone-900 border border-stone-800">
-            <div className="text-[10px] text-stone-400 font-medium">Herd Inflow Rate</div>
+            <div className="text-[10px] text-stone-400 font-medium">Slurry Inflow Rate</div>
             <div className="text-sm font-black text-cyan-400 font-mono mt-0.5">
               +{daytimeInflowPerMin.toFixed(1)} L/min
             </div>
-            <div className="text-[9px] text-stone-500 mt-0.5">{activeAnimals.length} productive livestock</div>
+            <div className="text-[9px] text-stone-500 mt-0.5">
+              {activeAnimals.length} herd{totalSanctuaryCreatures > 0 ? ` + ${totalSanctuaryCreatures} ancient` : ''}
+            </div>
           </div>
 
           <div className="p-2 rounded-lg bg-stone-900 border border-stone-800">

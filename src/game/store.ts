@@ -10833,6 +10833,8 @@ export const useGameStore = create<GameState>()(
         const prehistoricList = Object.values(state.prehistoricSanctuary?.enclosures || {}).map(enc => ({
           speciesId: enc.speciesId,
           specimenCount: enc.specimenCount || 0,
+          isStarving: Boolean(enc.isStarving),
+          name: enc.name,
         }));
 
         const isNight = currentClock.currentPeriod === 'night';
@@ -10986,9 +10988,27 @@ export const useGameStore = create<GameState>()(
             return a;
           });
           // Prehistoric reserve creatures contribute high-volume primeval slurry during daytime
+          let activeSanctuaryCreatures = 0;
           for (const enc of prehistoricList) {
-            if (enc.specimenCount > 0) {
+            if (enc.specimenCount > 0 && !enc.isStarving) {
+              activeSanctuaryCreatures += enc.specimenCount;
               totalHerdSlurryLps += (enc.specimenCount * (5.0 / 60)); // 5.0 L/min per prehistoric creature
+            }
+          }
+
+          // Periodic notification on active primeval slurry flow (every 5 mins during active daytime)
+          if (activeSanctuaryCreatures > 0) {
+            const lastNotif = updatedGasRefinery.lastSanctuarySlurryNotifTimestamp || 0;
+            if (now - lastNotif >= 300000) {
+              updatedGasRefinery = {
+                ...updatedGasRefinery,
+                lastSanctuarySlurryNotifTimestamp: now,
+              };
+              state.addNotification(
+                `🦕 Primeval Sluice Active: ${activeSanctuaryCreatures} Sanctuary mega-fauna pumping +${(activeSanctuaryCreatures * 5).toFixed(1)} L/min slurry directly into Gas Refinery!`,
+                '🦕',
+                'discovery'
+              );
             }
           }
         }
