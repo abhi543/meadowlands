@@ -27,6 +27,7 @@ import { BarnTab } from '@/components/game/BarnTab';
 import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { WaterTab } from '@/components/game/WaterTab';
 import { GasBottlingRefineryPanel } from '@/components/game/GasBottlingRefineryPanel';
+import { MorningIncidentModal } from '@/components/game/MorningIncidentModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 
 type TabId = 'farm' | 'water' | 'animals' | 'production' | 'gas' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
@@ -290,6 +291,7 @@ export default function Home() {
       </div>
 
       {/** Modals & Overlays **/}
+      <MorningIncidentModal />
       <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
       <EventDetailModal
         isOpen={eventModalOpen}

@@ -114,6 +114,7 @@ import {
 } from '@/game/slurryEngine';
 import {
   type CanisterId,
+  type CanisterRecipeDef,
   type GasBottlingRefineryState,
   type CompressorBatch,
   createDefaultGasBottlingRefinery,
@@ -347,6 +348,19 @@ import {
   executeNightWatchHydrationAutomation,
   CANTEEN_DEFAULT_CAPACITY_LITERS,
 } from './hydrationEngine';
+import {
+  type EstateSafetyInfrastructure,
+  type WorkerAbsenceRecord,
+  type AbsenceCause,
+  createDefaultSafetyInfrastructure,
+  isWorkerAbsentAndUncovered,
+  MEDICAL_DRAUGHT_COST_COINS,
+  TEMP_WORKER_DAILY_COST_COINS,
+  OZONE_AIR_SCRUBBER_COST_COINS,
+  EMERGENCY_PRESSURE_CUTOFF_COST_COINS,
+  ESTATE_BREAKROOM_COST_COINS,
+  WILDCAT_UNION_SETTLEMENT_BONUS_PCT,
+} from './absenteeismEngine';
 import {
   PLOT_SOIL_TIERS,
   getSoilTier,
@@ -881,6 +895,10 @@ export interface GameState {
   wranglerPolicy: WranglerPolicyConfig;
   barnItemLocks: BarnItemLockMap;
 
+  // Worker Absenteeism, Morale Crises & Safety Infrastructure
+  safetyInfrastructure: EstateSafetyInfrastructure;
+  activeMorningIncidentModal: WorkerAbsenceRecord | null;
+
   // Hourly Events
   activeEvent: ActiveHourlyEvent | null;
   lastEventTriggerTime: number;
@@ -1119,6 +1137,17 @@ export interface GameState {
   feedCalmingHerbs: () => boolean;
   thawFrozenTroughs: () => boolean;
   repairBrokenFences: () => boolean;
+
+  // Worker Absenteeism & Safety Actions
+  cureWorkerFumeSickness: (workerId: string) => boolean;
+  grantWorkerPaidLeave: (workerId: string) => boolean;
+  hireTempReplacementWorker: (workerId: string) => boolean;
+  settleWildcatStrike: () => boolean;
+  installAirScrubber: () => boolean;
+  installPressureCutoff: () => boolean;
+  upgradeEstateBreakroom: () => boolean;
+  dismissMorningIncidentModal: () => void;
+  forceWorkerOvertimeDespiteAbsence: (workerId: string) => boolean;
 
   // Breeding
   breedAnimals: (parent1Id: string, parent2Id: string) => boolean;
@@ -1947,6 +1976,10 @@ export const useGameStore = create<GameState>()(
       // Wrangler Feeding Automation & Barn Lock Policies
       wranglerPolicy: DEFAULT_WRANGLER_POLICY,
       barnItemLocks: {},
+
+      // Worker Absenteeism, Morale Crises & Safety Infrastructure
+      safetyInfrastructure: createDefaultSafetyInfrastructure(),
+      activeMorningIncidentModal: null,
 
       lastTick: Date.now(),
 
@@ -7683,6 +7716,10 @@ export const useGameStore = create<GameState>()(
 
       liquidateShippingCrate: (immediate = true) => {
         const state = get();
+        if (state.safetyInfrastructure?.isWildcatStrikeActive) {
+          state.addNotification('🛑 Gate Dock Blockaded: Striking workers have set up a picket line! Export freight cannot dispatch until wildcat strike is settled.', '🪧', 'event');
+          return { coinsEarned: 0, count: 0 };
+        }
         const refinery = { ...(state.gasRefinery || createDefaultGasBottlingRefinery()) };
         const crate = refinery.dailyShippingCrate || {
           co2_cylinder: 0,
@@ -11072,14 +11109,30 @@ export const useGameStore = create<GameState>()(
         const crateLiquidationPeriodMs = (updatedGasRefinery.dailyCycleSeconds || 300) * 1000;
         const lastLiquidationAt = updatedGasRefinery.lastDailyLiquidationTimestamp || now;
         if (now - lastLiquidationAt >= crateLiquidationPeriodMs) {
-          const crateItems = updatedGasRefinery.dailyShippingCrate || { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 };
+          const crateItems = updatedGasRefinery.dailyShippingCrate || {
+            co2_cylinder: 0,
+            oxygen_canister: 0,
+            nitrogen_dewar: 0,
+            ethylene_cylinder: 0,
+            ozone_canister: 0,
+            sulfur_dioxide_flask: 0,
+            phosphine_bomb: 0,
+          };
           const crateCount = getCrateTotalCanisterCount(crateItems);
           if (crateCount > 0) {
             const earnedCoins = calculateCrateLiquidationValue(crateItems);
             newCoins += earnedCoins;
             updatedGasRefinery = {
               ...updatedGasRefinery,
-              dailyShippingCrate: { co2_cylinder: 0, oxygen_canister: 0, nitrogen_dewar: 0 },
+              dailyShippingCrate: {
+                co2_cylinder: 0,
+                oxygen_canister: 0,
+                nitrogen_dewar: 0,
+                ethylene_cylinder: 0,
+                ozone_canister: 0,
+                sulfur_dioxide_flask: 0,
+                phosphine_bomb: 0,
+              },
               totalLifetimeExportCoins: (updatedGasRefinery.totalLifetimeExportCoins || 0) + earnedCoins,
               totalCanistersShipped: (updatedGasRefinery.totalCanistersShipped || 0) + crateCount,
               lastDailyLiquidationTimestamp: now,
@@ -11138,8 +11191,16 @@ export const useGameStore = create<GameState>()(
           phosphine_bomb: updatedGasRefinery.activeBatches?.phosphine_bomb || null,
         };
 
+        // Helper to check worker availability including absenteeism / strike
+        const canWorkerRunChamber = (role: WorkerRole) => {
+          return !areWorkersPaused &&
+            (updatedUnifiedWorkers[role]?.isHired ?? true) &&
+            !updatedUnifiedWorkers[role]?.isPaused &&
+            !isWorkerAbsentAndUncovered(role, updatedSafety, now);
+        };
+
         // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff, only if worker slurry governor is active)
-        const isCo2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_co2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_co2_tech?.isPaused;
+        const isCo2Active = canWorkerRunChamber('gas_co2_tech');
         if (isWorkerSlurryActive && autoGases.co2_cylinder && isCo2Active && !activeBatchesInRefinery.co2_cylinder) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const chaffAvail = (newSilo.chaff || 0) + (newBarn.chaff || 0);
@@ -11167,7 +11228,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 2. Check N2 Chamber (Needs 50L Slurry + 1 Fuel or 15 Coins, only if worker slurry governor is active)
-        const isN2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_n2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_n2_tech?.isPaused;
+        const isN2Active = canWorkerRunChamber('gas_n2_tech');
         if (isWorkerSlurryActive && autoGases.nitrogen_dewar && isN2Active && !activeBatchesInRefinery.nitrogen_dewar) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           if (slurryAvail >= 50) {
@@ -11202,7 +11263,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 3. Check O2 Chamber (Only runs automatically if player turned on automation for Oxygen)
-        const isO2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_o2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_o2_tech?.isPaused;
+        const isO2Active = canWorkerRunChamber('gas_o2_tech');
         if (autoGases.oxygen_canister && isO2Active && !activeBatchesInRefinery.oxygen_canister) {
           const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
           let bioTotal = 0;
@@ -11231,7 +11292,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 4. Check Ethylene Chamber (Needs 30L Slurry + 15 Cull Biomass, governor active)
-        const isEthyleneActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_ethylene_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_ethylene_tech?.isPaused;
+        const isEthyleneActive = canWorkerRunChamber('gas_ethylene_tech');
         if (isWorkerSlurryActive && autoGases.ethylene_cylinder && isEthyleneActive && !activeBatchesInRefinery.ethylene_cylinder) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const cullAvail = (updatedGasRefinery.cullBiomassStock || 0) + (newBarn.cull_biomass || 0);
@@ -11260,7 +11321,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 5. Check Ozone Chamber (Needs 1 O2 Canister from Rack/Barn + 40 kWh Dynamo Power)
-        const isOzoneActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_ozone_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_ozone_tech?.isPaused;
+        const isOzoneActive = canWorkerRunChamber('gas_ozone_tech');
         if (autoGases.ozone_canister && isOzoneActive && !activeBatchesInRefinery.ozone_canister) {
           const rackO2 = updatedGasRefinery.outputRack?.oxygen_canister || 0;
           const barnO2 = newBarn.oxygen_canister || 0;
@@ -11286,7 +11347,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 6. Check Sulfur Dioxide Chamber (Needs 15 Sulfur Dust + 20L Tower Water)
-        const isSo2Active = !areWorkersPaused && (updatedUnifiedWorkers.gas_so2_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_so2_tech?.isPaused;
+        const isSo2Active = canWorkerRunChamber('gas_so2_tech');
         if (autoGases.sulfur_dioxide_flask && isSo2Active && !activeBatchesInRefinery.sulfur_dioxide_flask) {
           const sulfurAvail = (updatedGasRefinery.rawSulfurDust || 0) + (newBarn.raw_sulfur || 0);
           const towerWater = hydroSimResult.updatedHydrology.towerLiters || 0;
@@ -11315,7 +11376,7 @@ export const useGameStore = create<GameState>()(
         }
 
         // 7. Check Phosphine Chamber (Needs 10 Bone Meal + 25L Slurry, governor active)
-        const isPhosActive = !areWorkersPaused && (updatedUnifiedWorkers.gas_phosphine_tech?.isHired ?? true) && !updatedUnifiedWorkers.gas_phosphine_tech?.isPaused;
+        const isPhosActive = canWorkerRunChamber('gas_phosphine_tech');
         if (isWorkerSlurryActive && autoGases.phosphine_bomb && isPhosActive && !activeBatchesInRefinery.phosphine_bomb) {
           const slurryAvail = updatedGasRefinery.storedSlurryFeedstock || 0;
           const boneAvail = (updatedGasRefinery.boneMealBags || 0) + (newBarn.bone_meal || 0);
@@ -11625,6 +11686,135 @@ export const useGameStore = create<GameState>()(
         let newPayrollVaultCoins = state.payrollVaultCoins || 0;
         let newStaffPantry = state.staffPantry ? { ...state.staffPantry } : {};
 
+        // --- Worker Absenteeism, Fume Sickness, Exhaustion & Biohazard Evaluation ---
+        let updatedSafety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const updatedAbsences = { ...updatedSafety.activeAbsences };
+        let absencesChanged = false;
+        const newMorningIncidents = [...updatedSafety.pendingMorningIncidents];
+
+        // 1. Biohazard Mutiny Check: Barn cleanliness 0% (mudExposureSec > 60 or slurry >= 2500L for > 12h = 900s real time)
+        const isBarnMudSoiled = (updatedPastureWelfare.mudExposureSec || 0) > 60;
+        const isSlurryMaxed = (updatedGasRefinery.storedSlurryFeedstock || 0) >= (updatedGasRefinery.maxSlurryCapacity || 2500);
+        if (isBarnMudSoiled || isSlurryMaxed) {
+          if (!updatedSafety.barnBiohazardStartTimestamp) {
+            updatedSafety.barnBiohazardStartTimestamp = now;
+            absencesChanged = true;
+          } else {
+            const overflowElapsedMs = now - updatedSafety.barnBiohazardStartTimestamp;
+            // 12 in-game hours = 900 real seconds
+            if (overflowElapsedMs >= 900 * 1000) {
+              // Herder & Wrangler mutiny
+              const barnWorkers: Array<{ id: string; role: WorkerRole; name: string; station: string }> = [
+                { id: 'herder', role: 'herder', name: 'Livestock Rancher', station: 'Barn & Pasture Pens' },
+                { id: 'worker_wrangler_tessa', role: 'herder', name: 'Tessa the Gentle', station: 'Pasture Paddocks & Feed Troughs' },
+              ];
+              for (const bw of barnWorkers) {
+                if (!updatedAbsences[bw.id] || updatedAbsences[bw.id].cause !== 'biohazard_mutiny') {
+                  const rec: WorkerAbsenceRecord = {
+                    workerId: bw.id,
+                    role: bw.role,
+                    workerName: bw.name,
+                    stationName: bw.station,
+                    stationEmoji: '☣️',
+                    cause: 'biohazard_mutiny',
+                    startedAt: now,
+                    durationMs: 86400 * 1000, // persists until slurry/mud cleared
+                    expiresAt: now + 86400 * 1000,
+                  };
+                  updatedAbsences[bw.id] = rec;
+                  newMorningIncidents.push(rec);
+                  absencesChanged = true;
+                  state.addNotification(`☣️ Barn Biohazard Mutiny: ${bw.name} refuses to enter pens due to waste overflow! Flush slurry or muck out.`, '☣️', 'event');
+                }
+              }
+            }
+          }
+        } else {
+          // Clear biohazard timestamp and remove biohazard mutiny if cleaned up!
+          if (updatedSafety.barnBiohazardStartTimestamp) {
+            updatedSafety.barnBiohazardStartTimestamp = null;
+            absencesChanged = true;
+          }
+          for (const [wId, abs] of Object.entries(updatedAbsences)) {
+            if (abs.cause === 'biohazard_mutiny') {
+              delete updatedAbsences[wId];
+              absencesChanged = true;
+              state.addNotification(`✨ Biohazard Resolved: Slurry & mud cleared. Barn keepers returned to duty!`, '✨', 'discovery');
+            }
+          }
+        }
+
+        // Clean expired absences
+        for (const [wId, abs] of Object.entries(updatedAbsences)) {
+          if (now >= abs.expiresAt && abs.cause !== 'biohazard_mutiny') {
+            delete updatedAbsences[wId];
+            absencesChanged = true;
+          }
+        }
+
+        // 2. Fume Sickness Check (SO2 and PH3 toxic chambers)
+        // Check once per day cycle or when toxic tech completes shifts without ozone scrubber
+        if (!updatedSafety.hasOzoneAirScrubber) {
+          const toxicTechs: Array<{ role: WorkerRole; canister: CanisterId; name: string }> = [
+            { role: 'gas_so2_tech', canister: 'sulfur_dioxide_flask', name: 'SO₂ Flask Bottler' },
+            { role: 'gas_phosphine_tech', canister: 'phosphine_bomb', name: 'Phosphine Bomb Synthesizer' },
+          ];
+          for (const tt of toxicTechs) {
+            const daysExposed = updatedSafety.consecutiveToxicExposureDays[tt.role] || 0;
+            if (daysExposed >= 2 && !updatedAbsences[tt.role]) {
+              const rec: WorkerAbsenceRecord = {
+                workerId: tt.role,
+                role: tt.role,
+                workerName: tt.name,
+                stationName: `Toxic Gas Line (${tt.canister})`,
+                stationEmoji: '🤢',
+                cause: 'fume_sickness',
+                startedAt: now,
+                durationMs: 2 * DAY_CYCLE_MS, // 2 game days = 3600s
+                expiresAt: now + 2 * DAY_CYCLE_MS,
+              };
+              updatedAbsences[tt.role] = rec;
+              newMorningIncidents.push(rec);
+              absencesChanged = true;
+              state.addNotification(`🤢 Fume Sickness: ${tt.name} collapsed from toxic fumes! Absent for 2 days. Cure with Medical Draught or install Ozone Scrubbers.`, '🤢', 'event');
+            }
+          }
+        }
+
+        // 3. Exhaustion Burnout Check (Workers operating without night rest or forced overtime >= 3 shifts)
+        for (const [wId, shifts] of Object.entries(updatedSafety.consecutiveOverworkDays || {})) {
+          if (shifts >= 3 && !updatedAbsences[wId]) {
+            const role = wId as WorkerRole;
+            const wName = WORKER_REGISTRY[role]?.name || wId;
+            const rec: WorkerAbsenceRecord = {
+              workerId: wId,
+              role,
+              workerName: wName,
+              stationName: 'Refinery & Field Ops',
+              stationEmoji: '🛌',
+              cause: 'exhaustion_burnout',
+              startedAt: now,
+              durationMs: 1 * DAY_CYCLE_MS, // 1 game day = 1800s
+              expiresAt: now + 1 * DAY_CYCLE_MS,
+            };
+            updatedAbsences[wId] = rec;
+            newMorningIncidents.push(rec);
+            absencesChanged = true;
+            state.addNotification(`🛌 Exhaustion Burnout: ${wName} retreated to bunkhouse for 1 day due to extreme fatigue! Grant paid leave to restore morale.`, '🛌', 'event');
+          }
+        }
+
+        if (absencesChanged) {
+          updatedSafety.activeAbsences = updatedAbsences;
+          updatedSafety.pendingMorningIncidents = newMorningIncidents;
+        }
+
+        // Trigger Morning Incident Modal on morning shift transition (06:00 in-game)
+        let activeMorningModal = state.activeMorningIncidentModal;
+        if (!activeMorningModal && newMorningIncidents.length > 0 && clock.currentPeriod === 'day') {
+          activeMorningModal = newMorningIncidents[0];
+        }
+
         // Offline Catch-Up (process sequential 30-min shifts for elapsed time)
         if (state.lastTick && now - state.lastTick >= DAY_CYCLE_MS) {
           const elapsedCycles = Math.min(Math.floor((now - state.lastTick) / DAY_CYCLE_MS), 24);
@@ -11832,6 +12022,13 @@ export const useGameStore = create<GameState>()(
                   worker.strikeStartedAt = now;
                   worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
                 }
+                // Trigger wildcat strike state across the estate if unpaid wages occur
+                if (!updatedSafety.isWildcatStrikeActive) {
+                  updatedSafety.isWildcatStrikeActive = true;
+                  updatedSafety.wildcatStrikeStartedAt = now;
+                  absencesChanged = true;
+                  state.addNotification('🚨 Wildcat Strike Declared! Estate workers picket at Gate Dock due to unpaid wages. Automated operations halted!', '🪧', 'event');
+                }
               }
 
               if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
@@ -11864,8 +12061,8 @@ export const useGameStore = create<GameState>()(
               }
             }
 
-            // Chores immediately pause the moment the worker transitions into off-duty rest!
-            if (!schedule.isOnDuty) {
+            // Chores immediately pause if worker is absent or transitioning into off-duty rest!
+            if (!schedule.isOnDuty || isWorkerAbsentAndUncovered(role, updatedSafety, now)) {
               worker.lastActionTimestamp = now;
               continue;
             }
@@ -12841,6 +13038,8 @@ export const useGameStore = create<GameState>()(
             coldInfusedDrinks: Math.round(newColdDrinks * 10) / 10,
             totalWaterConsumedLiters: Math.round(totalWaterConsumed * 10) / 10,
           },
+          safetyInfrastructure: updatedSafety,
+          activeMorningIncidentModal: activeMorningModal,
           notifications: (get().notifications || state.notifications).filter(
             n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
           ),
@@ -14773,6 +14972,281 @@ export const useGameStore = create<GameState>()(
 
       recallWorkerFromSabbatical: (workerId: string) => {
         return get().resolveWorkerStrikeAccord(workerId);
+      },
+
+      // --- Worker Absenteeism, Morale Crises & Safety Infrastructure Actions ---
+      cureWorkerFumeSickness: (workerId: string) => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const absence = safety.activeAbsences[workerId];
+        if (!absence || absence.cause !== 'fume_sickness') return false;
+
+        if (state.coins < MEDICAL_DRAUGHT_COST_COINS) {
+          state.addNotification(`Insufficient coins! Apothecary Medical Draught costs ${MEDICAL_DRAUGHT_COST_COINS} coins.`, '⚠️', 'info');
+          return false;
+        }
+
+        delete safety.activeAbsences[workerId];
+        playCashRegisterSound();
+        state.addNotification(`🧪 Apothecary Medical Draught administered to ${absence.workerName}! Fume Sickness cured immediately.`, '✨', 'discovery');
+
+        set({
+          coins: state.coins - MEDICAL_DRAUGHT_COST_COINS,
+          safetyInfrastructure: safety,
+          activeMorningIncidentModal: state.activeMorningIncidentModal?.workerId === workerId ? null : state.activeMorningIncidentModal,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      grantWorkerPaidLeave: (workerId: string) => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const absence = safety.activeAbsences[workerId];
+        const config = WORKER_UPKEEP_ROSTER[workerId];
+        const dailyWage = config?.baseDailyWage || 20;
+
+        if (state.coins < dailyWage) {
+          state.addNotification(`Insufficient coins! Paid Leave requires ${dailyWage} coins for 1 day wage.`, '⚠️', 'info');
+          return false;
+        }
+
+        // Reset fatigue and remove absence
+        delete safety.activeAbsences[workerId];
+        if (safety.consecutiveOverworkDays[workerId]) {
+          safety.consecutiveOverworkDays[workerId] = 0;
+        }
+
+        // Reset worker exhaustion state in unified or specialist roster
+        const newUnified = { ...state.unifiedWorkers };
+        const newSpecialists = { ...state.specialistWorkers };
+        if (newUnified[workerId as WorkerRole]) {
+          newUnified[workerId as WorkerRole] = {
+            ...newUnified[workerId as WorkerRole],
+            isExhausted: false,
+            exhaustedUntil: null,
+            stamina: 100,
+          };
+        }
+        if (newSpecialists[workerId as SpecialistWorkerId]) {
+          newSpecialists[workerId as SpecialistWorkerId] = {
+            ...newSpecialists[workerId as SpecialistWorkerId],
+            isExhausted: false,
+            exhaustedUntil: null,
+          };
+        }
+
+        playCashRegisterSound();
+        state.addNotification(`🛋️ Granted 1 day paid leave to ${absence?.workerName || config?.name || workerId}. Fatigue reset to zero!`, '🛋️', 'discovery');
+
+        set({
+          coins: state.coins - dailyWage,
+          safetyInfrastructure: safety,
+          unifiedWorkers: newUnified,
+          specialistWorkers: newSpecialists,
+          activeMorningIncidentModal: state.activeMorningIncidentModal?.workerId === workerId ? null : state.activeMorningIncidentModal,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      hireTempReplacementWorker: (workerId: string) => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const absence = safety.activeAbsences[workerId];
+        if (!absence) return false;
+
+        if (state.coins < TEMP_WORKER_DAILY_COST_COINS) {
+          state.addNotification(`Insufficient coins! Town Board temp laborer costs ${TEMP_WORKER_DAILY_COST_COINS} coins/day.`, '⚠️', 'info');
+          return false;
+        }
+
+        // Assign temp coverage for 1 in-game day (1800 real seconds)
+        const now = Date.now();
+        safety.activeAbsences[workerId] = {
+          ...absence,
+          isTempAssigned: true,
+          tempExpiresAt: now + (1800 * 1000),
+        };
+
+        playCashRegisterSound();
+        state.addNotification(`👷 Hired temp laborer for ${TEMP_WORKER_DAILY_COST_COINS} coins! Covering ${absence.stationName} for 1 day.`, '👷', 'discovery');
+
+        set({
+          coins: state.coins - TEMP_WORKER_DAILY_COST_COINS,
+          safetyInfrastructure: safety,
+          activeMorningIncidentModal: state.activeMorningIncidentModal?.workerId === workerId ? null : state.activeMorningIncidentModal,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      forceWorkerOvertimeDespiteAbsence: (workerId: string) => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const absence = safety.activeAbsences[workerId];
+        if (!absence) return false;
+
+        delete safety.activeAbsences[workerId];
+
+        // Heavy morale drop to striking or grumbling
+        const newUnified = { ...state.unifiedWorkers };
+        const newSpecialists = { ...state.specialistWorkers };
+        if (newUnified[workerId as WorkerRole]) {
+          newUnified[workerId as WorkerRole] = {
+            ...newUnified[workerId as WorkerRole],
+            moraleTier: 'grumbling',
+            stamina: 20,
+          };
+        }
+        if (newSpecialists[workerId as SpecialistWorkerId]) {
+          newSpecialists[workerId as SpecialistWorkerId] = {
+            ...newSpecialists[workerId as SpecialistWorkerId],
+            moraleTier: 'grumbling',
+          };
+        }
+
+        state.addNotification(`⚠️ Forced Overtime: ${absence.workerName} dragged back to shift under severe protest (Heavy Morale Penalty)!`, '⚠️', 'event');
+
+        set({
+          safetyInfrastructure: safety,
+          unifiedWorkers: newUnified,
+          specialistWorkers: newSpecialists,
+          activeMorningIncidentModal: state.activeMorningIncidentModal?.workerId === workerId ? null : state.activeMorningIncidentModal,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      settleWildcatStrike: () => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        if (!safety.isWildcatStrikeActive) return false;
+
+        const telemetry = calculateStaffUpkeep(state.unifiedWorkers, state.specialistWorkers, state.payrollVaultCoins, state.staffPantry);
+        const baseBackWages = Math.max(100, telemetry.baseDailyPayroll);
+        const totalSettlement = Math.round(baseBackWages * (1 + WILDCAT_UNION_SETTLEMENT_BONUS_PCT));
+
+        if (state.coins < totalSettlement) {
+          state.addNotification(`Insufficient funds! Wildcat union settlement requires ${totalSettlement} coins (back wages + 25% bonus).`, '⚠️', 'info');
+          return false;
+        }
+
+        safety.isWildcatStrikeActive = false;
+        safety.wildcatStrikeStartedAt = null;
+
+        // Restore striking workers to content
+        const newUnified = { ...state.unifiedWorkers };
+        for (const [r, w] of Object.entries(newUnified)) {
+          if (w.moraleTier === 'striking') {
+            newUnified[r as WorkerRole] = { ...w, moraleTier: 'content', missedCycles: 0, strikeStartedAt: null, desertionDeadline: null };
+          }
+        }
+
+        const newSpecialists = { ...state.specialistWorkers };
+        for (const [sId, sp] of Object.entries(newSpecialists)) {
+          if (sp.moraleTier === 'striking' || sp.isStriking) {
+            newSpecialists[sId as SpecialistWorkerId] = { ...sp, moraleTier: 'content', isStriking: false, missedCycles: 0, strikeStartedAt: null, desertionDeadline: null };
+          }
+        }
+
+        playCashRegisterSound();
+        state.addNotification(`🤝 Wildcat Strike Settled! Paid ${totalSettlement} coins to Union stewards. All picket lines dissolved and Gate Dock reopened!`, '🤝', 'discovery');
+
+        set({
+          coins: state.coins - totalSettlement,
+          safetyInfrastructure: safety,
+          unifiedWorkers: newUnified,
+          specialistWorkers: newSpecialists,
+          activeMorningIncidentModal: null,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      installAirScrubber: () => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        if (safety.hasOzoneAirScrubber) return true;
+
+        if (state.coins < OZONE_AIR_SCRUBBER_COST_COINS) {
+          state.addNotification(`Need ${OZONE_AIR_SCRUBBER_COST_COINS} coins to install Ozone Air Scrubbers!`, '⚠️', 'info');
+          return false;
+        }
+
+        safety.hasOzoneAirScrubber = true;
+        safety.consecutiveToxicExposureDays.gas_so2_tech = 0;
+        safety.consecutiveToxicExposureDays.gas_phosphine_tech = 0;
+
+        playCashRegisterSound();
+        state.addNotification(`🌬️ Ozone Air Scrubbers Installed! Workers at SO₂ and PH₃ chambers are now permanently protected from Fume Sickness.`, '🌬️', 'discovery');
+
+        set({
+          coins: state.coins - OZONE_AIR_SCRUBBER_COST_COINS,
+          safetyInfrastructure: safety,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      installPressureCutoff: () => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        if (safety.hasEmergencyPressureCutoff) return true;
+
+        if (state.coins < EMERGENCY_PRESSURE_CUTOFF_COST_COINS) {
+          state.addNotification(`Need ${EMERGENCY_PRESSURE_CUTOFF_COST_COINS} coins to install Emergency Pressure Cutoff!`, '⚠️', 'info');
+          return false;
+        }
+
+        safety.hasEmergencyPressureCutoff = true;
+        playCashRegisterSound();
+        state.addNotification(`⚡ Emergency Pressure Cutoff Installed! Connected gas chambers automatically throttle during worker absences to prevent tank damage.`, '⚡', 'discovery');
+
+        set({
+          coins: state.coins - EMERGENCY_PRESSURE_CUTOFF_COST_COINS,
+          safetyInfrastructure: safety,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      upgradeEstateBreakroom: () => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        if (safety.hasEstateBreakroom) return true;
+
+        if (state.coins < ESTATE_BREAKROOM_COST_COINS) {
+          state.addNotification(`Need ${ESTATE_BREAKROOM_COST_COINS} coins to build Estate Breakroom!`, '⚠️', 'info');
+          return false;
+        }
+
+        safety.hasEstateBreakroom = true;
+        playCashRegisterSound();
+        state.addNotification(`☕ Estate Breakroom Upgraded! Daily fatigue accumulation across all estate staff reduced by 40%.`, '☕', 'discovery');
+
+        set({
+          coins: state.coins - ESTATE_BREAKROOM_COST_COINS,
+          safetyInfrastructure: safety,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      dismissMorningIncidentModal: () => {
+        const state = get();
+        const safety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
+        const nextQueue = [...safety.pendingMorningIncidents];
+        nextQueue.shift();
+        const nextModal = nextQueue[0] || null;
+
+        set({
+          safetyInfrastructure: {
+            ...safety,
+            pendingMorningIncidents: nextQueue,
+          },
+          activeMorningIncidentModal: nextModal,
+        });
       },
 
       // Active Radar Crisis Actions (Step 1)

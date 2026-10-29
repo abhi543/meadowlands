@@ -32,6 +32,11 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
     loadCanisterToShippingCrate,
     liquidateShippingCrate,
     buyRefineryFeedstock,
+    safetyInfrastructure,
+    settleWildcatStrike,
+    installAirScrubber,
+    installPressureCutoff,
+    upgradeEstateBreakroom,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -1339,6 +1344,31 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                   </span>
                 </div>
 
+                {/* Wildcat Strike Gate Blockade Alert */}
+                {safetyInfrastructure?.isWildcatStrikeActive && (
+                  <div className="p-3 rounded-xl bg-rose-950/90 border-2 border-rose-600 space-y-2 animate-pulse">
+                    <div className="flex items-center justify-between text-xs font-bold text-rose-200">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-base">🪧</span>
+                        <span>Gate Dock Blockaded (Wildcat Strike!)</span>
+                      </span>
+                      <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-rose-900 border border-rose-700">
+                        Picketing
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-rose-300">
+                      Unpaid wage grievances have led workers to barricade the freight gate. Export carts cannot leave the estate!
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => settleWildcatStrike()}
+                      className="w-full py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center justify-center gap-1 shadow cursor-pointer"
+                    >
+                      <span>🤝</span> Settle Union Settlement (+25% Bonus)
+                    </button>
+                  </div>
+                )}
+
                 <div className="bg-stone-950/80 rounded-xl p-3 border border-amber-500/30 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-stone-300">Staged for Export:</span>
@@ -1402,12 +1432,125 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
               <button
                 type="button"
                 onClick={handleImmediateDispatch}
-                disabled={crateCount <= 0}
+                disabled={crateCount <= 0 || Boolean(safetyInfrastructure?.isWildcatStrikeActive)}
                 className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white text-xs font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/40 transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
-                <span>🚚</span> Dispatch Immediate Freight (+{crateValue} Coins)
+                <span>🚚</span> {safetyInfrastructure?.isWildcatStrikeActive ? 'Gate Dock Blockaded (Strike Active)' : `Dispatch Immediate Freight (+${crateValue} Coins)`}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Safety Infrastructure & Worker Protection Upgrades */}
+      <div className="bg-stone-900/90 rounded-2xl border border-stone-800 p-4 space-y-3 shadow-lg">
+        <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🛡️</span>
+            <h3 className="text-xs font-black text-amber-300 uppercase tracking-wider">
+              Safety Infrastructure &amp; Worker Absenteeism Buffers
+            </h3>
+          </div>
+          <span className="text-[10px] text-stone-400">
+            Hazard Mitigation Upgrades
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {/* Upgrade 1: Ozone Air Scrubbers */}
+          <div className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+                  <span>🌬️</span>
+                  <span>Ozone Air Scrubbers</span>
+                </span>
+                {safetyInfrastructure?.hasOzoneAirScrubber ? (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                    Installed ✓
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-amber-400">650 🪙</span>
+                )}
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                Circulates catalytic ozone filtration throughout SO₂ and PH₃ retort chambers, permanently eliminating Fume Sickness toxicity checks.
+              </p>
+            </div>
+            {!safetyInfrastructure?.hasOzoneAirScrubber && (
+              <button
+                type="button"
+                onClick={() => installAirScrubber()}
+                disabled={coins < 650}
+                className="w-full py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-stone-800 disabled:text-stone-500 text-white text-xs font-bold transition cursor-pointer"
+              >
+                Install Air Scrubbers (650c)
+              </button>
+            )}
+          </div>
+
+          {/* Upgrade 2: Emergency Pressure Cutoff */}
+          <div className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+                  <span>⚡</span>
+                  <span>Emergency Pressure Cutoff</span>
+                </span>
+                {safetyInfrastructure?.hasEmergencyPressureCutoff ? (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                    Installed ✓
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-amber-400">450 🪙</span>
+                )}
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                Interlocking pneumatic relief valves automatically throttle gas pipelines during worker absence, preventing tank damage or pipeline explosions.
+              </p>
+            </div>
+            {!safetyInfrastructure?.hasEmergencyPressureCutoff && (
+              <button
+                type="button"
+                onClick={() => installPressureCutoff()}
+                disabled={coins < 450}
+                className="w-full py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-stone-800 disabled:text-stone-500 text-white text-xs font-bold transition cursor-pointer"
+              >
+                Install Pressure Cutoff (450c)
+              </button>
+            )}
+          </div>
+
+          {/* Upgrade 3: Estate Breakroom */}
+          <div className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 flex flex-col justify-between space-y-2">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+                  <span>☕</span>
+                  <span>Estate Breakroom</span>
+                </span>
+                {safetyInfrastructure?.hasEstateBreakroom ? (
+                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
+                    Upgraded ✓
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono text-amber-400">550 🪙</span>
+                )}
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                Provides hot herbal infusions and padded seating, reducing daily physical fatigue accumulation across all estate staff by 40%.
+              </p>
+            </div>
+            {!safetyInfrastructure?.hasEstateBreakroom && (
+              <button
+                type="button"
+                onClick={() => upgradeEstateBreakroom()}
+                disabled={coins < 550}
+                className="w-full py-1.5 px-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-stone-800 disabled:text-stone-500 text-white text-xs font-bold transition cursor-pointer"
+              >
+                Upgrade Breakroom (550c)
+              </button>
+            )}
           </div>
         </div>
       </div>

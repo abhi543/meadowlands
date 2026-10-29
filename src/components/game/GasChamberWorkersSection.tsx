@@ -17,6 +17,12 @@ import {
 import { GAS_CANISTER_TO_TECH } from '@/game/store';
 import { toRomanNumeral } from '@/game/workerGenetics';
 import { playCashRegisterSound, playSumpValveSound } from '@/lib/soundEffects';
+import {
+  isWorkerAbsentAndUncovered,
+  formatAbsenceRemaining,
+  MEDICAL_DRAUGHT_COST_COINS,
+  TEMP_WORKER_DAILY_COST_COINS,
+} from '@/game/absenteeismEngine';
 
 export interface GasChamberWorkerDef {
   canisterId: CanisterId;
@@ -131,6 +137,10 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
     startGasCompressorBatch,
     collectGasCompressorOutput,
     loadCanisterToShippingCrate,
+    safetyInfrastructure,
+    cureWorkerFumeSickness,
+    hireTempReplacementWorker,
+    grantWorkerPaidLeave,
   } = useGameStore();
 
   const [now, setNow] = useState(Date.now());
@@ -308,20 +318,94 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
           const needsSlurry = worker.canisterId === 'co2_cylinder' || worker.canisterId === 'nitrogen_dewar' || worker.canisterId === 'ethylene_cylinder' || worker.canisterId === 'phosphine_bomb';
           const isSlurryBlocked = needsSlurry && !isWorkerSlurryActive;
 
+          const techRole = GAS_CANISTER_TO_TECH[worker.canisterId];
+          const isAbsent = isWorkerAbsentAndUncovered(techRole, safetyInfrastructure, now);
+          const absenceRecord = safetyInfrastructure?.activeAbsences?.[techRole];
+          const isCoveredByTemp = safetyInfrastructure?.tempReplacementWorkers?.[techRole] && (safetyInfrastructure.tempReplacementWorkers[techRole] || 0) > now;
+
           return (
             <div
               key={worker.canisterId}
               className={`rounded-2xl border p-4 transition-all space-y-3 shadow-md ${
-                isAutomated
+                isAbsent
+                  ? 'bg-rose-950/40 border-rose-500/70 shadow-rose-950/20'
+                  : isAutomated
                   ? 'bg-stone-900/90 dark:bg-stone-900/90 border-amber-500/40 hover:border-amber-500/70'
                   : 'bg-stone-950/70 dark:bg-stone-950/80 border-stone-800 opacity-80'
               }`}
             >
+              {/* Absenteeism Caution Banner & Quick Actions */}
+              {isAbsent && (
+                <div className="p-2.5 rounded-xl bg-rose-950/80 border border-rose-600/70 flex flex-col gap-2 animate-pulse">
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5 font-bold text-rose-300">
+                      <span className="text-base">⚠️</span>
+                      <span>WORKER ABSENT: {absenceRecord?.cause?.replace('_', ' ').toUpperCase() || 'SICK'}</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-rose-200 bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700/50">
+                      {absenceRecord ? formatAbsenceRemaining(absenceRecord.expiresAt) : 'Inactive'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    {absenceRecord?.cause === 'fume_sickness' && (
+                      <button
+                        onClick={() => cureWorkerFumeSickness(techRole)}
+                        disabled={coins < MEDICAL_DRAUGHT_COST_COINS}
+                        className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-xs cursor-pointer ${
+                          coins >= MEDICAL_DRAUGHT_COST_COINS
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                            : 'bg-stone-800 text-stone-500 cursor-not-allowed'
+                        }`}
+                      >
+                        <span>🧪 Medical Draught ({MEDICAL_DRAUGHT_COST_COINS}c)</span>
+                      </button>
+                    )}
+                    {absenceRecord?.cause === 'exhaustion_burnout' && (
+                      <button
+                        onClick={() => grantWorkerPaidLeave(techRole)}
+                        className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all flex items-center gap-1 shadow-xs cursor-pointer"
+                      >
+                        <span>🛌 Grant Paid Leave</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => hireTempReplacementWorker(techRole)}
+                      disabled={coins < TEMP_WORKER_DAILY_COST_COINS}
+                      className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 shadow-xs cursor-pointer ${
+                        coins >= TEMP_WORKER_DAILY_COST_COINS
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                          : 'bg-stone-800 text-stone-500 cursor-not-allowed'
+                      }`}
+                    >
+                      <span>👷 Call Temp Worker ({TEMP_WORKER_DAILY_COST_COINS}c / Day)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Covered by Temp Worker Notice */}
+              {!isAbsent && isCoveredByTemp && (
+                <div className="p-2 rounded-xl bg-amber-950/60 border border-amber-600/50 flex items-center justify-between text-xs text-amber-200">
+                  <span className="flex items-center gap-1.5 font-bold">
+                    <span>👷</span>
+                    <span>Temp Day-Laborer on Shift (Covering Absenteeism)</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-300">
+                    {formatAbsenceRemaining(safetyInfrastructure.tempReplacementWorkers[techRole] || 0)}
+                  </span>
+                </div>
+              )}
+
               {/* Header: Avatar, Name, Formula & Status Pill */}
               <div className="flex items-start justify-between gap-2.5">
                 <div className="flex items-center gap-3">
-                  <div className="text-3xl p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 shrink-0">
-                    {worker.emoji}
+                  <div className={`text-3xl p-2.5 rounded-xl border shrink-0 ${
+                    isAbsent
+                      ? 'bg-rose-950/60 border-rose-600 text-rose-400'
+                      : 'bg-amber-500/15 border-amber-500/30'
+                  }`}>
+                    {isAbsent ? '⚠️' : worker.emoji}
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5 flex-wrap">
@@ -432,7 +516,9 @@ export function GasChamberWorkersSection({ onNavigateToRefinery }: GasChamberWor
               <div className="p-2.5 rounded-xl bg-stone-950/90 border border-stone-800 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between font-medium">
                   <span className="text-[11px] text-stone-300 flex items-center gap-1.5">
-                    {currentBatch ? (
+                    {isAbsent ? (
+                      <span className="text-rose-400 font-bold">⚠️ Line Halted: Worker Absent</span>
+                    ) : currentBatch ? (
                       <>
                         <span className="animate-spin text-amber-400">⚙️</span>
                         <span className="text-amber-300 font-bold">Compressing: {remainingSec}s left</span>
