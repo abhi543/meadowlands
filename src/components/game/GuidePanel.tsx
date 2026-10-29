@@ -2401,6 +2401,73 @@ function WorkersGuide() {
           <li><strong>Gem Procs (Lv.60):</strong> Workers gain a 5% chance to drop raw Gems every completed cycle.</li>
         </ul>
       </div>
+
+      {/* Worker Absenteeism, Morale & Crisis Operations */}
+      <div className="bg-gradient-to-r from-rose-950/40 via-stone-900/60 to-amber-950/40 border border-rose-500/40 rounded-xl p-3.5 text-xs space-y-2.5 text-stone-200 mt-3">
+        <div className="flex items-center justify-between border-b border-rose-900/50 pb-2">
+          <h5 className="font-black text-sm text-rose-300 flex items-center gap-2">
+            <span>⚠️</span> Worker Absenteeism, Morale Crises &amp; Countermeasures
+          </h5>
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-900/60 text-rose-200 border border-rose-700/60 font-bold">
+            Operational Friction
+          </span>
+        </div>
+        <p className="text-stone-300 leading-relaxed">
+          Estate laborers are living hands subject to physical fatigue, facility hazards, and payroll morale. When an assigned worker is absent or striking, their station immediately stalls, halting automated bottling, feeding, and harvesting.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+          <div className="p-2.5 rounded-lg bg-stone-950/80 border border-stone-800 space-y-1">
+            <span className="font-bold text-emerald-400 block">🤢 1. Fume Sickness (Toxic Chambers):</span>
+            <p className="text-stone-300">
+              Operating Sulfur Dioxide (SO₂) or Phosphine (PH₃) chambers for ≥2 consecutive days without an active Ozone Scrubber triggers 2 days of sickness.
+            </p>
+            <span className="text-stone-400 block italic">
+              Fix: Administer Apothecary Medical Draught (85 Coins) or wait 2 days.
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-stone-950/80 border border-stone-800 space-y-1">
+            <span className="font-bold text-amber-400 block">🛌 2. Exhaustion Burnout:</span>
+            <p className="text-stone-300">
+              Working 3 consecutive shifts without diurnal bunkhouse sleep or forced overtime sends workers to bed for 1 day (0% productivity).
+            </p>
+            <span className="text-stone-400 block italic">
+              Fix: Grant 1 day of paid leave to reset fatigue, or hire a day-laborer.
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-stone-950/80 border border-stone-800 space-y-1">
+            <span className="font-bold text-rose-400 block">🪧 3. Wildcat Strike (Unpaid Wages):</span>
+            <p className="text-stone-300">
+              Insufficient midnight payroll causes unpaid workers to picket at the Gate Dock, halting all automated estate lines and blockading export freight carts.
+            </p>
+            <span className="text-stone-400 block italic">
+              Fix: Pay back wages + 25% union settlement bonus to resume operations.
+            </span>
+          </div>
+
+          <div className="p-2.5 rounded-lg bg-stone-950/80 border border-stone-800 space-y-1">
+            <span className="font-bold text-purple-400 block">☣️ 4. Barn Biohazard Mutiny:</span>
+            <p className="text-stone-300">
+              Muck-soaked pens (cleanliness 0%) or slurry tanks at 2,500L capacity for &gt;12 hours cause the Barn Keeper to refuse entering the paddocks.
+            </p>
+            <span className="text-stone-400 block italic">
+              Fix: Flush slurry tanks into gas digestors or muck out mud pens.
+            </span>
+          </div>
+        </div>
+
+        <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/30 text-[11px] space-y-1 text-stone-300">
+          <span className="font-bold text-amber-400 block">🛡️ Safety Infrastructure &amp; Buffers:</span>
+          <ul className="list-disc ml-4 space-y-0.5">
+            <li><strong>Town Board Temp Hands (45 Coins / Day):</strong> Hire temporary day-laborers to cover empty stations during worker absence.</li>
+            <li><strong>Ozone Air Scrubbers (650 Coins):</strong> Permanently eliminates fume sickness checks for workers stationed at SO₂ and PH₃ chambers.</li>
+            <li><strong>Emergency Pressure Cutoff (450 Coins):</strong> Automatically throttles gas lines during absences to prevent pipeline bursts.</li>
+            <li><strong>Estate Breakroom (550 Coins):</strong> Reduces daily fatigue accumulation across all estate staff by 40%.</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
