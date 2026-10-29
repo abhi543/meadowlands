@@ -3,15 +3,15 @@
 // ============================================================================
 
 import {
-  FrontierBiomeStrataId,
-  FrontierEventCard,
-  FrontierTrailRun,
-  FrontierRucksack,
-  EventActionType,
+  type FrontierBiomeStrataId,
+  type FrontierEventCard,
+  type FrontierTrailRun,
+  type FrontierRucksack,
+  type EventActionType,
   FRONTIER_STRATA_SEQUENCE,
   FRONTIER_STRATA_REGISTRY,
   PREHISTORIC_SPECIES_REGISTRY,
-} from '@/types/prehistoric';
+} from '../types/prehistoric.ts';
 
 // --- Procedural Event Decks per Biome Strata ---
 
@@ -25,20 +25,20 @@ export const PALEOSILT_EVENT_DECK: FrontierEventCard[] = [
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Precision Amber Chisel Flaking',
-        description: 'Delicately cleave along the sedimentary bedding plane to extract an undamaged trilobite specimen.',
-        requiredItem: { id: 'amber_chisel', name: 'Amber Chisel', emoji: '🔨', qty: 1 },
+        label: 'Chitin Plated Bedding Separation',
+        description: 'Lever shed Chitin Molt Plates as razor-sharp natural cleavage shims along the sedimentary bedding plane to extract an undamaged trilobite specimen.',
+        requiredItem: { id: 'chitin_molt_plates', name: 'Chitin Molt Plates', emoji: '🛡️', qty: 1 },
         successRate: 0.95,
         successRewards: {
           fossilIds: ['fossil_trilobite_carapace'],
           mineralSlabs: 2,
           coins: 450,
           moraleBonus: 10,
-          message: 'Splendid extraction! An intact Asaphid Trilobite carapace cleaved cleanly from the shale.',
+          message: 'Splendid extraction! Using the natural Asaphid chitin plate, the shale split cleanly without a scratch!',
         },
         failurePenalty: {
           moraleLoss: 15,
-          message: 'The chisel slipped on a pyrite nodule, fracturing the dorsal shield.',
+          message: 'A brittle pyrite nodule shattered the extraction angle, fracturing the dorsal shield.',
         },
       },
       hydrological: {
@@ -84,20 +84,20 @@ export const PALEOSILT_EVENT_DECK: FrontierEventCard[] = [
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Excavation Pick Dredge',
-        description: 'Anchor the pickaxe into bedrock to brace against the shifting quicksilt and hoist the heavy specimen block.',
-        requiredItem: { id: 'excavation_pickaxe', name: 'Excavation Pickaxe', emoji: '⛏️', qty: 1 },
-        successRate: 0.90,
+        label: 'Chitin Plated Step Trenching',
+        description: 'Lay hardened Chitin Molt Plates across the treacherous quicksilt to create a firm footing platform and safely hoist the heavy specimen block.',
+        requiredItem: { id: 'chitin_molt_plates', name: 'Chitin Molt Plates', emoji: '🛡️', qty: 2 },
+        successRate: 0.94,
         successRewards: {
           fossilIds: ['fossil_trilobite_carapace'],
           mineralSlabs: 3,
-          coins: 600,
+          coins: 650,
           moraleBonus: 15,
-          message: 'Anchored solid! Hoisted a dense block containing two pristine trilobite fossils.',
+          message: 'Anchored solid! The interlocking chitin shields distributed weight perfectly over the quicksilt, hoisting pristine trilobite fossils.',
         },
         failurePenalty: {
-          moraleLoss: 20,
-          message: 'Silt gave way underfoot, causing a minor slide and spraining a team member.',
+          moraleLoss: 15,
+          message: 'Quicksilt suction proved stubborn, causing minor fatigue.',
         },
       },
       hydrological: {
@@ -147,20 +147,20 @@ export const MANGROVE_EVENT_DECK: FrontierEventCard[] = [
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Solvent Heated Needle Drill',
-        description: 'Use Thermal Solvents to soften the outer resin and core out the intact amber block.',
-        requiredItem: { id: 'thermal_solvent', name: 'Thermal Solvent', emoji: '🧪', qty: 1 },
-        successRate: 0.92,
+        label: 'Prismatic Membrane Polarization Filter',
+        description: 'Cast light through a shed Prismatic Wing Membrane to reveal stress fractures and perfectly isolate the amber core intact.',
+        requiredItem: { id: 'prismatic_wing_membrane', name: 'Prismatic Wing Membranes', emoji: '🪽', qty: 1 },
+        successRate: 0.96,
         successRewards: {
           fossilIds: ['amber_meganeura_wing'],
-          amberPieces: 3,
-          coins: 800,
-          moraleBonus: 15,
-          message: 'Flawless extraction! Recovered an Amber-Encased Giant Meganeura Wing with zero stress fractures.',
+          amberPieces: 4,
+          coins: 900,
+          moraleBonus: 20,
+          message: 'Flawless optical extraction! The Meganeura wing membrane revealed every inner refraction line, guiding a perfect harvest!',
         },
         failurePenalty: {
-          moraleLoss: 20,
-          message: 'The solvent boiled too hot, micro-fracturing the outer amber resin.',
+          moraleLoss: 15,
+          message: 'Swamp mist clouded optical alignment, delaying extraction.',
         },
       },
       hydrological: {
@@ -200,26 +200,26 @@ export const MANGROVE_EVENT_DECK: FrontierEventCard[] = [
   {
     id: 'coal_forest_hollow',
     strataId: 'primeval_mangrove',
-    title: 'Hollowed Lepidodendron Log',
+    title: 'Hollowed Lepidodendron Peat Trench',
     ambientEmoji: '🪵🐛',
-    dilemmaText: 'A massive petrified log in the dense coal forest hollow contains thick, segmented chitin plates from a giant Arthropleura.',
+    dilemmaText: 'A massive petrified log in a suffocating methane swamp hollow contains thick, segmented chitin plates from a giant Arthropleura, surrounded by acidic sulfur slime.',
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Hardened Excavation Pick Prying',
-        description: 'Lever the heavy mineralized bark with an Excavation Pickaxe to slide out the segmented plates intact.',
-        requiredItem: { id: 'excavation_pickaxe', name: 'Excavation Pickaxe', emoji: '⛏️', qty: 1 },
-        successRate: 0.90,
+        label: 'Primeval Humus Acidity Neutralizer',
+        description: 'Pack Supercharged Primeval Humus into the rotting peat trench to absorb poisonous swamp acids and gently slide out the fossilized plates intact.',
+        requiredItem: { id: 'primeval_humus', name: 'Supercharged Primeval Humus', emoji: '🍂', qty: 1 },
+        successRate: 0.94,
         successRewards: {
           fossilIds: ['fossil_arthropleura_plates'],
-          mineralSlabs: 3,
-          coins: 750,
-          moraleBonus: 10,
-          message: 'Success! Extracted pristine Segmented Exoskeleton Plates of an Arthropleura.',
+          mineralSlabs: 4,
+          coins: 850,
+          moraleBonus: 15,
+          message: 'Miraculous bio-buffering! Primeval Humus neutralized the methane sludge instantly, yielding undamaged giant Arthropleura plates!',
         },
         failurePenalty: {
-          moraleLoss: 20,
-          message: 'The pick glanced off petrified ironwood, stinging the workers hands and denting morale.',
+          moraleLoss: 15,
+          message: 'Acids seeped through a cleft, taking extra effort to contain.',
         },
       },
       hydrological: {
@@ -263,23 +263,23 @@ export const RED_QUARRY_EVENT_DECK: FrontierEventCard[] = [
     strataId: 'sunken_red_quarry',
     title: 'Sunken Ferruginous Sandstone Bench',
     ambientEmoji: '🏜️🦎',
-    dilemmaText: 'An iron-red sandstone overhang has split under desert heat, revealing the mineralized dorsal neural spines of a Permian Dimetrodon sail.',
+    dilemmaText: 'An iron-red sandstone overhang has split under fierce desert heat, revealing the mineralized dorsal neural spines of a Permian Dimetrodon sail.',
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Precision Chisel Separation',
-        description: 'Chip away the friable ironstone matrix with the Amber Chisel without fracturing the long neural spines.',
-        requiredItem: { id: 'amber_chisel', name: 'Amber Chisel', emoji: '🔨', qty: 1 },
-        successRate: 0.88,
+        label: 'Thermal Scute Heat Shield Deflection',
+        description: 'Use shed Dimetrodon Thermal Scutes to insulate the friable sandstone against sun fracture and extract the dorsal spines intact.',
+        requiredItem: { id: 'thermal_scutes', name: 'Shed Thermal Scutes', emoji: '🔥', qty: 1 },
+        successRate: 0.95,
         successRewards: {
           fossilIds: ['fossil_dimetrodon_spine'],
           mineralSlabs: 4,
-          coins: 1100,
+          coins: 1200,
           moraleBonus: 20,
-          message: 'Incredible precision! Recovered a complete Mineralized Dorsal Sail Spine with intact grooves.',
+          message: 'Incredible thermodynamic mastery! Shed scutes buffered heat gradients, freeing the entire neural spine unharmed!',
         },
         failurePenalty: {
-          moraleLoss: 25,
+          moraleLoss: 20,
           message: 'A sandstone block cleaved early, snapping a delicate spine tip.',
         },
       },
@@ -330,20 +330,20 @@ export const THERMAL_MUD_EVENT_DECK: FrontierEventCard[] = [
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Thermal Solvent Quench & Hoist',
-        description: 'Neutralize the corrosive sulfuric salts with Thermal Solvents before winching the giant vertebrae.',
-        requiredItem: { id: 'thermal_solvent', name: 'Thermal Solvent', emoji: '🧪', qty: 2 },
-        successRate: 0.88,
+        label: 'Serpent Slough Acid Cloak Winching',
+        description: 'Drape impenetrable Titanoboa Serpent Slough over the rig and hoist ropes to resist scalding sulfuric mud while winching the colossal vertebra.',
+        requiredItem: { id: 'serpent_slough', name: 'Massive Serpent Slough', emoji: '📜', qty: 1 },
+        successRate: 0.95,
         successRewards: {
           fossilIds: ['fossil_titanoboa_vertebra'],
-          mineralSlabs: 5,
-          coins: 1600,
+          mineralSlabs: 6,
+          coins: 1800,
           moraleBonus: 25,
-          message: 'Masterwork recovery! Secured a massive Petrified Vertebral Column of Titanoboa.',
+          message: 'Masterwork recovery! The serpent slough shielded cables from acid mud, raising the colossal Titanoboa vertebral column!',
         },
         failurePenalty: {
-          moraleLoss: 30,
-          message: 'Sulfuric steam hissed through a crack, forcing the team back with stinging eyes.',
+          moraleLoss: 20,
+          message: 'Sulfuric steam hissed past, causing minor delays.',
         },
       },
       hydrological: {
@@ -392,20 +392,20 @@ export const GLACIAL_PERMAFROST_EVENT_DECK: FrontierEventCard[] = [
     actions: {
       specialized: {
         type: 'specialized_tool',
-        label: 'Cryo-Pickaxe Precision Trenching',
-        description: 'Cut ventilation and stress relief grooves with the Excavation Pickaxe to free the ice-bound block without thawing.',
-        requiredItem: { id: 'excavation_pickaxe', name: 'Excavation Pickaxe', emoji: '⛏️', qty: 2 },
-        successRate: 0.85,
+        label: 'Mammoth Down Wool Cryo-Thermal Wrap',
+        description: 'Wrap excavated ice-core tissue in shed Insulated Down Wool to maintain uniform sub-zero temperature and prevent destructive crystallization.',
+        requiredItem: { id: 'insulated_down_wool', name: 'Insulated Down Wool', emoji: '🧶', qty: 1 },
+        successRate: 0.96,
         successRewards: {
           fossilIds: ['cryo_mammoth_tissue'],
-          mineralSlabs: 6,
-          coins: 2500,
-          moraleBonus: 30,
-          message: 'Legendary Discovery! Retrieved intact Cryo-Preserved Core Tissue of a Woolly Mammoth!',
+          mineralSlabs: 8,
+          coins: 2800,
+          moraleBonus: 35,
+          message: 'Legendary Discovery! Using native Woolly Mammoth down fleece, the tissue was insulated without cellular damage!',
         },
         failurePenalty: {
-          moraleLoss: 30,
-          message: 'A wall of hard blue ice fractured unpredictably, nearly trapping the lead excavator.',
+          moraleLoss: 20,
+          message: 'A wall of hard blue ice fractured unpredictably, requiring cautious retreat.',
         },
       },
       hydrological: {

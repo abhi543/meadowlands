@@ -537,6 +537,15 @@ export function PrehistoricSanctuaryPanel() {
                     </span>
                   </div>
 
+                  {/* Frontier Trail Connection Indicator */}
+                  <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-200/90 flex items-start space-x-2">
+                    <span className="text-sm">🧭</span>
+                    <div className="leading-snug">
+                      <span className="font-bold text-amber-300">Frontier Trail Utility: </span>
+                      Essential specialized gear for <span className="underline decoration-amber-400/50">{spec?.name}’s</span> native strata expedition ({spec?.primaryStrata.replace(/_/g, ' ')}), guaranteeing high success and bonus fossil drops!
+                    </div>
+                  </div>
+
                   <button
                     disabled={enc.harvestReadyCount <= 0}
                     onClick={() => collectEnclosureHarvest(enc.enclosureId)}
