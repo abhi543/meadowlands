@@ -71,6 +71,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [hoveredCropId, setHoveredCropId] = useState<CropId | null>(null);
+  const [cropCategoryFilter, setCropCategoryFilter] = useState<'all' | 'temperate' | 'severe' | 'extreme' | 'legacy'>('all');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
   const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
@@ -393,7 +394,23 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
         {/* Seed Packets */}
         <div className="flex gap-2 flex-wrap">
-          {CROP_LIST.map(crop => {
+          {CROP_LIST.filter(crop => {
+            const pheno = CROP_PHENOLOGY_REGISTRY[crop.id];
+            if (cropCategoryFilter === 'all') return true;
+            if (cropCategoryFilter === 'temperate') {
+              return ['sunflower', 'okra', 'sorghum', 'spinach', 'eggplant', 'wasabi', 'tea_bush', 'soybean'].includes(crop.id);
+            }
+            if (cropCategoryFilter === 'severe') {
+              return ['paddy_rice', 'strawberry', 'peanut', 'sweet_potato', 'turnip', 'taro', 'kale', 'winter_rye'].includes(crop.id);
+            }
+            if (cropCategoryFilter === 'extreme') {
+              return ['water_chestnut', 'dragon_fruit', 'arctic_moss_campion', 'bambara_groundnut', 'bioluminescent_shroom', 'prickly_pear_cactus'].includes(crop.id);
+            }
+            if (cropCategoryFilter === 'legacy') {
+              return ['wheat', 'corn', 'carrot', 'pumpkin', 'cotton', 'peas', 'wild_berries'].includes(crop.id);
+            }
+            return true;
+          }).map(crop => {
             const isSelected = selectedCrop === crop.id;
             return (
               <button
