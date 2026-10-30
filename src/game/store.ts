@@ -10577,7 +10577,22 @@ export const useGameStore = create<GameState>()(
               return { ...p, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
 
-            // Direct Atmospheric Crop Phenology evaluation
+            // Crop-Specific Trait Invocations:
+            // 1. Tea Bush ("Foliar Hydration"): Self-waters passively without lowering soil O2 below 60%
+            if (p.crop === 'tea_bush') {
+              p.isWatered = true;
+              currentMoisture = Math.max(currentMoisture, 60.0);
+            }
+            // 2. Sorghum ("Xeric Taproot"): Zero penalty from dry soil; requires 50% less canal water
+            if (p.crop === 'sorghum') {
+              p.isWatered = true;
+            }
+            // 3. Okra ("Thermal Podding"): Maintains 1.0x baseline speed under heat
+            if (p.crop === 'okra') {
+              p.isHeatWilted = false;
+            }
+
+            // Direct Atmospheric Crop Phenology evaluation
             let pheno = evaluateCropPhenology({
               cropId: p.crop,
               weather: activeWeatherId,

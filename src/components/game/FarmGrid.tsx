@@ -701,12 +701,14 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
           const isHovered = hoveredPlotId === plot.id;
 
-          const progress = plot.crop && plot.plantedAt && !plot.ready
-            ? (plot.growthProgress !== undefined
-                ? plot.growthProgress
-                : Math.min(1, ((Date.now() - plot.plantedAt) * soilSpeedMult * waterMult * moistureSpeedMult * siltSpeedMult) / (CROPS[plot.crop].growTimeSec * 1000)))
-            : 0;
           const currentGrowthSpeed = plot.growthSpeedMultiplier ?? (moistureSpeedMult * soilSpeedMult * waterMult);
+          const timeElapsedProgress = plot.crop && plot.plantedAt && !plot.ready
+            ? Math.min(1, ((Date.now() - plot.plantedAt) * currentGrowthSpeed) / (CROPS[plot.crop].growTimeSec * 1000))
+            : 0;
+          const storeProgress = plot.growthProgress !== undefined ? plot.growthProgress : 0;
+          const progress = plot.crop && plot.plantedAt && !plot.ready
+            ? Math.min(1, Math.max(storeProgress, timeElapsedProgress))
+            : 0;
 
           // Soil styling classes with hydrological dynamics
           let soilClasses = '';
@@ -1204,11 +1206,15 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                               ? 'text-yellow-300 font-semibold'
                               : isWatered ? 'text-cyan-300' : 'text-emerald-400 dark:text-emerald-300'
                           }`}>
-                            {currentGrowthSpeed < 0.65
-                              ? `🐌 ${Math.round(progress * 100)}%`
-                              : plot.isHeatWilted
-                              ? `🥀 ${Math.round(progress * 100)}%`
-                              : `${Math.round(progress * 100)}%`}
+                            {(() => {
+                              const pct = progress * 100;
+                              const displayPct = pct > 0 && pct < 10 ? pct.toFixed(1) : Math.round(pct);
+                              return currentGrowthSpeed < 0.65
+                                ? `🐌 ${displayPct}%`
+                                : plot.isHeatWilted
+                                ? `🥀 ${displayPct}%`
+                                : `${displayPct}%`;
+                            })()}
                           </span>
                         </>
                       )}
