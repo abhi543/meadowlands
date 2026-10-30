@@ -12230,7 +12230,11 @@ export const useGameStore = create<GameState>()(
 
                   // 2. Auto-collect pass
                   newAnimals = newAnimals.map(a => {
-                    if (!a.productReady || a.cyclesRemaining <= 0) return a;
+                    const breedDef = BREED_REGISTRY[a.breedId];
+                    const speciesDef = ANIMALS[a.species];
+                    const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : speciesDef.productionTimeSec;
+                    const isTimeReady = Boolean(a.fed && a.fedAt && (now - a.fedAt) >= (prodTime * 1000));
+                    if ((!a.productReady && !isTimeReady) || a.cyclesRemaining <= 0) return a;
 
                     const breedDef = BREED_REGISTRY[a.breedId];
                     const speciesDef = ANIMALS[a.species];
