@@ -676,11 +676,11 @@ export function processSingleWorkerClockOut(params: {
     newMissedCycles += cycleIncrement;
     if (newMissedCycles === 1) {
       newMoraleTier = 'grumbling';
-      notificationMessage = `🟡 Missed Upkeep: ${workerName} clocked out without complete rations (Grumbling -50% speed).`;
-    } else if (newMissedCycles >= 2) {
-      newMoraleTier = 'striking';
-      isStriking = true;
-      notificationMessage = `🛑 Strike Alert: ${workerName} has halted tasks due to unpaid upkeep! Open Grievance Dossier to arbitrate.`;
+      notificationMessage = `🟡 Missed Upkeep: ${workerName} clocked out without complete rations (Grumbling -15% speed).`;
+    } else {
+      newMoraleTier = 'content'; // Workers remain on duty like before without halting tasks
+      isStriking = false;
+      notificationMessage = null;
     }
   }
 

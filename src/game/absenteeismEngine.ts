@@ -70,33 +70,15 @@ export const WILDCAT_UNION_SETTLEMENT_BONUS_PCT = 0.25; // 25% penalty bonus on 
 
 /**
  * Checks whether an active absence is currently incapacitating a worker.
- * If a temporary day-laborer is currently covering the shift, returns false (station runs).
+ * Returns false so hired workers work continuously like before without being halted by absenteeism.
  */
 export function isWorkerAbsentAndUncovered(
   workerId: string,
   safety: EstateSafetyInfrastructure,
   now: number
 ): boolean {
-  // If wildcat strike is active across the estate, all workers walk off
-  if (safety.isWildcatStrikeActive) return true;
-
-  const absence = safety.activeAbsences[workerId];
-  if (!absence) return false;
-
-  // If absence has expired by time, it is no longer blocking
-  if (now >= absence.expiresAt) return false;
-
-  // If a temp worker was hired and temp assignment is still active, station is covered
-  if (absence.isTempAssigned && absence.tempExpiresAt && now < absence.tempExpiresAt) {
-    return false;
-  }
-
-  // Also check direct temp replacement map
-  if (safety.tempReplacementWorkers && safety.tempReplacementWorkers[workerId] && now < safety.tempReplacementWorkers[workerId]) {
-    return false;
-  }
-
-  return true;
+  // Workers work continuously like before without absence halts
+  return false;
 }
 
 /**

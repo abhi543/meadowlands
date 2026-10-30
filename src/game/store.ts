@@ -11302,12 +11302,11 @@ export const useGameStore = create<GameState>()(
           phosphine_bomb: updatedGasRefinery.activeBatches?.phosphine_bomb || null,
         };
 
-        // Helper to check worker availability including absenteeism / strike
+        // Helper to check worker availability (workers run continuously without absence halts)
         const canWorkerRunChamber = (role: WorkerRole) => {
           return !areWorkersPaused &&
             (updatedUnifiedWorkers[role]?.isHired ?? true) &&
-            !updatedUnifiedWorkers[role]?.isPaused &&
-            !isWorkerAbsentAndUncovered(role, updatedSafety, now);
+            !updatedUnifiedWorkers[role]?.isPaused;
         };
 
         // 1. Check CO2 Chamber (Needs 40L Slurry + 10 Chaff, only if worker slurry governor is active)
@@ -11800,134 +11799,13 @@ export const useGameStore = create<GameState>()(
         let newPayrollVaultCoins = state.payrollVaultCoins || 0;
         let newStaffPantry = state.staffPantry ? { ...state.staffPantry } : {};
 
-        // --- Worker Absenteeism, Fume Sickness, Exhaustion & Biohazard Evaluation ---
+        // --- Worker Safety Infrastructure & Incident Management ---
         let updatedSafety = { ...(state.safetyInfrastructure || createDefaultSafetyInfrastructure()) };
-        const updatedAbsences = { ...updatedSafety.activeAbsences };
-        let absencesChanged = false;
-        const newMorningIncidents = [...updatedSafety.pendingMorningIncidents];
-
-        // 1. Biohazard Mutiny Check: Barn cleanliness 0% (mudExposureSec > 60 or slurry >= 2500L for > 12h = 900s real time)
-        const isBarnMudSoiled = (updatedPastureWelfare.mudExposureSec || 0) > 60;
-        const isSlurryMaxed = (updatedGasRefinery.storedSlurryFeedstock || 0) >= (updatedGasRefinery.maxSlurryCapacity || 2500);
-        if (isBarnMudSoiled || isSlurryMaxed) {
-          if (!updatedSafety.barnBiohazardStartTimestamp) {
-            updatedSafety.barnBiohazardStartTimestamp = now;
-            absencesChanged = true;
-          } else {
-            const overflowElapsedMs = now - updatedSafety.barnBiohazardStartTimestamp;
-            // 12 in-game hours = 900 real seconds
-            if (overflowElapsedMs >= 900 * 1000) {
-              // Herder & Wrangler mutiny
-              const barnWorkers: Array<{ id: string; role: WorkerRole; name: string; station: string }> = [
-                { id: 'herder', role: 'herder', name: 'Livestock Rancher', station: 'Barn & Pasture Pens' },
-                { id: 'worker_wrangler_tessa', role: 'herder', name: 'Tessa the Gentle', station: 'Pasture Paddocks & Feed Troughs' },
-              ];
-              for (const bw of barnWorkers) {
-                if (!updatedAbsences[bw.id] || updatedAbsences[bw.id].cause !== 'biohazard_mutiny') {
-                  const rec: WorkerAbsenceRecord = {
-                    workerId: bw.id,
-                    role: bw.role,
-                    workerName: bw.name,
-                    stationName: bw.station,
-                    stationEmoji: '☣️',
-                    cause: 'biohazard_mutiny',
-                    startedAt: now,
-                    durationMs: 86400 * 1000, // persists until slurry/mud cleared
-                    expiresAt: now + 86400 * 1000,
-                  };
-                  updatedAbsences[bw.id] = rec;
-                  newMorningIncidents.push(rec);
-                  absencesChanged = true;
-                  state.addNotification(`☣️ Barn Biohazard Mutiny: ${bw.name} refuses to enter pens due to waste overflow! Flush slurry or muck out.`, '☣️', 'event');
-                }
-              }
-            }
-          }
-        } else {
-          // Clear biohazard timestamp and remove biohazard mutiny if cleaned up!
-          if (updatedSafety.barnBiohazardStartTimestamp) {
-            updatedSafety.barnBiohazardStartTimestamp = null;
-            absencesChanged = true;
-          }
-          for (const [wId, abs] of Object.entries(updatedAbsences)) {
-            if (abs.cause === 'biohazard_mutiny') {
-              delete updatedAbsences[wId];
-              absencesChanged = true;
-              state.addNotification(`✨ Biohazard Resolved: Slurry & mud cleared. Barn keepers returned to duty!`, '✨', 'discovery');
-            }
-          }
-        }
-
-        // Clean expired absences
-        for (const [wId, abs] of Object.entries(updatedAbsences)) {
-          if (now >= abs.expiresAt && abs.cause !== 'biohazard_mutiny') {
-            delete updatedAbsences[wId];
-            absencesChanged = true;
-          }
-        }
-
-        // 2. Fume Sickness Check (SO2 and PH3 toxic chambers)
-        // Check once per day cycle or when toxic tech completes shifts without ozone scrubber
-        if (!updatedSafety.hasOzoneAirScrubber) {
-          const toxicTechs: Array<{ role: WorkerRole; canister: CanisterId; name: string }> = [
-            { role: 'gas_so2_tech', canister: 'sulfur_dioxide_flask', name: 'SO₂ Flask Bottler' },
-            { role: 'gas_phosphine_tech', canister: 'phosphine_bomb', name: 'Phosphine Bomb Synthesizer' },
-          ];
-          for (const tt of toxicTechs) {
-            const daysExposed = updatedSafety.consecutiveToxicExposureDays[tt.role] || 0;
-            if (daysExposed >= 2 && !updatedAbsences[tt.role]) {
-              const rec: WorkerAbsenceRecord = {
-                workerId: tt.role,
-                role: tt.role,
-                workerName: tt.name,
-                stationName: `Toxic Gas Line (${tt.canister})`,
-                stationEmoji: '🤢',
-                cause: 'fume_sickness',
-                startedAt: now,
-                durationMs: 2 * DAY_CYCLE_MS, // 2 game days = 3600s
-                expiresAt: now + 2 * DAY_CYCLE_MS,
-              };
-              updatedAbsences[tt.role] = rec;
-              newMorningIncidents.push(rec);
-              absencesChanged = true;
-              state.addNotification(`🤢 Fume Sickness: ${tt.name} collapsed from toxic fumes! Absent for 2 days. Cure with Medical Draught or install Ozone Scrubbers.`, '🤢', 'event');
-            }
-          }
-        }
-
-        // 3. Exhaustion Burnout Check (Workers operating without night rest or forced overtime >= 3 shifts)
-        for (const [wId, shifts] of Object.entries(updatedSafety.consecutiveOverworkDays || {})) {
-          if (shifts >= 3 && !updatedAbsences[wId]) {
-            const role = wId as WorkerRole;
-            const wName = WORKER_REGISTRY[role]?.name || wId;
-            const rec: WorkerAbsenceRecord = {
-              workerId: wId,
-              role,
-              workerName: wName,
-              stationName: 'Refinery & Field Ops',
-              stationEmoji: '🛌',
-              cause: 'exhaustion_burnout',
-              startedAt: now,
-              durationMs: 1 * DAY_CYCLE_MS, // 1 game day = 1800s
-              expiresAt: now + 1 * DAY_CYCLE_MS,
-            };
-            updatedAbsences[wId] = rec;
-            newMorningIncidents.push(rec);
-            absencesChanged = true;
-            state.addNotification(`🛌 Exhaustion Burnout: ${wName} retreated to bunkhouse for 1 day due to extreme fatigue! Grant paid leave to restore morale.`, '🛌', 'event');
-          }
-        }
-
-        if (absencesChanged) {
-          updatedSafety.activeAbsences = updatedAbsences;
-          updatedSafety.pendingMorningIncidents = newMorningIncidents;
-        }
-
-        // Trigger Morning Incident Modal on morning shift transition (06:00 in-game)
-        let activeMorningModal = state.activeMorningIncidentModal;
-        if (!activeMorningModal && newMorningIncidents.length > 0 && clock.currentPeriod === 'day') {
-          activeMorningModal = newMorningIncidents[0];
-        }
+        // Clear any active absences or wildcat strikes so hired workers work continuously like before
+        updatedSafety.activeAbsences = {};
+        updatedSafety.isWildcatStrikeActive = false;
+        updatedSafety.barnBiohazardStartTimestamp = null;
+        let activeMorningModal = null;
 
         // Offline Catch-Up (process sequential 30-min shifts for elapsed time)
         if (state.lastTick && now - state.lastTick >= DAY_CYCLE_MS) {
@@ -12067,10 +11945,11 @@ export const useGameStore = create<GameState>()(
             const isWorkerOverclocked = Boolean(wOverclock?.isOverclocked && (!wOverclock.expiresAt || now < wOverclock.expiresAt));
             const wMultiplier = isWorkerOverclocked ? wOverclock.speedMultiplier : 1.0;
 
-            const morale = worker.moraleTier || 'content';
+            let morale = worker.moraleTier || 'content';
             if (morale === 'striking' || morale === 'deserted') {
-              worker.lastActionTimestamp = now;
-              continue; // 0% efficiency, complete halt during strike
+              morale = 'content';
+              worker.moraleTier = 'content';
+              worker.isHired = true;
             }
             const moraleMultiplier = getMoraleSpeedMultiplier(morale);
 
@@ -12094,7 +11973,7 @@ export const useGameStore = create<GameState>()(
               worker.wellRested = true;
             }
 
-            // Scheduled Clock-Out Settlement at the end of the 8-hour shift
+            // Scheduled Clock-Out Settlement at the end of the shift
             if (hasWorkerReachedClockOut(schedule.shiftType, clock.cycleElapsedSeconds) && worker.lastClockOutDay !== clock.currentDay) {
               const clockOutRes = processSingleWorkerClockOut({
                 workerName: cfg.name,
@@ -12113,55 +11992,16 @@ export const useGameStore = create<GameState>()(
               worker.missedCycles = clockOutRes.newMissedCycles;
               worker.moraleTier = clockOutRes.newMoraleTier;
               worker.lastClockOutDay = clock.currentDay;
-              worker.wellRested = false; // completed shift consumes the rest buff
+              worker.wellRested = false;
               unifiedWorkersModified = true;
 
-              if (clockOutRes.isStriking) {
-                if (!worker.strikeStartedAt) {
-                  worker.strikeStartedAt = now;
-                  worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
-                }
-                // Trigger wildcat strike state across the estate if unpaid wages occur
-                if (!updatedSafety.isWildcatStrikeActive) {
-                  updatedSafety.isWildcatStrikeActive = true;
-                  updatedSafety.wildcatStrikeStartedAt = now;
-                  absencesChanged = true;
-                  state.addNotification('🚨 Wildcat Strike Declared! Estate workers picket at Gate Dock due to unpaid wages. Automated operations halted!', '🪧', 'event');
-                }
-              }
-
-              if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling')) {
-                state.addNotification(clockOutRes.notificationMessage, clockOutRes.isStriking ? '🛑' : '🪙', 'coin');
+              if (clockOutRes.notificationMessage && clockOutRes.newMoraleTier === 'grumbling') {
+                state.addNotification(clockOutRes.notificationMessage, '🪙', 'coin');
               }
             }
 
-            // Desertion Hard Deadline Check (2 Real-World Hours on Strike)
-            // Suppressed when tower is in Stage 2 or 3 (loadSheddingStage >= 2 / <= 80L) — workers never abandon the farm during water emergencies!
-            if (worker.moraleTier === 'striking') {
-              if (loadSheddingStage >= 2) {
-                // Suppress abandonment during emergency water rationing & lockdown
-                if (worker.desertionDeadline) {
-                  worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
-                }
-              } else if (!worker.strikeStartedAt) {
-                worker.strikeStartedAt = now;
-                worker.desertionDeadline = now + DESERTION_DURATION_SEC * 1000;
-                unifiedWorkersModified = true;
-              } else if (worker.desertionDeadline && now >= worker.desertionDeadline) {
-                worker.isHired = false;
-                worker.moraleTier = 'deserted';
-                worker.strikeStartedAt = null;
-                worker.desertionDeadline = null;
-                worker.level = 1;
-                unifiedWorkersModified = true;
-                playDefeatSound();
-                state.addNotification(`🪧 Worker Desertion: ${cfg.name} waited 2 hours with unresolved grievances and has permanently abandoned the farm! 🚪`, '🚪', 'event');
-                continue;
-              }
-            }
-
-            // Chores immediately pause if worker is absent or transitioning into off-duty rest!
-            if (!schedule.isOnDuty || isWorkerAbsentAndUncovered(role, updatedSafety, now)) {
+            // Hired workers work continuously without absence interruptions
+            if (!schedule.isOnDuty) {
               worker.lastActionTimestamp = now;
               continue;
             }
@@ -17018,6 +16858,37 @@ export const useGameStore = create<GameState>()(
         // Migration: Weather System (10 real minutes = 600s)
         if (merged.hydrology?.weatherState) {
           merged.hydrology.weatherState.weatherDurationSec = 600;
+        }
+
+        // Migration: Ensure workers are active like before and clear any absence/strike lockouts
+        merged.safetyInfrastructure = {
+          ...(merged.safetyInfrastructure || createDefaultSafetyInfrastructure()),
+          activeAbsences: {},
+          isWildcatStrikeActive: false,
+          barnBiohazardStartTimestamp: null,
+          pendingMorningIncidents: [],
+        };
+        merged.activeMorningIncidentModal = null;
+        if (merged.unifiedWorkers) {
+          for (const w of Object.values(merged.unifiedWorkers) as UnifiedWorkerInstance[]) {
+            if (w) {
+              if (w.moraleTier === 'striking' || w.moraleTier === 'deserted') {
+                w.moraleTier = 'content';
+              }
+              w.isHired = true;
+            }
+          }
+        }
+        if (merged.specialistWorkers) {
+          for (const sp of Object.values(merged.specialistWorkers) as SpecialistWorker[]) {
+            if (sp) {
+              if (sp.moraleTier === 'striking' || sp.moraleTier === 'deserted') {
+                sp.moraleTier = 'content';
+              }
+              sp.isStriking = false;
+              sp.isHired = true;
+            }
+          }
         }
 
         // Migration: Pasture Weather & Fauna Welfare System
