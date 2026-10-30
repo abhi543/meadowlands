@@ -468,7 +468,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </div>
         </div>
       </div>
-      </div>
 
       {/* Active Systemic Simulation Modifiers */}
       {(Boolean(relics.mineralAshUntil && relics.mineralAshUntil > Date.now()) || (systemicEvent?.id === 'alchemical_bloom' && systemicEvent?.phase === 'active')) && (
