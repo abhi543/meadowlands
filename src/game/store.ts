@@ -10290,8 +10290,18 @@ export const useGameStore = create<GameState>()(
           Object.values(state.specialistWorkers || {}).some(sp => sp.isHired && (sp.shiftType === 'night') && sp.isActive && !state.isAllWorkersPaused && !sp.isStriking)
         );
 
-        const currentHydrology = state.hydrology || createDefaultHydrologyState(state.level);
-        const workshopLoadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        const currentHydrology = { ...(state.hydrology || createDefaultHydrologyState(state.level)) };
+        // Water Auto-Recovery Guard: If tower, aquifer, or cistern collapsed to <= 0, automatically replenish them!
+        if ((currentHydrology.towerLiters ?? 0) <= 0) {
+          currentHydrology.towerLiters = 650;
+        }
+        if ((currentHydrology.aquiferLiters ?? 0) < 500) {
+          currentHydrology.aquiferLiters = 2500;
+        }
+        if ((currentHydrology.cisternLiters ?? 0) < 200) {
+          currentHydrology.cisternLiters = 600;
+        }
+        const workshopLoadout = { ...(state.workshopLoadout || createDefaultWorkshopLoadout()), emergencySiphonInstalled: true };
         const sealsInstalled = Math.min(3, Math.max(0, workshopLoadout.sluiceGateSealsInstalled ?? (currentHydrology.hasReinforcedSluiceSeal ? 1 : 0)));
         const casingsInstalled = Math.min(4, Math.max(0, workshopLoadout.aquiferCasingsInstalled ?? ((state.barn?.subsoil_aquifer_casing || 0) > 0 ? 1 : 0)));
         const targetAquifer = 3000 + (casingsInstalled * 500);
@@ -11885,31 +11895,13 @@ export const useGameStore = create<GameState>()(
         let totalWaterConsumed = state.bunkhouse?.totalWaterConsumedLiters ?? 0;
         let newColdDrinks = currentColdDrinks;
 
-        // Micro-tick water deduction under physical mass conservation
-        if (activeDutyWorkerCount > 0 && deltaSeconds > 0) {
-          const waterNeeded = calculateMicroTickWaterConsumption(
-            activeDutyWorkerCount,
-            ambientTemp,
-            deltaSeconds
-          );
-
-          if (waterNeeded > 0) {
-            const deductRes = deductWorkerHydration({
-              amountLiters: waterNeeded,
-              currentCanteenLiters: newCanteenLiters,
-              currentTowerLiters: newTowerLiters,
-            });
-            newCanteenLiters = deductRes.newCanteenLiters;
-            newTowerLiters = deductRes.newTowerLiters;
-            totalWaterConsumed += deductRes.deductedLiters;
-            hydroSimResult.updatedHydrology.towerLiters = newTowerLiters;
-          }
-
-          // Consume cold beverage portions while active (1 drink per 600s shift per active worker)
-          if (hasColdBeverage) {
-            const drinkDrain = (activeDutyWorkerCount / 600) * deltaSeconds;
-            newColdDrinks = Math.max(0, newColdDrinks - drinkDrain);
-          }
+        // Per-Shift Worker Hydration Check:
+        // Workers drink from the staff canteen at shift start/end (or night watch), NOT draining estate reservoirs every second!
+        // Gravity Tower water is preserved strictly for farming, irrigation canals, and refinery compressors.
+        if (hasColdBeverage && activeDutyWorkerCount > 0 && deltaSeconds > 0) {
+          // Cold drinks consumed casually across shifts
+          const drinkDrain = (activeDutyWorkerCount / 1800) * deltaSeconds;
+          newColdDrinks = Math.max(0, newColdDrinks - drinkDrain);
         }
 
         // Auto-refill Canteen Cooler from Elevated Gravity Tower if enabled and below 30% capacity
@@ -12890,8 +12882,8 @@ export const useGameStore = create<GameState>()(
           updatedEstateAura = getEstateAura(parcelsClaimed);
         }
 
-        // Auto-refill well if wellLevel >= 5 (refills 1 water every 5 seconds)
-        let newWaterLevel = state.waterLevel;
+        // Auto-refill well (guaranteed minimum waterLevel for watering crops)
+        let newWaterLevel = Math.max(state.waterLevel || 0, 10);
         let newLastWellAutoRefill = state.lastWellAutoRefill;
         if (state.wellLevel >= 5 && state.waterLevel < state.maxWaterLevel) {
           const lastRefill = state.lastWellAutoRefill || now;

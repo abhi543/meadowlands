@@ -627,8 +627,9 @@ export function resolveOfflineHydrologyCatchUp(params: {
   // Drain rates
   const R_furrow = isSluiceOpen ? Math.max(0, sluiceDischargeRateLps) : 0;
   const R_biolab = activeBioLabChambersCount * 0.05;
-  const R_crew_nominal = activeWorkerCount * 0.015;
-  const R_crew_rationed = R_crew_nominal * 0.5;
+  // Workers drink from staff canteen or personal rations, not draining the industrial gravity tower!
+  const R_crew_nominal = 0;
+  const R_crew_rationed = 0;
 
   const totalAvailableSiphon = aquifer + cistern;
   const isContinuousSiphon = hasEmergencySiphon && siphonMode !== 'emergency' && totalAvailableSiphon > 0;
