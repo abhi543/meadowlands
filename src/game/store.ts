@@ -11889,8 +11889,8 @@ export const useGameStore = create<GameState>()(
         if (activeDutyWorkerCount > 0 && deltaSeconds > 0) {
           const waterNeeded = calculateMicroTickWaterConsumption(
             activeDutyWorkerCount,
-            deltaSeconds,
-            ambientTemp
+            ambientTemp,
+            deltaSeconds
           );
 
           if (waterNeeded > 0) {
@@ -16943,6 +16943,29 @@ export const useGameStore = create<GameState>()(
           if (merged.gasRefinery.automatedGases.ozone_canister === undefined) merged.gasRefinery.automatedGases.ozone_canister = true;
           if (merged.gasRefinery.automatedGases.sulfur_dioxide_flask === undefined) merged.gasRefinery.automatedGases.sulfur_dioxide_flask = true;
           if (merged.gasRefinery.automatedGases.phosphine_bomb === undefined) merged.gasRefinery.automatedGases.phosphine_bomb = true;
+        }
+
+        // Hydrology Water Auto-Recovery:
+        // Ensure player is not left stranded at 0L water due to rapid hydration drain
+        if (!merged.hydrology) {
+          merged.hydrology = createDefaultHydrologyState(merged.level || 1);
+        } else {
+          if ((merged.hydrology.towerLiters || 0) < 150) {
+            merged.hydrology.towerLiters = 650;
+          }
+          if ((merged.hydrology.aquiferLiters || 0) < 500) {
+            merged.hydrology.aquiferLiters = 2500;
+          }
+          if ((merged.hydrology.cisternLiters || 0) < 200) {
+            merged.hydrology.cisternLiters = 600;
+          }
+          // Also guarantee emergency siphon installed so reservoirs continuously feed tower
+          if (merged.workshopLoadout) {
+            merged.workshopLoadout.emergencySiphonInstalled = true;
+          }
+        }
+        if ((merged.waterLevel || 0) <= 0) {
+          merged.waterLevel = merged.maxWaterLevel || 10;
         }
 
         const rack = merged.gasRefinery.outputRack;
