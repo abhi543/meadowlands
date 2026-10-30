@@ -24,6 +24,7 @@ import {
 import { SUDDEN_EVENT_TEMPLATES } from '@/lib/eventDirector';
 import { FARM_TIER_DROPS, PREHISTORIC_DROPS } from './AnimalProductsQuickReference';
 import { CANISTER_RECIPES } from '@/game/gasBottlingEngine';
+import { CROP_PHENOLOGY_REGISTRY, WEATHER_PROFILES } from '@/game/weatherEngine';
 
 type GuideTab =
   | 'overview'
@@ -549,70 +550,285 @@ function FarmGuide() {
         </div>
       </div>
 
-      {/* 5. Atmospheric Weather System: 1-Day Regional Climate Fronts (30m Game Time) */}
-      <div className="bg-gradient-to-r from-sky-950/20 via-blue-950/20 to-indigo-950/20 border border-sky-400/40 rounded-xl p-3 text-xs space-y-2">
+      {/* 5. Weather-Adapted Crop Matrix: 2-Minute Unified Cycle */}
+      <div className="bg-gradient-to-r from-sky-950/20 via-blue-950/20 to-indigo-950/20 border border-sky-400/40 rounded-xl p-3.5 text-xs space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-1">
           <div className="flex items-center gap-2">
             <span className="text-xl">🌤️</span>
-            <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100">
-              Atmospheric Weather System: 1-Day Regional Climate Fronts (30m Game Time)
-            </h5>
+            <div>
+              <h5 className="font-bold text-sm text-stone-900 dark:text-stone-100 flex items-center gap-2">
+                <span>Weather-Adapted Crop Matrix &amp; 2-Minute Unified Cycle</span>
+                <span className="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 font-mono px-2 py-0.5 rounded-full border border-amber-400/30">
+                  2-Minute Cadence
+                </span>
+              </h5>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                22 dynamic meteorologic patterns coupled with paired agronomic crop traits.
+              </p>
+            </div>
           </div>
-          <span className="text-[10px] bg-sky-950 text-sky-300 font-mono px-2 py-0.5 rounded-full border border-sky-500/40">
-            30-Min Weather Cadence
+        </div>
+
+        {/* Global Timing & Safeguards */}
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px]">
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+              <span>⏱️</span> Universal 120s Growth:
+            </span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-300">
+              All 22 crops share a unified base growth duration of exactly <strong>2 minutes (120s)</strong>.
+            </p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-blue-700 dark:text-blue-400 flex items-center gap-1">
+              <span>🛡️</span> 30s Seedling Grace:
+            </span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-300">
+              First 25% (0–30s) is <strong>100% immune</strong> to blight, drowning, drag, and speed penalties.
+            </p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <span>✨</span> Native Weather (1.3×):
+            </span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-300">
+              Matched crops surge at <strong>1.25×–1.35× speed</strong> (~88–96s) and lock <strong>Grade A yields</strong>.
+            </p>
+          </div>
+          <div className="p-2 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
+            <span className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+              <span>🌧️</span> Weather Strain (0.5×):
+            </span>
+            <p className="mt-0.5 text-stone-600 dark:text-stone-300">
+              Mismatched crops run at 0.5× speed (floor 0.40×; never freezes) with Grade C item downgrades.
+            </p>
+          </div>
+        </div>
+
+        {/* 22 Weather Compatibility Matrix Table */}
+        <div className="space-y-1.5 pt-1">
+          <span className="font-bold text-stone-800 dark:text-stone-200 text-xs">
+            📋 Complete 22 Weather-to-Crop Pairing Matrix:
           </span>
-        </div>
-        <p className="text-stone-600 dark:text-stone-300 leading-relaxed">
-          Weather fronts now persist for an entire <strong>1-day game time = 30 real minutes</strong> (1,800 seconds). Each in-game day rolls a sustained regional climate pattern featuring natural diurnal day/night variations:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-          <div className="p-2.5 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
-              <span>☀️</span> Morning Phase (10 Real Minutes · 06:00 – 14:00):
-            </span>
-            <p className="mt-1 text-stone-600 dark:text-stone-300">
-              High midday sun with warmer temperatures (+1.0°C boost) and standard solar evaporation (2.5%/min). All field workers actively till, plant, water, and process goods.
-            </p>
+          <div className="overflow-x-auto rounded-lg border border-stone-200 dark:border-stone-700">
+            <table className="w-full text-[11px] text-left border-collapse">
+              <thead>
+                <tr className="bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold border-b border-stone-200 dark:border-stone-700">
+                  <th className="p-1.5">Weather Front</th>
+                  <th className="p-1.5">Inflow</th>
+                  <th className="p-1.5">Native Crop</th>
+                  <th className="p-1.5">Unique Agronomic Trait</th>
+                  <th className="p-1.5">Native Bonus</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-200 dark:divide-stone-800 font-mono">
+                {/* A. Common & Temperate */}
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">☀️ Sunny / Clear Skies</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌻 Sunflower</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Heliotropic Drive</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.25× Speed · +1 Bonus Seed</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🔥 Hot / Heatwave</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🫛 Okra</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Thermal Podding</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · Immune to Scorch</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🏜️ Dry / Drought</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌾 Sorghum</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Xeric Taproot</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.25× Speed · 50% Water Req</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">☁️ Cloudy / Overcast</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🥬 Spinach</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Low-Light Synthesis</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.25× Speed · Low Lux Peak</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌫️ Humid &amp; Muggy</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🍆 Eggplant</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Vapor Feeder</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.28× Speed · Mildew Immune</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌁 Dense Ground Fog</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌿 Wasabi</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Misty Microclimate</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.25× Speed · +20% Value</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌦️ Drizzly Mist</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+15L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🍵 Tea Bush</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Foliar Hydration</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.25× Speed · Self-Watering</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌧️ Moderate Rainy</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+45L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🫘 Soybean</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Moisture Fixer</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · +40% Soil N</td>
+                </tr>
+
+                {/* B. Severe & Cold */}
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">⛈️ Heavy Monsoon Rain</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+120L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌾 Paddy Rice</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Submerged Stolon</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.35× Speed · Thrives Flooded</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌈 Sunshower / Mixed</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+25L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🍓 Strawberry</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Hydro-Thermal Burst</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · +30% Sugar Value</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">💨 Windy / Gale</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🥜 Peanut</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Ground Anchor</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.28× Speed · Gale Immune</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">⚡ Severe Thunderstorm</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+90L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🍠 Sweet Potato</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Nitrate Siphon</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.32× Speed · Root Siphon</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌨️ Severe Hailstorm</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+35L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🪴 Turnip</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Armored Crown</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.28× Speed · Hail Immune</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌀 Cyclonic Storm</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+180L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🥔 Taro</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Flood Corm</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · Erosion Anchor</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">❄️ Cold &amp; Frosty</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🥬 Kale</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Frost Glaze</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · +50% Cold Value</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">☃️ Snowy Weather</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+25L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌾 Winter Rye</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Thermal Overwintering</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.28× Speed · Sub-Snow Roots</td>
+                </tr>
+
+                {/* C. Extreme & Cataclysmic */}
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌊 Supercell Deluge</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+450L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌰 Water Chestnut</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Aquatic Siphon</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.35× Speed · 0 Anoxia Drag</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">☄️ Solar Firestorm</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🐉 Dragon Fruit</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Radiant Shielding</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.35× Speed · Absorbs Radiation</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🧊 Cryo Polar Vortex</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌸 Arctic Moss Campion</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Cryo-Resilience</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · Resists Sub-Zero</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🌪️ Cat-5 Hyper-Cyclone</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+320L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🥜 Bambara Groundnut</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Subterranean Vault</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.35× Speed · Deep Pod Vault</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🧪 Alchemical Monsoon</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+200L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🍄 Bioluminescent Shroom</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Mycelial Converter</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.35× Speed · Bio-Spore Essence</td>
+                </tr>
+                <tr className="hover:bg-amber-500/5">
+                  <td className="p-1.5 font-sans font-semibold">🏜️ Great Arid Haboob</td>
+                  <td className="p-1.5 text-cyan-600 dark:text-cyan-400">+0L/m</td>
+                  <td className="p-1.5 font-sans font-bold text-amber-600 dark:text-amber-400">🌵 Prickly Pear Cactus</td>
+                  <td className="p-1.5 font-sans italic text-stone-600 dark:text-stone-300">Silica Cuticle</td>
+                  <td className="p-1.5 text-emerald-600 dark:text-emerald-400">1.30× Speed · Resists Sandblast</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div className="p-2.5 rounded bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
-            <span className="font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
-              <span>🌙</span> Night Phase (20 Real Minutes · 14:00 – 06:00):
-            </span>
-            <p className="mt-1 text-stone-600 dark:text-stone-300">
-              Atmospheric cooling (-3.0°C drop) with nighttime dew condensation (+6% RH) that slows soil evaporation to 0.5%/min while workers rest in the Bunkhouse.
-            </p>
-          </div>
         </div>
-        <div className="text-[11px] text-sky-700 dark:text-sky-300 bg-sky-500/10 p-2 rounded-lg border border-sky-400/30">
-          💡 <strong>Crop Planning:</strong> Because the daily climate front is active for the full 30-minute day, you can reliably sow sun-loving crops during heatwaves or frost-hardy roots during cold fronts with total confidence!
+
+        <div className="text-[11px] text-sky-700 dark:text-sky-300 bg-sky-500/10 p-2.5 rounded-lg border border-sky-400/30 flex items-center gap-2">
+          <span className="text-base">💡</span>
+          <span><strong>Dynamic Weather Synchronization:</strong> Weather patterns shift naturally every <strong>2 minutes (120s)</strong>. Match your crop selections to the active climate or shelter vulnerable crops with greenhouses!</span>
         </div>
       </div>
 
       {/* Crop table */}
       <div>
         <h5 className="font-bold text-xs uppercase tracking-wider text-stone-500 dark:text-gray-400 mb-1.5">
-          Available Crop Roster
+          Weather-Adapted Crop Roster (22 Patterns + Legacy Aliases)
         </h5>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {Object.entries(CROPS).map(([id, crop]) => (
-            <div key={id} className="border border-stone-200 dark:border-gray-800 rounded-lg p-2.5 bg-stone-50/50 dark:bg-stone-900/30 flex items-start gap-2">
-              <span className="text-2xl">{crop.emoji}</span>
-              <div className="flex-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-stone-800 dark:text-gray-200">{crop.name}</span>
-                  <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                    Cost: 🪙{crop.seedCost}
-                  </span>
-                </div>
-                <div className="text-stone-500 dark:text-gray-400 mt-0.5">
-                  ⏱️ Base: {crop.growTimeSec}s (Watered: {Math.ceil(crop.growTimeSec / 2)}s) • 📦 Yield: {crop.yieldCount}x into Silo
-                </div>
-                <div className="text-[11px] text-stone-600 dark:text-stone-300 mt-1 italic">
-                  Used for: {getCropUsage(id)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          {Object.entries(CROPS).map(([id, crop]) => {
+            const pheno = CROP_PHENOLOGY_REGISTRY[id as keyof typeof CROP_PHENOLOGY_REGISTRY];
+            const optWeather = pheno ? WEATHER_PROFILES[pheno.optimalWeather] : null;
+
+            return (
+              <div key={id} className="border border-stone-200 dark:border-gray-800 rounded-lg p-2.5 bg-stone-50/50 dark:bg-stone-900/30 flex items-start gap-2">
+                <span className="text-2xl">{crop.emoji}</span>
+                <div className="flex-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-stone-800 dark:text-gray-200">{crop.name}</span>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                      🪙{crop.seedCost}
+                    </span>
+                  </div>
+                  <div className="text-stone-500 dark:text-gray-400 mt-0.5 text-[11px]">
+                    ⏱️ Base: <strong>{crop.growTimeSec}s</strong> • 📦 Yield: <strong>{crop.yieldCount}x</strong>
+                  </div>
+                  {optWeather && (
+                    <div className="text-[10px] text-amber-700 dark:text-amber-300 font-mono mt-1 flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      <span>🌤️ {optWeather.emoji} {optWeather.name}</span>
+                    </div>
+                  )}
+                  {pheno?.traitName && (
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-400 mt-0.5 italic">
+                      ✨ {pheno.traitName}: {pheno.traitDescription}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
