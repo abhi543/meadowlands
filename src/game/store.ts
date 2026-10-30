@@ -3564,7 +3564,6 @@ export const useGameStore = create<GameState>()(
           const isElapsedReady = Boolean(a.fed && a.fedAt && (now - a.fedAt) >= (prodTime * 1000));
           if ((!a.productReady && !isElapsedReady) || a.cyclesRemaining <= 0) return a;
 
-          const breedDef = BREED_REGISTRY[a.breedId];
           const speciesDef = ANIMALS[a.species];
           const aOverclock = updatedOverclocks[`animal_${a.id}`];
           const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
@@ -12236,8 +12235,6 @@ export const useGameStore = create<GameState>()(
                     const isTimeReady = Boolean(a.fed && a.fedAt && (now - a.fedAt) >= (prodTime * 1000));
                     if ((!a.productReady && !isTimeReady) || a.cyclesRemaining <= 0) return a;
 
-                    const breedDef = BREED_REGISTRY[a.breedId];
-                    const speciesDef = ANIMALS[a.species];
                     const aOverclock = state.entityOverclocks?.[`animal_${a.id}`];
                     const bonusYield = (aOverclock?.isOverclocked && aOverclock.bonusYield) ? aOverclock.bonusYield : 0;
                     const prodKey = breedDef ? breedDef.primaryProductKey : speciesDef.product;
