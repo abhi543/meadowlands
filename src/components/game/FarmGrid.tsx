@@ -71,7 +71,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [hoveredCropId, setHoveredCropId] = useState<CropId | null>(null);
-  const [cropCategoryFilter, setCropCategoryFilter] = useState<'all' | 'temperate' | 'severe' | 'extreme' | 'legacy'>('all');
+  const [cropCategoryFilter, setCropCategoryFilter] = useState<'recommended' | 'all' | 'temperate' | 'severe' | 'extreme' | 'legacy'>('recommended');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
   const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
@@ -384,11 +384,53 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       </div>
 
       {/* Crop Selector Toolbar */}
-      <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-2.5 border border-amber-200 dark:border-amber-800 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-            <span>🌱</span>
-            <span>Select Crop & Tap Plot to Plant</span>
+      <div className="bg-amber-50 dark:bg-amber-950/40 rounded-xl p-3 border border-amber-200 dark:border-amber-800 space-y-2.5 shadow-sm">
+        {/* Dynamic Weather Advisory Header */}
+        <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-amber-100/90 via-yellow-100/70 to-amber-100/90 dark:from-amber-950/80 dark:via-yellow-950/60 dark:to-amber-950/80 p-2.5 rounded-lg border border-amber-300/80 dark:border-amber-700/80">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl animate-pulse">{activeProfile.emoji}</span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-black text-amber-950 dark:text-amber-100">
+                  CURRENT WEATHER: {activeProfile.name.toUpperCase()}
+                </span>
+                <span className="text-[10px] bg-emerald-600 text-white font-mono px-2 py-0.2 rounded-full font-bold shadow-xs">
+                  ⚡ 1.35× Native Speed
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                Plant native crops below for guaranteed <strong>Grade A harvests</strong> and <strong>~88s</strong> maturation!
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Filter Tabs */}
+          <div className="flex items-center gap-1 overflow-x-auto text-[11px] font-bold">
+            {[
+              { id: 'recommended', label: `✨ Paired with ${activeProfile.emoji} ${activeProfile.name.split('/')[0].trim()}`, isSpecial: true },
+              { id: 'all', label: '🌾 All (29)' },
+              { id: 'temperate', label: '☀️ Temperate' },
+              { id: 'severe', label: '⛈️ Severe & Cold' },
+              { id: 'extreme', label: '🌋 Extreme' },
+              { id: 'legacy', label: '🌽 Classics' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setCropCategoryFilter(tab.id as any)}
+                className={`px-2.5 py-1 rounded-lg transition-all border cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                  cropCategoryFilter === tab.id
+                    ? tab.isSpecial
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-700 shadow-md ring-2 ring-emerald-400/50 font-black scale-105'
+                      : 'bg-amber-600 text-white border-amber-700 shadow-xs ring-2 ring-amber-400/50 font-black'
+                    : tab.isSpecial
+                    ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700 hover:bg-emerald-200'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:bg-amber-100 dark:hover:bg-amber-950/40'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -396,6 +438,10 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         <div className="flex gap-2 flex-wrap">
           {CROP_LIST.filter(crop => {
             const pheno = CROP_PHENOLOGY_REGISTRY[crop.id];
+            const isNative = pheno?.optimalWeather === activeWeatherId;
+            if (cropCategoryFilter === 'recommended') {
+              return isNative;
+            }
             if (cropCategoryFilter === 'all') return true;
             if (cropCategoryFilter === 'temperate') {
               return ['sunflower', 'okra', 'sorghum', 'spinach', 'eggplant', 'wasabi', 'tea_bush', 'soybean'].includes(crop.id);
@@ -412,6 +458,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             return true;
           }).map(crop => {
             const isSelected = selectedCrop === crop.id;
+            const isNativeToCurrentWeather = CROP_PHENOLOGY_REGISTRY[crop.id]?.optimalWeather === activeWeatherId;
             return (
               <button
                 key={crop.id}
@@ -419,9 +466,11 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 onClick={() => setSelectedCrop(crop.id)}
                 onMouseEnter={() => setHoveredCropId(crop.id)}
                 onMouseLeave={() => setHoveredCropId(null)}
-                className={`relative px-3 py-2 rounded-xl text-sm font-bold transition-all border cursor-pointer select-none ${
+                className={`relative px-3 py-2 rounded-xl text-sm font-bold transition-all border cursor-pointer select-none flex items-center gap-1.5 ${
                   isSelected
                     ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105 ring-2 ring-amber-400/50'
+                    : isNativeToCurrentWeather
+                    ? 'bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-100 dark:from-emerald-950/60 dark:to-teal-950/60 text-emerald-900 dark:text-emerald-100 border-emerald-400 dark:border-emerald-600 shadow-sm ring-1 ring-emerald-400/60 hover:scale-105'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                 }`}
                 title={`Base Time: 2m 00s | Optimal Weather: ${CROP_PHENOLOGY_REGISTRY[crop.id]?.optimalWeather ? `${WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[crop.id].optimalWeather]?.emoji} ${WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[crop.id].optimalWeather]?.name}` : 'Any'}`}
