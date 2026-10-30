@@ -10,6 +10,7 @@ import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 import { getMoistureZone, resolveWeatherProfileId } from '@/game/hydrologyEngine';
 import {
   WEATHER_PROFILES,
+  CROP_PHENOLOGY_REGISTRY,
   getEstateWeatherModifier,
   type WeatherProfileId,
 } from '@/game/weatherEngine';
@@ -406,7 +407,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-105 ring-2 ring-amber-400/50'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-amber-100 dark:hover:bg-amber-900/30'
                 }`}
-                title={crop.name}
+                title={`Base Time: 2m 00s | Optimal Weather: ${CROP_PHENOLOGY_REGISTRY[crop.id]?.optimalWeather ? `${WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[crop.id].optimalWeather]?.emoji} ${WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[crop.id].optimalWeather]?.name}` : 'Any'}`}
               >
                 <span>{crop.emoji}</span> {crop.name}
                 {crop.seedCost > 0 && (
@@ -421,7 +422,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
         {/* Pre-Plant Stamp Feedback */}
         <div className="mt-2 pt-2 border-t border-amber-200/80 dark:border-amber-900/60">
-          <div className="flex flex-wrap items-center justify-between gap-1 text-[11px]">
+          <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
             <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
               <span className="text-base">{previewCrop.emoji}</span>
               <span>Selected Crop: {previewCrop.name}</span>
@@ -429,8 +430,27 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 {previewCropRoleLabel}
               </span>
             </div>
+            {/* Crop Seed Hover Card Requirements */}
+            <div className="flex items-center gap-2 font-mono text-[10px] sm:text-[11px] bg-amber-100/70 dark:bg-amber-900/40 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700">
+              <span className="text-amber-900 dark:text-amber-200">⏱️ Base Time: <strong>2m 00s</strong></span>
+              <span className="text-amber-700 dark:text-amber-400">|</span>
+              <span className="text-amber-900 dark:text-amber-200">
+                🌤️ Optimal Weather: {CROP_PHENOLOGY_REGISTRY[previewCropId]?.optimalWeather ? (
+                  <strong>{WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[previewCropId].optimalWeather]?.emoji} {WEATHER_PROFILES[CROP_PHENOLOGY_REGISTRY[previewCropId].optimalWeather]?.name}</strong>
+                ) : '☀️ Sunny'}
+              </span>
+              {CROP_PHENOLOGY_REGISTRY[previewCropId]?.traitName && (
+                <>
+                  <span className="text-amber-700 dark:text-amber-400 hidden md:inline">|</span>
+                  <span className="text-amber-800 dark:text-amber-300 hidden md:inline">
+                    ✨ <em>{CROP_PHENOLOGY_REGISTRY[previewCropId].traitName}</em>
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Active Systemic Simulation Modifiers */}
@@ -1140,20 +1160,42 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   )}
 
                   {/* Climate-Driven Phenology & Weather Modifier Badge */}
-                  {plot.crop && (plot.weatherModifierText || plot.phenologyBadgeEmoji) && (
-                    <span
-                      className={`absolute bottom-1 left-1 flex items-center gap-0.5 px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-bold border z-10 backdrop-blur-xs shadow-xs ${
-                        currentGrowthSpeed < 0.65
-                          ? 'bg-amber-950/95 border-amber-500/80 text-amber-200'
-                          : 'bg-stone-900/90 border-stone-700/80 text-amber-200'
-                      }`}
-                      title={plot.weatherModifierText || plot.phenologyBadgeText || ''}
-                    >
-                      <span>{plot.phenologyBadgeEmoji || (currentGrowthSpeed < 0.65 ? '🐌' : '🌦️')}</span>
-                      <span className="truncate max-w-[65px] hidden xs:inline">
-                        {plot.weatherModifierText?.split(':')[0]?.trim() || plot.phenologyBadgeText?.split('(')[0]?.trim() || 'Standard'}
-                      </span>
-                    </span>
+                  {plot.crop && (
+                    (() => {
+                      const isNative = plot.phenologyBadgeEmoji === '✨' || (plot.phenologyBadgeText && plot.phenologyBadgeText.includes('In Native Element'));
+                      const isStrain = currentGrowthSpeed < 0.65 || (plot.phenologyBadgeText && plot.phenologyBadgeText.includes('Weather Strain'));
+                      
+                      const badgeClasses = isNative
+                        ? 'bg-gradient-to-r from-amber-500/90 via-yellow-400/90 to-amber-600/90 border-yellow-200 text-stone-950 font-black shadow-lg shadow-yellow-500/50 animate-pulse ring-1 ring-yellow-300'
+                        : isStrain
+                        ? 'bg-amber-950/95 border-amber-500/90 text-amber-200 font-bold shadow-md shadow-amber-900/40 ring-1 ring-amber-600/60'
+                        : 'bg-stone-900/90 border-stone-700/80 text-amber-200 font-bold';
+
+                      const badgeIcon = isNative ? '✨' : (isStrain ? '🌧️' : (plot.phenologyBadgeEmoji || '🌱'));
+                      const badgeTitle = isNative
+                        ? `✨ In Native Element: ${(plot.growthSpeedMultiplier || 1.3).toFixed(1)}× Speed | Grade A Locked`
+                        : isStrain
+                        ? '🌧️ Weather Strain: 0.5× Speed | Protect via Trench/Cover'
+                        : (plot.weatherModifierText || plot.phenologyBadgeText || 'Normal');
+
+                      const displayText = isNative
+                        ? 'Native 1.3x'
+                        : isStrain
+                        ? 'Strain 0.5x'
+                        : (plot.weatherModifierText?.split(':')[0]?.trim() || plot.phenologyBadgeText?.split('(')[0]?.trim() || 'Standard');
+
+                      return (
+                        <span
+                          className={`absolute bottom-1 left-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] sm:text-[8px] border z-10 backdrop-blur-xs ${badgeClasses}`}
+                          title={badgeTitle}
+                        >
+                          <span>{badgeIcon}</span>
+                          <span className="truncate max-w-[70px] hidden xs:inline font-mono">
+                            {displayText}
+                          </span>
+                        </span>
+                      );
+                    })()
                   )}
 
                   {/* Alluvial Silt Deposit Badge */}

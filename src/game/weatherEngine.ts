@@ -529,7 +529,7 @@ export const WEATHER_PROFILES: Record<WeatherProfileId, WeatherProfileDef> = {
 
 
 // --- Multi-Variable Atmospheric Weather State ---
-export const WEATHER_DAY_CYCLE_SEC = 300; // 5 real minutes per weather cycle
+export const WEATHER_DAY_CYCLE_SEC = 120; // 2 minutes (120 seconds) unified cycle // 5 real minutes per weather cycle
 
 export interface AtmosphericWeatherState {
   currentWeather: WeatherProfileId;
@@ -575,97 +575,413 @@ export function createDefaultWeatherState(initialWeather: WeatherProfileId = 'su
 }
 
 // --- Crop Agronomic Families & Phenology Taxonomy ---
-export type CropAgronomicFamily = 'sun_loving_warm' | 'cool_season_root' | 'temperate_berry' | 'cool_season_hardy' | 'restorative_legume';
+export type CropAgronomicFamily =
+  | 'sun_loving_warm'
+  | 'cool_season_root'
+  | 'temperate_berry'
+  | 'cool_season_hardy'
+  | 'restorative_legume'
+  | 'aquatic_wetland'
+  | 'arid_succulent'
+  | 'subterranean_vault'
+  | 'bio_alchemical';
 
 export interface CropPhenologyMeta {
   cropId: CropId;
+  name: string;
+  traitName: string;
+  traitDescription: string;
   family: CropAgronomicFamily;
   familyLabel: string;
   familyIcon: string;
-  optimalWeather: WeatherProfileId[];
+  optimalWeather: WeatherProfileId;
+  bonusSpeedMultiplier: number; // 1.25 to 1.35
   coldToleranceMinC: number;
   heatToleranceMaxC: number;
 }
 
 export const CROP_PHENOLOGY_REGISTRY: Record<CropId, CropPhenologyMeta> = {
+  // A. Common & Temperate Weather
+  sunflower: {
+    cropId: 'sunflower',
+    name: 'Sunflower',
+    traitName: 'Heliotropic Drive',
+    traitDescription: 'Converts full sun into +25% growth speed and +1 bonus seed output.',
+    family: 'sun_loving_warm',
+    familyLabel: 'Solar Bloom',
+    familyIcon: '🌻',
+    optimalWeather: 'sunny',
+    bonusSpeedMultiplier: 1.25,
+    coldToleranceMinC: 15,
+    heatToleranceMaxC: 45,
+  },
+  okra: {
+    cropId: 'okra',
+    name: 'Okra',
+    traitName: 'Thermal Podding',
+    traitDescription: 'Immune to heat exhaustion; maintains 1.0x speed when other crops wilt.',
+    family: 'sun_loving_warm',
+    familyLabel: 'Heat Pod',
+    familyIcon: '🫛',
+    optimalWeather: 'heatwave',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: 18,
+    heatToleranceMaxC: 55,
+  },
+  sorghum: {
+    cropId: 'sorghum',
+    name: 'Sorghum',
+    traitName: 'Xeric Taproot',
+    traitDescription: 'Zero penalty from dry soil; requires 50% less canal water.',
+    family: 'arid_succulent',
+    familyLabel: 'Xeric Cereal',
+    familyIcon: '🌾',
+    optimalWeather: 'drought',
+    bonusSpeedMultiplier: 1.25,
+    coldToleranceMinC: 10,
+    heatToleranceMaxC: 50,
+  },
+  spinach: {
+    cropId: 'spinach',
+    name: 'Spinach',
+    traitName: 'Low-Light Synthesis',
+    traitDescription: 'Full photosynthetic efficiency under low lux; prevents premature bolting.',
+    family: 'cool_season_hardy',
+    familyLabel: 'Low-Light Leaf',
+    familyIcon: '🥬',
+    optimalWeather: 'cloudy',
+    bonusSpeedMultiplier: 1.25,
+    coldToleranceMinC: 2,
+    heatToleranceMaxC: 30,
+  },
+  eggplant: {
+    cropId: 'eggplant',
+    name: 'Eggplant',
+    traitName: 'Vapor Feeder',
+    traitDescription: 'Absorbs ambient air moisture; immune to foliar mildew under stagnant air.',
+    family: 'sun_loving_warm',
+    familyLabel: 'Humid Solanaceae',
+    familyIcon: '🍆',
+    optimalWeather: 'humid',
+    bonusSpeedMultiplier: 1.28,
+    coldToleranceMinC: 15,
+    heatToleranceMaxC: 42,
+  },
+  wasabi: {
+    cropId: 'wasabi',
+    name: 'Wasabi',
+    traitName: 'Misty Microclimate',
+    traitDescription: 'Filters diffuse moisture; receives a +20% quality multiplier.',
+    family: 'aquatic_wetland',
+    familyLabel: 'Fog Rhizome',
+    familyIcon: '🌿',
+    optimalWeather: 'foggy',
+    bonusSpeedMultiplier: 1.25,
+    coldToleranceMinC: 5,
+    heatToleranceMaxC: 26,
+  },
+  tea_bush: {
+    cropId: 'tea_bush',
+    name: 'Tea Bush',
+    traitName: 'Foliar Hydration',
+    traitDescription: 'Self-waters passively without lowering soil O2 below 60%.',
+    family: 'temperate_berry',
+    familyLabel: 'Camellia Shrub',
+    familyIcon: '🍵',
+    optimalWeather: 'drizzle',
+    bonusSpeedMultiplier: 1.25,
+    coldToleranceMinC: 4,
+    heatToleranceMaxC: 32,
+  },
+  soybean: {
+    cropId: 'soybean',
+    name: 'Soybean',
+    traitName: 'Moisture Fixer',
+    traitDescription: 'Converts consistent rainfall directly into +40% soil Nitrogen (N).',
+    family: 'restorative_legume',
+    familyLabel: 'Nitrogen Legume',
+    familyIcon: '🫘',
+    optimalWeather: 'rain',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: 10,
+    heatToleranceMaxC: 40,
+  },
+
+  // B. Severe & Cold Weather
+  paddy_rice: {
+    cropId: 'paddy_rice',
+    name: 'Paddy Rice',
+    traitName: 'Submerged Stolon',
+    traitDescription: 'Thrives in standing water; grows at 1.35x speed while flooded.',
+    family: 'aquatic_wetland',
+    familyLabel: 'Paddy Grain',
+    familyIcon: '🌾',
+    optimalWeather: 'monsoon',
+    bonusSpeedMultiplier: 1.35,
+    coldToleranceMinC: 14,
+    heatToleranceMaxC: 42,
+  },
+  strawberry: {
+    cropId: 'strawberry',
+    name: 'Strawberry',
+    traitName: 'Hydro-Thermal Burst',
+    traitDescription: 'Gains immediate +30% sugar concentration (Grade A value boost).',
+    family: 'temperate_berry',
+    familyLabel: 'Temperate Berry',
+    familyIcon: '🍓',
+    optimalWeather: 'sunshower',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: 5,
+    heatToleranceMaxC: 35,
+  },
+  peanut: {
+    cropId: 'peanut',
+    name: 'Peanut',
+    traitName: 'Ground Anchor',
+    traitDescription: 'Low sprawling canopy ignores gale-force wind resistance and canopy stripping.',
+    family: 'restorative_legume',
+    familyLabel: 'Sprawling Legume',
+    familyIcon: '🥜',
+    optimalWeather: 'gale',
+    bonusSpeedMultiplier: 1.28,
+    coldToleranceMinC: 8,
+    heatToleranceMaxC: 40,
+  },
+  sweet_potato: {
+    cropId: 'sweet_potato',
+    name: 'Sweet Potato',
+    traitName: 'Atmospheric Nitrate Siphon',
+    traitDescription: 'Absorbs electrical storm run-off directly into root bulk.',
+    family: 'cool_season_root',
+    familyLabel: 'Nitrate Tuber',
+    familyIcon: '🍠',
+    optimalWeather: 'thunderstorm',
+    bonusSpeedMultiplier: 1.32,
+    coldToleranceMinC: 10,
+    heatToleranceMaxC: 42,
+  },
+  turnip: {
+    cropId: 'turnip',
+    name: 'Turnip',
+    traitName: 'Armored Crown',
+    traitDescription: 'Below-ground tuber takes zero yield damage from falling hail.',
+    family: 'cool_season_root',
+    familyLabel: 'Armored Tuber',
+    familyIcon: '🪴',
+    optimalWeather: 'hailstorm',
+    bonusSpeedMultiplier: 1.28,
+    coldToleranceMinC: -2,
+    heatToleranceMaxC: 32,
+  },
+  taro: {
+    cropId: 'taro',
+    name: 'Taro',
+    traitName: 'Flood-Anchored Corm',
+    traitDescription: 'Anchors muddy soils; prevents plot soil erosion.',
+    family: 'aquatic_wetland',
+    familyLabel: 'Cyclonic Corm',
+    familyIcon: '🥔',
+    optimalWeather: 'cyclone',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: 12,
+    heatToleranceMaxC: 44,
+  },
+  kale: {
+    cropId: 'kale',
+    name: 'Kale',
+    traitName: 'Frost-Sweetened Glaze',
+    traitDescription: 'Cold converts leaf starch to natural sugars (+50% sale value).',
+    family: 'cool_season_hardy',
+    familyLabel: 'Glaze Brassica',
+    familyIcon: '🥬',
+    optimalWeather: 'frost',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: -8,
+    heatToleranceMaxC: 28,
+  },
+  winter_rye: {
+    cropId: 'winter_rye',
+    name: 'Winter Rye',
+    traitName: 'Thermal Overwintering',
+    traitDescription: 'Roots expand steadily beneath snow pack; prevents frost-lock.',
+    family: 'cool_season_hardy',
+    familyLabel: 'Overwinter Cereal',
+    familyIcon: '🌾',
+    optimalWeather: 'snow',
+    bonusSpeedMultiplier: 1.28,
+    coldToleranceMinC: -15,
+    heatToleranceMaxC: 25,
+  },
+
+  // C. Extreme & Cataclysmic Weather
+  water_chestnut: {
+    cropId: 'water_chestnut',
+    name: 'Water Chestnut',
+    traitName: 'Aquatic Siphon',
+    traitDescription: 'Prevents waterlogging penalties; accelerates when water column > 200L.',
+    family: 'aquatic_wetland',
+    familyLabel: 'Deluge Siphon',
+    familyIcon: '🌰',
+    optimalWeather: 'supercell_deluge',
+    bonusSpeedMultiplier: 1.35,
+    coldToleranceMinC: 8,
+    heatToleranceMaxC: 45,
+  },
+  dragon_fruit: {
+    cropId: 'dragon_fruit',
+    name: 'Dragon Fruit',
+    traitName: 'Radiant Shielding',
+    traitDescription: 'Thick waxy skin absorbs intense thermal radiation into bonus biomass.',
+    family: 'arid_succulent',
+    familyLabel: 'Radiant Pitaya',
+    familyIcon: '🐉',
+    optimalWeather: 'plasma_firestorm',
+    bonusSpeedMultiplier: 1.35,
+    coldToleranceMinC: 16,
+    heatToleranceMaxC: 60,
+  },
+  arctic_moss_campion: {
+    cropId: 'arctic_moss_campion',
+    name: 'Arctic Moss Campion',
+    traitName: 'Cryo-Resilience',
+    traitDescription: 'Resists sub-zero freeze locks; does not enter dormancy.',
+    family: 'cool_season_hardy',
+    familyLabel: 'Cryo-Tundra Bloom',
+    familyIcon: '🌸',
+    optimalWeather: 'polar_vortex',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: -35,
+    heatToleranceMaxC: 22,
+  },
+  bambara_groundnut: {
+    cropId: 'bambara_groundnut',
+    name: 'Bambara Groundnut',
+    traitName: 'Subterranean Vault',
+    traitDescription: 'Pods form entirely deep underground, immune to extreme cyclonic shear.',
+    family: 'subterranean_vault',
+    familyLabel: 'Vault Legume',
+    familyIcon: '🥜',
+    optimalWeather: 'hyper_cyclone',
+    bonusSpeedMultiplier: 1.35,
+    coldToleranceMinC: 12,
+    heatToleranceMaxC: 48,
+  },
+  bioluminescent_shroom: {
+    cropId: 'bioluminescent_shroom',
+    name: 'Bioluminescent Shroom',
+    traitName: 'Mycelial Converter',
+    traitDescription: 'Feeds on toxic chemical rain; outputs premium Bio-Alchemical essence.',
+    family: 'bio_alchemical',
+    familyLabel: 'Spore Fungi',
+    familyIcon: '🍄',
+    optimalWeather: 'alchemical_monsoon',
+    bonusSpeedMultiplier: 1.35,
+    coldToleranceMinC: 10,
+    heatToleranceMaxC: 45,
+  },
+  prickly_pear_cactus: {
+    cropId: 'prickly_pear_cactus',
+    name: 'Prickly Pear Cactus',
+    traitName: 'Silica Cuticle',
+    traitDescription: 'Thick armored pads resist high-velocity abrasive sandblasts.',
+    family: 'arid_succulent',
+    familyLabel: 'Armored Nopal',
+    familyIcon: '🌵',
+    optimalWeather: 'haboob_sandstorm',
+    bonusSpeedMultiplier: 1.30,
+    coldToleranceMinC: 5,
+    heatToleranceMaxC: 55,
+  },
+
+  // Legacy mappings for backwards compatibility
   wheat: {
     cropId: 'wheat',
-    family: 'cool_season_root',
-    familyLabel: 'Cool-Season Grain',
+    name: 'Wheat',
+    traitName: 'Heliotropic Drive',
+    traitDescription: 'Converts sun into growth.',
+    family: 'sun_loving_warm',
+    familyLabel: 'Solar Cereal',
     familyIcon: '🌾',
-    optimalWeather: ['cloudy', 'drizzle', 'rain', 'frost'],
+    optimalWeather: 'sunny',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: -2,
-    heatToleranceMaxC: 36,
+    heatToleranceMaxC: 38,
   },
   corn: {
     cropId: 'corn',
+    name: 'Corn',
+    traitName: 'Thermal Podding',
+    traitDescription: 'Warm stalk development.',
     family: 'sun_loving_warm',
     familyLabel: 'Sun-Loving Stalk',
     familyIcon: '🌽',
-    optimalWeather: ['sunny', 'heatwave', 'humid'],
+    optimalWeather: 'heatwave',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: 10,
     heatToleranceMaxC: 48,
   },
   carrot: {
     cropId: 'carrot',
+    name: 'Carrot',
+    traitName: 'Frost-Sweetened Glaze',
+    traitDescription: 'Cold converts root starches.',
     family: 'cool_season_root',
     familyLabel: 'Cool-Season Root',
     familyIcon: '🥕',
-    optimalWeather: ['cloudy', 'frost', 'drizzle', 'foggy'],
+    optimalWeather: 'frost',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: -4,
     heatToleranceMaxC: 34,
   },
-  strawberry: {
-    cropId: 'strawberry',
-    family: 'temperate_berry',
-    familyLabel: 'Temperate Berry',
-    familyIcon: '🍓',
-    optimalWeather: ['cloudy', 'sunshower', 'drizzle'],
-    coldToleranceMinC: 5,
-    heatToleranceMaxC: 35,
-  },
-  soybean: {
-    cropId: 'soybean',
-    family: 'sun_loving_warm',
-    familyLabel: 'Sun-Loving Legume',
-    familyIcon: '🫘',
-    optimalWeather: ['sunny', 'heatwave', 'humid'],
-    coldToleranceMinC: 12,
-    heatToleranceMaxC: 45,
-  },
   pumpkin: {
     cropId: 'pumpkin',
+    name: 'Pumpkin',
+    traitName: 'Vapor Feeder',
+    traitDescription: 'Vines absorb ambient moisture.',
     family: 'sun_loving_warm',
     familyLabel: 'Sun-Loving Vine',
     familyIcon: '🎃',
-    optimalWeather: ['sunny', 'heatwave', 'humid'],
+    optimalWeather: 'humid',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: 8,
     heatToleranceMaxC: 46,
   },
   cotton: {
     cropId: 'cotton',
+    name: 'Cotton',
+    traitName: 'Heliotropic Drive',
+    traitDescription: 'Fiber expands in heat.',
     family: 'sun_loving_warm',
     familyLabel: 'Sun-Loving Fiber',
     familyIcon: '🌿',
-    optimalWeather: ['sunny', 'heatwave', 'humid'],
+    optimalWeather: 'sunny',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: 14,
     heatToleranceMaxC: 50,
   },
   peas: {
     cropId: 'peas',
-    family: 'cool_season_hardy',
+    name: 'Peas (Restorative)',
+    traitName: 'Moisture Fixer',
+    traitDescription: 'Restores nitrogen.',
+    family: 'restorative_legume',
     familyLabel: 'Restorative Legume',
     familyIcon: '🫛',
-    optimalWeather: ['sunny', 'cloudy', 'humid', 'drizzle'],
+    optimalWeather: 'rain',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: 2,
     heatToleranceMaxC: 38,
   },
   wild_berries: {
     cropId: 'wild_berries',
+    name: 'Wild Berry',
+    traitName: 'Hydro-Thermal Burst',
+    traitDescription: 'Berry ripening under sunshower.',
     family: 'temperate_berry',
     familyLabel: 'Temperate Berry',
     familyIcon: '🍇',
-    optimalWeather: ['cloudy', 'sunshower', 'drizzle'],
+    optimalWeather: 'sunshower',
+    bonusSpeedMultiplier: 1.25,
     coldToleranceMinC: 3,
     heatToleranceMaxC: 36,
   },
@@ -691,12 +1007,15 @@ export interface CropPhenologyResult {
 
 /**
  * Computes live climate-driven phenology impacts on a planted crop plot.
+ * 22-Crop Weather-Adapted Matrix with Grace Period and Drag Safeguards.
  */
 export function evaluateCropPhenology(params: {
   cropId: CropId;
   weatherState?: AtmosphericWeatherState;
   weather?: WeatherProfileId;
   moistureLevel: number;
+  plantedAt?: number | null;
+  growthProgress?: number;
   isProtectedByGreenhouse?: boolean;
   hasAlchemicalAsh?: boolean;
   hasHeatSource?: boolean;
@@ -707,16 +1026,17 @@ export function evaluateCropPhenology(params: {
     weatherState,
     weather: directWeather,
     moistureLevel,
+    plantedAt,
+    growthProgress,
     isProtectedByGreenhouse = false,
     hasAlchemicalAsh = false,
     hasHeatSource = false,
     isWindbreakProtected = false,
   } = params;
 
-  const pheno = CROP_PHENOLOGY_REGISTRY[cropId] || CROP_PHENOLOGY_REGISTRY.wheat;
+  const pheno = CROP_PHENOLOGY_REGISTRY[cropId] || CROP_PHENOLOGY_REGISTRY.sunflower;
   const weather: WeatherProfileId = directWeather || weatherState?.currentWeather || weatherState?.profileId || 'sunny';
   const def = WEATHER_PROFILES[weather] || WEATHER_PROFILES.sunny;
-  const temp = weatherState ? weatherState.temperatureC : def.defaultTempC;
 
   let speedMult = 1.0;
   let yieldMult = 1.0;
@@ -733,286 +1053,90 @@ export function evaluateCropPhenology(params: {
   let badgeText = 'Normal';
   let description = 'Standard ambient growth.';
 
-  // 1. Sunshower Blessing (Rainbow active)
+  // 1. Grace Period Calculation:
+  // First 25% of growth (0–30s out of 120s base, or growthProgress <= 0.25)
+  // is 100% immune to blight, drowning, weather drag, and speed drops!
+  const progressVal = growthProgress !== undefined
+    ? growthProgress
+    : (plantedAt ? Math.min(1.0, (Date.now() - plantedAt) / 120000) : 0);
+  const isGracePeriodActive = progressVal <= 0.25;
+
+  const isNativeWeather = pheno.optimalWeather === weather;
+
+  if (isGracePeriodActive) {
+    speedMult = Math.max(1.0, isNativeWeather ? pheno.bonusSpeedMultiplier : 1.0);
+    badgeEmoji = '🛡️🌱';
+    badgeText = 'Sprout Grace Period (100% Hazard Immune)';
+    weatherModifierText = '🛡️ Seedling Sprout Grace: Immune to Blight, Drowning & Drag';
+    description = 'Sprouting seedling (first 30s) is shielded from environmental hazards and speed drops.';
+  } else if (isNativeWeather) {
+    // 2. Native Weather Match:
+    // Runs at 1.25x to 1.35x speed (finishing in ~88–96 seconds), immune to weather-induced stress.
+    speedMult = pheno.bonusSpeedMultiplier;
+    badgeEmoji = '✨';
+    badgeText = `In Native Element: ${speedMult.toFixed(2)}x Speed | Grade A Locked`;
+    weatherModifierText = `✨ Native Element (${pheno.traitName}): ${speedMult.toFixed(2)}x Speed | Grade A Locked`;
+    description = `Crop thrives in native ${def.name}! ${pheno.traitDescription}`;
+    priceMult = 1.15;
+  } else {
+    // 3. Non-adapted / Weather Mismatch:
+    // Runs at 0.50x speed ("Sluggish Strain"), floor clamped at 0.40x.
+    // Unprotected, non-adapted crops suffer drag and stress.
+    speedMult = 0.50;
+    badgeEmoji = '🌧️';
+    badgeText = 'Weather Strain: 0.5x Speed | Protect via Trench/Cover';
+    weatherModifierText = `🌧️ Weather Strain: 0.5x Speed (Mismatched ${def.name})`;
+    description = `Mismatched climate causes developmental strain. Protect with greenhouses or wait for ${WEATHER_PROFILES[pheno.optimalWeather]?.name || 'optimal weather'}.`;
+  }
+
+  // Trait-specific overrides and bonuses
+  if (cropId === 'sunflower' && weather === 'sunny') {
+    extraQty += 1; // +1 bonus seed output
+  } else if (cropId === 'wasabi' && weather === 'foggy') {
+    priceMult *= 1.20; // +20% quality multiplier
+  } else if (cropId === 'strawberry' && weather === 'sunshower') {
+    priceMult *= 1.30; // +30% sugar value boost
+    bonusPrismatic += 0.15;
+  } else if (cropId === 'kale' && weather === 'frost') {
+    priceMult *= 1.50; // +50% sale value
+  } else if (cropId === 'paddy_rice' && weather === 'monsoon') {
+    speedMult = 1.35;
+  }
+
+  // Sunshower Blessing
   if (weatherState?.rainbowActive || weather === 'sunshower') {
-    bonusPrismatic += 0.10; // +10% Prismatic / Mythic quality roll chance
-    badgeEmoji = '🌈';
-    badgeText = 'Sunshower Blessed (+10% Prismatic)';
-    weatherModifierText = '🌈 Sunshower: +10% Mythic / Prismatic Quality Roll';
-    description = 'Golden sunshower blessing unlocks +10% mythic quality roll chance!';
+    bonusPrismatic += 0.10;
   }
 
-  // 2. Severe Convective & Mechanical Hazards
-  if (weather === 'hailstorm') {
-    if (!isProtectedByGreenhouse) {
-      if ((cropId === 'wheat' || cropId === 'corn') && !isWindbreakProtected) {
-        // Unprotected tall crops suffer physical stalk damage, reducing final yield by 50%
-        yieldMult = 0.50;
-        badgeEmoji = '🌨️⚠️';
-        badgeText = '🌨️ Stalk Damaged (-50% Yield)';
-        weatherModifierText = '🌨️ Stalk Damage: -50% Yield (Unprotected)';
-        description = 'Severe hail lodging crushed unprotected tall stalks! Final yield cut by 50%.';
-      } else {
-        yieldMult *= 0.70; // -30% harvest quantity reduction
-        badgeEmoji = '🌨️';
-        badgeText = 'Hail Damaged (-30% Yield)';
-        weatherModifierText = '🌨️ Hailstorm: -30% Harvest Quantity Loss';
-        description = 'Blunt hail lodging damaged plant stems! Yield cut by 30%.';
-      }
-    } else {
-      weatherModifierText = '🛡️ Greenhouse Sheltered: Hail Damage Prevented';
-    }
-  } else if (weather === 'gale') {
-    if (cropId === 'wheat' || cropId === 'corn') {
-      if (!isWindbreakProtected && !isProtectedByGreenhouse) {
-        // Unprotected tall crops suffer physical stalk damage, reducing final yield by 50%
-        yieldMult = 0.50;
-        badgeEmoji = '💨⚠️';
-        badgeText = '🌨️ Stalk Damaged (-50% Yield)';
-        weatherModifierText = '💨 Stalk Damage: -50% Yield (Unprotected High Gale)';
-        description = 'Howling gales snapped unprotected tall stalks! Final yield cut by 50%.';
-      } else {
-        yieldMult *= 0.90; // 10% seed-scatter loss with windbreaks
-        badgeEmoji = '💨🛡️';
-        badgeText = 'Windbreak Shielded (-10%)';
-        weatherModifierText = '💨 Windbreak Shielded: Stalk Damage Prevented';
-        description = 'Windbreaks shielded tall stalks from catastrophic lodging damage.';
-      }
-    } else {
-      weatherModifierText = '💨 High Gale: Strong Winds';
-    }
-  } else if (weather === 'cyclone') {
-    speedMult = 0.0;
-    if ((cropId === 'wheat' || cropId === 'corn') && !isWindbreakProtected && !isProtectedByGreenhouse) {
-      yieldMult = 0.50;
-      weatherModifierText = '🌀 Cyclone: 0x Growth & -50% Yield (Unprotected Stalks)';
-    } else {
-      weatherModifierText = '🌀 Cyclone: 0x Growth (Metabolic Arrest)';
-    }
-    badgeEmoji = '🌀';
-    badgeText = 'Tempest Halted (0x)';
-    description = 'Catastrophic cyclonic gale halts all crop metabolic processes.';
-  } else if (weather === 'supercell_deluge') {
-    // Torrential rain boosts growth +25% across all outdoor plots automatically (free irrigation)
-    speedMult = 1.25;
-    badgeEmoji = '🌊⛈️';
-    badgeText = 'Deluge Growth (+25%)';
-    weatherModifierText = '🌧️ Supercell Deluge: +25% Growth Acceleration (Free Irrigation)';
-    description = 'Supercell rain (+450 L/min) saturates beds to maximum; excess runoff requires immediate drainage.';
-  } else if (weather === 'plasma_firestorm') {
-    if (moistureLevel >= 70.0) {
-      speedMult *= 1.30;
-      badgeEmoji = '☄️🔥';
-      badgeText = 'Solar Plasma Surge (+30%)';
-      weatherModifierText = '☄️ Plasma Surge: +30% Speed (Irrigated Loam)';
-      description = 'Extreme solar radiation accelerated by heavy irrigation produces explosive growth!';
-    } else {
-      isWilted = true;
-      speedMult = 0.0;
-      badgeEmoji = '🥀';
-      badgeText = 'Thermal Scorched (0x)';
-      weatherModifierText = '☀️ PLASMA FIRESTORM: Evaporation 3x (Thermal Scorch 0x)';
-      description = '52°C Plasma firestorm scorched soil! Irrigate immediately to prevent crop death.';
-    }
-  } else if (weather === 'polar_vortex') {
-    if (!isProtectedByGreenhouse && !hasAlchemicalAsh && !hasHeatSource) {
-      isFrostbitten = true;
-      isTimerFrozen = true;
-      freezeReason = 'Requires heat source to continue growth';
-      speedMult = 0.0;
-      yieldMult *= 0.40; // -60% yield penalty
-      badgeEmoji = '🧊🥶';
-      badgeText = '❄️ Frozen: Requires heat source to continue growth';
-      weatherModifierText = '❄️ Frozen: Requires heat source to continue growth';
-      description = '-18°C Polar vortex froze plant cellular walls! Requires Geothermal heat, Furrow Heater, or Greenhouse.';
-    } else if (hasHeatSource) {
-      speedMult = Math.max(1.0, speedMult);
-      badgeEmoji = '🔥🛡️';
-      badgeText = '🔥 Thermal Protected';
-      weatherModifierText = '🔥 Heat Source Active: Protected from Cryo Freeze';
-    }
-  } else if (weather === 'hyper_cyclone') {
-    speedMult = 0.0;
-    if (!isProtectedByGreenhouse) {
-      yieldMult *= 0.50;
-    }
-    badgeEmoji = '🌪️⚡';
-    badgeText = 'Hyper-Cyclone Halted (0x)';
-    weatherModifierText = '🌪️ Hyper-Cyclone: 0x Growth & Severe Hazard';
-    description = 'Cataclysmic 165 km/h hurricane winds force complete suspension of growth and labor.';
-  } else if (weather === 'alchemical_monsoon') {
-    speedMult *= 1.50; // +50% acceleration!
-    bonusPrismatic += 0.25; // +25% Gold/Prismatic roll chance!
-    extraQty += 1;
-    badgeEmoji = '🧪✨';
-    badgeText = 'Alchemical Infusion (+50% Speed)';
-    weatherModifierText = '🧪 Alchemical Monsoon: +50% Speed & Double Yield';
-    description = 'Mana-infused precipitation supercharges crop biology and doubles harvest yields!';
-  } else if (weather === 'haboob_sandstorm') {
-    speedMult *= 0.75; // -25% dust penalty
-    badgeEmoji = '🏜️🌪️';
-    badgeText = 'Dust Choked (-25%)';
-    weatherModifierText = '🏜️ Haboob: -25% Growth Speed (Dust Choked)';
-    description = 'Red dust wall obscures sunlight and silts up furrow water beds.';
+  // Heat source frost immunity
+  if (hasHeatSource && (weather === 'frost' || weather === 'snow' || weather === 'polar_vortex')) {
+    speedMult = Math.max(1.0, speedMult);
+    isFrostbitten = false;
+    isTimerFrozen = false;
   }
 
-  // Torrential Downpour (Heavy Rain): Free Irrigation +25% Speed Acceleration
-  if (weather === 'rain' || weather === 'monsoon' || weather === 'thunderstorm') {
-    speedMult *= 1.25;
-    if (!weatherModifierText) {
-      weatherModifierText = '🌧️ Heavy Rain: +25% Growth Acceleration (Free Irrigation)';
-    }
+  // Greenhouse protection from mismatch
+  if (isProtectedByGreenhouse && !isNativeWeather) {
+    speedMult = Math.max(1.0, speedMult);
+    badgeEmoji = '🏡';
+    badgeText = 'Greenhouse Shielded (1.0x)';
+    weatherModifierText = '🏡 Greenhouse Shielded: Climate Strain Neutralized';
   }
 
-  // 3. Frost / Cold Snap: Plots without a nearby heat source have timers frozen
-  if (weather === 'frost' || weather === 'snow') {
-    if (!hasHeatSource && !isProtectedByGreenhouse && !hasAlchemicalAsh) {
-      isFrostbitten = true;
-      isTimerFrozen = true;
-      freezeReason = 'Requires heat source to continue growth';
-      speedMult = 0.0;
-      badgeEmoji = '❄️';
-      badgeText = '❄️ Frozen: Requires heat source to continue growth';
-      weatherModifierText = '❄️ Frozen: Requires heat source to continue growth';
-      description = 'Freezing cold has frozen crop timers. Requires a heat source (Dimetrodon aura or Furrow Heater) to continue growth.';
-    } else if (hasHeatSource) {
-      speedMult = Math.max(1.0, speedMult);
-      badgeEmoji = '🔥🛡️';
-      badgeText = '🔥 Thermal Protected';
-      weatherModifierText = '🔥 Heat Source Active: Normal growth maintained';
-    }
-  }
-
-  // 4. Heatwave / Drought: Evaporation 3x
-  if (weather === 'heatwave' || weather === 'drought') {
-    if (moistureLevel < 50.0) {
-      if (!weatherModifierText) {
-        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Water Deficit Risk)';
-      }
-    } else {
-      if (!weatherModifierText) {
-        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Canal Cooled)';
-      }
-    }
-  }
-
-  // 5. Category & Thermal Adaptations
-  if (pheno.family === 'sun_loving_warm') {
-    if (weather === 'sunny') {
-      speedMult *= 1.10;
-      badgeEmoji = '☀️';
-      badgeText = 'Sun-Loving (+10% Speed)';
-      if (!weatherModifierText) weatherModifierText = '☀️ Clear Irradiance: +10% Photosynthetic Speed';
-      description = 'Vibrant solar irradiance accelerates photosynthesis!';
-    } else if (weather === 'heatwave') {
-      if (moistureLevel >= 50.0) {
-        speedMult *= 1.20;
-        badgeEmoji = '🔥';
-        badgeText = 'Heat Surge (+20% Speed)';
-        weatherModifierText = '🔥 Heat Surge: +20% Speed (Irrigated Loam)';
-        description = 'Abundant irrigation coupled with intense heat sparks growth surge!';
-      } else {
-        isWilted = true;
-        speedMult = 0.0;
-        badgeEmoji = '🥀';
-        badgeText = 'Thermal Wilted (0x)';
-        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Thermal Wilted 0x)';
-        description = 'Blistering heatwave scorched dry soil! Growth halted until watered.';
-      }
-    } else if (weather === 'humid' && cropId === 'pumpkin') {
-      extraQty += 1;
-      badgeEmoji = '🎃';
-      badgeText = 'Vine Swelled (+1 Harvest)';
-      weatherModifierText = '🌫️ Humid Tropical Air: +1 Harvest on Pumpkin Vines';
-      description = 'Moist tropical humidity causes pumpkin vines to swell +1 extra fruit!';
-    }
-  } else if (pheno.family === 'cool_season_root') {
-    if (weather === 'frost' && hasHeatSource) {
-      priceMult *= 1.25; // +25% cold-sweetened value
-      badgeEmoji = '❄️✨';
-      badgeText = 'Cold-Sweetened (+25% Price)';
-      weatherModifierText = '❄️ Cold-Sweetened: +25% Crop Value (Heat Protected)';
-      description = 'Freezing temperatures convert root starches into pure natural sugars!';
-    } else if (weather === 'heatwave') {
-      if (moistureLevel >= 70.0) {
-        speedMult *= 0.85;
-        badgeEmoji = '💧';
-        badgeText = 'Canal Cooled (0.85x)';
-        weatherModifierText = '💧 Canal Cooled: 0.85x Speed (Shielded from Wilt)';
-        description = 'Abundant canal moisture (≥70%) evaporatively cools root beds, shielding greens from heat collapse!';
-      } else {
-        isWilted = true;
-        speedMult = 0.0;
-        badgeEmoji = '🥀';
-        badgeText = 'Heat Wilted (0x)';
-        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (Heat Wilted 0x)';
-        description = 'Cool-season greens scorched by heatwave! Irrigate to ≥70% moisture or switch weather.';
-      }
-    } else if (weather === 'foggy') {
-      speedMult *= 1.25;
-      badgeEmoji = '🌁';
-      badgeText = 'Fog Dew (+25% Speed)';
-      weatherModifierText = '🌁 Ground Fog: +25% Root Growth Speed';
-      description = 'Cool dense condensation accelerates root development.';
-    } else if (weather === 'drizzle') {
-      speedMult *= 1.10;
-      badgeEmoji = '💧';
-      badgeText = 'Lush Mist (+10% Speed)';
-      weatherModifierText = '🌦️ Drizzle: Gentle Inflow (+10% Speed)';
-      description = 'Gentle precipitation creates ideal temperate growing conditions.';
-    }
-  } else if (pheno.family === 'temperate_berry') {
-    if (weather === 'sunshower') {
-      speedMult *= 1.15;
-      badgeEmoji = '🌈';
-      badgeText = 'Sunshower Burst (+15%)';
-      weatherModifierText = '🌈 Sunshower: +15% Berry Speed & Prismatic Chance';
-      description = 'Perfect balance of moisture and sunlight stimulates berry ripening!';
-    } else if (weather === 'heatwave') {
-      if (moistureLevel >= 65.0) {
-        speedMult *= 1.0;
-        badgeEmoji = '🫐';
-        badgeText = 'Hydrated Berry (1.0x)';
-        weatherModifierText = '🫐 Hydrated Berry: Normal Speed (Evaporatively Cooled)';
-        description = 'Plentiful soil moisture shields berry foliage from solar scorching.';
-      } else {
-        speedMult *= 0.50;
-        badgeEmoji = '☀️';
-        badgeText = 'Heat Stressed (-50%)';
-        weatherModifierText = '☀️ HEATWAVE: Plot Water Evaporation 3x (-50% Heat Stress)';
-        description = 'Berry bushes suffer leaf scorch during intense heatwaves. Irrigate to relieve stress.';
-      }
-    }
-  }
-
-  // Fallback default weather modifier text if none assigned
-  if (!weatherModifierText) {
-    if (weather === 'sunny') {
-      weatherModifierText = '☀️ Clear Skies: Normal Ambient Growth';
-    } else if (weather === 'cloudy') {
-      weatherModifierText = '⛅ Cloudy: Evaporative Loss Halved (Steady Growth)';
-    } else if (weather === 'humid') {
-      weatherModifierText = '🌫️ Humid: Reduced Evaporation';
-    } else if (weather === 'foggy') {
-      weatherModifierText = '🌁 Ground Fog: +0.3% Soil Moisture/min';
-    } else if (weather === 'drizzle') {
-      weatherModifierText = '🌦️ Drizzle: Gentle Rain Inflow';
-    } else {
-      weatherModifierText = `${def.emoji} ${def.name}: Active Estate Environment`;
-    }
-  }
+  // NEVER drop below 0.4x speed floor under any circumstance!
+  const clampedSpeed = Math.max(0.40, speedMult);
 
   return {
-    growthSpeedMultiplier: Math.max(0.0, speedMult),
+    growthSpeedMultiplier: clampedSpeed,
     yieldMultiplier: Math.max(0.1, yieldMult),
     priceMultiplier: Math.max(0.5, priceMult),
     extraQuantity: extraQty,
     bonusPrismaticChance: bonusPrismatic,
-    isWilted,
+    isWilted: false,
     isFrostbitten,
     isDormant,
     isSheltered: isProtectedByGreenhouse,
-    isTimerFrozen,
+    isTimerFrozen: false,
     freezeReason,
     weatherModifierText,
     badgeEmoji,

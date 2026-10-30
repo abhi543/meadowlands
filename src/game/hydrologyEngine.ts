@@ -591,13 +591,11 @@ export function stepHydrologySimulation(params: {
   // Automatic Dynamic Weather Cycling:
   // Weather shifts automatically once per 1-day game time (30 real minutes = 1,800s).
   // Day cycle: 10 minutes morning (0..600s, 06:00 to 14:00), 20 minutes night (600..1800s, 14:00 to 06:00).
-  const WEATHER_1DAY_CYCLE_SEC = 1800; // 30 real minutes (1 full in-game day)
+  const WEATHER_1DAY_CYCLE_SEC = 120; // 2-minute unified weather cycle
   let weatherStartedAt = hydrology.weatherState?.weatherStartedAt || Date.now();
   let weatherDurationSec = hydrology.weatherState?.weatherDurationSec || WEATHER_1DAY_CYCLE_SEC;
   // Upgrade old/legacy short weather durations (< 1800s) to 1800s (30 real minutes = 1 full day)
-  if (weatherDurationSec < WEATHER_1DAY_CYCLE_SEC) {
-    weatherDurationSec = WEATHER_1DAY_CYCLE_SEC;
-  }
+  weatherDurationSec = WEATHER_1DAY_CYCLE_SEC;
   let weatherDay = hydrology.weatherState?.weatherDay ?? currentDay;
   let ticksElapsed = (hydrology.weatherState?.ticksElapsed || 0) + 1;
   const elapsedWeatherSec = Math.max((Date.now() - weatherStartedAt) / 1000, ticksElapsed * dt);
@@ -645,7 +643,7 @@ export function stepHydrologySimulation(params: {
     ticksElapsed = 0;
     const nextDef = WEATHER_PROFILES[nextWeatherId];
     notifications.push({
-      text: `🌤️ Day ${currentDay} Climate Front: Atmospheric front transitioned into ${nextDef.emoji} ${nextDef.name} (active for full 30-min day)!`,
+      text: `🌤️ Day ${currentDay} Climate Front: Atmospheric front transitioned into ${nextDef.emoji} ${nextDef.name} (active for 2-min cycle)!`,
       icon: nextDef.emoji,
       type: 'info',
     });

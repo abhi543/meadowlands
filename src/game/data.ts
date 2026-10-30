@@ -216,7 +216,31 @@ export const BREED_DISCOVERY_HINTS: Record<string, string> = {
 };
 
 // --- Crops ---
-export type CropId = 'wheat' | 'corn' | 'carrot' | 'strawberry' | 'soybean' | 'pumpkin' | 'cotton' | 'peas' | 'wild_berries';
+export type CropId =
+  | 'sunflower'
+  | 'okra'
+  | 'sorghum'
+  | 'spinach'
+  | 'eggplant'
+  | 'wasabi'
+  | 'tea_bush'
+  | 'soybean'
+  | 'paddy_rice'
+  | 'strawberry'
+  | 'peanut'
+  | 'sweet_potato'
+  | 'turnip'
+  | 'taro'
+  | 'kale'
+  | 'winter_rye'
+  | 'water_chestnut'
+  | 'dragon_fruit'
+  | 'arctic_moss_campion'
+  | 'bambara_groundnut'
+  | 'bioluminescent_shroom'
+  | 'prickly_pear_cactus'
+  // Legacy aliases
+  | 'wheat' | 'corn' | 'carrot' | 'pumpkin' | 'cotton' | 'peas' | 'wild_berries';
 
 export interface CropDef {
   id: CropId;
@@ -228,15 +252,42 @@ export interface CropDef {
 }
 
 export const CROPS: Record<CropId, CropDef> = {
-  wheat:       { id: 'wheat',       name: 'Wheat',       emoji: '\u{1F33E}', growTimeSec: 120, yieldCount: 4,  seedCost: 0 },
-  corn:        { id: 'corn',        name: 'Corn',        emoji: '\u{1F33D}', growTimeSec: 120, yieldCount: 4,  seedCost: 0 },
-  carrot:      { id: 'carrot',      name: 'Carrot',      emoji: '\u{1F955}', growTimeSec: 180, yieldCount: 6,  seedCost: 5 },
-  strawberry:  { id: 'strawberry',  name: 'Strawberry',  emoji: '\u{1F353}', growTimeSec: 240, yieldCount: 6,  seedCost: 10 },
-  soybean:     { id: 'soybean',     name: 'Soybean',     emoji: '\u{1FADB}', growTimeSec: 360, yieldCount: 8,  seedCost: 15 },
-  pumpkin:     { id: 'pumpkin',     name: 'Pumpkin',     emoji: '\u{1F383}', growTimeSec: 1200, yieldCount: 10, seedCost: 25 },
-  cotton:      { id: 'cotton',      name: 'Cotton',      emoji: '\u{1F33F}', growTimeSec: 300, yieldCount: 16, seedCost: 12 },
-  peas:        { id: 'peas',        name: 'Peas (Restorative)', emoji: '\u{1FADB}', growTimeSec: 30,  yieldCount: 4,  seedCost: 2 },
-  wild_berries:{ id: 'wild_berries',name: 'Wild Berry',  emoji: '\u{1F347}', growTimeSec: 150, yieldCount: 5,  seedCost: 6 },
+  // A. Common & Temperate Weather
+  sunflower: { id: 'sunflower', name: 'Sunflower', emoji: '🌻', growTimeSec: 120, yieldCount: 5, seedCost: 10 },
+  okra: { id: 'okra', name: 'Okra', emoji: '🫛', growTimeSec: 120, yieldCount: 5, seedCost: 10 },
+  sorghum: { id: 'sorghum', name: 'Sorghum', emoji: '🌾', growTimeSec: 120, yieldCount: 5, seedCost: 10 },
+  spinach: { id: 'spinach', name: 'Spinach', emoji: '🥬', growTimeSec: 120, yieldCount: 6, seedCost: 10 },
+  eggplant: { id: 'eggplant', name: 'Eggplant', emoji: '🍆', growTimeSec: 120, yieldCount: 5, seedCost: 12 },
+  wasabi: { id: 'wasabi', name: 'Wasabi', emoji: '🌿', growTimeSec: 120, yieldCount: 4, seedCost: 15 },
+  tea_bush: { id: 'tea_bush', name: 'Tea Bush', emoji: '🍵', growTimeSec: 120, yieldCount: 5, seedCost: 12 },
+  soybean: { id: 'soybean', name: 'Soybean', emoji: '🫘', growTimeSec: 120, yieldCount: 6, seedCost: 12 },
+
+  // B. Severe & Cold Weather
+  paddy_rice: { id: 'paddy_rice', name: 'Paddy Rice', emoji: '🌾', growTimeSec: 120, yieldCount: 6, seedCost: 12 },
+  strawberry: { id: 'strawberry', name: 'Strawberry', emoji: '🍓', growTimeSec: 120, yieldCount: 6, seedCost: 15 },
+  peanut: { id: 'peanut', name: 'Peanut', emoji: '🥜', growTimeSec: 120, yieldCount: 5, seedCost: 12 },
+  sweet_potato: { id: 'sweet_potato', name: 'Sweet Potato', emoji: '🍠', growTimeSec: 120, yieldCount: 6, seedCost: 14 },
+  turnip: { id: 'turnip', name: 'Turnip', emoji: '🪴', growTimeSec: 120, yieldCount: 6, seedCost: 12 },
+  taro: { id: 'taro', name: 'Taro', emoji: '🥔', growTimeSec: 120, yieldCount: 5, seedCost: 15 },
+  kale: { id: 'kale', name: 'Kale', emoji: '🥬', growTimeSec: 120, yieldCount: 6, seedCost: 14 },
+  winter_rye: { id: 'winter_rye', name: 'Winter Rye', emoji: '🌾', growTimeSec: 120, yieldCount: 6, seedCost: 12 },
+
+  // C. Extreme & Cataclysmic Weather
+  water_chestnut: { id: 'water_chestnut', name: 'Water Chestnut', emoji: '🌰', growTimeSec: 120, yieldCount: 6, seedCost: 20 },
+  dragon_fruit: { id: 'dragon_fruit', name: 'Dragon Fruit', emoji: '🐉', growTimeSec: 120, yieldCount: 5, seedCost: 25 },
+  arctic_moss_campion: { id: 'arctic_moss_campion', name: 'Arctic Moss Campion', emoji: '🌸', growTimeSec: 120, yieldCount: 5, seedCost: 25 },
+  bambara_groundnut: { id: 'bambara_groundnut', name: 'Bambara Groundnut', emoji: '🥜', growTimeSec: 120, yieldCount: 6, seedCost: 22 },
+  bioluminescent_shroom: { id: 'bioluminescent_shroom', name: 'Bioluminescent Shroom', emoji: '🍄', growTimeSec: 120, yieldCount: 5, seedCost: 30 },
+  prickly_pear_cactus: { id: 'prickly_pear_cactus', name: 'Prickly Pear Cactus', emoji: '🌵', growTimeSec: 120, yieldCount: 5, seedCost: 20 },
+
+  // Legacy mappings for backwards compatibility (all 120s)
+  wheat: { id: 'wheat', name: 'Wheat', emoji: '🌾', growTimeSec: 120, yieldCount: 4, seedCost: 0 },
+  corn: { id: 'corn', name: 'Corn', emoji: '🌽', growTimeSec: 120, yieldCount: 4, seedCost: 0 },
+  carrot: { id: 'carrot', name: 'Carrot', emoji: '🥕', growTimeSec: 120, yieldCount: 6, seedCost: 5 },
+  pumpkin: { id: 'pumpkin', name: 'Pumpkin', emoji: '🎃', growTimeSec: 120, yieldCount: 6, seedCost: 15 },
+  cotton: { id: 'cotton', name: 'Cotton', emoji: '🌿', growTimeSec: 120, yieldCount: 6, seedCost: 12 },
+  peas: { id: 'peas', name: 'Peas (Restorative)', emoji: '🫛', growTimeSec: 120, yieldCount: 5, seedCost: 5 },
+  wild_berries: { id: 'wild_berries', name: 'Wild Berry', emoji: '🍇', growTimeSec: 120, yieldCount: 5, seedCost: 6 },
 };
 
 // --- Animals ---

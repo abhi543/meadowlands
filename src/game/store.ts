@@ -10582,6 +10582,8 @@ export const useGameStore = create<GameState>()(
               cropId: p.crop,
               weather: activeWeatherId,
               moistureLevel: currentMoisture,
+              plantedAt: p.plantedAt,
+              growthProgress: p.growthProgress,
               isProtectedByGreenhouse: false,
               hasHeatSource,
               isWindbreakProtected: hasWindbreak,
@@ -10677,6 +10679,14 @@ export const useGameStore = create<GameState>()(
               lowNTimer = 0;
             }
 
+            const isNativeWeather = Boolean(pheno.badgeText && pheno.badgeText.includes('Grade A Locked'));
+            if (isNativeWeather) {
+              stress = 0; // Grade A Locked
+            } else if (clampedSpeedMultiplier <= 0.55 && (p.growthProgress || 0) > 0.25) {
+              // Weather mismatch strain downgrades to Grade C
+              stress = Math.max(stress, 80);
+            }
+
             let harvestGrade: 'A' | 'B' | 'C' = 'A';
             if (stress <= 20) {
               harvestGrade = 'A';
@@ -10723,6 +10733,14 @@ export const useGameStore = create<GameState>()(
             } else {
               badgeEmoji = pheno.badgeEmoji || '🌱';
               badgeText = pheno.badgeText || `Speed ${clampedSpeedMultiplier.toFixed(2)}x`;
+            }
+
+            if (pheno.badgeEmoji === '✨' || pheno.badgeEmoji === '🛡️🌱' || (pheno.badgeText && pheno.badgeText.includes('In Native Element'))) {
+              badgeEmoji = '✨';
+              badgeText = pheno.badgeText;
+            } else if (clampedSpeedMultiplier <= 0.55 && (p.growthProgress || 0) > 0.25) {
+              badgeEmoji = '🌧️';
+              badgeText = 'Weather Strain: 0.5x Speed | Protect via Trench/Cover';
             }
 
             const weatherModifier = isWaterlogged
@@ -14406,7 +14424,7 @@ export const useGameStore = create<GameState>()(
         const clock = getCircadianClock(Date.now(), state.farmEpochStart || Date.now());
         const newAtmosphere = createDefaultWeatherState(profileId);
         newAtmosphere.weatherDay = clock.currentDay;
-        newAtmosphere.weatherDurationSec = 1800; // 30 minutes (1 full in-game day: 10m morning, 20m night)
+        newAtmosphere.weatherDurationSec = 120; // 2 minutes unified weather cycle
         newAtmosphere.weatherStartedAt = Date.now();
         newAtmosphere.isManualOverride = true;
         set({
@@ -16941,9 +16959,7 @@ export const useGameStore = create<GameState>()(
 
         // Migration: 1-Day Weather System (30 real minutes = 1,800s: 10m morning, 20m night)
         if (merged.hydrology?.weatherState) {
-          if ((merged.hydrology.weatherState.weatherDurationSec || 0) < 1800) {
-            merged.hydrology.weatherState.weatherDurationSec = 1800;
-          }
+          merged.hydrology.weatherState.weatherDurationSec = 120;
         }
 
         // Migration: Pasture Weather & Fauna Welfare System
