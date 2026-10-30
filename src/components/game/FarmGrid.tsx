@@ -120,8 +120,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const cowsCount = animals.filter(a => a.species === 'cow').length;
   const sheepCount = animals.filter(a => a.species === 'sheep').length;
   const pigsCount = animals.filter(a => a.species === 'pig').length;
-  const readyCollectCount = animals.filter(a => a.productReady).length;
-  const hungryCount = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder').length;
+  const isAnimalReadyCheck = (a: typeof animals[0]) => {
+    if (a.productReady) return true;
+    if (a.fed && a.fedAt) {
+      const bDef = BREED_REGISTRY[a.breedId];
+      const pSec = bDef ? bDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
+      return (Date.now() - a.fedAt) >= (pSec * 1000);
+    }
+    return false;
+  };
+  const readyCollectCount = animals.filter(a => isAnimalReadyCheck(a)).length;
+  const hungryCount = animals.filter(a => !a.fed && !isAnimalReadyCheck(a) && a.age !== 'elder').length;
   const totalFarmAnimals = animals.length + livestockReserve.length;
 
   // Count ready, empty, and crop-bearing plots for batch actions

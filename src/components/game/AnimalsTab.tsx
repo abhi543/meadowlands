@@ -115,8 +115,17 @@ export function AnimalsTab() {
   });
 
   // Compute global batch action counts
-  const feedableAnimals = animals.filter(a => !a.fed && !a.productReady && a.age !== 'elder');
-  const collectibleAnimals = animals.filter(a => a.productReady && a.cyclesRemaining > 0);
+  const isAnimalProductReady = (a: AnimalInstance) => {
+    if (a.productReady) return true;
+    if (a.fed && a.fedAt) {
+      const bDef = BREED_REGISTRY[a.breedId];
+      const pSec = bDef ? bDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
+      return (Date.now() - a.fedAt) >= (pSec * 1000);
+    }
+    return false;
+  };
+  const feedableAnimals = animals.filter(a => !a.fed && !isAnimalProductReady(a) && a.age !== 'elder');
+  const collectibleAnimals = animals.filter(a => isAnimalProductReady(a) && a.cyclesRemaining > 0);
 
   let feedSim = silo.feed || 0;
   let canFeedCount = 0;
@@ -543,8 +552,6 @@ export function AnimalsTab() {
                 {/* Active Animal Slots */}
                 {filledSlots.map(animal => {
                   const def = ANIMALS[animal.species];
-                  const canFeed = !animal.fed && !animal.productReady && (silo.feed || 0) >= def.feedPerCycle;
-                  const canCollect = animal.productReady;
                   const breedDef = BREED_REGISTRY[animal.breedId];
                   const breedName = breedDef?.name || TIER_LABELS[animal.tier];
 
@@ -555,8 +562,9 @@ export function AnimalsTab() {
                     prodProgress = Math.max(0, Math.min(1, (Date.now() - safeFedAt) / (prodTimeSec * 1000)));
                   }
 
-                  const isMaturedProduct = animal.productReady || (animal.fed && animal.fedAt && prodProgress >= 0.999);
+                  const isMaturedProduct = Boolean(animal.productReady || (animal.fed && animal.fedAt && prodProgress >= 0.999));
                   const canCollect = isMaturedProduct;
+                  const canFeed = !animal.fed && !canCollect && (silo.feed || 0) >= def.feedPerCycle;
 
                   const coatDef = getCoatDefinition(animal.species, animal.coat);
                   const traitDef = getTraitDefinition(animal.trait);
@@ -747,18 +755,18 @@ export function AnimalsTab() {
                         {canCollect ? (
                           <button
                             onClick={() => collectProduct(animal.id)}
-                            className="w-full py-1 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 text-stone-950 font-black text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-amber-300/40"
+                            className="w-full py-1 bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:brightness-105 text-stone-950 font-black text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-amber-300/40 cursor-pointer animate-bounce"
                           >
                             {def.productEmoji} Collect
                           </button>
                         ) : canFeed && animal.age !== 'elder' && !isExhausted ? (
                           <button
                             onClick={() => feedAnimal(animal.id)}
-                            className="w-full py-1 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white font-bold text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-blue-200 dark:shadow-none"
+                            className="w-full py-1 bg-gradient-to-r from-blue-500 to-sky-500 hover:from-blue-600 hover:to-sky-600 text-white font-bold text-[11px] rounded-lg transition-transform active:scale-95 shadow-sm shadow-blue-200 dark:shadow-none cursor-pointer"
                           >
                             🫗 Feed
                           </button>
-                        ) : animal.fed && !animal.productReady ? (
+                        ) : animal.fed && !canCollect ? (
                           <div className="space-y-0.5">
                             <div className="w-full h-1.5 bg-sky-100 dark:bg-sky-950 rounded-full overflow-hidden border border-sky-200 dark:border-sky-800/60">
                               <div
