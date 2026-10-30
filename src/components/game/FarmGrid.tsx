@@ -611,7 +611,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const soilTier = getSoilTier(plotLevel);
           const soilSpeedMult = 1 + (soilTier.speedBonusPct / 100);
           const waterMult = (isWatered || soilTier.autoHydrate) ? 2.0 : 1.0;
-          const moistureSpeedMult = isWithered ? 0 : moistureZone.growthSpeedMultiplier;
+          const moistureSpeedMult = isWithered ? 0.40 : Math.max(0.40, moistureZone.growthSpeedMultiplier);
           const siltSpeedMult = (plot.alluvialSiltCyclesRemaining && plot.alluvialSiltCyclesRemaining > 0) ? 1.20 : 1.0;
 
           const isHovered = hoveredPlotId === plot.id;

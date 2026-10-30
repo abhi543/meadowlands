@@ -10565,7 +10565,15 @@ export const useGameStore = create<GameState>()(
             if (isPlotExhausted) {
               return { ...p, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
-            if (p.isWithered) {
+            // Auto-heal withered/desiccated crops in non-hardcore mode so crops always grow
+            if (!state.isHardcoreMode) {
+              if (p.isWithered) p.isWithered = false;
+              if (p.desiccatedSeconds) p.desiccatedSeconds = 0;
+              if (currentMoisture < 25.0) {
+                currentMoisture = 50.0;
+              }
+            }
+            if (p.isWithered && state.isHardcoreMode) {
               return { ...p, gases: currentGases, moistureLevel: currentMoisture, disease: currentDisease, lowO2DurationSec: currentLowO2Sec, highCo2DurationSec: currentHighCo2Sec, highNitrogenDurationSec: currentHighNSec, isContaminatedDirt: currentContaminatedDirt, contaminatedCyclesRemaining: currentContaminatedCycles };
             }
 

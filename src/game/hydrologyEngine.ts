@@ -1054,19 +1054,29 @@ export function stepHydrologySimulation(params: {
     }
 
     // Desiccation tracking (< 15.0%)
-    if (m <= 15.0 && p.crop && !p.ready && !isWithered) {
-      desiccatedSec += dt;
-      const desiccationLimit = isHardcoreMode ? 75 : DESICCATION_WITHER_DURATION_SEC;
-      if (desiccatedSec >= desiccationLimit) {
-        isWithered = true;
-        notifications.push({
-          text: `🥀 Crop Withered: Plot #${i + 1} remained desiccated (<15%) for ${isHardcoreMode ? '75s' : '30 minutes'}! Clear with a hoe.`,
-          icon: '🥀',
-          type: 'event',
-        });
+    // In casual/normal mode, crops NEVER permanently wither/lock; instead desiccation imposes a minimum growth drag.
+    // Permanent withering only occurs in Hardcore mode.
+    if (m <= 15.0 && p.crop && !p.ready) {
+      if (isHardcoreMode && !isWithered) {
+        desiccatedSec += dt;
+        if (desiccatedSec >= 75) {
+          isWithered = true;
+          notifications.push({
+            text: `🥀 Crop Withered: Plot #${i + 1} remained desiccated (<15%) for 75s! Clear with a hoe.`,
+            icon: '🥀',
+            type: 'event',
+          });
+        }
+      } else if (!isHardcoreMode) {
+        // Auto-heal any stale wither lock in normal mode
+        isWithered = false;
+        desiccatedSec = 0;
       }
     } else if (m > 15.0) {
       desiccatedSec = 0;
+      if (!isHardcoreMode) {
+        isWithered = false;
+      }
     }
 
     // Waterlogging & Root Rot tracking (> 95.0%)
