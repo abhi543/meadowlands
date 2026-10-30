@@ -5,11 +5,11 @@ import { useGameStore } from '@/game/store';
 export function FloatingNumbers() {
   const { notifications } = useGameStore();
 
-  // Show only the most recent 5 notifications, auto-expire after 4 seconds
+  // Show only the most recent 3 notifications, auto-expire after 3 seconds to avoid visual clutter
   const now = Date.now();
   const recent = notifications
-    .filter(n => now - n.createdAt < 4000)
-    .slice(0, 5);
+    .filter(n => now - n.createdAt < 3000)
+    .slice(0, 3);
 
   if (recent.length === 0) return null;
 
@@ -26,7 +26,7 @@ export function FloatingNumbers() {
     <div className="fixed top-20 right-3 z-[100] space-y-1.5 pointer-events-none select-none">
       {recent.map(n => {
         const age = now - n.createdAt;
-        const opacity = Math.max(0, 1 - age / 4000);
+        const opacity = Math.max(0, 1 - age / 3000);
         return (
           <div
             key={n.id}

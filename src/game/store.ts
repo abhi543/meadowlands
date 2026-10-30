@@ -10188,17 +10188,44 @@ export const useGameStore = create<GameState>()(
         }
 
         const currentNotifications = get().notifications || [];
-        // Deduplicate identical notifications arriving within 8 seconds
+        const now = Date.now();
+
+        // 1. Deduplicate identical notifications arriving within 20 seconds
         const recentDuplicate = currentNotifications.find(
-          n => n.message === message && (Date.now() - n.createdAt < 8000)
+          n => n.message === message && (now - n.createdAt < 20000)
         );
         if (recentDuplicate) return;
+
+        // 2. Throttle high-frequency routine spam notifications (allow at most once every 60s for similar text)
+        const isRoutineAutomatedSpam =
+          message.includes('Auto-Sold') ||
+          message.includes('Compression Complete') ||
+          message.includes('Refinery Governor') ||
+          message.includes('Mineral Snout Pig') ||
+          message.includes('Sluice Gates') ||
+          message.includes('Bio-Lab Cryo-Standby') ||
+          message.includes('Barn Feed Shortage');
+
+        if (isRoutineAutomatedSpam) {
+          const recentSpamMatch = currentNotifications.find(n => {
+            if (now - n.createdAt >= 60000) return false;
+            if (message.includes('Auto-Sold') && n.message.includes('Auto-Sold')) return true;
+            if (message.includes('Compression Complete') && n.message.includes('Compression Complete')) return true;
+            if (message.includes('Refinery Governor') && n.message.includes('Refinery Governor')) return true;
+            if (message.includes('Mineral Snout Pig') && n.message.includes('Mineral Snout Pig')) return true;
+            if (message.includes('Sluice Gates') && n.message.includes('Sluice Gates')) return true;
+            if (message.includes('Bio-Lab Cryo-Standby') && n.message.includes('Bio-Lab Cryo-Standby')) return true;
+            if (message.includes('Barn Feed Shortage') && n.message.includes('Barn Feed Shortage')) return true;
+            return false;
+          });
+          if (recentSpamMatch) return;
+        }
 
         const notification: NotificationItem = {
           id: generateId(),
           message,
           emoji,
-          createdAt: Date.now(),
+          createdAt: now,
           type,
           category: resolvedCategory,
           priority: resolvedPriority,
@@ -12023,7 +12050,7 @@ export const useGameStore = create<GameState>()(
                 }
               }
 
-              if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
+              if (clockOutRes.notificationMessage && (clockOutRes.isStriking || clockOutRes.newMoraleTier === 'grumbling')) {
                 state.addNotification(clockOutRes.notificationMessage, clockOutRes.isStriking ? '🛑' : '🪙', 'coin');
               }
             }
@@ -12518,7 +12545,7 @@ export const useGameStore = create<GameState>()(
               }
             }
 
-            if (spClockOutRes.notificationMessage && (spClockOutRes.isStriking || spClockOutRes.newMoraleTier === 'grumbling' || Math.random() < 0.1)) {
+            if (spClockOutRes.notificationMessage && (spClockOutRes.isStriking || spClockOutRes.newMoraleTier === 'grumbling')) {
               state.addNotification(spClockOutRes.notificationMessage, spClockOutRes.isStriking ? '🛑' : '🪙', 'coin');
             }
           }
