@@ -555,6 +555,9 @@ export function AnimalsTab() {
                     prodProgress = Math.max(0, Math.min(1, (Date.now() - safeFedAt) / (prodTimeSec * 1000)));
                   }
 
+                  const isMaturedProduct = animal.productReady || (animal.fed && animal.fedAt && prodProgress >= 0.999);
+                  const canCollect = isMaturedProduct;
+
                   const coatDef = getCoatDefinition(animal.species, animal.coat);
                   const traitDef = getTraitDefinition(animal.trait);
                   const generation = animal.generation || 0;

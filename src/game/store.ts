@@ -3300,7 +3300,11 @@ export const useGameStore = create<GameState>()(
       collectProduct: (animalId) => {
         const state = get();
         const animal = state.animals.find(a => a.id === animalId);
-        if (!animal || !animal.productReady) return;
+        if (!animal) return;
+        const breedDef = BREED_REGISTRY[animal.breedId];
+        const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[animal.species].productionTimeSec;
+        const isTimeElapsedReady = Boolean(animal.fed && animal.fedAt && (Date.now() - animal.fedAt) >= (prodTime * 1000));
+        if (!animal.productReady && !isTimeElapsedReady) return;
         if (animal.cyclesRemaining <= 0) return;
 
         const activeWeatherId = resolveWeatherProfileId(state.hydrology?.weatherCondition || 'sunny');
@@ -3555,7 +3559,10 @@ export const useGameStore = create<GameState>()(
         const yieldMult = faunaEval.yieldMultiplier;
 
         const newAnimals = state.animals.map(a => {
-          if (!a.productReady || a.cyclesRemaining <= 0) return a;
+          const breedDef = BREED_REGISTRY[a.breedId];
+          const prodTime = breedDef ? breedDef.baseIntervalMs / 1000 : ANIMALS[a.species].productionTimeSec;
+          const isElapsedReady = Boolean(a.fed && a.fedAt && (now - a.fedAt) >= (prodTime * 1000));
+          if ((!a.productReady && !isElapsedReady) || a.cyclesRemaining <= 0) return a;
 
           const breedDef = BREED_REGISTRY[a.breedId];
           const speciesDef = ANIMALS[a.species];
