@@ -1208,6 +1208,8 @@ export interface GameState {
   recalculateEstateAura: () => void;
 
   // Notifications & Estate Dispatch
+  notificationFilterMode: 'critical_only' | 'important' | 'all' | 'muted';
+  setNotificationFilterMode: (mode: 'critical_only' | 'important' | 'all' | 'muted') => void;
   isDispatchModalOpen: boolean;
   setDispatchModalOpen: (open: boolean) => void;
   addNotification: (
@@ -1861,6 +1863,7 @@ export const useGameStore = create<GameState>()(
       activeEvent: null,
       lastEventTriggerTime: Date.now(),
 
+      notificationFilterMode: 'critical_only',
       isDispatchModalOpen: false,
       notifications: [],
 
@@ -10095,6 +10098,9 @@ export const useGameStore = create<GameState>()(
       },
 
       // Notifications & Estate Dispatch Center
+      setNotificationFilterMode: (mode) => {
+        set({ notificationFilterMode: mode, isDirty: true });
+      },
       setDispatchModalOpen: (open) => {
         set({ isDispatchModalOpen: open });
       },
@@ -16421,6 +16427,9 @@ export const useGameStore = create<GameState>()(
         // Hardcore, Game Manager Dispatch, and Offline Modes disabled
         merged.isHardcoreMode = false;
         merged.isOfflineMode = false;
+        if (!merged.notificationFilterMode) {
+          merged.notificationFilterMode = 'critical_only';
+        }
         merged.isDispatchModalOpen = false;
 
         if (!merged.highStakesContracts || merged.highStakesContracts.length === 0) {

@@ -29,6 +29,8 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
     specialistWorkers,
     isAllWorkersPaused,
     notifications = [],
+    notificationFilterMode = 'critical_only',
+    setNotificationFilterMode,
     hydrology,
     prehistoricSanctuary,
   } = useGameStore();
@@ -109,6 +111,47 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             <span className="font-medium">{auraTitle}</span>
           </div>
         )}
+
+        {/* Notification Filter Toggle (Focus Mode) */}
+        <button
+          type="button"
+          onClick={() => {
+            const nextMode =
+              notificationFilterMode === 'critical_only' ? 'important'
+              : notificationFilterMode === 'important' ? 'all'
+              : notificationFilterMode === 'all' ? 'muted'
+              : 'critical_only';
+            setNotificationFilterMode(nextMode);
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shadow-sm border backdrop-blur-sm select-none cursor-pointer ${
+            notificationFilterMode === 'critical_only'
+              ? 'bg-emerald-600/80 hover:bg-emerald-600 text-white border-emerald-400/50'
+              : notificationFilterMode === 'important'
+              ? 'bg-amber-600/80 hover:bg-amber-600 text-white border-amber-400/50'
+              : notificationFilterMode === 'all'
+              ? 'bg-blue-600/80 hover:bg-blue-600 text-white border-blue-400/50'
+              : 'bg-stone-700/80 hover:bg-stone-700 text-stone-300 border-stone-500/50'
+          }`}
+          title={`Notification Display Mode: ${
+            notificationFilterMode === 'critical_only' ? 'Critical Hazards Only (Focus Mode - recommended)'
+            : notificationFilterMode === 'important' ? 'Important Milestones & Hazards'
+            : notificationFilterMode === 'all' ? 'All Notifications'
+            : 'Muted (Quiet Mode)'
+          } · Click to cycle`}
+        >
+          <span>
+            {notificationFilterMode === 'critical_only' ? '🛡️'
+            : notificationFilterMode === 'important' ? '⭐'
+            : notificationFilterMode === 'all' ? '🔔'
+            : '🔕'}
+          </span>
+          <span className="capitalize hidden md:inline">
+            {notificationFilterMode === 'critical_only' ? 'Hazards Only'
+            : notificationFilterMode === 'important' ? 'Important'
+            : notificationFilterMode === 'all' ? 'All Notifs'
+            : 'Muted'}
+          </span>
+        </button>
 
         {/* Local Storage & Backup Button */}
         {onOpenBackupModal && (
