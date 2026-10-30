@@ -2031,11 +2031,14 @@ export const useGameStore = create<GameState>()(
           crop: cropId,
           plantedAt: Date.now(),
           ready: false,
+          isWithered: false,
+          hasRootRot: false,
           isWatered: soilTier.autoHydrate || plot.isWatered || false,
           wateredUntil: plot.wateredUntil || null,
           level: pLevel,
           alluvialSiltCyclesRemaining: plot.alluvialSiltCyclesRemaining,
-          moistureLevel: plot.moistureLevel !== undefined ? plot.moistureLevel : 60.0,
+          moistureLevel: (plot.moistureLevel !== undefined && plot.moistureLevel >= 25.0) ? plot.moistureLevel : 60.0,
+          desiccatedSeconds: 0,
           isMonoculture,
           disease: initialDisease,
           lowO2DurationSec: 0,
@@ -2343,11 +2346,14 @@ export const useGameStore = create<GameState>()(
             crop: cropId,
             plantedAt: now,
             ready: false,
+            isWithered: false,
+            hasRootRot: false,
             isWatered: soilTier.autoHydrate || currentPlot?.isWatered || false,
             wateredUntil: currentPlot?.wateredUntil || null,
             level: pLevel,
             alluvialSiltCyclesRemaining: currentPlot?.alluvialSiltCyclesRemaining,
-            moistureLevel: currentPlot?.moistureLevel !== undefined ? currentPlot?.moistureLevel : 60.0,
+            moistureLevel: (currentPlot?.moistureLevel !== undefined && currentPlot?.moistureLevel >= 25.0) ? currentPlot?.moistureLevel : 60.0,
+            desiccatedSeconds: 0,
             isMonoculture,
             disease: initialDisease,
             lowO2DurationSec: 0,
@@ -16593,6 +16599,14 @@ export const useGameStore = create<GameState>()(
         } else {
           for (const p of merged.plots) {
             if (!p.level) p.level = 1;
+            // Clean up any stale or corrupted wither/desiccation locks on crops
+            if (p.isWithered && p.crop && !p.ready) {
+              p.isWithered = false;
+            }
+            if (p.crop && !p.ready && (p.moistureLevel === undefined || p.moistureLevel < 25.0)) {
+              p.moistureLevel = 60.0;
+              p.desiccatedSeconds = 0;
+            }
           }
           if (merged.plots.length < MAX_FARM_PLOTS) {
             for (let i = merged.plots.length; i < MAX_FARM_PLOTS; i++) {
