@@ -125,7 +125,18 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const totalFarmAnimals = animals.length + livestockReserve.length;
 
   // Count ready, empty, and crop-bearing plots for batch actions
-  const readyOrWitheredCount = visiblePlots.filter(p => p.crop && (p.ready || p.isWithered)).length;
+  const isPlotMaturedOrReady = (p: typeof visiblePlots[0]) => {
+    if (!p.crop) return false;
+    if (p.ready) return true;
+    if (p.growthProgress !== undefined && p.growthProgress >= 0.999) return true;
+    if (p.plantedAt) {
+      const speed = p.growthSpeedMultiplier ?? 1.0;
+      const growTime = CROPS[p.crop]?.growTimeSec || 120;
+      return (Date.now() - p.plantedAt) * speed >= (growTime * 1000);
+    }
+    return false;
+  };
+  const readyOrWitheredCount = visiblePlots.filter(p => p.crop && (isPlotMaturedOrReady(p) || p.isWithered)).length;
   const alreadyWitheredCount = visiblePlots.filter(p => p.crop && p.isWithered).length;
   const cropsToWitherCount = visiblePlots.filter(p => p.crop && !p.isWithered).length;
   const anyCropsOnFarm = visiblePlots.some(p => p.crop); // growing OR withered
@@ -659,8 +670,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
       {/* Farm Grid */}
       <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-2 sm:gap-2.5">
         {visiblePlots.map(plot => {
-          const isReady = plot.ready;
-          const isGrowing = plot.crop && !plot.ready;
           const isEmpty = !plot.crop;
           const isWatered = Boolean(plot.isWatered);
           const isWithered = Boolean(plot.isWithered);
@@ -709,6 +718,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           const progress = plot.crop && plot.plantedAt && !plot.ready
             ? Math.min(1, Math.max(storeProgress, timeElapsedProgress))
             : 0;
+
+          const isReady = Boolean(plot.ready || (plot.crop && (storeProgress >= 0.999 || progress >= 0.999)));
+          const isGrowing = Boolean(plot.crop && !isReady);
 
           // Soil styling classes with hydrological dynamics
           let soilClasses = '';

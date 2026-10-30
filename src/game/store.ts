@@ -2062,7 +2062,13 @@ export const useGameStore = create<GameState>()(
       harvestPlot: (plotId) => {
         const state = get();
         const plot = state.plots[plotId];
-        if (!plot || !plot.crop || !plot.ready) return;
+        if (!plot || !plot.crop) return;
+        const isPlotReady = Boolean(
+          plot.ready ||
+          (plot.growthProgress !== undefined && plot.growthProgress >= 0.99) ||
+          (plot.plantedAt && (Date.now() - plot.plantedAt) >= ((CROPS[plot.crop]?.growTimeSec || 120) * 1000) / (plot.growthSpeedMultiplier || 1.0))
+        );
+        if (!isPlotReady && !plot.isWithered) return;
 
         if (plot.isWithered) {
           state.clearWitheredCrop(plotId);
@@ -2410,7 +2416,14 @@ export const useGameStore = create<GameState>()(
 
         for (let i = 0; i < state.unlockedPlots; i++) {
           const plot = state.plots[i];
-          if (plot && plot.crop && (plot.ready || plot.isWithered)) {
+          const isPlotReady = Boolean(
+            plot && plot.crop && (
+              plot.ready ||
+              (plot.growthProgress !== undefined && plot.growthProgress >= 0.99) ||
+              (plot.plantedAt && (now - plot.plantedAt) >= ((CROPS[plot.crop]?.growTimeSec || 120) * 1000) / (plot.growthSpeedMultiplier || 1.0))
+            )
+          );
+          if (plot && plot.crop && (isPlotReady || plot.isWithered)) {
             if (plot.isWithered) {
               newPlots[i] = {
                 id: i,
@@ -10592,7 +10605,7 @@ export const useGameStore = create<GameState>()(
               p.isHeatWilted = false;
             }
 
-            // Direct Atmospheric Crop Phenology evaluation
+            // Direct Atmospheric Crop Phenology evaluation
             let pheno = evaluateCropPhenology({
               cropId: p.crop,
               weather: activeWeatherId,
@@ -10721,8 +10734,9 @@ export const useGameStore = create<GameState>()(
 
             const progressDelta = (deltaSeconds * clampedSpeedMultiplier) / growTime;
             const newProgress = Math.min(1.0, prevProgress + progressDelta);
-            const isReady = newProgress >= 1.0;
-            const newPlantedAt = Math.round(now - (newProgress * growTime * 1000));
+            const isReady = newProgress >= 0.995;
+            const finalProgress = isReady ? 1.0 : newProgress;
+            const newPlantedAt = Math.round(now - (finalProgress * growTime * 1000));
 
             let badgeEmoji = '🌱';
             let badgeText = '';
@@ -10766,7 +10780,7 @@ export const useGameStore = create<GameState>()(
               ...p,
               plantedAt: newPlantedAt,
               ready: isReady,
-              growthProgress: newProgress,
+              growthProgress: finalProgress,
               growthSpeedMultiplier: clampedSpeedMultiplier,
               stressAccumulator: stress,
               waterloggedStressTimerSec: waterloggedTimer,
