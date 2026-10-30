@@ -177,11 +177,15 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     farmLevel: level,
   });
 
-  // 1-Day Weather Timing (30 real minutes per day: 10m morning, 20m night)
+  // Weather Front Timing (10 real minutes per weather front)
+  const weatherState = hydrology?.weatherState;
+  const weatherDurationSec = weatherState?.weatherDurationSec || 600;
+  const weatherStartedAt = weatherState?.weatherStartedAt || (farmEpochStart || Date.now());
+  const elapsedWeatherSec = Math.max(0, (Date.now() - weatherStartedAt) / 1000);
+  const weatherRemainingSec = Math.max(0, Math.ceil(weatherDurationSec - (elapsedWeatherSec % weatherDurationSec)));
+  const weatherRemainingMin = Math.floor(weatherRemainingSec / 60);
+  const weatherRemainingSecFormatted = `${weatherRemainingMin}:${(weatherRemainingSec % 60).toString().padStart(2, '0')}`;
   const clock = getCircadianClock(Date.now(), farmEpochStart || Date.now());
-  const dayRemainingSec = Math.max(0, 1800 - clock.cycleElapsedSeconds);
-  const dayRemainingMin = Math.floor(dayRemainingSec / 60);
-  const dayRemainingSecFormatted = `${dayRemainingMin}:${(dayRemainingSec % 60).toString().padStart(2, '0')}`;
   const isMorningPhase = clock.activeShift === 'morning';
 
   // Pre-plant stamp hover feedback calculation
@@ -243,19 +247,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </div>
         </div>
 
-        {/* 1-Day Weather Front Telemetry Badge & Remaining Time */}
+        {/* Weather Front Telemetry Badge & Remaining Time (10m Cycle) */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-white flex items-center gap-1.5 shadow-inner">
             <span>📅</span>
-            <span>Day {clock.currentDay} Weather</span>
+            <span>Day {clock.currentDay}</span>
             <span className="opacity-50">•</span>
-            <span className={isMorningPhase ? 'text-amber-300' : 'text-indigo-300 font-semibold'}>
-              {isMorningPhase ? '☀️ Morning (10m)' : '🌙 Night (20m)'}
-            </span>
+            <span className="text-amber-300">Front (10m)</span>
           </span>
-          <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-amber-300 flex items-center gap-1 shadow-inner" title="Time remaining before next daily weather front transition">
+          <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-amber-300 flex items-center gap-1 shadow-inner" title="Time remaining before next weather front transition">
             <span>⏳</span>
-            <span>{dayRemainingSecFormatted} left</span>
+            <span>{weatherRemainingSecFormatted} left</span>
           </span>
         </div>
       </div>

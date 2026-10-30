@@ -529,7 +529,7 @@ export const WEATHER_PROFILES: Record<WeatherProfileId, WeatherProfileDef> = {
 
 
 // --- Multi-Variable Atmospheric Weather State ---
-export const WEATHER_DAY_CYCLE_SEC = 120; // 2 minutes (120 seconds) unified cycle // 5 real minutes per weather cycle
+export const WEATHER_DAY_CYCLE_SEC = 600; // 10 minutes (600 seconds) weather cycle
 
 export interface AtmosphericWeatherState {
   currentWeather: WeatherProfileId;
@@ -563,7 +563,7 @@ export function createDefaultWeatherState(initialWeather: WeatherProfileId = 'su
     cloudCoverPct: def.cloudCoverPct,
     barometricPressureHPa: def.barometricPressureHPa,
     weatherStartedAt: Date.now(),
-    weatherDurationSec: WEATHER_DAY_CYCLE_SEC, // 30 minutes (1 full in-game day: 10m morning, 20m night)
+    weatherDurationSec: WEATHER_DAY_CYCLE_SEC, // 10 minutes (600 seconds) weather cycle
     weatherDay: 1,
     isManualOverride: false,
     lightningStrikesCount: 0,
