@@ -68,7 +68,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
   const sanctuaryInflowPerMin = totalSanctuaryCreatures * 5.0;
 
   const daytimeInflowPerMin = domesticInflowPerMin + sanctuaryInflowPerMin;
-  const autoInflowPerMin = isNight ? 0 : daytimeInflowPerMin;
+  const autoInflowPerMin = daytimeInflowPerMin;
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -364,9 +364,9 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                     ☀️ +{autoInflowPerMin.toFixed(1)} L/min ({activeAnimalCount} herd{totalSanctuaryCreatures > 0 ? `, ${totalSanctuaryCreatures} sanctuary` : ''}{elderAnimalCount > 0 ? `, ${elderAnimalCount} elder` : ''})
                   </span>
                 ) : isNight ? (
-                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-500/30 px-2 py-0.5 rounded-full" title="Livestock and sanctuary fauna are asleep during the night shift. Slurry production pauses until morning.">
+                  <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/70 border border-indigo-500/30 px-2 py-0.5 rounded-full" title="Night Watch: Nocturnal slurry continues to flow from barn stalls into refinery intake.">
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-                    🌙 Night Rest: 0 L/min (Herd &amp; Sanctuary Asleep)
+                    🌙 Night Inflow: +{autoInflowPerMin.toFixed(1)} L/min (Barn Stalls Active)
                   </span>
                 ) : elderAnimalCount > 0 && activeAnimalCount === 0 && totalSanctuaryCreatures === 0 ? (
                   <span className="text-[10px] text-amber-400/90 italic" title="Elder animals have retired from biological production and do not produce slurry.">
@@ -386,11 +386,7 @@ export function GasBottlingRefineryPanel({ onNavigateToOrders, onNavigateToGuide
                     <span>🦕</span> Primeval Sanctuary Sluice Intake
                   </span>
                   <span className="font-mono text-amber-200">
-                    {isNight ? (
-                      <span className="text-stone-400 text-[9px]">🌙 Resting (0 L/min)</span>
-                    ) : (
-                      <span className="text-emerald-400 font-bold">🟢 Active: +{sanctuaryInflowPerMin.toFixed(1)} L/min ({totalSanctuaryCreatures} ancient specimen{totalSanctuaryCreatures !== 1 ? 's' : ''})</span>
-                    )}
+                    <span className="text-emerald-400 font-bold">🟢 Active: +{sanctuaryInflowPerMin.toFixed(1)} L/min ({totalSanctuaryCreatures} ancient specimen{totalSanctuaryCreatures !== 1 ? 's' : ''})</span>
                   </span>
                 </div>
               )}

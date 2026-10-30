@@ -3328,7 +3328,6 @@ export const useGameStore = create<GameState>()(
         }
 
         // Use breed registry for breed-specific yields
-        const breedDef = BREED_REGISTRY[animal.breedId];
         const speciesDef = ANIMALS[animal.species];
         const newBarn = { ...state.barn };
         let additionalCoins = 0;
@@ -10300,13 +10299,14 @@ export const useGameStore = create<GameState>()(
       },
 
       tick: () => {
-        const now = Date.now();
-        const state = get();
+        try {
+          const now = Date.now();
+          const state = get();
 
-        // If Game Manager is in Offline Mode, pause live active ticking
-        if (state.isOfflineMode) {
-          return;
-        }
+          // If Game Manager is in Offline Mode, pause live active ticking
+          if (state.isOfflineMode) {
+            return;
+          }
 
         // Systemic event physics modifiers (v2.3)
         const isAlchemicalBloom = state.systemicEvent?.id === 'alchemical_bloom' && state.systemicEvent.phase === 'active';
@@ -11051,6 +11051,9 @@ export const useGameStore = create<GameState>()(
             const role = GAS_CANISTER_TO_TECH[b.canisterId];
             const worker = updatedUnifiedWorkers[role];
             if (worker && worker.isHired) {
+              if (!worker.stats) {
+                worker.stats = { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 };
+              }
               unifiedWorkersModified = true;
               worker.stats.totalItemsProduced = (worker.stats.totalItemsProduced || 0) + b.outputQty;
               if (worker.autoSell) {
@@ -11086,18 +11089,17 @@ export const useGameStore = create<GameState>()(
         }
 
         // 100% Automated passive herd slurry generation directly into refinery feedstock
-        // Pauses at night (livestock asleep in barn stalls) and excludes retired elders
+        // Excludes retired elders and flows continuously across day and nocturnal barn stalls
         let totalHerdSlurryLps = 0;
-        if (!isNight) {
-          for (const a of newAnimals) {
-            const isElder = Boolean((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder');
-            if (isElder) continue; // Retired elder animals cease slurry generation
+        for (const a of newAnimals) {
+          const isElder = Boolean((a.cyclesRemaining !== undefined && a.cyclesRemaining <= 0) || a.age === 'elder');
+          if (isElder) continue; // Retired elder animals cease slurry generation
 
-            // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
-            let baseRateLps = a.species === 'cow' ? (2.5 / 60)
-              : a.species === 'pig' ? (1.5 / 60)
-              : a.species === 'sheep' ? (1.0 / 60)
-              : (0.5 / 60);
+          // Calibrated real-time generation: Cow 2.5 L/min, Pig 1.5 L/min, Sheep 1.0 L/min, Chicken 0.5 L/min
+          let baseRateLps = a.species === 'cow' ? (2.5 / 60)
+            : a.species === 'pig' ? (1.5 / 60)
+            : a.species === 'sheep' ? (1.0 / 60)
+            : (0.5 / 60);
 
             // Trait 1: Pig hyper_slurry (+60% slurry production rate)
             if (a.species === 'pig' && a.trait === 'hyper_slurry') {
@@ -11158,7 +11160,6 @@ export const useGameStore = create<GameState>()(
               );
             }
           }
-        }
         if (totalHerdSlurryLps > 0) {
           const addedSlurry = totalHerdSlurryLps * deltaSeconds;
           updatedGasRefinery = {
@@ -11262,18 +11263,18 @@ export const useGameStore = create<GameState>()(
 
         // --- Automated Gas Refinery Workers (Tri-Chamber Dispatch) ---
         // Slurry Governor Hysteresis Rule:
-        // Workers start working when slurry goes >= 2000L and stop when it drops below 500L
+        // Workers start working when slurry goes >= 40L (enough for a batch) and pause when below 20L
         const currentSlurry = updatedGasRefinery.storedSlurryFeedstock || 0;
         let isWorkerSlurryActive = Boolean(updatedGasRefinery.isWorkerSlurryActive);
 
-        if (currentSlurry >= 2000) {
+        if (currentSlurry >= 40) {
           if (!isWorkerSlurryActive) {
-            state.addNotification('🛢️ Refinery Governor: Slurry reached 2,000L buffer! Automated gas workers engaged.', '🚀', 'discovery');
+            state.addNotification('🛢️ Refinery Governor: Slurry reserve active! Automated gas workers engaged.', '🚀', 'discovery');
           }
           isWorkerSlurryActive = true;
-        } else if (currentSlurry < 500) {
+        } else if (currentSlurry < 20) {
           if (isWorkerSlurryActive) {
-            state.addNotification('🛡️ Refinery Governor: Slurry fell below 500L cutoff! Automated gas workers paused to protect reserves.', '⚠️', 'info');
+            state.addNotification('🛡️ Refinery Governor: Slurry low (<20L). Automated gas workers waiting for feedstock.', '⚠️', 'info');
           }
           isWorkerSlurryActive = false;
         }
@@ -11641,7 +11642,10 @@ export const useGameStore = create<GameState>()(
             }
 
             const lastCatch = state.fishery.lastCatchTimestamps[zoneId] || 0;
-            if (lastCatch === 0) continue;
+            if (lastCatch === 0) {
+              newCatchTimestamps[zoneId] = now;
+              continue;
+            }
 
             const fOverclock = state.entityOverclocks?.[`fishery_${zoneId}`];
             const isFisheryExhausted = Boolean(fOverclock?.isExhausted && fOverclock?.exhaustedUntil && now < fOverclock.exhaustedUntil);
@@ -12044,6 +12048,9 @@ export const useGameStore = create<GameState>()(
             const worker = updatedUnifiedWorkers[role];
             const hasLegacyFarmhand = role === 'herder' && state.farmhands.some(fh => fh.role === 'herder');
             if (!worker || (!worker.isHired && !hasLegacyFarmhand)) continue;
+            if (!worker.stats) {
+              worker.stats = { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 };
+            }
             if (worker.isPaused) {
               worker.lastActionTimestamp = now;
               continue;
@@ -12895,8 +12902,16 @@ export const useGameStore = create<GameState>()(
       if (enc.specimenCount > 0) {
         const spec = PREHISTORIC_SPECIES_REGISTRY[enc.speciesId];
         // Food trough consumption: -0.05 liters per second per living specimen
-        const newTrough = Math.max(0, enc.troughFoodLiters - 0.05 * enc.specimenCount);
-        const isStarving = newTrough <= 0;
+        let finalTrough = Math.max(0, enc.troughFoodLiters - 0.05 * enc.specimenCount);
+        // Automated sanctuary herd feeder: top up troughs from silo feed when low
+        if (finalTrough <= 15 && (newSilo.feed || 0) >= 10) {
+          const topUp = Math.min(enc.maxTroughLiters - finalTrough, Math.min(newSilo.feed, 25));
+          if (topUp > 0) {
+            newSilo.feed -= topUp;
+            finalTrough += topUp;
+          }
+        }
+        const isStarving = finalTrough <= 0;
 
         let nextHarvestProgress = enc.harvestProgressSec;
         let nextHarvestReady = enc.harvestReadyCount;
@@ -12916,7 +12931,7 @@ export const useGameStore = create<GameState>()(
 
         updatedEnclosures[encKey as EnclosureTypeId] = {
           ...enc,
-          troughFoodLiters: newTrough,
+          troughFoodLiters: finalTrough,
           isStarving,
           harvestProgressSec: nextHarvestProgress,
           harvestReadyCount: nextHarvestReady,
@@ -12924,16 +12939,14 @@ export const useGameStore = create<GameState>()(
       }
     }
 
-    set({
-      amberBioLab: {
-        ...currentBioLab,
-        chambers: updatedChambers,
-      },
-      prehistoricSanctuary: {
-        ...currentSanctuary,
-        enclosures: updatedEnclosures,
-      },
-    });
+    const updatedBioLabState = {
+      ...currentBioLab,
+      chambers: updatedChambers,
+    };
+    const updatedSanctuaryState = {
+      ...currentSanctuary,
+      enclosures: updatedEnclosures,
+    };
 
     for (const n of notificationsToAdd) {
       get().addNotification(n.message, n.emoji, n.type as any);
@@ -13134,11 +13147,16 @@ export const useGameStore = create<GameState>()(
           },
           safetyInfrastructure: updatedSafety,
           activeMorningIncidentModal: activeMorningModal,
+          amberBioLab: updatedBioLabState,
+          prehistoricSanctuary: updatedSanctuaryState,
           notifications: (get().notifications || state.notifications).filter(
             n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
           ),
           lastTick: now,
         });
+        } catch (err) {
+          console.error('CRITICAL ERROR IN GAME TICK:', err);
+        }
       },
 
       // Cloud Sync & Auth Actions
@@ -16605,6 +16623,9 @@ export const useGameStore = create<GameState>()(
               }
               if (!currentW.genetics || !isValidWorkerGenetics(currentW.genetics)) {
                 currentW.genetics = generateRandomWorkerGenetics();
+              }
+              if (!currentW.stats) {
+                currentW.stats = { totalCoinsEarned: 0, totalItemsProduced: 0, totalGemsEarned: 0 };
               }
               if (currentW.level > 1 || (currentW.stats?.totalItemsProduced || 0) > 0 || (currentW.stats?.totalCoinsEarned || 0) > 0) {
                 currentW.isHired = true;

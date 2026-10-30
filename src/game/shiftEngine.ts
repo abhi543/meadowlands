@@ -45,9 +45,9 @@ export const IN_GAME_HOURS_PER_DAY = 24;
 export const IN_GAME_MINUTES_PER_DAY = 1440;
 export const SEC_PER_IN_GAME_HOUR = 75; // 75 real seconds = 1 in-game hour
 export const MS_PER_IN_GAME_HOUR = 75000;
-export const SHIFT_WORK_SEC = 600; // 10 real minutes (06:00 - 14:00)
+export const SHIFT_WORK_SEC = 600; // 10 real minutes (06:00 - 14:00) Day Shift
 export const SHIFT_RECREATION_SEC = 0;
-export const SHIFT_SLEEP_SEC = 1200; // 20 real minutes (14:00 - 06:00)
+export const SHIFT_SLEEP_SEC = 0; // Continuous Operations: Night Watch Active Duty with Lanterns
 export const TWILIGHT_GAP_SEC = 0;
 export const OVERTIME_DURATION_MS = 300000; // 5 real minutes = 4 in-game hours
 export const SHIFT_ADJUST_DURATION_MS = 1800000; // 1 full day (30 real minutes)
@@ -62,7 +62,7 @@ export const TWILIGHT_GAP_DEFINITION: ShiftDefinition = {
   cycleWorkStartSec: 600,
   cycleWorkEndSec: 600,
   recreationEndSec: 600,
-  responsibilities: 'Shift transition from Morning active labor into Night bunkhouse rest.',
+  responsibilities: 'Shift transition from Morning active labor into Night Watch lantern duty.',
   icon: '🔄',
   color: 'text-stone-300',
   bgGradient: 'from-stone-800/40 via-stone-900 to-stone-950',
@@ -86,31 +86,31 @@ export const SHIFT_DEFINITIONS: Record<ShiftType, ShiftDefinition> = {
   },
   night: {
     type: 'night',
-    name: 'Night Shift: Bunkhouse Rest (20 min)',
-    shortName: 'Night Rest',
+    name: 'Night Watch: Active Patrol (20 min)',
+    shortName: 'Night Watch',
     timeRange: '14:00 – 06:00',
     startInGameHour: 14,
     endInGameHour: 6,
     cycleWorkStartSec: 600,
-    cycleWorkEndSec: 600,
+    cycleWorkEndSec: 1800,
     recreationEndSec: 1800,
-    responsibilities: 'All workers resting and sleeping in the Bunkhouse to regenerate stamina and well-rested buffs.',
+    responsibilities: 'Workers on night watch with lanterns: guarding plots, feeding livestock, operating gas refinery, and maintaining continuous production.',
     icon: '🌙',
     color: 'text-indigo-400',
     bgGradient: 'from-indigo-500/20 to-purple-500/10',
   },
   evening: {
-    // Legacy fallback redirecting to Night Rest
+    // Legacy fallback redirecting to Night Watch
     type: 'night',
-    name: 'Night Shift: Bunkhouse Rest (20 min)',
-    shortName: 'Night Rest',
+    name: 'Night Watch: Active Patrol (20 min)',
+    shortName: 'Night Watch',
     timeRange: '14:00 – 06:00',
     startInGameHour: 14,
     endInGameHour: 6,
     cycleWorkStartSec: 600,
-    cycleWorkEndSec: 600,
+    cycleWorkEndSec: 1800,
     recreationEndSec: 1800,
-    responsibilities: 'All workers resting and sleeping in the Bunkhouse.',
+    responsibilities: 'Workers active on Night Watch duty with lanterns.',
     icon: '🌙',
     color: 'text-indigo-400',
     bgGradient: 'from-indigo-500/20 to-purple-500/10',
@@ -168,7 +168,7 @@ export function getCircadianClock(timestamp: number, epochStart: number = 0): Ci
   const hour12 = inGameHour % 12 === 0 ? 12 : inGameHour % 12;
   const inGameTimeFormatted = `${hour12}:${paddedMinute} ${isPM ? 'PM' : 'AM'}`;
 
-  // Period: Day (06:00 - 14:00, 10 min work), Night (14:00 - 06:00, 20 min rest)
+  // Period: Day (06:00 - 14:00, 10 min work), Night (14:00 - 06:00, 20 min Night Watch with Lanterns)
   let currentPeriod: 'day' | 'dusk' | 'night' = 'day';
   let periodLabel = 'Morning Shift: Active Duty (10 min)';
   let periodEmoji = '☀️';
@@ -176,14 +176,14 @@ export function getCircadianClock(timestamp: number, epochStart: number = 0): Ci
 
   if (cycleElapsedSeconds >= 600) {
     currentPeriod = 'night';
-    periodLabel = 'Night Shift: Bunkhouse Rest (20 min)';
+    periodLabel = 'Night Watch: Active Patrol (20 min)';
     periodEmoji = '🌙';
     periodThemeColor = '#6366f1'; // Deep Indigo
   }
 
-  // 10-Min Morning Work + 20-Min Night Rest Cadence (30-Minute Total Day)
-  // [0..600s) -> Morning Shift (06:00 - 14:00, All Workers Active)
-  // [600..1800s) -> Night Shift (14:00 - 06:00, All Workers Resting in Bunkhouse)
+  // 10-Min Morning Work + 20-Min Night Watch Cadence (30-Minute Continuous Operations Day)
+  // [0..600s) -> Morning Shift (06:00 - 14:00, Daytime Field Operations)
+  // [600..1800s) -> Night Watch (14:00 - 06:00, Lantern Patrol & Machine Operation)
   let activeShift: ShiftType | null = 'morning';
   let activeShiftDef: ShiftDefinition = SHIFT_DEFINITIONS.morning;
   const isTwilightGap = false;
@@ -307,19 +307,18 @@ export function getWorkerScheduleTelemetry(params: {
     stamina = 50;
   } else {
     // Normal shift timeline based on cycleSec (0..1800)
-    // Unified Model: All workers work in Morning Shift (10 min), all rest in Night Shift (20 min)
+    // Continuous Operations: Workers remain active on duty across both Day Shift and Night Watch!
+    phase = 'on_shift';
     if (cycleSec < 600) {
-      // [0..600): Active Work Phase (10 real minutes / 06:00 - 14:00)
-      phase = 'on_shift';
+      // [0..600): Active Day Shift (10 real minutes / 06:00 - 14:00)
       timeRemainingSeconds = 600 - cycleSec;
       const workProgress = cycleSec / 600;
-      stamina = Math.max(5, Math.round((1 - workProgress) * 100));
+      stamina = Math.max(50, Math.round((1 - workProgress) * 100));
     } else {
-      // [600..1800): Night Shift Rest & Sleep in Bunkhouse (20 real minutes / 14:00 - 06:00)
-      phase = 'sleeping';
+      // [600..1800): Active Night Watch with Lanterns (20 real minutes / 14:00 - 06:00)
       timeRemainingSeconds = 1800 - cycleSec;
-      const sleepProgress = (cycleSec - 600) / 1200;
-      stamina = Math.min(100, Math.round(sleepProgress * 100));
+      const nightProgress = (cycleSec - 600) / 1200;
+      stamina = Math.min(100, Math.max(45, Math.round(50 + nightProgress * 50)));
     }
   }
 
@@ -539,11 +538,10 @@ export const BUNKHOUSE_TIERS: Record<number, BunkhouseTierMeta> = {
 
 /**
  * Returns true if the worker's shift has reached its clock-out boundary within the current cycle.
- * - Morning Shift: Concludes work at 600s (10 real minutes / 14:00 in-game).
- * - All workers clock out at 600s, receive wage and ration, then rest in Bunkhouse until 06:00.
+ * Settlement occurs once per 30-minute day cycle at day's end (1740s / 23:30 in-game).
  */
 export function hasWorkerReachedClockOut(shiftType: ShiftType, cycleSeconds: number): boolean {
-  return cycleSeconds >= 600;
+  return cycleSeconds >= 1740;
 }
 
 export interface ClockOutSettlementResult {

@@ -734,10 +734,10 @@ export function AnimalsTab() {
                             </span>
                           ) : isNight ? (
                             <span
-                              className="text-[8px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/80 px-1 py-0.2 rounded border border-indigo-300 dark:border-indigo-700/60 truncate"
-                              title="Night Rest: Animal is asleep in barn stall (0 L/min Slurry until morning)"
+                              className="text-[8px] font-mono font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/80 px-1 py-0.2 rounded border border-indigo-300 dark:border-indigo-700/60 truncate"
+                              title={`Night Watch: Active nocturnal slurry +${(animal.species === 'cow' ? 2.5 : animal.species === 'pig' ? 1.5 : animal.species === 'sheep' ? 1.0 : 0.5).toFixed(1)} L/min piped directly to Gas Refinery intake`}
                             >
-                              🌙 Asleep (0 Slurry)
+                              🌙 +{(animal.species === 'cow' ? 2.5 : animal.species === 'pig' ? 1.5 : animal.species === 'sheep' ? 1.0 : 0.5).toFixed(1)} L/m
                             </span>
                           ) : (
                             <span

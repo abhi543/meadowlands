@@ -625,7 +625,9 @@ export function evaluateAnimalSlurry(params: {
   if (params.isElder) {
     netRateLiters = 0; // Retired elders cease slurry generation
   } else if (params.isNight) {
-    netRateLiters = 0; // Nocturnal sleep dormancy: herd asleep in barn stalls
+    // Nocturnal stall digestion: animals resting in barn stalls continue active digestion and manure/slurry flow
+    const totalModifierMultiplier = 1 + ((dietModifierPercent + weatherModifierPercent) / 100);
+    netRateLiters = Math.max(0.1, Number((profile.baseWasteRateLitersPerDay * totalModifierMultiplier * 0.95).toFixed(2)));
   } else if (isDehydrated) {
     netRateLiters = 0;
   } else {
@@ -633,7 +635,7 @@ export function evaluateAnimalSlurry(params: {
     netRateLiters = Math.max(0.1, Number((profile.baseWasteRateLitersPerDay * totalModifierMultiplier).toFixed(2)));
   }
 
-  const ratePerSecond = (isDehydrated || params.isElder || params.isNight) ? 0 : netRateLiters / 1800;
+  const ratePerSecond = (isDehydrated || params.isElder) ? 0 : netRateLiters / 1800;
   const washDownNeededLiters = Number((netRateLiters * profile.washDownWaterRatio * 0.1).toFixed(1));
 
   // Build inspection badge string
@@ -641,7 +643,7 @@ export function evaluateAnimalSlurry(params: {
   if (params.isElder) {
     qualityLabel = 'Retired Elder (0 L/day)';
   } else if (params.isNight) {
-    qualityLabel = 'Night Rest (Asleep in Barn)';
+    qualityLabel = `${profile.name} (Nocturnal Stall Digestate)`;
   } else if (profile.qualityGrade === 'swine_methane') {
     qualityLabel = 'Swine Quality (High Methane)';
   } else if (profile.qualityGrade === 'poultry_uric') {
@@ -656,7 +658,7 @@ export function evaluateAnimalSlurry(params: {
   if (params.isElder) {
     badge = 'Retired Elder | Slurry Production Ceased (0 L/day)';
   } else if (params.isNight) {
-    badge = 'Night Rest | Livestock Asleep in Barn (0 L/day Slurry)';
+    badge = `Night Watch | Barn Stall Slurry: +${netRateLiters.toFixed(1)} L/day (${qualityLabel})`;
   } else if (isDehydrated) {
     badge = `Hydration: ${Math.round(hydration)}% (DEHYDRATED) | Slurry Output Frozen! Refill Troughs`;
   } else if (isDryCaked) {
