@@ -66,12 +66,12 @@ export function CloudSyncIndicator({ onOpenAccountModal, className = '' }: Cloud
         <button
           type="button"
           onClick={() => setIsElevationModalOpen(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md transition-all shadow-xs border cursor-pointer bg-stone-900/40 hover:bg-stone-900/60 border-white/20 text-stone-200"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium backdrop-blur-md transition-all shadow-xs border cursor-pointer bg-stone-900/60 hover:bg-stone-900/80 border-white/20 text-stone-200"
           title={
             telemetry.status === 'syncing'
               ? 'Syncing changes to Cloud...'
               : telemetry.status === 'synced'
-              ? 'All progress saved to Cloud'
+              ? `All progress saved to Cloud as ${telemetry.displayName || 'Player'}`
               : telemetry.status === 'error'
               ? telemetry.errorMessage || 'Offline / Local save only'
               : 'Saved locally'
@@ -83,47 +83,59 @@ export function CloudSyncIndicator({ onOpenAccountModal, className = '' }: Cloud
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
               </span>
-              <span className="text-amber-300 font-semibold text-[11px]">Syncing to Cloud...</span>
+              <span className="text-amber-300 font-semibold text-[11px]">Syncing...</span>
             </>
           )}
 
           {telemetry.status === 'synced' && (
             <>
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]"></span>
-              <span className="text-emerald-300 font-medium text-[11px]">All Progress Saved</span>
+              <span className="text-emerald-300 font-medium text-[11px] truncate max-w-[120px]">
+                {telemetry.displayName ? `👤 ${telemetry.displayName}` : 'Cloud Synced'}
+              </span>
             </>
           )}
 
           {telemetry.status === 'local' && (
             <>
               <span className="h-2 w-2 rounded-full bg-stone-400"></span>
-              <span className="text-stone-300 text-[11px]">Saved Locally</span>
+              <span className="text-stone-300 text-[11px] truncate max-w-[120px]">
+                {telemetry.displayName ? `👤 ${telemetry.displayName}` : 'Saved Locally'}
+              </span>
             </>
           )}
 
           {telemetry.status === 'error' && (
             <>
               <span className="h-2 w-2 rounded-full bg-red-400"></span>
-              <span className="text-red-300 text-[11px]">Offline / Local Only</span>
+              <span className="text-red-300 text-[11px]">
+                {telemetry.displayName ? `👤 ${telemetry.displayName}` : 'Offline'}
+              </span>
             </>
           )}
 
-          {telemetry.isGuest && (
+          {telemetry.isGuest ? (
             <span className="ml-1 text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full border border-amber-500/30">
               Guest
+            </span>
+          ) : (
+            <span className="ml-1 text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded-full border border-emerald-500/30">
+              Cloud
             </span>
           )}
         </button>
 
         {/* Quick Manual Cloud Save Button */}
-        <button
-          type="button"
-          onClick={handleManualSave}
-          className="px-2 py-1 text-xs rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/90 border border-white/15"
-          title="Force immediate cloud save (bypass 45s debounce timer)"
-        >
-          💾 Save
-        </button>
+        {telemetry.status === 'error' && (
+          <button
+            type="button"
+            onClick={handleManualSave}
+            className="px-2 py-1 text-xs rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white/90 border border-white/15"
+            title="Retry cloud save"
+          >
+            🔄 Retry
+          </button>
+        )}
       </div>
 
       {/* Account Elevation & Profile Modal */}

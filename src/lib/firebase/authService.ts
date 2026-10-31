@@ -66,10 +66,11 @@ export async function syncUserProfile(user: User, gameId: string): Promise<Studi
   const snap = await getDoc(userRef);
 
   const now = Date.now();
+  const fallbackGuestName = `Guest_${user.uid.slice(0, 5)}`;
   if (!snap.exists()) {
     const newProfile: StudioUserProfile = {
       uid: user.uid,
-      displayName: user.displayName || (user.isAnonymous ? `Guest_${user.uid.slice(0, 6)}` : 'Rancher'),
+      displayName: user.displayName || fallbackGuestName,
       email: user.email || null,
       isAnonymous: user.isAnonymous,
       createdAt: now,
