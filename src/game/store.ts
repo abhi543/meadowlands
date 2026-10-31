@@ -1232,7 +1232,6 @@ export interface GameState {
   markDirty: () => void;
   markClean: () => void;
   claimAccountLinkReward: () => void;
-  loadBackupSave: (payload: Partial<GameState>) => void;
   loadCloudSave: (payload: Partial<GameState>) => void;
   fastForwardOfflineTime: (elapsedMs: number) => void;
 
@@ -13020,7 +13019,7 @@ export const useGameStore = create<GameState>()(
         state.addNotification('Homestead Protected! Claimed +50 Gems bonus.', '💎', 'info');
       },
 
-      loadBackupSave: (payload) => {
+      loadCloudSave: (payload) => {
         const state = get();
         set({
           ...state,
@@ -13028,11 +13027,7 @@ export const useGameStore = create<GameState>()(
           isDirty: false,
           lastTick: Date.now(),
         });
-        get().addNotification('Local backup loaded successfully! Farm restored.', '💾', 'info');
-      },
-
-      loadCloudSave: (payload) => {
-        get().loadBackupSave(payload);
+        get().addNotification('Cloud save loaded successfully! Farm restored.', '☁️', 'info');
       },
 
       fastForwardOfflineTime: (elapsedMs) => {

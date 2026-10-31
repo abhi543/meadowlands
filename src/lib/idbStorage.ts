@@ -91,7 +91,7 @@ export async function requestPersistentStorage(): Promise<boolean> {
 }
 
 /**
- * Retrieve raw saved JSON string for export or inspection.
+ * Retrieve raw saved JSON string for inspection.
  */
 export async function getRawSaveData(key = SAVE_KEY): Promise<string | null> {
   try {
@@ -103,51 +103,4 @@ export async function getRawSaveData(key = SAVE_KEY): Promise<string | null> {
     return localStorage.getItem(key) || null;
   }
   return null;
-}
-
-/**
- * Triggers a browser file download of the full game state.
- */
-export function downloadBackupFile(jsonString: string, filename?: string): void {
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const name = filename || `meadowlands-backup-${dateStr}.json`;
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Parses and validates an imported backup JSON string, writing it directly into IndexedDB.
- */
-export async function importBackupString(
-  jsonString: string,
-  key = SAVE_KEY
-): Promise<{ success: boolean; error?: string; state?: any }> {
-  try {
-    const parsed = JSON.parse(jsonString);
-    const stateObj = parsed.state || parsed;
-
-    // Sanity check: must resemble a Meadowlands GameState
-    if (
-      typeof stateObj !== 'object' ||
-      stateObj === null ||
-      (stateObj.coins === undefined && stateObj.level === undefined && stateObj.plots === undefined)
-    ) {
-      return { success: false, error: 'File is not a valid Meadowlands backup JSON.' };
-    }
-
-    const payload = parsed.state ? parsed : { state: stateObj, version: 0 };
-    const stringified = JSON.stringify(payload);
-
-    await set(key, stringified);
-    return { success: true, state: stateObj };
-  } catch (err: any) {
-    return { success: false, error: err?.message || 'Invalid JSON format in backup file.' };
-  }
 }

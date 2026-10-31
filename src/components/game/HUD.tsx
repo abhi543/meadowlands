@@ -8,11 +8,10 @@ import { useState, useEffect } from 'react';
 import { CloudSyncIndicator } from './CloudSyncIndicator';
 
 interface HUDProps {
-  onOpenBackupModal?: () => void;
   onSelectTab?: (tab: 'animals' | 'market' | 'barn' | 'farmhands') => void;
 }
 
-export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
+export function HUD({ onSelectTab }: HUDProps) {
   const {
     coins,
     gems,
@@ -153,19 +152,6 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
             : 'Muted'}
           </span>
         </button>
-
-        {/* Local Storage & Backup Button */}
-        {onOpenBackupModal && (
-          <button
-            onClick={onOpenBackupModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-white/20 hover:bg-white/30 text-white transition-all shadow-sm border border-white/20 backdrop-blur-sm"
-            title="Local-first IndexedDB save & Backup Manager"
-          >
-            <span>💾</span>
-            <span>Backup</span>
-          </button>
-        )}
-
 
         {/* Workers Timing Display Widget (On Top Header) */}
         <button

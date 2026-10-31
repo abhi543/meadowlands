@@ -22,7 +22,6 @@ import { LivestockMarketPanel } from '@/components/game/LivestockMarketPanel';
 import { PrehistoricSanctuaryPanel } from '@/components/game/prehistoric/PrehistoricSanctuaryPanel';
 import { TerritoryMapView } from '@/components/game/TerritoryMapView';
 import { FloatingNumbers } from '@/components/game/FloatingNumbers';
-import { BackupModal } from '@/components/game/BackupModal';
 import { BarnTab } from '@/components/game/BarnTab';
 import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { WaterTab } from '@/components/game/WaterTab';
@@ -87,7 +86,6 @@ export default function Home() {
       setSluiceModalOpen(false);
     }
   }, [isSluiceModalOpen, setSluiceModalOpen]);
-  const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [relicsModalOpen, setRelicsModalOpen] = useState(false);
   const [conflictModalData, setConflictModalData] = useState<{
@@ -288,7 +286,7 @@ export default function Home() {
         {/* Header HUD */}
         <header className="sticky top-0 z-30 p-3 pb-0">
           <div className="w-full max-w-[1600px] mx-auto">
-            <HUD onOpenBackupModal={() => setBackupModalOpen(true)} onSelectTab={setActiveTab} />
+            <HUD onSelectTab={setActiveTab} />
           </div>
         </header>
 
@@ -339,7 +337,6 @@ export default function Home() {
 
       {/** Modals & Overlays **/}
       <MorningIncidentModal />
-      <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
       {conflictModalData && (
         <SaveConflictModal
           isOpen={Boolean(conflictModalData)}
