@@ -47,15 +47,42 @@ export interface ContractSettlementBreakdown {
 // Formula: Raw Crop Value = (Seed Purchase Price * 2.0) + ((Growth Duration Sec / 60) * 2.5)
 // ----------------------------------------------------------------------------
 export const STAGE_0_RAW_CROPS: Record<string, { seedCost: number; growTimeSec: number; name: string; icon: string }> = {
+  // Legacy staples
   wheat:       { seedCost: 1,  growTimeSec: 120,  name: 'Wheat',       icon: '🌾' },
   corn:        { seedCost: 1,  growTimeSec: 120,  name: 'Corn',        icon: '🌽' },
   carrot:      { seedCost: 5,  growTimeSec: 180,  name: 'Carrot',      icon: '🥕' },
   strawberry:  { seedCost: 10, growTimeSec: 240, name: 'Strawberry',  icon: '🍓' },
   cotton:      { seedCost: 12, growTimeSec: 300, name: 'Cotton',      icon: '🌿' },
-  soybean:     { seedCost: 15, growTimeSec: 360, name: 'Soybean',     icon: '🫛' },
+  soybean:     { seedCost: 15, growTimeSec: 360, name: 'Soybean',     icon: '🫘' },
   pumpkin:     { seedCost: 25, growTimeSec: 1200, name: 'Pumpkin',     icon: '🎃' },
   peas:        { seedCost: 2,  growTimeSec: 30,  name: 'Peas',        icon: '🫛' },
   wild_berries:{ seedCost: 6,  growTimeSec: 150, name: 'Wild Berries', icon: '🍇' },
+
+  // A. Common & Temperate Weather Crops
+  sunflower:   { seedCost: 10, growTimeSec: 120, name: 'Sunflower',    icon: '🌻' },
+  okra:        { seedCost: 10, growTimeSec: 120, name: 'Okra',         icon: '🫛' },
+  sorghum:     { seedCost: 10, growTimeSec: 120, name: 'Sorghum',      icon: '🌾' },
+  spinach:     { seedCost: 10, growTimeSec: 120, name: 'Spinach',      icon: '🥬' },
+  eggplant:    { seedCost: 12, growTimeSec: 120, name: 'Eggplant',     icon: '🍆' },
+  wasabi:      { seedCost: 15, growTimeSec: 120, name: 'Wasabi',       icon: '🌿' },
+  tea_bush:    { seedCost: 12, growTimeSec: 120, name: 'Tea Bush',     icon: '🍵' },
+
+  // B. Severe & Cold Weather Crops
+  paddy_rice:  { seedCost: 12, growTimeSec: 120, name: 'Paddy Rice',   icon: '🌾' },
+  peanut:      { seedCost: 12, growTimeSec: 120, name: 'Peanut',       icon: '🥜' },
+  sweet_potato:{ seedCost: 14, growTimeSec: 120, name: 'Sweet Potato', icon: '🍠' },
+  turnip:      { seedCost: 12, growTimeSec: 120, name: 'Turnip',       icon: '🪴' },
+  taro:        { seedCost: 15, growTimeSec: 120, name: 'Taro',         icon: '🥔' },
+  kale:        { seedCost: 14, growTimeSec: 120, name: 'Kale',         icon: '🥬' },
+  winter_rye:  { seedCost: 12, growTimeSec: 120, name: 'Winter Rye',   icon: '🌾' },
+
+  // C. Extreme & Cataclysmic Weather Crops
+  water_chestnut:        { seedCost: 20, growTimeSec: 120, name: 'Water Chestnut',        icon: '🌰' },
+  dragon_fruit:          { seedCost: 25, growTimeSec: 120, name: 'Dragon Fruit',          icon: '🐉' },
+  arctic_moss_campion:   { seedCost: 25, growTimeSec: 120, name: 'Arctic Moss Campion',   icon: '🌸' },
+  bambara_groundnut:     { seedCost: 22, growTimeSec: 120, name: 'Bambara Groundnut',     icon: '🥜' },
+  bioluminescent_shroom: { seedCost: 30, growTimeSec: 120, name: 'Bioluminescent Shroom', icon: '🍄' },
+  prickly_pear_cactus:   { seedCost: 20, growTimeSec: 120, name: 'Prickly Pear Cactus',   icon: '🌵' },
 };
 
 export function calculateRawCropValue(seedCost: number, growTimeSec: number): number {
@@ -267,6 +294,12 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   lure_nectar:       { stage: 2, inputs: [{ id: 'truffle_oil', qty: 2 }, { id: 'sweater', qty: 2 }, { id: 'fish', qty: 6 }], outputQty: 1, timeSec: 300, name: 'Ambrosia', icon: '✨' },
 
   // Gourmet Culinary & Quality Artisan Recipes
+  sunflower_oil:           { stage: 1, inputs: [{ id: 'sunflower', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Golden Sunflower Oil', icon: '🌻🫒' },
+  rice_bowl:               { stage: 2, inputs: [{ id: 'paddy_rice', qty: 2 }, { id: 'egg', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Steamed Rice Bowl', icon: '🍚' },
+  sweet_potato_fries:      { stage: 2, inputs: [{ id: 'sweet_potato', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Roasted Sweet Potato Wedges', icon: '🍠✨' },
+  taro_chips:              { stage: 2, inputs: [{ id: 'taro', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Crispy Taro Chips', icon: '🥔✨' },
+  matcha_tea:              { stage: 1, inputs: [{ id: 'tea_bush', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Ceremonial Matcha Tea', icon: '🍵✨' },
+  dragon_fruit_smoothie:   { stage: 2, inputs: [{ id: 'dragon_fruit', qty: 2 }], outputQty: 1, timeSec: 75, name: 'Dragon Fruit Sorbet', icon: '🐉🍧' },
   golden_cornbread:        { stage: 2, inputs: [{ id: 'corn_gold', qty: 2 }, { id: 'egg', qty: 1 }], outputQty: 1, timeSec: 75, name: 'Golden Cornbread', icon: '🍞⭐' },
   prismatic_berry_tart:    { stage: 2, inputs: [{ id: 'strawberry_prismatic', qty: 1 }, { id: 'wheat_silver', qty: 2 }, { id: 'honey', qty: 1 }], outputQty: 1, timeSec: 120, name: 'Prismatic Berry Tart', icon: '🥧🌈' },
   glazed_silver_carrots:   { stage: 2, inputs: [{ id: 'carrot_silver', qty: 2 }, { id: 'honey', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Glazed Silver Carrots', icon: '🥕✨' },

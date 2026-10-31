@@ -88,6 +88,13 @@ function getIngredientSourceHint(itemId: string): string {
   if (itemId === 'rich_butter') return 'Churn at Dairy (2 Rich Cream)';
   if (itemId === 'alpine_cheese') return 'Age at Dairy (2 Alpine Milk)';
   if (itemId === 'golden_cake') return 'Bake at Bakery (Golden Egg + Bread)';
+  // Weather Matrix Crop Products
+  if (itemId === 'sunflower_oil') return 'Press at Press building (2x Sunflower)';
+  if (itemId === 'rice_bowl') return 'Steam at Bakery (2x Paddy Rice + Egg)';
+  if (itemId === 'sweet_potato_fries') return 'Bake at Bakery (2x Sweet Potato)';
+  if (itemId === 'taro_chips') return 'Bake at Bakery (2x Taro)';
+  if (itemId === 'matcha_tea') return 'Brew at Bakery (2x Tea Bush)';
+  if (itemId === 'dragon_fruit_smoothie') return 'Freeze at Bakery (2x Dragon Fruit)';
   // Quality Crops
   if (itemId.endsWith('_silver')) return 'Harvest Silver Crop from Hydrated Farm Soil';
   if (itemId.endsWith('_gold')) return 'Harvest Gold Crop from Optimal Soil (40-80% Moisture)';

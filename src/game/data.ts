@@ -389,7 +389,9 @@ export type ProductId =
   // Advanced Gas Feedstocks
   | 'cull_biomass' | 'raw_sulfur' | 'bone_meal'
   // Specialized Trait Livestock Products
-  | 'golden_milk' | 'wild_truffle';
+  | 'golden_milk' | 'wild_truffle'
+  // Weather Matrix Crop Culinary & Artisan Products
+  | 'sunflower_oil' | 'rice_bowl' | 'sweet_potato_fries' | 'taro_chips' | 'matcha_tea' | 'dragon_fruit_smoothie';
 
 /**
  * Calculates chaff byproduct from a crop harvest.
@@ -581,6 +583,14 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   // --- Specialized Trait Livestock Products ---
   golden_milk:             { id: 'golden_milk',             name: 'Golden Milk',                 emoji: '🥛', category: 'animal', sellPrice: 20 },
   wild_truffle:            { id: 'wild_truffle',            name: 'Wild Truffle',                emoji: '🍄', category: 'animal', sellPrice: 75 },
+
+  // --- Weather Matrix Crop Culinary & Artisan Products ---
+  sunflower_oil:           { id: 'sunflower_oil',           name: 'Golden Sunflower Oil',        emoji: '🌻🫒', category: 'manufactured', sellPrice: 42 },
+  rice_bowl:               { id: 'rice_bowl',               name: 'Steamed Rice Bowl',          emoji: '🍚',   category: 'manufactured', sellPrice: 35 },
+  sweet_potato_fries:      { id: 'sweet_potato_fries',      name: 'Roasted Sweet Potato Wedges', emoji: '🍠✨', category: 'manufactured', sellPrice: 40 },
+  taro_chips:              { id: 'taro_chips',              name: 'Crispy Taro Chips',           emoji: '🥔✨', category: 'manufactured', sellPrice: 45 },
+  matcha_tea:              { id: 'matcha_tea',              name: 'Ceremonial Matcha Tea',       emoji: '🍵✨', category: 'manufactured', sellPrice: 50 },
+  dragon_fruit_smoothie:   { id: 'dragon_fruit_smoothie',   name: 'Dragon Fruit Sorbet',        emoji: '🐉🍧', category: 'manufactured', sellPrice: 65 },
 };
 
 // --- Production Buildings ---
@@ -610,7 +620,10 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_feed', name: 'Grain Feed (Wheat)', emoji: '🥣', inputs: [{ productId: 'wheat', qty: 2 }], output: { productId: 'feed', qty: 3 }, timeSec: 60 },
       { id: 'make_feed_corn', name: 'Corn Feed Blend', emoji: '🌽', inputs: [{ productId: 'corn', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
+      { id: 'make_feed_sorghum', name: 'Sorghum Grain Feed', emoji: '🌾🥣', inputs: [{ productId: 'sorghum', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
       { id: 'make_feed_carrot', name: 'Carrot Feed Blend', emoji: '🥕', inputs: [{ productId: 'carrot', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
+      { id: 'make_feed_turnip', name: 'Turnip Root Feed', emoji: '🪴🥣', inputs: [{ productId: 'turnip', qty: 2 }], output: { productId: 'feed', qty: 4 }, timeSec: 60 },
+      { id: 'make_feed_peanut', name: 'Peanut Protein Mash', emoji: '🥜🥣', inputs: [{ productId: 'peanut', qty: 2 }], output: { productId: 'feed', qty: 5 }, timeSec: 60 },
       { id: 'make_feed_soybean', name: 'Protein Soy Chow', emoji: '🫘', inputs: [{ productId: 'soybean', qty: 2 }], output: { productId: 'feed', qty: 5 }, timeSec: 60 },
       { id: 'make_feed_chaff', name: 'Chaff & Grain Mash', emoji: '🥣🌾', inputs: [{ productId: 'chaff', qty: 3 }, { productId: 'wheat', qty: 1 }], output: { productId: 'feed', qty: 4 }, timeSec: 45 },
     ],
@@ -620,6 +633,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     recipes: [
       { id: 'make_lure_basic', name: 'Sweet Seed Cluster', emoji: '\u{1F33E}', inputs: [{ productId: 'wheat', qty: 6 }, { productId: 'carrot', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 120 },
       { id: 'make_seed_blend', name: 'Wild Forage Seed Blend', emoji: '🌱', inputs: [{ productId: 'wheat', qty: 4 }, { productId: 'corn', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 100 },
+      { id: 'make_sunflower_cluster', name: 'Sunflower Seed Cluster', emoji: '🌻✨', inputs: [{ productId: 'sunflower', qty: 4 }, { productId: 'sorghum', qty: 4 }], output: { productId: 'lure_basic', qty: 1 }, timeSec: 90 },
       { id: 'make_chaff_bedding', name: 'Compressed Chaff Bedding Bale', emoji: '📦🌾', inputs: [{ productId: 'chaff', qty: 4 }], output: { productId: 'mountain_hay_bales', qty: 1 }, timeSec: 45 },
       // Gourmet Animal Nutrition: High-yield feed conversion from premium harvest
       { id: 'make_gourmet_feed', name: 'Gourmet Cattle Ambrosia', emoji: '🥣⭐', inputs: [{ productId: 'soybean_gold', qty: 1 }, { productId: 'corn_silver', qty: 2 }], output: { productId: 'feed', qty: 15 }, timeSec: 60 },
@@ -634,6 +648,12 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'bakery', name: 'Bakery', emoji: '\u{1F3ED}', queueSlots: 20,
     recipes: [
       { id: 'make_bread', name: 'Bake Bread', emoji: '\u{1F35E}', inputs: [{ productId: 'wheat', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 1 }, timeSec: 60 },
+      { id: 'make_winter_bread', name: 'Hearty Rye Loaf', emoji: '🍞🌾', inputs: [{ productId: 'winter_rye', qty: 3 }, { productId: 'egg', qty: 1 }], output: { productId: 'bread', qty: 2 }, timeSec: 60 },
+      { id: 'make_rice_bowl', name: 'Steam Rice Bowl', emoji: '🍚', inputs: [{ productId: 'paddy_rice', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'rice_bowl', qty: 1 }, timeSec: 60 },
+      { id: 'make_sweet_potato_fries', name: 'Roast Sweet Potato Wedges', emoji: '🍠✨', inputs: [{ productId: 'sweet_potato', qty: 2 }], output: { productId: 'sweet_potato_fries', qty: 1 }, timeSec: 60 },
+      { id: 'make_taro_chips', name: 'Crisp Taro Chips', emoji: '🥔✨', inputs: [{ productId: 'taro', qty: 2 }], output: { productId: 'taro_chips', qty: 1 }, timeSec: 60 },
+      { id: 'brew_matcha_tea', name: 'Brew Matcha Tea', emoji: '🍵✨', inputs: [{ productId: 'tea_bush', qty: 2 }], output: { productId: 'matcha_tea', qty: 1 }, timeSec: 60 },
+      { id: 'make_dragon_fruit_sorbet', name: 'Freeze Dragon Fruit Sorbet', emoji: '🐉🍧', inputs: [{ productId: 'dragon_fruit', qty: 2 }], output: { productId: 'dragon_fruit_smoothie', qty: 1 }, timeSec: 75 },
       { id: 'make_pie', name: 'Bake Pie', emoji: '\u{1F967}', inputs: [{ productId: 'bread', qty: 1 }, { productId: 'strawberry', qty: 2 }], output: { productId: 'pie', qty: 1 }, timeSec: 60 },
       { id: 'make_savory_fish_pie', name: 'Savory Fish Pie', emoji: '\u{1F967}', inputs: [{ productId: 'fish', qty: 2 }, { productId: 'wheat', qty: 2 }, { productId: 'egg', qty: 1 }], output: { productId: 'savory_fish_pie', qty: 1 }, timeSec: 75 },
       { id: 'make_crab_bisque', name: 'Crab Bisque', emoji: '\u{1F352}', inputs: [{ productId: 'fish', qty: 3 }, { productId: 'milk', qty: 1 }], output: { productId: 'crab_bisque', qty: 1 }, timeSec: 90 },
@@ -685,6 +705,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   press: {
     id: 'press', name: 'Press', emoji: '\u{1FAD2}', queueSlots: 20,
     recipes: [
+      { id: 'make_sunflower_oil', name: 'Press Sunflower Oil', emoji: '🌻🫒', inputs: [{ productId: 'sunflower', qty: 2 }], output: { productId: 'sunflower_oil', qty: 1 }, timeSec: 60 },
       { id: 'make_truffle_oil', name: 'Press Truffle Oil', emoji: '\u{1FAD2}', inputs: [{ productId: 'truffle', qty: 2 }], output: { productId: 'truffle_oil', qty: 1 }, timeSec: 90 },
       { id: 'make_honey', name: 'Press Honey', emoji: '\u{1F36F}', inputs: [{ productId: 'honey_comb', qty: 2 }], output: { productId: 'honey', qty: 1 }, timeSec: 60 },
       { id: 'make_lure_truffle', name: 'Aromatic Truffle Mash', emoji: '\u{1F344}', inputs: [{ productId: 'truffle_oil', qty: 1 }, { productId: 'cheese', qty: 2 }], output: { productId: 'lure_truffle', qty: 1 }, timeSec: 180 },
