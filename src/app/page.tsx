@@ -29,6 +29,10 @@ import { WaterTab } from '@/components/game/WaterTab';
 import { GasBottlingRefineryPanel } from '@/components/game/GasBottlingRefineryPanel';
 import { MorningIncidentModal } from '@/components/game/MorningIncidentModal';
 import { requestPersistentStorage } from '@/lib/idbStorage';
+import { initializeAuthObserver } from '@/lib/firebase/authService';
+import { cloudSyncEngine } from '@/lib/firebase/cloudSyncEngine';
+import { SaveConflictModal } from '@/components/game/SaveConflictModal';
+import type { PartitionedGameSave } from '@/lib/firebase/types';
 
 type TabId = 'farm' | 'water' | 'animals' | 'production' | 'gas' | 'orders' | 'shop' | 'barn' | 'farmhands' | 'fishery' | 'wilderness' | 'territory' | 'market' | 'guide';
 
@@ -86,6 +90,10 @@ export default function Home() {
   const [backupModalOpen, setBackupModalOpen] = useState(false);
   const [eventModalOpen, setEventModalOpen] = useState(false);
   const [relicsModalOpen, setRelicsModalOpen] = useState(false);
+  const [conflictModalData, setConflictModalData] = useState<{
+    localSave: { level: number; coins: number; gems: number; updatedAt: number };
+    cloudSave: PartitionedGameSave;
+  } | null>(null);
   const [menuPosition, setMenuPosition] = useState<'left' | 'right'>('left');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const hydrated = useHydrated();
@@ -116,6 +124,45 @@ export default function Home() {
   // Request browser storage persistence so IndexedDB is never evicted
   useEffect(() => {
     requestPersistentStorage();
+  }, []);
+
+  // Firebase Silent Onboarding & Cloud Conflict Detection
+  useEffect(() => {
+    const unsubscribe = initializeAuthObserver(async (user, profile) => {
+      if (!user) {
+        cloudSyncEngine.setAuthenticatedUser(null, true);
+        return;
+      }
+      cloudSyncEngine.setAuthenticatedUser(
+        user.uid,
+        user.isAnonymous,
+        user.email,
+        profile?.displayName || user.displayName || `Guest_${user.uid.slice(0, 5)}`
+      );
+
+      // Check cloud save for conflict resolution
+      const cloudSave = await cloudSyncEngine.fetchCloudSave(user.uid);
+      if (cloudSave && cloudSave.state) {
+        const storeState = useGameStore.getState();
+        const localTimestamp = storeState.lastTick || 0;
+        const cloudTimestamp = cloudSave.updatedAt || 0;
+
+        // If local is strictly newer and differs from cloud, prompt user with modal
+        if (localTimestamp > cloudTimestamp + 60000 && Math.abs(storeState.coins - (cloudSave.state.coins || 0)) > 50) {
+          setConflictModalData({
+            localSave: {
+              level: storeState.level,
+              coins: storeState.coins,
+              gems: storeState.gems,
+              updatedAt: localTimestamp,
+            },
+            cloudSave,
+          });
+        }
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
 
@@ -293,6 +340,25 @@ export default function Home() {
       {/** Modals & Overlays **/}
       <MorningIncidentModal />
       <BackupModal isOpen={backupModalOpen} onClose={() => setBackupModalOpen(false)} />
+      {conflictModalData && (
+        <SaveConflictModal
+          isOpen={Boolean(conflictModalData)}
+          localSave={conflictModalData.localSave}
+          cloudSave={conflictModalData.cloudSave}
+          onSelectLocal={() => {
+            // Keep local: force upload local state to cloud immediately
+            cloudSyncEngine.flushImmediateSave();
+            setConflictModalData(null);
+          }}
+          onSelectCloud={() => {
+            // Restore cloud save
+            if (conflictModalData.cloudSave.state) {
+              useGameStore.setState(conflictModalData.cloudSave.state);
+            }
+            setConflictModalData(null);
+          }}
+        />
+      )}
       <EventDetailModal
         isOpen={eventModalOpen}
         onClose={() => setEventModalOpen(false)}

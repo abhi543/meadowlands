@@ -5,6 +5,7 @@ import { xpForLevel } from '@/game/data';
 import { TOTAL_PASTURE_CAPACITY } from '@/types/animals';
 import { getCircadianClock, type ShiftType } from '@/game/shiftEngine';
 import { useState, useEffect } from 'react';
+import { CloudSyncIndicator } from './CloudSyncIndicator';
 
 interface HUDProps {
   onOpenBackupModal?: () => void;
@@ -266,6 +267,7 @@ export function HUD({ onOpenBackupModal, onSelectTab }: HUDProps) {
           >
             🔄 Reset
           </button>
+          <CloudSyncIndicator className="ml-2" />
         </div>
       </div>
     </div>

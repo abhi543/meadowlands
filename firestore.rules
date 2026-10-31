@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Root Studio User Profiles
+    // Read and write permitted only when the requester is authenticated
+    // and their authentication identifier matches the document key.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 2. Partitioned Multi-Game Saves
+    // Document key format: [gameId]_[userId]
+    // Ensures requester can only access documents ending with their UID
+    // and requires mandatory schema payload validation.
+    match /game_saves/{saveId} {
+      allow read: if request.auth != null &&
+        saveId.matches('.*_' + request.auth.uid + '$');
+
+      allow write: if request.auth != null &&
+        saveId.matches('.*_' + request.auth.uid + '$') &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.gameId is string &&
+        request.resource.data.schemaVersion is int &&
+        request.resource.data.state != null;
+    }
+  }
+}
