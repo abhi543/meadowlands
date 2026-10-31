@@ -39,3 +39,4 @@ export interface CloudSyncTelemetry {
   userEmail: string | null;
   displayName: string | null;
 }
+

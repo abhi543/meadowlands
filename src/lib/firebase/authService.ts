@@ -169,3 +169,4 @@ export async function switchToGoogleAccount(): Promise<LinkResult> {
     };
   }
 }
+
