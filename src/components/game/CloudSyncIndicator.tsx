@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { cloudSyncEngine } from '@/lib/firebase/cloudSyncEngine';
-import { linkCurrentGuestToGoogle, switchToGoogleAccount } from '@/lib/firebase/authService';
+import { linkCurrentGuestToGoogle, switchToGoogleAccount, updatePlayerDisplayName } from '@/lib/firebase/authService';
 import type { CloudSyncTelemetry } from '@/lib/firebase/types';
 
 interface CloudSyncIndicatorProps {
@@ -16,6 +16,12 @@ export function CloudSyncIndicator({ onOpenAccountModal, className = '' }: Cloud
   const [isLinking, setIsLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [showSwitchOption, setShowSwitchOption] = useState(false);
+
+  // Edit Player Name state
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [nameSaveError, setNameSaveError] = useState<string | null>(null);
+  const [isSavingName, setIsSavingName] = useState(false);
 
   useEffect(() => {
     return cloudSyncEngine.subscribe(setTelemetry);
@@ -56,6 +62,30 @@ export function CloudSyncIndicator({ onOpenAccountModal, className = '' }: Cloud
       window.location.reload(); // Reload cleanly to hydrate cloud state from elevated user
     } else {
       setLinkError(res.errorMessage || 'Failed to switch Google Account.');
+    }
+  };
+
+  const handleStartEditName = () => {
+    setNameInput(telemetry.displayName || '');
+    setNameSaveError(null);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = async () => {
+    if (!nameInput.trim()) return;
+    setIsSavingName(true);
+    setNameSaveError(null);
+
+    const res = await updatePlayerDisplayName(nameInput.trim());
+    setIsSavingName(false);
+
+    if (res.success) {
+      cloudSyncEngine.updateDisplayNameLocally(nameInput.trim());
+      setIsEditingName(false);
+      // Trigger cloud sync to update metadata
+      cloudSyncEngine.flushImmediateSave();
+    } else {
+      setNameSaveError(res.error || 'Failed to update player name.');
     }
   };
 
@@ -162,8 +192,50 @@ export function CloudSyncIndicator({ onOpenAccountModal, className = '' }: Cloud
             <div className="bg-stone-950/60 rounded-xl p-3 border border-stone-800 text-xs space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-stone-400">Player Handle:</span>
-                <span className="font-semibold text-amber-300">{telemetry.displayName || 'Guest Player'}</span>
+                {!isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-amber-300">{telemetry.displayName || 'Guest Player'}</span>
+                    <button
+                      type="button"
+                      onClick={handleStartEditName}
+                      className="text-[10px] text-stone-400 hover:text-white px-1.5 py-0.5 rounded bg-stone-800 hover:bg-stone-700 transition-colors"
+                      title="Change Player Name"
+                    >
+                      ✏️ Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
+                      maxLength={24}
+                      placeholder="Enter new name"
+                      className="px-2 py-0.5 bg-stone-900 border border-stone-600 rounded text-amber-200 text-xs focus:outline-hidden focus:border-amber-400 w-32"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveName}
+                      disabled={isSavingName || !nameInput.trim()}
+                      className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded text-[10px] font-bold"
+                    >
+                      {isSavingName ? '...' : '✓'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingName(false)}
+                      className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded text-[10px]"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
+              {nameSaveError && (
+                <div className="text-[10px] text-red-400 text-right">{nameSaveError}</div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-stone-400">Account Type:</span>
                 <span className="font-medium">

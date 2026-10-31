@@ -171,3 +171,42 @@ export async function switchToGoogleAccount(): Promise<LinkResult> {
   }
 }
 
+/**
+ * Updates the player's custom display handle across Firebase Auth & Firestore profile.
+ */
+export async function updatePlayerDisplayName(newName: string): Promise<{ success: boolean; error?: string }> {
+  const trimmed = newName.trim();
+  if (!trimmed || trimmed.length < 2) {
+    return { success: false, error: 'Name must be at least 2 characters long.' };
+  }
+  if (trimmed.length > 24) {
+    return { success: false, error: 'Name cannot exceed 24 characters.' };
+  }
+
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    return { success: false, error: 'No active user session found.' };
+  }
+
+  try {
+    const db = getFirebaseDb();
+    const userRef = doc(db, 'users', user.uid);
+    await updateDoc(userRef, {
+      displayName: trimmed,
+      lastActiveAt: Date.now(),
+      serverLastActiveAt: serverTimestamp(),
+    });
+
+    // Also cache locally in localStorage for instant offline access
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('meadowlands_player_handle', trimmed);
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.warn('[Firebase Auth] Failed to update display name:', err);
+    return { success: false, error: err?.message || 'Failed to update name.' };
+  }
+}
+

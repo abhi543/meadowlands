@@ -61,6 +61,11 @@ class CloudSyncEngine {
     }
   }
 
+  public updateDisplayNameLocally(name: string) {
+    this.displayName = name;
+    this.emitTelemetry();
+  }
+
   public setAuthenticatedUser(
     userId: string | null,
     isGuest: boolean,
