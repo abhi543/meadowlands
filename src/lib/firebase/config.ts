@@ -14,12 +14,12 @@ import {
 } from 'firebase/firestore';
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'AIzaSyDemoFallbackKeyForClientInit9988',
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || 'meadowlands-studio.firebaseapp.com',
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'meadowlands-studio',
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || 'meadowlands-studio.appspot.com',
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '1029384756',
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || '1:1029384756:web:abcdef1234567890',
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyBRvmzfU52is8UAcx1n9KcRZV-YTxGaSzQ",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "meadowlands-64696.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "meadowlands-64696",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "meadowlands-64696.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "900016364212",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:900016364212:web:475a83a17d3483ad32d5e1",
 };
 
 export function getFirebaseApp(): FirebaseApp {
@@ -62,8 +62,9 @@ export function getFirebaseDb(): Firestore {
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    firebaseConfig.apiKey &&
+    firebaseConfig.projectId &&
+    !firebaseConfig.apiKey.includes('FallbackKey')
   );
 }
 
