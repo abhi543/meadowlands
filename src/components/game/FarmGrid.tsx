@@ -21,6 +21,7 @@ import {
   playFloodWashSound,
   playBioDressingSound,
 } from '@/lib/soundEffects';
+import { MobilePlotInspectionDrawer } from './MobilePlotInspectionDrawer';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -74,6 +75,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
   const [cropCategoryFilter, setCropCategoryFilter] = useState<'recommended' | 'all' | 'temperate' | 'severe' | 'extreme' | 'legacy'>('recommended');
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [selectedPlotForUpgrade, setSelectedPlotForUpgrade] = useState<number | null>(null);
+  const [mobileDrawerPlot, setMobileDrawerPlot] = useState<typeof plots[0] | null>(null);
   const [hoveredPlotId, setHoveredPlotId] = useState<number | null>(null);
   const [activeActionPlotId, setActiveActionPlotId] = useState<number | null>(null);
   const [flushingPlotId, setFlushingPlotId] = useState<number | null>(null);
@@ -806,11 +808,19 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
             }
           };
 
+          const handlePlotPointerDown = (e: React.PointerEvent) => {
+            // Check for coarse touch device long-press or tap inspection
+            if (e.pointerType === 'touch' && isGrowing) {
+              setMobileDrawerPlot(plot);
+            }
+          };
+
           return (
             <div
               key={plot.id}
               role="button"
               tabIndex={0}
+              onPointerDown={handlePlotPointerDown}
               onMouseEnter={() => {
                 setHoveredPlotId(plot.id);
               }}
@@ -826,7 +836,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 }
               }}
               onClick={handlePlotClick}
-              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none ${soilClasses}`}
+              className={`relative aspect-square rounded-xl border-2 transition-all duration-200 flex flex-col items-center justify-center text-center overflow-hidden select-none active:scale-95 touch-manipulation cursor-pointer ${soilClasses}`}
             >
               {/* Crisis Overlay 0: Crop Blight */}
               {hasBlight ? (
@@ -1376,6 +1386,20 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
         selectedPlotId={selectedPlotForUpgrade}
+      />
+
+      {/* Mobile Touch Plot Inspection Drawer */}
+      <MobilePlotInspectionDrawer
+        plot={mobileDrawerPlot}
+        isOpen={Boolean(mobileDrawerPlot)}
+        onClose={() => setMobileDrawerPlot(null)}
+        onHarvest={(id) => harvestPlot(id)}
+        onPlant={(id) => plantCrop(id, selectedCrop)}
+        onClearWithered={(id) => clearWitheredCrop(id)}
+        onUpgradeSoil={(id) => {
+          setSelectedPlotForUpgrade(id);
+          setIsUpgradeModalOpen(true);
+        }}
       />
     </div>
   );

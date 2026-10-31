@@ -27,6 +27,9 @@ import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { WaterTab } from '@/components/game/WaterTab';
 import { GasBottlingRefineryPanel } from '@/components/game/GasBottlingRefineryPanel';
 import { MorningIncidentModal } from '@/components/game/MorningIncidentModal';
+import { OrientationGuard } from '@/components/game/OrientationGuard';
+import { MobileActionDock } from '@/components/game/MobileActionDock';
+import { useDeviceProfile } from '@/hooks/useDeviceProfile';
 import { requestPersistentStorage } from '@/lib/idbStorage';
 import { initializeAuthObserver } from '@/lib/firebase/authService';
 import { cloudSyncEngine } from '@/lib/firebase/cloudSyncEngine';
@@ -95,6 +98,7 @@ export default function Home() {
   const [menuPosition, setMenuPosition] = useState<'left' | 'right'>('left');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const hydrated = useHydrated();
+  const { isMobileDevice } = useDeviceProfile();
 
   useEffect(() => {
     const saved = localStorage.getItem('meadowlands_menu_pos');
@@ -193,7 +197,9 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex flex-col md:flex-row ${menuPosition === 'right' ? 'md:flex-row-reverse' : ''}`}>
+    <div className={`min-h-screen bg-gradient-to-b from-sky-100 via-green-50 to-amber-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 flex flex-col md:flex-row safe-top safe-bottom safe-left safe-right ${menuPosition === 'right' ? 'md:flex-row-reverse' : ''}`}>
+      {/* Mobile Orientation Lock / Advisory Modal */}
+      <OrientationGuard />
 
       {/* Side Navigation (Docked on Left or Right Side) */}
       <aside
@@ -371,6 +377,17 @@ export default function Home() {
 
       {/** Floating Notifications */}
       <FloatingNumbers />
+
+      {/** Mobile Quick-Action Dock (Rendered on mobile coarse touch devices) */}
+      {isMobileDevice && (
+        <div className="fixed bottom-3 right-3 z-40">
+          <MobileActionDock
+            onOpenBarn={() => setActiveTab('barn')}
+            onOpenProduce={() => setActiveTab('production')}
+            onOpenOrders={() => setActiveTab('orders')}
+          />
+        </div>
+      )}
     </div>
   );
 }

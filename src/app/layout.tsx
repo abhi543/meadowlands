@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,10 +13,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#0c0a09",
+};
+
 export const metadata: Metadata = {
   title: "Meadowlands",
   description: "A cozy farming, crafting, and idle management game.",
   keywords: ["Meadowlands", "Farming Game", "Idle Game", "Next.js", "React"],
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Meadowlands",
+  },
   openGraph: {
     title: "Meadowlands",
     description: "A cozy farming, crafting, and idle management game.",

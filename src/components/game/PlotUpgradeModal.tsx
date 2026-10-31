@@ -52,11 +52,14 @@ export function PlotUpgradeModal({ isOpen, onClose, selectedPlotId: initialPlotI
   const canAffordBatch = coins >= totalBatchCost && totalBatchCost > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="w-full max-w-2xl bg-stone-900 border border-amber-500/40 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] text-stone-100"
+        className="w-full sm:max-w-2xl bg-stone-900 border-t sm:border border-amber-500/40 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] sm:max-h-[90vh] text-stone-100 safe-bottom"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Drag Indicator Handle */}
+        <div className="sm:hidden w-12 h-1.5 rounded-full bg-stone-600 mx-auto mt-2 mb-1 flex-shrink-0" />
+
         {/* Header */}
         <div className="p-4 bg-gradient-to-r from-amber-950/80 via-stone-900 to-stone-950 border-b border-amber-500/30 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
