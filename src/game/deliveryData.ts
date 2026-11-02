@@ -657,12 +657,25 @@ export function generateDeliveryOrder(
   const hasPerishables = requiredItems.some(it => it.isPerishable);
   const pristineBonusCoins = hasPerishables ? Math.round(coins * 0.50) : undefined;
 
-  // Countdown duration: High-stakes 8-min (480s) or 10-min rush (600s)
-  const totalDuration = isHighStakes ? 480 : (isRush ? 600 : (type === 'futures' ? 300 : undefined));
+  // Countdown duration: All orders have live ticking countdowns!
+  // High-stakes: 8-min (480s), Rush: 10-min (600s), Futures: 5-min (300s), Town Project: 15-min (900s), Standard: 12-min (720s)
+  const totalDuration = isHighStakes
+    ? 480
+    : isRush
+    ? 600
+    : type === 'futures'
+    ? 300
+    : type === 'town_project'
+    ? 900
+    : 720; // 12 minutes default for standard orders
   const durationRemaining = totalDuration;
   const penaltyCoins = isHighStakes
     ? Math.max(80, Math.round(coins * 0.20))
-    : (isRush ? Math.max(25, Math.round(coins * 0.10)) : undefined);
+    : isRush
+    ? Math.max(25, Math.round(coins * 0.10))
+    : type === 'futures'
+    ? Math.max(30, Math.round(coins * 0.15))
+    : 0; // Standard orders expire without coin breach fees, auto-replacing on board
   const penaltyReputation = isHighStakes ? 15 : undefined;
 
   const id = `deliv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;

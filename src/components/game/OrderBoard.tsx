@@ -525,12 +525,13 @@ export function OrderBoard() {
             const fulfilled = checkOrderFulfillable(order);
 
             const isHighStakes = Boolean(order.isHighStakes);
-            const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder || isHighStakes;
+            const isRush = Boolean(order.type === 'rush' || order.isRushOrder);
+            const isFutures = order.type === 'futures';
             const expiry = order.expiresAt || order.rushExpiresAt;
-            const remainingSec = isTimed && expiry ? Math.max(0, Math.ceil((expiry - now) / 1000)) : null;
+            const remainingSec = expiry ? Math.max(0, Math.ceil((expiry - now) / 1000)) : null;
             const isCritical = remainingSec !== null && remainingSec <= 30;
             const isRushActive = Boolean(
-              (order.type === 'rush' || order.isRushOrder || isHighStakes) &&
+              (isRush || isHighStakes) &&
               remainingSec !== null && remainingSec > 0
             );
 
@@ -713,7 +714,17 @@ export function OrderBoard() {
                             ? 'bg-red-600 text-white animate-pulse'
                             : 'bg-rose-100 text-rose-900 dark:bg-rose-950/80 dark:text-rose-200 border border-rose-300 dark:border-rose-700'
                         }`}>
-                          <span>⚡</span> 3.0x {remainingSec !== null ? `${remainingSec}s` : 'RUSH'}
+                          <span>⚡</span> 3.0x {remainingSec !== null ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : 'RUSH'}
+                        </span>
+                      )}
+
+                      {!isRushActive && !isHighStakes && remainingSec !== null && (
+                        <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                          isCritical
+                            ? 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500 animate-pulse'
+                            : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-300 dark:border-stone-700'
+                        }`}>
+                          <span>⏳</span> {Math.floor(remainingSec / 60)}m {remainingSec % 60}s
                         </span>
                       )}
                     </div>
@@ -949,7 +960,7 @@ export function OrderBoard() {
                   )}
 
                   {/* Penalty notice for timed / high-stakes orders */}
-                  {isTimed && !isHighStakes && Boolean(order.penaltyCoins || order.breachFee) && (
+                  {(isHighStakes || isRush || isFutures) && Boolean(order.penaltyCoins || order.breachFee) && (
                     <div className="mb-2.5 text-xs text-rose-700 dark:text-rose-400 font-bold flex items-center gap-1.5">
                       <span>⚠️</span>
                       <span>Breach Penalty: -{order.penaltyCoins || order.breachFee} 🪙 if expired/cancelled</span>

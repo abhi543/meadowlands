@@ -12864,33 +12864,56 @@ export const useGameStore = create<GameState>()(
             ordersModified = true;
             return generateDeliveryOrder(state.level, undefined, order.clientId);
           }
-          const isTimed = order.type === 'rush' || order.type === 'futures' || order.isRushOrder || order.isHighStakes;
-          const expiryTime = order.expiresAt || order.rushExpiresAt;
-          if (isTimed && expiryTime && now >= expiryTime) {
+
+          // Ensure every active order has an expiry timestamp ticking down
+          let expiryTime = order.expiresAt || order.rushExpiresAt;
+          if (!expiryTime) {
+            ordersModified = true;
+            const fallbackDurationSec = order.isHighStakes ? 480 : (order.type === 'rush' ? 600 : 720);
+            expiryTime = now + fallbackDurationSec * 1000;
+            order.expiresAt = expiryTime;
+            order.durationRemaining = fallbackDurationSec;
+            order.totalDuration = fallbackDurationSec;
+          }
+
+          if (now >= expiryTime) {
             ordersModified = true;
             const isHighStakes = order.isHighStakes;
-            const breachPercent = isHighStakes ? 0.20 : (state.isHardcoreMode ? 0.20 : 0.10);
-            const minFee = isHighStakes ? 80 : (state.isHardcoreMode ? 25 : 15);
-            const fee = order.penaltyCoins || order.breachFee || Math.max(minFee, Math.round((order.rewards?.coins || order.coinReward || 50) * breachPercent));
-            newCoins = Math.max(0, newCoins - fee);
+            const isRush = order.type === 'rush' || order.isRushOrder;
+            const isFutures = order.type === 'futures';
+            const hasBreachPenalty = isHighStakes || isRush || isFutures || Boolean(order.penaltyCoins && order.penaltyCoins > 0);
 
-            let repLostText = '';
-            if (isHighStakes && order.clientId && currentClientRep[order.clientId]) {
-              clientRepModified = true;
-              const repPenalty = order.penaltyReputation || 15;
-              currentClientRep[order.clientId] = {
-                ...currentClientRep[order.clientId],
-                xp: Math.max(0, (currentClientRep[order.clientId].xp || 0) - repPenalty),
-              };
-              repLostText = ` & -${repPenalty} ${CLIENT_DEFINITIONS[order.clientId]?.name || 'Client'} Rep`;
+            if (hasBreachPenalty) {
+              const breachPercent = isHighStakes ? 0.20 : (state.isHardcoreMode ? 0.20 : 0.10);
+              const minFee = isHighStakes ? 80 : (state.isHardcoreMode ? 25 : 15);
+              const fee = order.penaltyCoins || order.breachFee || Math.max(minFee, Math.round((order.rewards?.coins || order.coinReward || 50) * breachPercent));
+              newCoins = Math.max(0, newCoins - fee);
+
+              let repLostText = '';
+              if (isHighStakes && order.clientId && currentClientRep[order.clientId]) {
+                clientRepModified = true;
+                const repPenalty = order.penaltyReputation || 15;
+                currentClientRep[order.clientId] = {
+                  ...currentClientRep[order.clientId],
+                  xp: Math.max(0, (currentClientRep[order.clientId].xp || 0) - repPenalty),
+                };
+                repLostText = ` & -${repPenalty} ${CLIENT_DEFINITIONS[order.clientId]?.name || 'Client'} Rep`;
+              }
+
+              playDefeatSound();
+              state.addNotification(
+                `⚠️ ${isHighStakes ? '👑 High-Stakes Contract' : (isFutures ? 'Advance Futures' : 'VIP Rush')} expired! Paid breach fee of ${fee} coins${repLostText}.`,
+                '📉',
+                'event'
+              );
+            } else {
+              // Standard orders simply rotate out with fresh contract demand
+              state.addNotification(
+                `📋 Contract expired and refreshed with new buyer demand.`,
+                '🔄',
+                'info'
+              );
             }
-
-            playDefeatSound();
-            state.addNotification(
-              `⚠️ ${isHighStakes ? '👑 High-Stakes Contract' : (order.type === 'futures' ? 'Advance Futures' : 'VIP Rush')} expired! Paid breach fee of ${fee} coins${repLostText}.`,
-              '📉',
-              'event'
-            );
             return generateDeliveryOrder(state.level, undefined, order.clientId);
           }
           return order;

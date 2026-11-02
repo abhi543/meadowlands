@@ -59,3 +59,4 @@ export function useDeviceProfile(): DeviceProfile {
 
   return profile;
 }
+

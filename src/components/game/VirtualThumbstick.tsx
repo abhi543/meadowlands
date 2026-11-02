@@ -94,3 +94,4 @@ export function VirtualThumbstick({ onMove, className = '' }: VirtualThumbstickP
     </div>
   );
 }
+
