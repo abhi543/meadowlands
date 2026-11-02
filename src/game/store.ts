@@ -1505,12 +1505,12 @@ export const DEFAULT_CLIENT_REPUTATION: Record<string, { level: number; xp: numb
   old_man_jed: { level: 1, xp: 0 },
 };
 
-function generateOrders(count: number, playerLevel = 1, weatherCondition?: string): DeliveryOrder[] {
+function generateOrders(count: number, playerLevel = 1, weatherCondition?: string, inventoryStock?: Record<string, number>): DeliveryOrder[] {
   const orders: DeliveryOrder[] = [];
   const clientKeys = Object.keys(CLIENT_DEFINITIONS);
   for (let i = 0; i < count; i++) {
     const clientKey = clientKeys[i % clientKeys.length];
-    orders.push(generateDeliveryOrder(playerLevel, undefined, clientKey, weatherCondition));
+    orders.push(generateDeliveryOrder(playerLevel, undefined, clientKey, weatherCondition, inventoryStock));
   }
   return orders;
 }
@@ -4337,7 +4337,8 @@ export const useGameStore = create<GameState>()(
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round((order.rewards?.xp || order.xpReward || 15) * xpBonus), state.level);
 
         const activeWeather = state.hydrology?.weatherState?.currentWeather || state.hydrology?.weatherCondition;
-        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(newLevel, undefined, undefined, activeWeather) : o);
+        const currentStock = { ...newSilo, ...newBarn };
+        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(newLevel, undefined, undefined, activeWeather, currentStock) : o);
 
         playCashRegisterSound();
         state.addNotification(
@@ -4519,7 +4520,8 @@ export const useGameStore = create<GameState>()(
 
         // Replace all fulfilled orders with fresh contracts matching current climate
         const activeWeather = state.hydrology?.weatherState?.currentWeather || state.hydrology?.weatherCondition;
-        const newOrders = state.orders.map(o => (orderIdSet.has(o.id) ? generateDeliveryOrder(newLevel, undefined, undefined, activeWeather) : o));
+        const currentStock = { ...newSilo, ...newBarn };
+        const newOrders = state.orders.map(o => (orderIdSet.has(o.id) ? generateDeliveryOrder(newLevel, undefined, undefined, activeWeather, currentStock) : o));
 
         playGoldRushFanfare();
         const dropText = rareDropsWon.length > 0 ? ` 🎁 Frontier Rare Drops: ${rareDropsWon.join(', ')}!` : '';
@@ -4579,7 +4581,8 @@ export const useGameStore = create<GameState>()(
           state.addNotification(`⚠️ Contract Cancelled: Paid breach cancellation fee of ${fee} coins.`, '📉', 'event');
         }
         const activeWeather = state.hydrology?.weatherState?.currentWeather || state.hydrology?.weatherCondition;
-        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level, undefined, undefined, activeWeather) : o);
+        const currentStock = { ...state.silo, ...state.barn };
+        const newOrders = state.orders.map(o => o.id === orderId ? generateDeliveryOrder(state.level, undefined, undefined, activeWeather, currentStock) : o);
         set({ coins: newCoins, orders: newOrders, isDirty: true });
       },
 
@@ -12874,13 +12877,14 @@ export const useGameStore = create<GameState>()(
         let clientRepModified = false;
         const currentClientRep = { ...(state.clientReputation || DEFAULT_CLIENT_REPUTATION) };
         const activeWeather = state.hydrology?.weatherState?.currentWeather || state.hydrology?.weatherCondition;
+        const currentInventoryStock = { ...state.silo, ...state.barn };
 
         const updatedOrders = state.orders.map(order => {
           const reqItems = order.requiredItems || (order.requested?.map((r: any) => ({ itemId: r.itemId })) || []);
           const hasOverlevelItem = reqItems.some((it: any) => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) > state.level);
           if (hasOverlevelItem) {
             ordersModified = true;
-            return generateDeliveryOrder(state.level, undefined, order.clientId, activeWeather);
+            return generateDeliveryOrder(state.level, undefined, order.clientId, activeWeather, currentInventoryStock);
           }
 
           // Ensure every active order has an expiry timestamp ticking down
@@ -12932,7 +12936,7 @@ export const useGameStore = create<GameState>()(
                 'info'
               );
             }
-            return generateDeliveryOrder(state.level, undefined, order.clientId, activeWeather);
+            return generateDeliveryOrder(state.level, undefined, order.clientId, activeWeather, currentInventoryStock);
           }
           return order;
         });
@@ -16860,8 +16864,9 @@ export const useGameStore = create<GameState>()(
 
         const currentLvl = merged.level || 1;
         const currentHydrologyWeather = merged.hydrology?.weatherState?.currentWeather || merged.hydrology?.weatherCondition;
+        const startupStock = { ...(merged.silo || {}), ...(merged.barn || {}) };
         if (!merged.orders || merged.orders.length === 0 || !(merged.orders[0] as DeliveryOrder).type) {
-          merged.orders = generateOrders(6, currentLvl, currentHydrologyWeather);
+          merged.orders = generateOrders(6, currentLvl, currentHydrologyWeather, startupStock);
         } else {
           // Sanitize any existing orders that contain items higher than player's level
           merged.orders = merged.orders.map((order: DeliveryOrder) => {
@@ -16869,7 +16874,7 @@ export const useGameStore = create<GameState>()(
             const hasOverlevelItem = reqItems.some((it: any) => (ITEM_UNLOCK_LEVELS[it.itemId] || 1) > currentLvl);
             const invalidContractType = currentLvl < 2 && order.type !== 'standard';
             if (hasOverlevelItem || invalidContractType) {
-              return generateDeliveryOrder(currentLvl, undefined, order.clientId, currentHydrologyWeather);
+              return generateDeliveryOrder(currentLvl, undefined, order.clientId, currentHydrologyWeather, startupStock);
             }
             return order;
           });

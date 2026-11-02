@@ -58,6 +58,7 @@ export interface DeliveryOrder {
   }[];
   waterRequired?: number; // Hydrology demand in Liters
   isHighStakes?: boolean; // High-Stakes flag
+  isSurplusOrder?: boolean; // True if generated to buy player's surplus inventory
   weatherCondition?: string; // e.g., 'sunny', 'rain', 'heatwave'
   weatherBonusMultiplier?: number; // e.g., 1.35x
   weatherLabel?: string; // e.g., 'Heatwave Drought Surge', 'Monsoon Harvest'
@@ -516,7 +517,8 @@ export function generateDeliveryOrder(
   playerLevel = 1,
   forcedType?: OrderType,
   clientKey?: string,
-  weatherCondition?: string
+  weatherCondition?: string,
+  inventoryStock?: Record<string, number>
 ): DeliveryOrder {
   const safeLevel = Math.max(1, playerLevel);
   const clientKeys = Object.keys(CLIENT_DEFINITIONS);
@@ -623,29 +625,80 @@ export function generateDeliveryOrder(
     itemCount = Math.min(Math.max(itemPool.length, viableWeatherCrops.length), safeLevel >= 3 && Math.random() < 0.35 ? 2 : 1);
   }
 
+  // Detect player surplus items in Barn/Silo (items with >= 10 in stock)
+  let surplusItemCandidates: string[] = [];
+  if (inventoryStock) {
+    surplusItemCandidates = Object.entries(inventoryStock)
+      .filter(([id, count]) => {
+        if (!count || count < 10) return false;
+        const reqLvl = ITEM_UNLOCK_LEVELS[id] || 1;
+        return reqLvl <= safeLevel && id !== 'water';
+      })
+      .map(([id]) => id);
+  }
+
+  // Roll whether this contract features player surplus (40% chance if surplus exists, or guaranteed for secondary items)
+  let isSurplusOrder = false;
+  let surplusPrimaryItem: string | null = null;
+  if (surplusItemCandidates.length > 0 && Math.random() < 0.45) {
+    const shuffledSurplus = [...surplusItemCandidates].sort(() => Math.random() - 0.5);
+    surplusPrimaryItem = shuffledSurplus[0];
+    isSurplusOrder = true;
+  }
+
   let pickedItemIds: string[] = [];
-  if (orderHasWeatherAffinity && viableWeatherCrops.length > 0) {
+  if (isSurplusOrder && surplusPrimaryItem) {
+    pickedItemIds.push(surplusPrimaryItem);
+    if (itemCount > 1) {
+      if (viableWeatherCrops.length > 0 && Math.random() < 0.60) {
+        pickedItemIds.push(viableWeatherCrops[0]);
+      } else {
+        const otherSurplus = surplusItemCandidates.filter(id => id !== surplusPrimaryItem);
+        if (otherSurplus.length > 0 && Math.random() < 0.50) {
+          pickedItemIds.push(otherSurplus[0]);
+        } else {
+          const rem = itemPool.filter(id => !pickedItemIds.includes(id));
+          if (rem.length > 0) pickedItemIds.push(rem[0]);
+        }
+      }
+    }
+  } else if (orderHasWeatherAffinity && viableWeatherCrops.length > 0) {
     // Shuffle viable weather crops to pick primary weather demand item
     const shuffledWeather = [...viableWeatherCrops].sort(() => Math.random() - 0.5);
     const weatherPick = shuffledWeather[0];
     pickedItemIds.push(weatherPick);
 
     if (itemCount > 1) {
-      // Prefer other weather affinity items first, then general client item pool
-      const otherWeather = shuffledWeather.slice(1);
-      if (otherWeather.length > 0 && Math.random() < 0.70) {
-        pickedItemIds.push(otherWeather[0]);
+      // If player has surplus items, 65% chance to include a surplus item as the secondary request!
+      const availableSurplus = surplusItemCandidates.filter(id => !pickedItemIds.includes(id));
+      if (availableSurplus.length > 0 && Math.random() < 0.65) {
+        pickedItemIds.push(availableSurplus[0]);
+        isSurplusOrder = true;
       } else {
-        const remainingPool = itemPool.filter(id => !pickedItemIds.includes(id));
-        if (remainingPool.length > 0) {
-          const shuffledRemaining = [...remainingPool].sort(() => Math.random() - 0.5);
-          pickedItemIds.push(shuffledRemaining[0]);
+        // Prefer other weather affinity items first, then general client item pool
+        const otherWeather = shuffledWeather.slice(1);
+        if (otherWeather.length > 0 && Math.random() < 0.70) {
+          pickedItemIds.push(otherWeather[0]);
+        } else {
+          const remainingPool = itemPool.filter(id => !pickedItemIds.includes(id));
+          if (remainingPool.length > 0) {
+            const shuffledRemaining = [...remainingPool].sort(() => Math.random() - 0.5);
+            pickedItemIds.push(shuffledRemaining[0]);
+          }
         }
       }
     }
   } else {
-    const shuffledItems = [...itemPool].sort(() => Math.random() - 0.5);
-    pickedItemIds = shuffledItems.slice(0, itemCount);
+    // Fallback if no weather affinity
+    if (surplusItemCandidates.length > 0 && Math.random() < 0.60) {
+      pickedItemIds.push(surplusItemCandidates[0]);
+      isSurplusOrder = true;
+      const rem = itemPool.filter(id => !pickedItemIds.includes(id));
+      if (itemCount > 1 && rem.length > 0) pickedItemIds.push(rem[0]);
+    } else {
+      const shuffledItems = [...itemPool].sort(() => Math.random() - 0.5);
+      pickedItemIds = shuffledItems.slice(0, itemCount);
+    }
   }
 
   // Scaled quantities matching player level capacity
@@ -773,6 +826,7 @@ export function generateDeliveryOrder(
     requiredItems,
     waterRequired,
     isHighStakes,
+    isSurplusOrder: isSurplusOrder || undefined,
     weatherCondition: activeWeather,
     weatherBonusMultiplier: weatherBonusMult > 1.0 ? weatherBonusMult : undefined,
     weatherLabel,

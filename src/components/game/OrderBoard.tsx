@@ -736,6 +736,13 @@ export function OrderBoard() {
                           <span>🌤️</span> {order.weatherLabel || `${order.weatherCondition} Demand (+25%)`}
                         </span>
                       )}
+
+                      {/* Surplus Inventory Demand Badge */}
+                      {Boolean(order.isSurplusOrder) && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700 flex items-center gap-1 shadow-2xs">
+                          <span>🌾</span> Surplus Buyer
+                        </span>
+                      )}
                     </div>
                   </div>
 
