@@ -529,7 +529,7 @@ export const WEATHER_PROFILES: Record<WeatherProfileId, WeatherProfileDef> = {
 
 
 // --- Multi-Variable Atmospheric Weather State ---
-export const WEATHER_DAY_CYCLE_SEC = 600; // 10 minutes (600 seconds) weather cycle
+export const WEATHER_DAY_CYCLE_SEC = 1800; // Exactly 1 in-game day (30 real minutes = 1,800 seconds)
 
 export interface AtmosphericWeatherState {
   currentWeather: WeatherProfileId;

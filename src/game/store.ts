@@ -14342,7 +14342,7 @@ export const useGameStore = create<GameState>()(
         const clock = getCircadianClock(Date.now(), state.farmEpochStart || Date.now());
         const newAtmosphere = createDefaultWeatherState(profileId);
         newAtmosphere.weatherDay = clock.currentDay;
-        newAtmosphere.weatherDurationSec = 600; // 10 minutes unified weather cycle
+        newAtmosphere.weatherDurationSec = 1800; // 1 full in-game day (30 real minutes)
         newAtmosphere.weatherStartedAt = Date.now();
         newAtmosphere.isManualOverride = true;
         set({
@@ -16886,7 +16886,7 @@ export const useGameStore = create<GameState>()(
 
         // Migration: Weather System (10 real minutes = 600s)
         if (merged.hydrology?.weatherState) {
-          merged.hydrology.weatherState.weatherDurationSec = 600;
+          merged.hydrology.weatherState.weatherDurationSec = 1800; // 1 full day
         }
 
         // Migration: Ensure workers are active like before and clear any absence/strike lockouts

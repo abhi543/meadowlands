@@ -179,8 +179,8 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     farmLevel: level,
   });
 
-  // Weather Front Timing (10 real minutes per weather front)
-  const weatherDurationSec = weatherState?.weatherDurationSec || 600;
+  // Weather Front Timing (1 full in-game day per climate front: 1,800s / 30m)
+  const weatherDurationSec = weatherState?.weatherDurationSec || 1800;
   const weatherStartedAt = weatherState?.weatherStartedAt || (farmEpochStart || Date.now());
   const elapsedWeatherSec = Math.max(0, (Date.now() - weatherStartedAt) / 1000);
   const weatherRemainingSec = Math.max(0, Math.ceil(weatherDurationSec - (elapsedWeatherSec % weatherDurationSec)));
@@ -248,13 +248,13 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </div>
         </div>
 
-        {/* Weather Front Telemetry Badge & Remaining Time (10m Cycle) */}
+        {/* Weather Front Telemetry Badge & Remaining Time (1 Day / 30m Cycle) */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-white flex items-center gap-1.5 shadow-inner">
             <span>📅</span>
             <span>Day {clock.currentDay}</span>
             <span className="opacity-50">•</span>
-            <span className="text-amber-300">Front (10m)</span>
+            <span className="text-amber-300">Front (1 Day)</span>
           </span>
           <span className="px-2.5 py-1 rounded-xl text-[10px] sm:text-xs font-mono font-bold bg-black/40 border border-white/20 text-amber-300 flex items-center gap-1 shadow-inner" title="Time remaining before next weather front transition">
             <span>⏳</span>
