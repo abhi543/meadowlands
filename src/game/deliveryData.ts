@@ -701,31 +701,31 @@ export function generateDeliveryOrder(
     }
   }
 
-  // Scaled quantities matching player level capacity
+  // Scaled quantities matching player level capacity (doubled as requested for higher throughput & reward)
   const requiredItems = pickedItemIds.map(id => {
     const meta = getItemMeta(id);
     let qty = 1;
     if (id === 'wheat' || id === 'corn' || id === 'feed') {
       if (safeLevel <= 2) {
-        qty = 2 + Math.floor(Math.random() * 2); // 2-3 items for beginners
+        qty = (2 + Math.floor(Math.random() * 2)) * 2; // 4-6 items for beginners
       } else {
-        qty = type === 'town_project' ? 8 + Math.floor(Math.random() * 6) : 3 + Math.floor(Math.random() * 4);
+        qty = (type === 'town_project' ? 8 + Math.floor(Math.random() * 6) : 3 + Math.floor(Math.random() * 4)) * 2; // 6-14 or 16-28
       }
     } else if (id === 'carrot' || id === 'strawberry' || id === 'cotton' || id === 'fish') {
       if (safeLevel <= 3) {
-        qty = 1 + Math.floor(Math.random() * 2); // 1-2 items
+        qty = (1 + Math.floor(Math.random() * 2)) * 2; // 2-4 items
       } else {
-        qty = type === 'town_project' ? 5 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3);
+        qty = (type === 'town_project' ? 5 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3)) * 2; // 4-10 or 10-16
       }
     } else if (id === 'egg' || id === 'milk' || id === 'wool') {
       if (safeLevel <= 3) {
-        qty = 1 + Math.floor(Math.random() * 2); // 1-2 items
+        qty = (1 + Math.floor(Math.random() * 2)) * 2; // 2-4 items
       } else {
-        qty = type === 'town_project' ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2);
+        qty = (type === 'town_project' ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2)) * 2; // 4-8 or 8-14
       }
     } else {
       // Manufactured/artisan products (bread, cheese, pie, sweater, etc.)
-      qty = type === 'town_project' ? 2 : 1;
+      qty = (type === 'town_project' ? 2 : 1) * 2; // 2-4 items
     }
     const perishable = isItemPerishable(id);
     const minFresh: 'standard' | 'pristine' | undefined = perishable ? 'standard' : undefined;
