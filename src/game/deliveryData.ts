@@ -58,6 +58,9 @@ export interface DeliveryOrder {
   }[];
   waterRequired?: number; // Hydrology demand in Liters
   isHighStakes?: boolean; // High-Stakes flag
+  weatherCondition?: string; // e.g., 'sunny', 'rain', 'heatwave'
+  weatherBonusMultiplier?: number; // e.g., 1.35x
+  weatherLabel?: string; // e.g., 'Heatwave Drought Surge', 'Monsoon Harvest'
   penaltyReputation?: number; // Client reputation loss if deadline missed
   rewards: {
     coins: number;
@@ -512,7 +515,8 @@ export const CLIENT_LEVEL_POOLS: Record<string, { itemId: string; minLevel: numb
 export function generateDeliveryOrder(
   playerLevel = 1,
   forcedType?: OrderType,
-  clientKey?: string
+  clientKey?: string,
+  weatherCondition?: string
 ): DeliveryOrder {
   const safeLevel = Math.max(1, playerLevel);
   const clientKeys = Object.keys(CLIENT_DEFINITIONS);
@@ -544,11 +548,54 @@ export function generateDeliveryOrder(
     }
   }
 
+  // Weather-Themed Crop & Commodity Affinities
+  const weatherCropMap: Record<string, string[]> = {
+    sunny: ['sunflower', 'cotton', 'wheat', 'corn'],
+    heatwave: ['okra', 'corn', 'sunflower', 'dragon_fruit'],
+    drought: ['sorghum', 'prickly_pear_cactus', 'corn'],
+    cloudy: ['spinach', 'peas', 'carrot'],
+    humid: ['eggplant', 'pumpkin', 'tea_bush'],
+    foggy: ['wasabi', 'tea_bush', 'spinach'],
+    drizzle: ['tea_bush', 'strawberry', 'spinach'],
+    rain: ['soybean', 'paddy_rice', 'strawberry'],
+    monsoon: ['paddy_rice', 'taro', 'water_chestnut'],
+    sunshower: ['strawberry', 'sunflower', 'wild_berries'],
+    gale: ['peanut', 'winter_rye', 'wheat'],
+    thunderstorm: ['sweet_potato', 'peanut', 'soybean'],
+    hailstorm: ['turnip', 'sweet_potato', 'kale'],
+    cyclone: ['taro', 'bambara_groundnut'],
+    frost: ['kale', 'carrot', 'turnip'],
+    snow: ['winter_rye', 'kale', 'arctic_moss_campion'],
+    polar_vortex: ['arctic_moss_campion', 'winter_rye'],
+    supercell_deluge: ['water_chestnut', 'paddy_rice'],
+    plasma_firestorm: ['dragon_fruit', 'okra'],
+    hyper_cyclone: ['bambara_groundnut', 'taro'],
+    alchemical_monsoon: ['bioluminescent_shroom', 'paddy_rice'],
+    haboob_sandstorm: ['prickly_pear_cactus', 'sorghum'],
+  };
+
   // Filter client's preferred items strictly to those unlocked at playerLevel
   const clientPool = CLIENT_LEVEL_POOLS[selectedClientId] || [];
   const eligibleItems = clientPool
     .filter(item => item.minLevel <= safeLevel)
     .map(item => item.itemId);
+
+  // Weather Condition Influence: Favor crops matching atmospheric weather
+  const activeWeather = weatherCondition?.toLowerCase();
+  const weatherAffinityCrops = (activeWeather && weatherCropMap[activeWeather]) || [];
+  const matchingWeatherItems = eligibleItems.filter(id => weatherAffinityCrops.includes(id));
+
+  // Determine if this order adopts a weather surge
+  let orderHasWeatherAffinity = false;
+  let weatherBonusMult = 1.0;
+  let weatherLabel: string | undefined;
+
+  if (activeWeather && matchingWeatherItems.length > 0 && Math.random() < 0.75) {
+    orderHasWeatherAffinity = true;
+    weatherBonusMult = 1.25; // +25% Weather Demand Bonus
+    const weatherName = activeWeather.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    weatherLabel = `${weatherName} Demand (+25%)`;
+  }
 
   // Fallback safety if pool is somehow empty
   const itemPool = eligibleItems.length > 0 ? eligibleItems : ['wheat', 'feed', 'egg'];
@@ -566,8 +613,21 @@ export function generateDeliveryOrder(
     itemCount = Math.min(itemPool.length, safeLevel >= 3 && Math.random() < 0.35 ? 2 : 1);
   }
 
-  const shuffledItems = [...itemPool].sort(() => Math.random() - 0.5);
-  const pickedItemIds = shuffledItems.slice(0, itemCount);
+  let pickedItemIds: string[] = [];
+  if (orderHasWeatherAffinity && matchingWeatherItems.length > 0) {
+    const weatherPick = matchingWeatherItems[Math.floor(Math.random() * matchingWeatherItems.length)];
+    pickedItemIds.push(weatherPick);
+    if (itemCount > 1) {
+      const remainingPool = itemPool.filter(id => id !== weatherPick);
+      if (remainingPool.length > 0) {
+        const shuffled = [...remainingPool].sort(() => Math.random() - 0.5);
+        pickedItemIds.push(...shuffled.slice(0, itemCount - 1));
+      }
+    }
+  } else {
+    const shuffledItems = [...itemPool].sort(() => Math.random() - 0.5);
+    pickedItemIds = shuffledItems.slice(0, itemCount);
+  }
 
   // Scaled quantities matching player level capacity
   const requiredItems = pickedItemIds.map(id => {
@@ -624,13 +684,15 @@ export function generateDeliveryOrder(
   const isHighStakes = safeLevel >= 2 && (isRush || Math.random() < 0.30);
 
   // Hydrology pressurized water demand roll: ~35% chance at Level 2+
+  // If weather is hot/arid (heatwave/drought), chance increases to 70%
+  const isDryWeather = activeWeather === 'heatwave' || activeWeather === 'drought' || activeWeather === 'haboob_sandstorm';
   let waterRequired: number | undefined;
-  if (safeLevel >= 2 && (isHighStakes || selectedClientId === 'mayor_barnaby' || Math.random() < 0.35)) {
+  if (safeLevel >= 2 && (isHighStakes || isDryWeather || selectedClientId === 'mayor_barnaby' || Math.random() < 0.35)) {
     // 20L to 60L pressurized water request
     waterRequired = 20 + Math.floor(Math.random() * 5) * 10;
   }
 
-  // Calculate master settlement with high-stakes 5.0x multiplier and water demand valuation
+  // Calculate master settlement with high-stakes 5.0x multiplier, water demand, and weather demand bonus
   const settlement = calculateMasterSettlement(
     requiredItems,
     contractTier,
@@ -638,7 +700,9 @@ export function generateDeliveryOrder(
     isRush,
     0,
     waterRequired || 0,
-    isHighStakes
+    isHighStakes,
+    weatherBonusMult,
+    weatherLabel
   );
 
   const specialItemPool = ['Expansion Deed', 'Nail', 'Plank', 'Relic Fragment'];
@@ -690,6 +754,9 @@ export function generateDeliveryOrder(
     requiredItems,
     waterRequired,
     isHighStakes,
+    weatherCondition: activeWeather,
+    weatherBonusMultiplier: weatherBonusMult > 1.0 ? weatherBonusMult : undefined,
+    weatherLabel,
     penaltyReputation,
     rewards: {
       coins,

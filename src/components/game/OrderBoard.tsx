@@ -577,7 +577,9 @@ export function OrderBoard() {
               isRushActive,
               dailyPayrollBurnRate,
               order.waterRequired || 0,
-              isHighStakes
+              isHighStakes,
+              order.weatherBonusMultiplier || 1.0,
+              order.weatherLabel
             );
 
             const isPacked = selectedOrderIds.includes(order.id);
@@ -725,6 +727,13 @@ export function OrderBoard() {
                             : 'bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-300 dark:border-stone-700'
                         }`}>
                           <span>⏳</span> {Math.floor(remainingSec / 60)}m {remainingSec % 60}s
+                        </span>
+                      )}
+
+                      {/* Weather Condition Alignment Badge */}
+                      {Boolean(order.weatherCondition || order.weatherLabel) && (
+                        <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-900 dark:bg-cyan-950/80 dark:text-cyan-200 border border-cyan-300 dark:border-cyan-700 flex items-center gap-1 shadow-2xs">
+                          <span>🌤️</span> {order.weatherLabel || `${order.weatherCondition} Demand (+25%)`}
                         </span>
                       )}
                     </div>
@@ -889,6 +898,12 @@ export function OrderBoard() {
                         <div className="flex items-center justify-between text-rose-600 dark:text-rose-400 font-bold">
                           <span>Courier Rush Multiplier:</span>
                           <span>⚡ 3.0x</span>
+                        </div>
+                      )}
+                      {settlement.weatherBonusMultiplier && settlement.weatherBonusMultiplier > 1.0 && (
+                        <div className="flex items-center justify-between text-cyan-600 dark:text-cyan-400 font-bold">
+                          <span>{settlement.weatherLabel || 'Weather Demand Surge'}:</span>
+                          <span>+{settlement.weatherBonusPercent}% ({settlement.weatherBonusMultiplier}x)</span>
                         </div>
                       )}
                       {isHighStakes && (

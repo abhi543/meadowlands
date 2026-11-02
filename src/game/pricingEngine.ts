@@ -38,6 +38,9 @@ export interface ContractSettlementBreakdown {
   highStakesMultiplier?: number; // 5.0 or 1.0
   waterValue?: number;
   waterRequired?: number;
+  weatherBonusMultiplier?: number;
+  weatherBonusPercent?: number;
+  weatherLabel?: string;
   finalCoinPayout: number;
   payrollDaysCovered?: number;
 }
@@ -525,13 +528,16 @@ export function calculateMasterSettlement(
   isRush = false,
   dailyPayrollRate = 0,
   waterRequired = 0,
-  isHighStakes = false
+  isHighStakes = false,
+  weatherBonusMultiplier = 1.0,
+  weatherLabel?: string
 ): ContractSettlementBreakdown {
   const tierConfig = CONTRACT_TIER_CONFIG[tier] || CONTRACT_TIER_CONFIG.tier1_local;
   const streakInfo = getTradeStreakMultiplier(streak);
   const rushMultiplier = isRush ? 3.0 : 1.0;
   // High-stakes contracts command a premium 5.0x bounty multiplier delivering substantial payouts
   const highStakesMultiplier = isHighStakes ? 5.0 : 1.0;
+  const validWeatherMultiplier = Math.max(1.0, weatherBonusMultiplier);
 
   let baseCommodityValue = 0;
   for (const it of items) {
@@ -543,13 +549,15 @@ export function calculateMasterSettlement(
   const waterValue = waterRequired > 0 ? Math.round(waterRequired * 6) : 0;
   baseCommodityValue += waterValue;
 
-  const rawFinal = baseCommodityValue * tierConfig.multiplier * streakInfo.multiplier * rushMultiplier * highStakesMultiplier;
+  const rawFinal = baseCommodityValue * tierConfig.multiplier * streakInfo.multiplier * rushMultiplier * highStakesMultiplier * validWeatherMultiplier;
   const finalCoinPayout = Math.max(15, Math.round(rawFinal));
 
   let payrollDaysCovered: number | undefined;
   if (dailyPayrollRate > 0) {
     payrollDaysCovered = Math.round((finalCoinPayout / dailyPayrollRate) * 10) / 10;
   }
+
+  const weatherBonusPercent = Math.round((validWeatherMultiplier - 1.0) * 100);
 
   return {
     baseCommodityValue,
@@ -566,6 +574,9 @@ export function calculateMasterSettlement(
     highStakesMultiplier,
     waterValue,
     waterRequired,
+    weatherBonusMultiplier: validWeatherMultiplier,
+    weatherBonusPercent,
+    weatherLabel,
     finalCoinPayout,
     payrollDaysCovered,
   };
