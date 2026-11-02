@@ -12746,12 +12746,26 @@ export const useGameStore = create<GameState>()(
         const spec = PREHISTORIC_SPECIES_REGISTRY[enc.speciesId];
         // Food trough consumption: -0.05 liters per second per living specimen
         let finalTrough = Math.max(0, enc.troughFoodLiters - 0.05 * enc.specimenCount);
-        // Automated sanctuary herd feeder: top up troughs from silo feed when low
-        if (finalTrough <= 15 && (newSilo.feed || 0) >= 10) {
-          const topUp = Math.min(enc.maxTroughLiters - finalTrough, Math.min(newSilo.feed, 25));
-          if (topUp > 0) {
-            newSilo.feed -= topUp;
-            finalTrough += topUp;
+        // Automated sanctuary herd feeder: top up troughs only using each species' specific dietProductId when low (never drain standard farm feed)
+        const dietId = spec?.dietProductId;
+        if (finalTrough <= 15 && dietId) {
+          const availStock = (newBarn[dietId] || 0) + (newSilo[dietId] || 0);
+          if (availStock >= 5) {
+            const topUp = Math.min(enc.maxTroughLiters - finalTrough, Math.min(availStock, 25));
+            if (topUp > 0) {
+              let rem = topUp;
+              if (newBarn[dietId]) {
+                const take = Math.min(newBarn[dietId], rem);
+                newBarn[dietId] -= take;
+                rem -= take;
+              }
+              if (rem > 0 && newSilo[dietId]) {
+                const take = Math.min(newSilo[dietId], rem);
+                newSilo[dietId] -= take;
+                rem -= take;
+              }
+              finalTrough += topUp;
+            }
           }
         }
         const isStarving = finalTrough <= 0;
