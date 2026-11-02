@@ -543,8 +543,7 @@ export function OrderBoard() {
             const required = order.requiredItems || (order.requested?.map(r => ({ itemId: r.itemId, quantity: r.qty, name: r.name, icon: r.emoji })) || []);
             
             for (const item of required) {
-              const storage = isCropItem(item.itemId) ? silo : barn;
-              const have = storage[item.itemId] || 0;
+              const have = getStorageAvailableStock(silo, barn, item.itemId);
               if (have < item.quantity) {
                 missingItems.push({
                   itemId: item.itemId,
@@ -772,8 +771,7 @@ export function OrderBoard() {
                   {/* Required Items with Unit Valuations */}
                   <div className="space-y-1.5 mb-2.5">
                     {required.map((it, i) => {
-                      const storage = isCropItem(it.itemId) ? silo : barn;
-                      const have = storage[it.itemId] || 0;
+                      const have = getStorageAvailableStock(silo, barn, it.itemId);
                       const enough = have >= it.quantity;
                       const itemProfile = getItemEconomicProfile(it.itemId);
 

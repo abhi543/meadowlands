@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { CROPS } from './data';
+import { isCropItem, getStorageAvailableStock } from './store';
 import {
   getItemEconomicProfile,
   getTradeStreakMultiplier,
@@ -158,8 +159,8 @@ export function validateCaravanCargo(
 
     for (const item of items) {
       if (!demandMap[item.itemId]) {
-        const isCrop = isCropStorageItem(item.itemId);
-        const available = isCrop ? (silo[item.itemId] || 0) : (barn[item.itemId] || 0);
+        const isCrop = isCropItem(item.itemId);
+        const available = getStorageAvailableStock(silo, barn, item.itemId);
         demandMap[item.itemId] = {
           itemId: item.itemId,
           name: item.name || item.itemId,
