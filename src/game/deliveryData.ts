@@ -701,32 +701,35 @@ export function generateDeliveryOrder(
     }
   }
 
-  // Scaled quantities matching player level capacity (doubled as requested for higher throughput & reward)
+  // Scaled quantities matching player level capacity (minimum quantity of 100 for all items as requested)
   const requiredItems = pickedItemIds.map(id => {
     const meta = getItemMeta(id);
-    let qty = 1;
+    let qty = 100;
     if (id === 'wheat' || id === 'corn' || id === 'feed') {
       if (safeLevel <= 2) {
-        qty = (2 + Math.floor(Math.random() * 2)) * 2; // 4-6 items for beginners
+        qty = 100 + Math.floor(Math.random() * 20); // 100-120
       } else {
-        qty = (type === 'town_project' ? 8 + Math.floor(Math.random() * 6) : 3 + Math.floor(Math.random() * 4)) * 2; // 6-14 or 16-28
+        qty = type === 'town_project' ? 150 + Math.floor(Math.random() * 50) : 100 + Math.floor(Math.random() * 30); // 100-130 or 150-200
       }
     } else if (id === 'carrot' || id === 'strawberry' || id === 'cotton' || id === 'fish') {
       if (safeLevel <= 3) {
-        qty = (1 + Math.floor(Math.random() * 2)) * 2; // 2-4 items
+        qty = 100 + Math.floor(Math.random() * 15);
       } else {
-        qty = (type === 'town_project' ? 5 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 3)) * 2; // 4-10 or 10-16
+        qty = type === 'town_project' ? 130 + Math.floor(Math.random() * 40) : 100 + Math.floor(Math.random() * 25);
       }
     } else if (id === 'egg' || id === 'milk' || id === 'wool') {
       if (safeLevel <= 3) {
-        qty = (1 + Math.floor(Math.random() * 2)) * 2; // 2-4 items
+        qty = 100 + Math.floor(Math.random() * 10);
       } else {
-        qty = (type === 'town_project' ? 4 + Math.floor(Math.random() * 3) : 2 + Math.floor(Math.random() * 2)) * 2; // 4-8 or 8-14
+        qty = type === 'town_project' ? 120 + Math.floor(Math.random() * 30) : 100 + Math.floor(Math.random() * 20);
       }
     } else {
       // Manufactured/artisan products (bread, cheese, pie, sweater, etc.)
-      qty = (type === 'town_project' ? 2 : 1) * 2; // 2-4 items
+      qty = type === 'town_project' ? 110 + Math.floor(Math.random() * 15) : 100;
     }
+    // Enforce strict minimum of 100 on everything
+    qty = Math.max(100, qty);
+
     const perishable = isItemPerishable(id);
     const minFresh: 'standard' | 'pristine' | undefined = perishable ? 'standard' : undefined;
     return {
