@@ -580,17 +580,27 @@ export function generateDeliveryOrder(
     .filter(item => item.minLevel <= safeLevel)
     .map(item => item.itemId);
 
-  // Weather Condition Influence: Favor crops matching atmospheric weather
+  // Weather Condition Influence: MUST strictly match crops and commodities corresponding to current atmospheric weather
   const activeWeather = weatherCondition?.toLowerCase();
   const weatherAffinityCrops = (activeWeather && weatherCropMap[activeWeather]) || [];
-  const matchingWeatherItems = eligibleItems.filter(id => weatherAffinityCrops.includes(id));
+  
+  // Available weather-matched crops in the game unlocked at or below safeLevel
+  const allUnlockedWeatherCrops = weatherAffinityCrops.filter(id => {
+    const meta = getItemMeta(id);
+    return (ITEM_UNLOCK_LEVELS[id] || 1) <= safeLevel;
+  });
 
-  // Determine if this order adopts a weather surge
+  // Client's items that match active weather
+  const matchingWeatherItems = eligibleItems.filter(id => weatherAffinityCrops.includes(id));
+  // Use client matching items if available, otherwise any unlocked weather crops
+  const viableWeatherCrops = matchingWeatherItems.length > 0 ? matchingWeatherItems : allUnlockedWeatherCrops;
+
+  // If active weather has viable crops, ALWAYS bind the order to the weather condition (100% match)
   let orderHasWeatherAffinity = false;
   let weatherBonusMult = 1.0;
   let weatherLabel: string | undefined;
 
-  if (activeWeather && matchingWeatherItems.length > 0 && Math.random() < 0.75) {
+  if (activeWeather && viableWeatherCrops.length > 0) {
     orderHasWeatherAffinity = true;
     weatherBonusMult = 1.25; // +25% Weather Demand Bonus
     const weatherName = activeWeather.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -603,25 +613,34 @@ export function generateDeliveryOrder(
   // Item count based on contract type & player level
   let itemCount = 1;
   if (type === 'town_project') {
-    itemCount = Math.min(itemPool.length, 3);
+    itemCount = Math.min(Math.max(itemPool.length, viableWeatherCrops.length), 3);
   } else if (type === 'futures') {
-    itemCount = Math.min(itemPool.length, safeLevel >= 4 ? 2 : 1);
+    itemCount = Math.min(Math.max(itemPool.length, viableWeatherCrops.length), safeLevel >= 4 ? 2 : 1);
   } else if (type === 'rush') {
-    itemCount = Math.min(itemPool.length, safeLevel >= 3 && Math.random() < 0.4 ? 2 : 1);
+    itemCount = Math.min(Math.max(itemPool.length, viableWeatherCrops.length), safeLevel >= 3 && Math.random() < 0.4 ? 2 : 1);
   } else {
     // Standard orders: 1 item for beginners; 1-2 items for experienced farmers
-    itemCount = Math.min(itemPool.length, safeLevel >= 3 && Math.random() < 0.35 ? 2 : 1);
+    itemCount = Math.min(Math.max(itemPool.length, viableWeatherCrops.length), safeLevel >= 3 && Math.random() < 0.35 ? 2 : 1);
   }
 
   let pickedItemIds: string[] = [];
-  if (orderHasWeatherAffinity && matchingWeatherItems.length > 0) {
-    const weatherPick = matchingWeatherItems[Math.floor(Math.random() * matchingWeatherItems.length)];
+  if (orderHasWeatherAffinity && viableWeatherCrops.length > 0) {
+    // Shuffle viable weather crops to pick primary weather demand item
+    const shuffledWeather = [...viableWeatherCrops].sort(() => Math.random() - 0.5);
+    const weatherPick = shuffledWeather[0];
     pickedItemIds.push(weatherPick);
+
     if (itemCount > 1) {
-      const remainingPool = itemPool.filter(id => id !== weatherPick);
-      if (remainingPool.length > 0) {
-        const shuffled = [...remainingPool].sort(() => Math.random() - 0.5);
-        pickedItemIds.push(...shuffled.slice(0, itemCount - 1));
+      // Prefer other weather affinity items first, then general client item pool
+      const otherWeather = shuffledWeather.slice(1);
+      if (otherWeather.length > 0 && Math.random() < 0.70) {
+        pickedItemIds.push(otherWeather[0]);
+      } else {
+        const remainingPool = itemPool.filter(id => !pickedItemIds.includes(id));
+        if (remainingPool.length > 0) {
+          const shuffledRemaining = [...remainingPool].sort(() => Math.random() - 0.5);
+          pickedItemIds.push(shuffledRemaining[0]);
+        }
       }
     }
   } else {
