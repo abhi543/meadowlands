@@ -40,6 +40,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     applyCompostToProps,
     flushPlotBed,
     applyUniversalBioDressing,
+    instantBloomPlot,
     witherAllPlants,
     silo,
     barn = {},
@@ -111,6 +112,17 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     setTimeout(() => {
       setBioDressingFloatingTextPlotId(null);
     }, 2200);
+  };
+
+  const handleInstantBloom = (plotId: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const success = instantBloomPlot(plotId);
+    if (!success) return;
+    setBioDressingPlotId(plotId);
+    setActiveActionPlotId(null);
+    setTimeout(() => {
+      setBioDressingPlotId(null);
+    }, 1200);
   };
 
 
@@ -1016,10 +1028,21 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                   {/* Contextual Action Bubble for Growing Crop */}
                   {isGrowing && (activeActionPlotId === plot.id || isHovered) && (
                     <div
-                      className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-stone-950/95 border border-amber-400/90 px-2 py-1 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
+                      className="absolute -top-4 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 bg-stone-950/95 border border-amber-400/90 px-2 py-1 rounded-xl shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none whitespace-nowrap"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {/* Instant Bloom Button */}
+                      <button
+                        type="button"
+                        onClick={(e) => handleInstantBloom(plot.id, e)}
+                        className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 active:scale-95 text-stone-950 text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-amber-300 animate-pulse"
+                        title="Instant Bloom: Matures crop immediately ready to harvest at the cost of 1 Fertilizer dose (or 10 Favor / 25 Coins)"
+                      >
+                        <span>⚡</span>
+                        <span>Instant Bloom</span>
+                      </button>
 
+                      {/* Soil Fertilizer Button */}
                       <button
                         type="button"
                         onClick={(e) => handleApplyBioDressing(plot.id, e)}
@@ -1037,7 +1060,6 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                             : 'Fertilizer (Shop)'}
                         </span>
                       </button>
-
                     </div>
                   )}
 

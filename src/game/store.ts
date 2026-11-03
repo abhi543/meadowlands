@@ -1035,6 +1035,7 @@ export interface GameState {
   tillUnderCrop: (plotId: number) => boolean;
   flushPlotBed: (plotId: number) => boolean;
   applyUniversalBioDressing: (plotId: number) => boolean;
+  instantBloomPlot: (plotId: number) => boolean;
   feedAnimal: (animalId: string) => void;
   collectProduct: (animalId: string) => void;
   feedAllAnimals: () => void;
@@ -2970,6 +2971,71 @@ export const useGameStore = create<GameState>()(
         });
 
         state.addNotification(`✨ Universal Bio-Dressing applied to Plot #${plotId + 1}! All 3 nutrient lights recharged to 100% Solid Full & soil health cleansed.${purchaseMethod} (${newBarn.universal_bio_dressing} doses left)`, '🧪', 'discovery');
+        return true;
+      },
+
+      instantBloomPlot: (plotId: number) => {
+        const state = get();
+        const plot = state.plots[plotId];
+        if (!plot || plotId >= state.unlockedPlots || !plot.crop) return false;
+        if (plot.isWithered) {
+          state.addNotification(`Cannot Instant Bloom withered crops. Clear withered first!`, '🥀', 'info');
+          return false;
+        }
+
+        // Deduct 1 fertilizer dose (or auto-purchase if empty)
+        let doses = state.barn?.universal_bio_dressing || 0;
+        const newBarn = { ...state.barn };
+        let purchaseMethod = '';
+
+        if (doses <= 0) {
+          const favor = state.globalReputation?.spendableFavor || 0;
+          if (favor >= 10) {
+            set({
+              globalReputation: {
+                ...state.globalReputation,
+                spendableFavor: favor - 10,
+              },
+            });
+            doses = 3;
+            newBarn.universal_bio_dressing = 2; // used 1, kept 2
+            purchaseMethod = ' (Auto-bought 3-pack for 10 Favor)';
+          } else if (state.coins >= 25) {
+            set({ coins: state.coins - 25 });
+            doses = 3;
+            newBarn.universal_bio_dressing = 2; // used 1, kept 2
+            purchaseMethod = ' (Auto-bought 3-pack for 🪙 25 Coins)';
+          } else {
+            state.addNotification('Need at least 1 dose of Fertilizer (or 10 Favor / 25 Coins) to Instant Bloom!', '⚠️', 'info');
+            return false;
+          }
+        } else {
+          newBarn.universal_bio_dressing = doses - 1;
+        }
+
+        const cropDef = CROPS[plot.crop];
+        const growSec = cropDef?.growTimeSec || 120;
+        const newPlots = [...state.plots];
+        // Instantly force crop to full maturity and mark ready for harvest
+        newPlots[plotId] = {
+          ...plot,
+          growthProgress: 1.0,
+          ready: true,
+          plantedAt: Date.now() - ((growSec + 10) * 1000),
+          stressAccumulator: Math.max(0, (plot.stressAccumulator ?? 0) - 15), // Instant bloom alleviates stress
+          disease: null, // Cleanses disease as well
+        };
+
+        playBioDressingSound();
+        playVictoryChime();
+
+        set({
+          barn: newBarn,
+          plots: newPlots,
+          isDirty: true,
+        });
+
+        state.addNotification(`⚡ Instant Bloom! Plot #${plotId + 1} (${cropDef?.name || plot.crop}) matured instantly!${purchaseMethod} (${newBarn.universal_bio_dressing} fertilizer doses left)`, '🌸', 'discovery');
         return true;
       },
 
