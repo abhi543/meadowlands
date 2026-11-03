@@ -117,8 +117,8 @@ export const FAVOR_SHOP_CATALOG: FavorShopItem[] = [
   },
   {
     id: 'favor_universal_bio_dressing',
-    title: 'Universal Bio-Dressing (Pack of 3)',
-    description: 'Instant-recovery organic fertilizer pack. Applies to any empty or growing plot to instantly reset all 3 nutrient lights (🟢 Leaf, 🟡 Root, 🔴 Fruit) to 100% Solid Full, clear crop sickness, and restore dark fertile loam.',
+    title: 'Universal Bio-Dressing Fertilizer (Pack of 3)',
+    description: 'Instant-recovery organic soil fertilizer pack. Applies to any empty or growing plot to instantly reset all 3 nutrient lights (🟢 Leaf, 🟡 Root, 🔴 Fruit) to 100% Solid Full, clear crop sickness, and restore dark fertile loam.',
     costFavor: 10,
     icon: '🧪',
     type: 'universal_bio_dressing',

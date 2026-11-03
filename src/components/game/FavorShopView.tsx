@@ -62,7 +62,7 @@ export function FavorShopView() {
             <div className="text-xs font-black text-emerald-300 font-mono">📜 +{bonusStorageCapacity || 0} Slots</div>
           </div>
           <div className="bg-stone-900/60 rounded-lg p-1.5 border border-stone-800">
-            <div className="text-[10px] text-stone-400">Bio-Dressing</div>
+            <div className="text-[10px] text-stone-400">Bio-Dressing Fertilizer</div>
             <div className="text-xs font-black text-teal-300 font-mono">🧪 {barn?.universal_bio_dressing || 0} Doses</div>
           </div>
         </div>

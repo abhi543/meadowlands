@@ -1029,12 +1029,12 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                         <span>🧪</span>
                         <span>
                           {(barn?.universal_bio_dressing || 0) > 0
-                            ? `Bio-Dressing (${barn.universal_bio_dressing})`
+                            ? `Fertilizer (${barn.universal_bio_dressing})`
                             : (globalReputation?.spendableFavor || 0) >= 10
-                            ? 'Bio-Dress (10 🎖️)'
+                            ? 'Fertilizer (10 🎖️)'
                             : coins >= 25
-                            ? 'Bio-Dress (25 🪙)'
-                            : 'Bio-Dress (Shop)'}
+                            ? 'Fertilizer (25 🪙)'
+                            : 'Fertilizer (Shop)'}
                         </span>
                       </button>
 
