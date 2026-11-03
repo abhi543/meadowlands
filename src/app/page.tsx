@@ -27,6 +27,7 @@ import { PicketAlertBanner } from '@/components/game/PicketAlertBanner';
 import { WaterTab } from '@/components/game/WaterTab';
 import { GasBottlingRefineryPanel } from '@/components/game/GasBottlingRefineryPanel';
 import { MorningIncidentModal } from '@/components/game/MorningIncidentModal';
+import { WeatherAtmosphereOverlay } from '@/components/game/WeatherAtmosphereOverlay';
 import { OrientationGuard } from '@/components/game/OrientationGuard';
 import { MobileActionDock } from '@/components/game/MobileActionDock';
 import { useDeviceProfile } from '@/hooks/useDeviceProfile';
@@ -342,6 +343,7 @@ export default function Home() {
       </div>
 
       {/** Modals & Overlays **/}
+      <WeatherAtmosphereOverlay />
       <MorningIncidentModal />
       {conflictModalData && (
         <SaveConflictModal
