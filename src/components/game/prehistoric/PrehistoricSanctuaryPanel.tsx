@@ -10,7 +10,11 @@ import {
 import { FrontierTrailModal } from './FrontierTrailModal';
 import { SlurryCollectionModal } from '../SlurryCollectionModal';
 
-export function PrehistoricSanctuaryPanel() {
+interface PrehistoricSanctuaryPanelProps {
+  onSelectTab?: (tab: string) => void;
+}
+
+export function PrehistoricSanctuaryPanel({ onSelectTab }: PrehistoricSanctuaryPanelProps = {}) {
   const {
     amberBioLab,
     prehistoricSanctuary,
@@ -558,6 +562,20 @@ export function PrehistoricSanctuaryPanel() {
                     <span>✨</span>
                     <span>Gather Shed Harvest ({enc.harvestReadyCount})</span>
                   </button>
+
+                  {/* Workshop Integration Link */}
+                  {onSelectTab && (
+                    <button
+                      type="button"
+                      onClick={() => onSelectTab('production')}
+                      className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-amber-950/60 hover:bg-amber-900/60 text-amber-200 border border-amber-500/30 transition flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 shadow-sm"
+                      title="Open Workshop in the Produce tab to craft permanent installations, tools, and fertilizers using shed harvests"
+                    >
+                      <span>🔨</span>
+                      <span>Craft in Workshop ➔</span>
+                      <span className="text-[10px] opacity-75 font-mono">({(barn?.[spec?.harvestProductId] || 0)} in Barn)</span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

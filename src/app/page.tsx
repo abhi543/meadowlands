@@ -334,7 +334,7 @@ export default function Home() {
               <WorkersHubPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />
             )}
             {activeTab === 'fishery' && <FisheryPanel />}
-            {activeTab === 'wilderness' && <PrehistoricSanctuaryPanel />}
+            {activeTab === 'wilderness' && <PrehistoricSanctuaryPanel onSelectTab={(tab) => setActiveTab(tab as TabId)} />}
             {activeTab === 'territory' && <TerritoryMapView />}
             {activeTab === 'market' && <LivestockMarketPanel />}
             {activeTab === 'guide' && <GuidePanel initialTab={guideInitialTab} />}

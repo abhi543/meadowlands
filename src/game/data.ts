@@ -381,6 +381,7 @@ export type ProductId =
   // Workshop Tool, Hardware & Hydraulic Upgrades
   | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
   | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve'
+  | 'universal_bio_dressing' | 'serpent_pest_ward' | 'mammoth_thermal_parka'
   // Agricultural Byproducts
   | 'chaff'
   // Gas Bottling & Export Commodities
@@ -565,6 +566,9 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   prismatic_light_lens:    { id: 'prismatic_light_lens',    name: 'Prismatic Light Lens',        emoji: '🔍🌈', category: 'manufactured', sellPrice: 850 },
   thermal_retaining_core:  { id: 'thermal_retaining_core',  name: 'Thermal Retaining Core',      emoji: '🔥💎', category: 'manufactured', sellPrice: 950 },
   emergency_siphon_valve:  { id: 'emergency_siphon_valve',  name: 'Emergency Siphon Float Valve', emoji: '🚰⚡', category: 'manufactured', sellPrice: 750 },
+  universal_bio_dressing:  { id: 'universal_bio_dressing',  name: 'Universal Bio-Dressing Fertilizer', emoji: '🧪', category: 'manufactured', sellPrice: 80 },
+  serpent_pest_ward:       { id: 'serpent_pest_ward',       name: 'Apex Serpent Pest Ward',      emoji: '📜🛡️', category: 'manufactured', sellPrice: 1200 },
+  mammoth_thermal_parka:   { id: 'mammoth_thermal_parka',   name: 'Mammoth Down Work Parka',     emoji: '🧥❄️', category: 'manufactured', sellPrice: 1400 },
 
   // --- Gas Bottling & Export Commodities ---
   co2_cylinder:            { id: 'co2_cylinder',            name: 'Pressurized CO₂ Cylinder',    emoji: '🫧',   category: 'manufactured', sellPrice: 45 },
@@ -818,6 +822,31 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
         inputs: [{ productId: 'thermal_scutes', qty: 1 }, { productId: 'mineral_slab', qty: 2 }],
         output: { productId: 'thermal_solvent', qty: 1 },
         timeSec: 60,
+      },
+      // Sanctuary Shed Artifact Recipes (High-Value Processing)
+      {
+        id: 'make_primeval_fertilizer_batch',
+        name: 'Primeval Bio-Dressing Fertilizer (Pack of 3)',
+        emoji: '🧪✨',
+        inputs: [{ productId: 'primeval_humus', qty: 1 }, { productId: 'chaff', qty: 4 }],
+        output: { productId: 'universal_bio_dressing', qty: 3 },
+        timeSec: 45,
+      },
+      {
+        id: 'make_serpent_pest_ward',
+        name: 'Apex Serpent Pest Ward',
+        emoji: '📜🛡️',
+        inputs: [{ productId: 'serpent_slough', qty: 1 }, { productId: 'fired_hardwood', qty: 2 }],
+        output: { productId: 'serpent_pest_ward', qty: 1 },
+        timeSec: 90,
+      },
+      {
+        id: 'make_mammoth_thermal_parka',
+        name: 'Mammoth Down Work Parka',
+        emoji: '🧥❄️',
+        inputs: [{ productId: 'insulated_down_wool', qty: 1 }, { productId: 'silk', qty: 2 }],
+        output: { productId: 'mammoth_thermal_parka', qty: 1 },
+        timeSec: 100,
       },
     ],
   },
