@@ -22,6 +22,7 @@ import {
   playBioDressingSound,
 } from '@/lib/soundEffects';
 import { MobilePlotInspectionDrawer } from './MobilePlotInspectionDrawer';
+import { LivingPastureMeadow } from './LivingPastureMeadow';
 
 const CROP_LIST = Object.values(CROPS);
 
@@ -336,6 +337,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
           </button>
         </div>
       )}
+
+      {/* Living Pasture Meadow Interactive Strip */}
+      <LivingPastureMeadow onNavigateToPastures={() => onSelectTab?.('animals')} />
 
       {/* Farm Livestock & Animals Overview Widget */}
       <div className="bg-gradient-to-r from-amber-50/90 via-stone-50 to-orange-50/80 dark:from-stone-900/90 dark:via-stone-850 dark:to-stone-900/90 rounded-2xl p-3 border border-amber-200/90 dark:border-amber-900/50 shadow-xs flex flex-wrap items-center justify-between gap-3">
