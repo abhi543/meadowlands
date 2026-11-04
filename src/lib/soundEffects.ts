@@ -607,3 +607,31 @@ export function playDigesterDistillSound(): void {
     osc.stop(now + idx * 0.08 + 0.22);
   });
 }
+
+/**
+ * ⚡ Rush Hour Frenzy Activation: High-energy synthesizer riser & power chord
+ */
+export function playRushHourActivationSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const arpeggio = [440, 554.37, 659.25, 880, 1108.73, 1318.51, 1760]; // A major rising arpeggio
+  arpeggio.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+
+    gain.gain.setValueAtTime(0, now + idx * 0.05);
+    gain.gain.linearRampToValueAtTime(0.18, now + idx * 0.05 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.4);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now + idx * 0.05);
+    osc.stop(now + idx * 0.05 + 0.45);
+  });
+}

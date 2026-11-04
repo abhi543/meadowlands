@@ -72,6 +72,9 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     pastureWelfare,
     prehistoricSanctuary,
     installPlotSmartSensor,
+    rushHourCharge = 0,
+    rushHourActiveSeconds = 0,
+    triggerRushHour,
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [hoveredCropId, setHoveredCropId] = useState<CropId | null>(null);
@@ -341,6 +344,84 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
 
       {/* Living Pasture Meadow Interactive Strip */}
       <LivingPastureMeadow onNavigateToPastures={() => onSelectTab?.('animals')} />
+
+      {/* Estate Rush Hour Frenzy Banner (Level 21+) */}
+      {level >= 21 && (
+        <div className={`rounded-2xl p-3 border shadow-md transition-all select-none ${
+          rushHourActiveSeconds > 0
+            ? 'bg-gradient-to-r from-amber-500 via-rose-500 to-yellow-500 text-stone-950 border-yellow-350 shadow-yellow-500/30 animate-pulse'
+            : 'bg-gradient-to-r from-stone-900/90 via-stone-850 to-stone-900/90 border-amber-500/30 text-stone-100'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 border ${
+                rushHourActiveSeconds > 0
+                  ? 'bg-stone-950/20 border-stone-950/30 text-2xl animate-bounce'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+              }`}>
+                {rushHourActiveSeconds > 0 ? '🚀' : '⚡'}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="font-black text-xs sm:text-sm tracking-wide uppercase flex items-center gap-1.5">
+                    {rushHourActiveSeconds > 0 ? '🔥 RUSH HOUR FRENZY ACTIVE!' : 'Estate Rush Hour'}
+                  </h4>
+                  {rushHourActiveSeconds > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-stone-950 text-yellow-300 border border-yellow-400 shadow-sm animate-pulse">
+                      ⏳ {Math.ceil(rushHourActiveSeconds)}s Remaining • 4x Growth Speed!
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                      Charge: {Math.round(rushHourCharge)}% / 100%
+                    </span>
+                  )}
+                </div>
+                <p className={`text-[11px] mt-0.5 leading-snug ${rushHourActiveSeconds > 0 ? 'font-bold text-stone-950/90' : 'text-stone-400'}`}>
+                  {rushHourActiveSeconds > 0
+                    ? '✨ All crops are surging at 4x Speed! Harvest rapidly to clear fields before the clock runs out!'
+                    : 'Harvest crops (+3% each) to build momentum. At 100%, ignite a 30-second 4x Estate Frenzy!'}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-2">
+              {rushHourActiveSeconds > 0 ? (
+                <div className="px-4 py-2 rounded-xl bg-stone-950/90 text-yellow-300 font-mono font-black text-xs flex items-center gap-1.5 border border-yellow-400/80 shadow-md">
+                  <span>⚡ 4.0x SPEED</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => triggerRushHour()}
+                  disabled={rushHourCharge < 100}
+                  className={`px-4 py-2 rounded-xl font-black text-xs sm:text-sm tracking-wide transition-all active:scale-95 shadow-md flex items-center gap-1.5 ${
+                    rushHourCharge >= 100
+                      ? 'bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-stone-950 border-2 border-yellow-200 cursor-pointer animate-bounce shadow-amber-400/40'
+                      : 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed opacity-70'
+                  }`}
+                >
+                  <span>🚀</span>
+                  <span>{rushHourCharge >= 100 ? 'IGNITE RUSH HOUR!' : `Charge (${Math.round(rushHourCharge)}%)`}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Charge Progress bar */}
+          {rushHourActiveSeconds <= 0 && (
+            <div className="mt-2.5 h-1.5 w-full bg-stone-800 rounded-full overflow-hidden border border-stone-700/60">
+              <div
+                className={`h-full transition-all duration-300 ${
+                  rushHourCharge >= 100
+                    ? 'bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse'
+                    : 'bg-gradient-to-r from-amber-600 to-amber-500'
+                }`}
+                style={{ width: `${Math.min(100, rushHourCharge)}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Farm Livestock & Animals Overview Widget */}
       <div className="bg-gradient-to-r from-amber-50/90 via-stone-50 to-orange-50/80 dark:from-stone-900/90 dark:via-stone-850 dark:to-stone-900/90 rounded-2xl p-3 border border-amber-200/90 dark:border-amber-900/50 shadow-xs flex flex-wrap items-center justify-between gap-3">

@@ -139,6 +139,7 @@ import {
   playSlurryScoopSound,
   playSumpValveSound,
   playDigesterDistillSound,
+  playRushHourActivationSound,
 } from '@/lib/soundEffects';
 import {
   type ZoneEcosystemData,
@@ -839,6 +840,10 @@ export interface GameState {
   plots: PlotState[];
   unlockedPlots: number;
 
+  // Rush Hour Frenzy Event System (Level 21+)
+  rushHourCharge: number; // 0 to 100 points
+  rushHourActiveSeconds: number; // remaining duration (e.g. 30s when triggered)
+
   // Animals & Livestock Reserve
   animals: AnimalInstance[];
   animalCapacity: Record<AnimalSpecies, number>;
@@ -1029,6 +1034,9 @@ export interface GameState {
 
   // Time
   lastTick: number;
+
+  // Rush Hour Actions
+  triggerRushHour: () => boolean;
 
   // --- Actions ---
   plantCrop: (plotId: number, cropId: CropId) => void;
@@ -1790,6 +1798,9 @@ export const useGameStore = create<GameState>()(
       plots: initialPlots,
       unlockedPlots: GRID_SIZE,
 
+      rushHourCharge: 40,
+      rushHourActiveSeconds: 0,
+
       animals: initialAnimals,
       animalCapacity: { chicken: 50, cow: 50, sheep: 50, pig: 50 },
       livestockReserve: [],
@@ -2065,6 +2076,34 @@ export const useGameStore = create<GameState>()(
         set({ plots: newPlots });
       },
 
+      triggerRushHour: () => {
+        const state = get();
+        if (state.level < 21) {
+          state.addNotification('🔒 Level 21 Required: Estate Rush Hour Frenzy unlocks at Farm Level 21!', '🔒', 'warning');
+          return false;
+        }
+
+        if ((state.rushHourActiveSeconds || 0) > 0) {
+          state.addNotification('⚡ Rush Hour is already active!', '⚡', 'info');
+          return false;
+        }
+
+        if ((state.rushHourCharge || 0) < 100) {
+          state.addNotification(`⚡ Rush Hour meter at ${Math.round(state.rushHourCharge || 0)}%/100%. Harvest crops or deliver orders to charge!`, '⚡', 'info');
+          return false;
+        }
+
+        playRushHourActivationSound();
+        state.addNotification('🚀 ESTATE RUSH HOUR ACTIVATED! 4x Growth Speed & Rapid Worker Frenzy for 30 Seconds!', '⚡🚀', 'discovery');
+
+        set({
+          rushHourCharge: 0,
+          rushHourActiveSeconds: 30,
+          isDirty: true,
+        });
+        return true;
+      },
+
       harvestPlot: (plotId) => {
         const state = get();
         const plot = state.plots[plotId];
@@ -2303,6 +2342,11 @@ export const useGameStore = create<GameState>()(
         const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
         const earnedXp = Math.round((3 + soilTier.bonusXp) * xpMultiplier);
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + earnedXp, state.level);
+
+        // Rush Hour Charge Gain (Level 21+): +3% per harvest
+        const currentRushCharge = state.rushHourCharge || 0;
+        const newRushCharge = state.rushHourActiveSeconds > 0 ? 0 : Math.min(100, currentRushCharge + 3);
+
         set({
           silo: newSilo,
           barn: newBarn,
@@ -2314,6 +2358,7 @@ export const useGameStore = create<GameState>()(
           systemicEvent: newSystemicEvent,
           relics: newRelics,
           isToolContaminated: newToolContaminated,
+          rushHourCharge: newRushCharge,
         });
       },
 
@@ -2664,6 +2709,11 @@ export const useGameStore = create<GameState>()(
 
         const xpMultiplier = (state.relics.ancientSunRelic ? 1.15 : 1.0) * (state.relics.circusCub ? 1.10 : 1.0);
         const { xp: newXp, level: newLevel } = levelUpCheck(state.xp + Math.round(3 * harvestedCount * xpMultiplier), state.level);
+
+        // Rush Hour Charge Gain (Level 21+): +3% per harvested plot
+        const currentRushCharge = state.rushHourCharge || 0;
+        const newRushCharge = state.rushHourActiveSeconds > 0 ? 0 : Math.min(100, currentRushCharge + (harvestedCount * 3));
+
         set({
           silo: newSilo,
           barn: newBarn,
@@ -2674,6 +2724,7 @@ export const useGameStore = create<GameState>()(
           systemicEvent: newSystemicEvent,
           relics: newRelics,
           isToolContaminated: anyToolContaminated || Boolean(state.isToolContaminated),
+          rushHourCharge: newRushCharge,
         });
       },
 
@@ -10861,8 +10912,12 @@ export const useGameStore = create<GameState>()(
             // Multiplicative speed calculation
             const rawSpeed = baseGrowthRate * co2Modifier * aeratedModifier * waterloggedModifier * mildewModifier * otherDiseaseModifier * soilSpeedMultiplier * plotMultiplier * waterBoost * siltSpeedMultiplier * phenoSpeedMultiplier * monocultureMultiplier * anoxiaModifier * frostModifier;
 
-            // Speed Clamp: Maximum 1.50x, Minimum 0.40x. Under NO circumstances does speed reach 0.0x!
-            const clampedSpeedMultiplier = Math.max(0.40, Math.min(1.50, rawSpeed));
+            // Estate Rush Hour 4x Frenzy (Level 21+)
+            const isRushHourActive = Boolean(state.rushHourActiveSeconds && state.rushHourActiveSeconds > 0 && state.level >= 21);
+            const rushHourSpeedMultiplier = isRushHourActive ? 4.0 : 1.0;
+
+            // Speed Clamp: Maximum 1.50x (or 6.0x during Rush Hour), Minimum 0.40x. Under NO circumstances does speed reach 0.0x!
+            const clampedSpeedMultiplier = Math.max(0.40, Math.min(isRushHourActive ? 6.0 : 1.50, rawSpeed * rushHourSpeedMultiplier));
 
             // --- Dynamic Yield Tiering (Grades A, B, C) ---
             // Hidden "Stress Accumulator" from 0 to 100 points:
@@ -10927,7 +10982,10 @@ export const useGameStore = create<GameState>()(
             let badgeEmoji = '🌱';
             let badgeText = '';
 
-            if (currentDisease?.stage === 'warning') {
+            if (isRushHourActive) {
+              badgeEmoji = '🚀⚡';
+              badgeText = `RUSH HOUR FRENZY (${clampedSpeedMultiplier.toFixed(1)}x Speed!)`;
+            } else if (currentDisease?.stage === 'warning') {
               badgeEmoji = '⚠️';
               badgeText = `⚠️ High Disease Risk: ${currentDisease.name} (${Math.round(currentDisease.warningTimerSec)}s to infection)`;
             } else if (currentDisease?.stage === 'active') {
@@ -13212,6 +13270,9 @@ export const useGameStore = create<GameState>()(
             n => !n.message.includes('Population Depleted') && !n.message.includes('fish stock emptied')
           ),
           lastTick: now,
+          rushHourActiveSeconds: state.rushHourActiveSeconds > 0
+            ? Math.max(0, state.rushHourActiveSeconds - deltaSeconds)
+            : 0,
         });
         } catch (err) {
           console.error('CRITICAL ERROR IN GAME TICK:', err);
@@ -16917,6 +16978,9 @@ export const useGameStore = create<GameState>()(
           if (merged.wilderness.outpostLevel === undefined) merged.wilderness.outpostLevel = 1;
         }
         if (!merged.stagingWagonProvisions) merged.stagingWagonProvisions = {};
+
+        if (merged.rushHourCharge === undefined) merged.rushHourCharge = 45;
+        if (merged.rushHourActiveSeconds === undefined) merged.rushHourActiveSeconds = 0;
 
         // Migration: farmhands with missing equippedOutfit
         if (merged.farmhands) {
