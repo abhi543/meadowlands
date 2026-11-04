@@ -350,4 +350,3 @@ export function BarnTab({ onSelectTab }: BarnTabProps) {
   );
 }
 
-export default BarnTab;
