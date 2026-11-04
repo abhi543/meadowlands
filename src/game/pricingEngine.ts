@@ -323,11 +323,11 @@ export const KNOWN_RECIPE_VALUATIONS: Record<string, RecipeValuationConfig> = {
   luminescent_chowder:     { stage: 2, inputs: [{ id: 'lanternfish', qty: 1 }, { id: 'milk_rich_cream', qty: 1 }, { id: 'pumpkin', qty: 1 }], outputQty: 1, timeSec: 180, name: 'Luminescent Abyss Chowder', icon: '🍲🌈' },
 
   // Workshop Tool, Hardware & Hydraulic Upgrades
-  reinforced_sluice_seal:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 2 }, { id: 'mineral_slab', qty: 2 }], outputQty: 1, timeSec: 60, name: 'Reinforced Sluice Gate Seal', icon: '🛡️🔧' },
+  reinforced_sluice_seal:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 2 }, { id: 'co2_cylinder', qty: 1 }], outputQty: 1, timeSec: 60, name: 'Reinforced Sluice Gate Seal', icon: '🛡️🔧' },
   hardened_chitin_trowel:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 3 }, { id: 'fired_hardwood', qty: 2 }], outputQty: 1, timeSec: 90, name: 'Hardened Chitin Trowel', icon: '⛏️✨' },
-  subsoil_aquifer_casing:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 5 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 120, name: 'Subsoil Aquifer Casing', icon: '🏗️💧' },
+  subsoil_aquifer_casing:  { stage: 1, inputs: [{ id: 'chitin_molt_plates', qty: 4 }, { id: 'oxygen_canister', qty: 2 }], outputQty: 1, timeSec: 120, name: 'Subsoil Aquifer Casing', icon: '🏗️💧' },
   prismatic_light_lens:    { stage: 1, inputs: [{ id: 'prismatic_wing_membrane', qty: 2 }, { id: 'tempered_glass', qty: 2 }], outputQty: 1, timeSec: 150, name: 'Prismatic Light Lens', icon: '🔍🌈' },
-  thermal_retaining_core:  { stage: 1, inputs: [{ id: 'thermal_scutes', qty: 2 }, { id: 'mineral_slab', qty: 4 }], outputQty: 1, timeSec: 180, name: 'Thermal Retaining Core', icon: '🔥💎' },
+  thermal_retaining_core:  { stage: 1, inputs: [{ id: 'thermal_scutes', qty: 2 }, { id: 'nitrogen_dewar', qty: 2 }], outputQty: 1, timeSec: 180, name: 'Thermal Retaining Core', icon: '🔥💎' },
 
   // Gas Bottling & Export Commodities (Hydraulic Gas Compressor)
   co2_cylinder:            { stage: 1, inputs: [{ id: 'chaff', qty: 10 }], outputQty: 1, timeSec: 60, name: 'Pressurized CO₂ Cylinder', icon: '🫧' },
