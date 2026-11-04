@@ -1049,6 +1049,58 @@ export function stepHydrologySimulation(params: {
       }
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // SMART SOIL SENSOR & RAIN-ADAPTIVE IRRIGATION VALVE (LEVEL 21+)
+    // ──────────────────────────────────────────────────────────────────────────
+    let currentValveState: 'idle' | 'irrigating' | 'rain_lockout' | 'drainage_bypass' = 'idle';
+    if (farmLevel >= 21 && p.hasSmartSensor) {
+      const isExtremeRain = activeProfileId === 'monsoon' || activeProfileId === 'cyclone' || activeProfileId === 'alchemical_downpour' || rainGainPctPerMin >= 5.0;
+      const isHighRain = !isExtremeRain && (rainGainPctPerMin >= 2.5 || activeProfileId === 'rain' || activeProfileId === 'thunderstorm');
+      const isLowRain = !isExtremeRain && !isHighRain && (rainGainPctPerMin > 0.0 || activeProfileId === 'drizzle' || activeProfileId === 'sunshower' || activeProfileId === 'foggy');
+
+      if (isExtremeRain && m > 80.0) {
+        // Extreme Rain: Active drainage bypass! Drains excess water down to 78% to avoid root rot
+        currentValveState = 'drainage_bypass';
+        m = Math.max(78.0, m - 4.0 * dt);
+        // Silt & Mineral trap: Trapping nutrient-rich runoff into alluvial silt bonus
+        if (!p.alluvialSiltCyclesRemaining || p.alluvialSiltCyclesRemaining < 1) {
+          p.alluvialSiltCyclesRemaining = 2;
+        }
+      } else if (isHighRain) {
+        // High Rain: 100% Emergency Rain-Lockout! Zero water pulled from tower
+        currentValveState = 'rain_lockout';
+      } else if (isLowRain) {
+        // Low Rain: Smart Assist Throttle
+        if (m < 65.0 && currentTower > 150) {
+          currentValveState = 'irrigating';
+          // Delivers a gentle assist pulse (0.6L/sec) to supplement light rain up to 72%
+          const neededPct = Math.min(72.0 - m, 5.0 * dt);
+          const neededLiters = neededPct * LITERS_PER_PERCENT_MOISTURE_PER_PLOT * 0.35; // 65% water saved!
+          if (currentTower >= neededLiters) {
+            currentTower -= neededLiters;
+            totalDischarged += neededLiters;
+            m += neededPct;
+          }
+        } else {
+          currentValveState = 'idle';
+        }
+      } else {
+        // Normal / Dry Weather: Automated Smart Hydration
+        if (m < 50.0 && currentTower > 150) {
+          currentValveState = 'irrigating';
+          const neededPct = Math.min(72.0 - m, 12.0 * dt);
+          const neededLiters = neededPct * LITERS_PER_PERCENT_MOISTURE_PER_PLOT;
+          if (currentTower >= neededLiters) {
+            currentTower -= neededLiters;
+            totalDischarged += neededLiters;
+            m += neededPct;
+          }
+        } else {
+          currentValveState = 'idle';
+        }
+      }
+    }
+
     // Desiccation tracking (< 15.0%)
     // In casual/normal mode, crops NEVER permanently wither/lock; instead desiccation imposes a minimum growth drag.
     // Permanent withering only occurs in Hardcore mode.
@@ -1102,6 +1154,7 @@ export function stepHydrologySimulation(params: {
       waterloggedSeconds: waterloggedSec,
       hasRootRot,
       wasFloodedToMax,
+      sensorValveState: currentValveState,
       // Maintain backwards-compatible isWatered boolean
       isWatered: m >= 40.0,
     };

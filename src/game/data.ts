@@ -382,6 +382,7 @@ export type ProductId =
   | 'reinforced_sluice_seal' | 'hardened_chitin_trowel' | 'subsoil_aquifer_casing'
   | 'prismatic_light_lens' | 'thermal_retaining_core' | 'emergency_siphon_valve'
   | 'universal_bio_dressing' | 'serpent_pest_ward' | 'mammoth_thermal_parka'
+  | 'smart_soil_sensor'
   // Agricultural Byproducts
   | 'chaff'
   // Gas Bottling & Export Commodities
@@ -569,6 +570,7 @@ export const PRODUCTS: Record<ProductId, ProductDef> = {
   universal_bio_dressing:  { id: 'universal_bio_dressing',  name: 'Universal Bio-Dressing Fertilizer', emoji: '🧪', category: 'manufactured', sellPrice: 80 },
   serpent_pest_ward:       { id: 'serpent_pest_ward',       name: 'Apex Serpent Pest Ward',      emoji: '📜🛡️', category: 'manufactured', sellPrice: 1200 },
   mammoth_thermal_parka:   { id: 'mammoth_thermal_parka',   name: 'Mammoth Down Work Parka',     emoji: '🧥❄️', category: 'manufactured', sellPrice: 1400 },
+  smart_soil_sensor:       { id: 'smart_soil_sensor',       name: 'Smart Soil Sensor Valve',     emoji: '📡💧', category: 'manufactured', sellPrice: 850 },
 
   // --- Gas Bottling & Export Commodities ---
   co2_cylinder:            { id: 'co2_cylinder',            name: 'Pressurized CO₂ Cylinder',    emoji: '🫧',   category: 'manufactured', sellPrice: 45 },
@@ -847,6 +849,14 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
         inputs: [{ productId: 'insulated_down_wool', qty: 1 }, { productId: 'silk', qty: 2 }],
         output: { productId: 'mammoth_thermal_parka', qty: 1 },
         timeSec: 100,
+      },
+      {
+        id: 'make_smart_soil_sensor',
+        name: 'Smart Soil Sensor & Irrigation Valve',
+        emoji: '📡💧',
+        inputs: [{ productId: 'co2_cylinder', qty: 1 }, { productId: 'oxygen_canister', qty: 1 }, { productId: 'fired_hardwood', qty: 2 }],
+        output: { productId: 'smart_soil_sensor', qty: 1 },
+        timeSec: 45,
       },
     ],
   },

@@ -71,6 +71,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
     level,
     pastureWelfare,
     prehistoricSanctuary,
+    installPlotSmartSensor,
   } = useGameStore();
   const [selectedCrop, setSelectedCrop] = useState<CropId>('wheat');
   const [hoveredCropId, setHoveredCropId] = useState<CropId | null>(null);
@@ -915,7 +916,7 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                 </div>
               ) : (
                 <>
-                  {/* Soil Moisture Zone Pill */}
+                  {/* Soil Moisture Zone Pill & Smart Sensor Badge */}
                   <div className="absolute top-1 left-1 flex items-center gap-1 z-10 pointer-events-none">
                     <span className={`px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-mono font-black border backdrop-blur-md ${
                       moistureZone.id === 'optimal'
@@ -928,6 +929,30 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                     }`} title={`${moistureZone.name}: ${Math.round(moisturePct)}% (${moistureZone.badgeText})`}>
                       💧{Math.round(moisturePct)}%
                     </span>
+
+                    {/* Smart Sensor Indicator (Level 21+) */}
+                    {plot.hasSmartSensor && (
+                      <span className={`px-1 py-0.2 rounded text-[7px] font-black border flex items-center gap-0.5 shadow-sm ${
+                        plot.sensorValveState === 'drainage_bypass'
+                          ? 'bg-rose-950/90 text-rose-300 border-rose-400 animate-pulse'
+                          : plot.sensorValveState === 'rain_lockout'
+                          ? 'bg-amber-950/90 text-yellow-300 border-yellow-400'
+                          : plot.sensorValveState === 'irrigating'
+                          ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400 animate-pulse'
+                          : 'bg-stone-900/90 text-cyan-400 border-cyan-600/60'
+                      }`} title={
+                        plot.sensorValveState === 'drainage_bypass'
+                          ? 'Extreme Rain: Active Drainage Bypass & Silt Trap'
+                          : plot.sensorValveState === 'rain_lockout'
+                          ? 'High Rain: Rain-Lockout Active (Zero Water Waste)'
+                          : plot.sensorValveState === 'irrigating'
+                          ? 'Smart Irrigation: Micro-pulsing water from tower'
+                          : 'Smart Sensor: Telemetry Active (Optimal Zone)'
+                      }>
+                        <span>📡</span>
+                        <span>{plot.sensorValveState === 'drainage_bypass' ? 'DRAIN' : plot.sensorValveState === 'rain_lockout' ? 'RAIN 🌧️' : plot.sensorValveState === 'irrigating' ? 'AUTO 💧' : 'ON'}</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Hydration Sparkle Badge: ⚡ 2x Speed */}
@@ -1064,6 +1089,26 @@ export function FarmGrid({ onSelectTab }: FarmGridProps) {
                             : 'Fertilizer (Shop)'}
                         </span>
                       </button>
+
+                      {/* Install Smart Soil Sensor Button (Level 21+) */}
+                      {level >= 21 && !plot.hasSmartSensor && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            installPlotSmartSensor(plot.id);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 active:scale-95 text-cyan-100 text-[9px] font-black tracking-tight flex items-center gap-1 cursor-pointer shadow-md transition-all border border-cyan-400"
+                          title="Install Smart Soil Sensor: Enables automatic rain-adaptive irrigation & flood drainage bypass"
+                        >
+                          <span>📡</span>
+                          <span>
+                            {(barn?.smart_soil_sensor || 0) > 0
+                              ? `Sensor (${barn.smart_soil_sensor})`
+                              : 'Sensor (450🪙)'}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   )}
 

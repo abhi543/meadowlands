@@ -5,6 +5,10 @@ import { useGameStore } from '@/game/store';
 
 export const WorkshopInstallationsPanel: React.FC = () => {
   const barn = useGameStore(state => state.barn);
+  const coins = useGameStore(state => state.coins);
+  const level = useGameStore(state => state.level);
+  const plots = useGameStore(state => state.plots);
+  const unlockedPlots = useGameStore(state => state.unlockedPlots);
   const hydrology = useGameStore(state => state.hydrology);
   const workshopLoadout = useGameStore(state => state.workshopLoadout) || {
     equippedTool: null,
@@ -23,6 +27,7 @@ export const WorkshopInstallationsPanel: React.FC = () => {
   const mountThermalCore = useGameStore(state => state.mountThermalCore);
   const unmountThermalCore = useGameStore(state => state.unmountThermalCore);
   const installEmergencySiphonValve = useGameStore(state => state.installEmergencySiphonValve);
+  const installAllPlotsSmartSensors = useGameStore(state => state.installAllPlotsSmartSensors);
 
   // Bag inventory counts
   const trowelInBag = barn.hardened_chitin_trowel || 0;
@@ -31,6 +36,7 @@ export const WorkshopInstallationsPanel: React.FC = () => {
   const lensInBag = barn.prismatic_light_lens || 0;
   const thermalCoreInBag = barn.thermal_retaining_core || 0;
   const siphonInBag = barn.emergency_siphon_valve || 0;
+  const smartSensorsInBag = barn.smart_soil_sensor || 0;
 
   // Hydrology values
   const sealsInstalled = Math.min(3, Math.max(0, workshopLoadout.sluiceGateSealsInstalled || 0));
@@ -41,6 +47,11 @@ export const WorkshopInstallationsPanel: React.FC = () => {
   const isTrowelEquipped = workshopLoadout.equippedTool === 'hardened_chitin_trowel';
   const isLensMounted = Boolean(workshopLoadout.prismaticLensMounted);
   const isThermalActive = Boolean(workshopLoadout.thermalCoreActive);
+
+  // Smart sensors stats
+  const sensedPlotsCount = plots.slice(0, unlockedPlots).filter(p => p.hasSmartSensor).length;
+  const isNetworkFullyDeployed = sensedPlotsCount >= unlockedPlots && unlockedPlots > 0;
+  const isLevel21Unlocked = level >= 21;
 
   return (
     <div className="p-4 sm:p-5 space-y-6 bg-gradient-to-b from-stone-900/30 to-stone-950/40 dark:from-gray-950/50 dark:to-black/50">
@@ -490,6 +501,97 @@ export const WorkshopInstallationsPanel: React.FC = () => {
                   className="w-full py-2 px-3 rounded-lg text-xs font-black bg-gradient-to-r from-rose-500 to-orange-600 hover:from-rose-400 hover:to-orange-500 disabled:opacity-40 text-white transition-all active:scale-95 shadow-md shadow-rose-500/20 cursor-pointer disabled:cursor-not-allowed"
                 >
                   {thermalCoreInBag > 0 ? `🔥 Activate Core (In Bag: ${thermalCoreInBag})` : 'Activate Core (In Bag: 0)'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4: SMART SOIL SENSOR & RAIN-ADAPTIVE IRRIGATION (LEVEL 21+) */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">📡</span>
+            <div>
+              <h4 className="font-black text-sm tracking-wide text-cyan-200 uppercase flex items-center gap-2">
+                Smart Soil Sensor &amp; Rain-Adaptive Valve Network
+                <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${
+                  isLevel21Unlocked ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'bg-stone-800 text-stone-400 border border-stone-700'
+                }`}>
+                  {isLevel21Unlocked ? 'Level 21+ Active' : '🔒 Unlocks at Level 21'}
+                </span>
+              </h4>
+              <p className="text-[11px] text-stone-400">
+                Precision IoT telemetry with automatic rain lockout, low-rain assist throttle, and flood drainage bypass.
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+              {sensedPlotsCount} / {unlockedPlots} Plots Sensed
+            </span>
+          </div>
+        </div>
+
+        <div className={`border rounded-xl p-4 shadow-sm transition-all ${
+          !isLevel21Unlocked
+            ? 'bg-stone-900/40 border-stone-800 opacity-70'
+            : isNetworkFullyDeployed
+            ? 'bg-gradient-to-br from-cyan-950/40 to-emerald-950/30 border-cyan-500/40'
+            : 'bg-stone-800/80 dark:bg-gray-900/90 border-stone-700/80 hover:border-cyan-500/40'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl border ${
+                !isLevel21Unlocked
+                  ? 'bg-stone-900 border-stone-800 text-stone-600'
+                  : isNetworkFullyDeployed
+                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 animate-pulse shadow-md shadow-cyan-500/20'
+                  : 'bg-stone-900/60 border-stone-700 text-stone-400'
+              }`}>
+                {!isLevel21Unlocked ? '🔒' : '📡'}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h5 className="font-bold text-sm text-stone-100 flex items-center gap-1.5">
+                    Automated Rain-Adaptive Telemetry
+                  </h5>
+                  {isNetworkFullyDeployed && (
+                    <span className="px-2 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      Fully Automated
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-stone-300 space-y-0.5">
+                  <p>• <span className="font-bold text-cyan-400">Low Rain:</span> Throttles valve assist to 35% flow, saving 65% tower water.</p>
+                  <p>• <span className="font-bold text-yellow-400">High Rain:</span> 100% Emergency Rain-Lockout cuts valve shut, preventing waste.</p>
+                  <p>• <span className="font-bold text-emerald-400">Extreme Deluge:</span> Activates drainage bypass &amp; traps alluvial silt (+20% Growth Speed).</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="sm:text-right shrink-0">
+              {!isLevel21Unlocked ? (
+                <div className="px-3 py-2 rounded-lg bg-stone-900/90 border border-stone-700 text-stone-400 text-xs font-bold flex items-center gap-1.5 justify-center">
+                  <span>🔒</span>
+                  <span>Requires Level 21 (Current: Lv {level})</span>
+                </div>
+              ) : isNetworkFullyDeployed ? (
+                <div className="px-3 py-2 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 text-xs font-black flex items-center gap-1.5 justify-center shadow-sm">
+                  <span>✨</span>
+                  <span>All {unlockedPlots} Plots Monitored</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => installAllPlotsSmartSensors()}
+                  className="w-full sm:w-auto px-4 py-2 rounded-lg text-xs font-black bg-gradient-to-r from-cyan-600 to-teal-500 hover:from-cyan-500 hover:to-teal-400 text-stone-950 transition-all active:scale-95 shadow-md shadow-cyan-500/20 cursor-pointer flex items-center gap-1.5 justify-center"
+                >
+                  <span>📡 Deploy Sensor Network</span>
+                  <span className="text-[10px] bg-stone-950/40 text-cyan-200 px-1.5 py-0.2 rounded font-mono font-bold">
+                    {smartSensorsInBag > 0 ? `Have ${smartSensorsInBag} in Bag` : '450🪙 / plot'}
+                  </span>
                 </button>
               )}
             </div>

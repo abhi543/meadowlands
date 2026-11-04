@@ -502,6 +502,9 @@ export interface PlotState {
   waterloggedStressTimerSec?: number; // 5s interval tracker (+5 pts)
   lowNStressTimerSec?: number; // 5s interval tracker for N < 35% (+5 pts)
   harvestGrade?: 'A' | 'B' | 'C'; // Dynamic Harvest Tier Outlook
+  // Smart Soil Sensor & Rain-Adaptive Irrigation Valve (Level 21+)
+  hasSmartSensor?: boolean;
+  sensorValveState?: 'idle' | 'irrigating' | 'rain_lockout' | 'drainage_bypass';
 }
 
 export interface AnimalInstance {
@@ -803,6 +806,7 @@ export interface WorkshopLoadoutState {
   prismaticLensMounted: boolean;
   thermalCoreActive?: boolean;
   emergencySiphonInstalled?: boolean;
+  smartSensorNetworkInstalled?: boolean;
 }
 
 export function createDefaultWorkshopLoadout(): WorkshopLoadoutState {
@@ -813,6 +817,7 @@ export function createDefaultWorkshopLoadout(): WorkshopLoadoutState {
     prismaticLensMounted: false,
     thermalCoreActive: false,
     emergencySiphonInstalled: false,
+    smartSensorNetworkInstalled: false,
   };
 }
 
@@ -9822,6 +9827,109 @@ export const useGameStore = create<GameState>()(
         set({
           coins: Math.max(0, state.coins - effectiveCost),
           barn: newBarn,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      installPlotSmartSensor: (plotId: number) => {
+        const state = get();
+        if (state.level < 21) {
+          state.addNotification('🔒 Level 21 Required: Smart Soil Sensor & Rain-Adaptive Irrigation Valves unlock at Farm Level 21!', '🔒', 'warning');
+          return false;
+        }
+
+        const plot = state.plots.find(p => p.id === plotId);
+        if (!plot || plot.hasSmartSensor) return false;
+
+        const sensorInBarn = state.barn.smart_soil_sensor || 0;
+        let newBarn = { ...state.barn };
+        let newCoins = state.coins;
+
+        if (sensorInBarn > 0) {
+          newBarn.smart_soil_sensor = sensorInBarn - 1;
+        } else if (state.coins >= 450) {
+          newCoins -= 450;
+        } else {
+          state.addNotification('📡 Need 1 Smart Soil Sensor in Barn or 450 Coins to install!', '📡', 'warning');
+          return false;
+        }
+
+        const newPlots = state.plots.map(p => {
+          if (p.id === plotId) {
+            return {
+              ...p,
+              hasSmartSensor: true,
+              sensorValveState: 'idle' as const,
+            };
+          }
+          return p;
+        });
+
+        playVictoryChime();
+        state.addNotification(`📡 Smart Soil Sensor installed on Plot #${plotId + 1}! Auto-irrigation & Rain Lockout active.`, '📡💧', 'discovery');
+
+        set({
+          coins: newCoins,
+          barn: newBarn,
+          plots: newPlots,
+          isDirty: true,
+        });
+        return true;
+      },
+
+      installAllPlotsSmartSensors: () => {
+        const state = get();
+        if (state.level < 21) {
+          state.addNotification('🔒 Level 21 Required: Smart Soil Sensor Network unlocks at Farm Level 21!', '🔒', 'warning');
+          return false;
+        }
+
+        const uninstalled = state.plots.filter((p, i) => i < state.unlockedPlots && !p.hasSmartSensor);
+        if (uninstalled.length === 0) {
+          state.addNotification('✨ All unlocked plots already have Smart Soil Sensors installed!', '📡', 'info');
+          return true;
+        }
+
+        const needed = uninstalled.length;
+        const availableInBarn = state.barn.smart_soil_sensor || 0;
+        const fromBarn = Math.min(needed, availableInBarn);
+        const fromCoinsCount = needed - fromBarn;
+        const coinCost = fromCoinsCount * 450;
+
+        if (state.coins < coinCost) {
+          state.addNotification(`📡 Insufficient resources! Need ${needed} sensors (Have: ${availableInBarn} in Barn, need ${coinCost} Coins for remaining).`, '⚠️', 'warning');
+          return false;
+        }
+
+        const newBarn = { ...state.barn };
+        if (fromBarn > 0) {
+          newBarn.smart_soil_sensor = availableInBarn - fromBarn;
+        }
+
+        const newPlots = state.plots.map((p, i) => {
+          if (i < state.unlockedPlots) {
+            return {
+              ...p,
+              hasSmartSensor: true,
+              sensorValveState: p.sensorValveState || 'idle',
+            };
+          }
+          return p;
+        });
+
+        const loadout = state.workshopLoadout || createDefaultWorkshopLoadout();
+        playVictoryChime();
+        state.addNotification(`🌐 Estate Sensor Network Deployed! All ${uninstalled.length} plots connected to Smart Irrigation & Rain Lockout.`, '🌐📡', 'discovery');
+
+        set({
+          coins: Math.max(0, state.coins - coinCost),
+          barn: newBarn,
+          plots: newPlots,
+          workshopLoadout: {
+            ...loadout,
+            smartSensorNetworkInstalled: true,
+          },
           isDirty: true,
         });
         return true;
