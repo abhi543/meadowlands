@@ -635,3 +635,68 @@ export function playRushHourActivationSound(): void {
     osc.stop(now + idx * 0.05 + 0.45);
   });
 }
+
+/**
+ * 🎣 Interactive Fishing Reel Mini-Game Sound Effects
+ */
+export function playReelBiteSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  // Sharp warning bite buzz
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(480, now);
+  osc.frequency.exponentialRampToValueAtTime(720, now + 0.12);
+
+  gain.gain.setValueAtTime(0.2, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.16);
+}
+
+export function playReelClickSound(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(800 + Math.random() * 200, now);
+
+  gain.gain.setValueAtTime(0.08, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.05);
+}
+
+export function playLegendaryBossSplash(): void {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  // Deep booming splash & thunder chord
+  [65.41, 130.81, 196.00, 392.00, 523.25].forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, now + idx * 0.04);
+
+    gain.gain.setValueAtTime(0.25, now + idx * 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.9);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now + idx * 0.04);
+    osc.stop(now + idx * 0.04 + 0.95);
+  });
+}

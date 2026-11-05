@@ -24,6 +24,7 @@ import {
   type FisheryCrewPolicy,
 } from '@/game/aquaticEcosystem';
 import { OverclockActionMenu } from './OverclockActionMenu';
+import { FishingReelMinigame } from './FishingReelMinigame';
 
 const ZONE_ORDER: WaterZoneId[] = ['zone_pond', 'zone_river', 'zone_estuary', 'zone_lake', 'zone_ocean'];
 
@@ -46,6 +47,11 @@ export function FisheryPanel() {
   // Re-render every second for progress bars & spawn clocks
   const [now, setNow] = useState(Date.now());
   const [castingZoneId, setCastingZoneId] = useState<WaterZoneId | null>(null);
+  const [activeMinigame, setActiveMinigame] = useState<{
+    zoneId: WaterZoneId;
+    speciesId: typeof FISH_SPECIES[keyof typeof FISH_SPECIES]['id'];
+    isBoss: boolean;
+  } | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -121,11 +127,16 @@ export function FisheryPanel() {
   }
 
   const handleManualCast = (zoneId: WaterZoneId) => {
-    setCastingZoneId(zoneId);
-    manualCatchFish(zoneId);
-    setTimeout(() => {
-      setCastingZoneId(null);
-    }, 700);
+    const zone = WATER_ZONES[zoneId];
+    if (!zone) return;
+    const pickedSpecies = zone.species[Math.floor(Math.random() * zone.species.length)];
+    const isBoss = pickedSpecies === 'lanternfish' || pickedSpecies === 'marlin' || pickedSpecies === 'sturgeon' || pickedSpecies === 'barramundi';
+
+    setActiveMinigame({
+      zoneId,
+      speciesId: pickedSpecies,
+      isBoss,
+    });
   };
 
   return (
@@ -1078,6 +1089,23 @@ export function FisheryPanel() {
           </div>
         </div>
       </div>
+
+      {/* Interactive Tension Reel Mini-Game Modal */}
+      {activeMinigame && (
+        <FishingReelMinigame
+          zoneId={activeMinigame.zoneId}
+          targetSpeciesId={activeMinigame.speciesId}
+          isBossCatch={activeMinigame.isBoss}
+          onSuccess={() => {
+            manualCatchFish(activeMinigame.zoneId);
+            setActiveMinigame(null);
+          }}
+          onFail={() => {
+            setActiveMinigame(null);
+          }}
+          onClose={() => setActiveMinigame(null)}
+        />
+      )}
     </div>
   );
 }
